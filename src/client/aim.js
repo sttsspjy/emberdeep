@@ -1,224 +1,43 @@
-// Aim feedback, client only: where a skill reaches for the current aim, the procedural CSS cursor (reticle bitmaps, foe hover, gamepad hiding)
-// and the world-space cursor extras (attack-cooldown arc, attack pulse, crit flash, ground-skill landing preview, gamepad chevron).
-// game.js owns the aim state (ED.Game.s.aim); the renderer calls ED.AimFx.draw(c, view) with the world transform active.
+// Aim (client only): the world point skills aim at (mouse cursor, or the right stick 120 px ahead of the hero on a gamepad) and the procedural reticle CSS cursor.
 (function (ED) {
   'use strict';
-  const U = ED.U, Sim = ED.Sim, TAU = Math.PI * 2;
-  const A = ED.AimFx = { uCss: 13 }; // uCss: the cursor unit in CSS px (a reticle's ring radius is 0.6 of it)
+  const U = ED.U, TAU = Math.PI * 2;
+  const A = ED.AimFx = { wx: 0, wy: 0, padA: 0 };
 
-  // ---------------- where a skill reaches ----------------
-  const WANT = { x: 0, y: 0, d: 0 };
-  // Target the aim asks for: the cursor (mouse), else along the aim by the stick push (or 0.6) of `range`. Shared scratch point {x, y, d = distance from the hero}.
-  A.want = (me, a, range) => {
-    if (a.pointer) { WANT.x = a.wx; WANT.y = a.wy; }
-    else { WANT.x = me.x + Math.cos(a.a) * range * a.frac; WANT.y = me.y + Math.sin(a.a) * range * a.frac; }
-    WANT.d = Math.hypot(WANT.x - me.x, WANT.y - me.y);
-    return WANT;
-  };
-  // Landing point of a ground skill: the target clamped to `range` and cut at the first wall (Sim.groundPoint); `walk` lands on a standable spot.
-  A.groundLand = (view, me, a, range, walk) => {
-    const w = A.want(me, a, range);
-    return Sim.groundPoint(view.room, view.locked, me.x, me.y, w.x, w.y, range, walk);
-  };
-  // Shadowstep: toward the target, 40..140 px, stopped by walls for the hero's body; a free path lands exactly on the point, not on the last 8 px step.
-  A.stepLand = (view, me, a) => {
-    const w = A.want(me, a, 140), ang = w.d > 12 ? Math.atan2(w.y - me.y, w.x - me.x) : a.a, d = U.clamp(w.d, 40, 140);
-    const e = Sim.castMove(view.room, me.x, me.y, ang, d, me.r, view.locked);
-    if (Math.hypot(e.x - me.x, e.y - me.y) >= d - 8) {
-      const q = { x: me.x + Math.cos(ang) * d, y: me.y + Math.sin(ang) * d, r: me.r };
-      if (!Sim.resolve(q, view.room, view.locked, false)) return q;
-    }
-    return e;
+  // World aim point for hero me from this frame's input `inp` (ED.Input.read()). Returns A ({ wx, wy }).
+  A.point = (me, inp) => {
+    const I = ED.Input, R = ED.Render;
+    if (I.device === 'pad') {
+      if (inp.padAim !== undefined) A.padA = inp.padAim; else if (Math.hypot(inp.mx, inp.my) > 0.2) A.padA = Math.atan2(inp.my, inp.mx);
+      A.wx = me.x + Math.cos(A.padA) * 120; A.wy = me.y + Math.sin(A.padA) * 120;
+    } else { const w = R.toWorld(I.mouse.x * R.dpr, I.mouse.y * R.dpr); A.wx = w.x; A.wy = w.y; }
+    return A;
   };
 
-  // ---------------- procedural CSS cursor ----------------
-  const COL = { ember: '#ffb56b', bone: '#f6ecda', frost: '#7fe3ff' }, SZ = { s: 0.8, m: 1, l: 1.3 };
-  const unit = () => U.clamp(Math.min(window.innerWidth / 110, window.innerHeight / 62), 13, 36); // the HUD unit, CSS px
-  let curKey = '', curSz = 28, empCol = null;
-
-  // One reticle bitmap, `sz` CSS px drawn at k device px per CSS px: dark underlay, ring, 4 ticks (rotated 45 degrees over a foe), centre dot.
-  // burst (the empowered reticle): the ring in `col` over a foe too, 4 short rays between the ticks and a white centre dot.
-  function reticle(sz, k, col, foe, burst) {
+  // ---------------- reticle cursor ----------------
+  const reticle = (sz, k) => {
     const cv = document.createElement('canvas'); cv.width = cv.height = sz * k;
-    const g = cv.getContext('2d'), uu = sz * k / 2.1;
-    g.translate(sz * k / 2, sz * k / 2); g.lineCap = 'butt';
-    const lw = Math.max(0.12 * uu, 1.5), dot = Math.max(0.09 * uu, 1), rot = foe ? Math.PI / 4 : 0;
-    const pass = (w, ringCol, tickCol, dotR, dotCol) => {
-      g.lineWidth = w;
-      g.strokeStyle = ringCol; g.beginPath(); g.arc(0, 0, 0.6 * uu, 0, TAU); g.stroke();
-      g.strokeStyle = tickCol; g.beginPath();
-      for (let i = 0; i < 4; i++) {
-        const an = i * Math.PI / 2 + rot, co = Math.cos(an), si = Math.sin(an);
-        g.moveTo(co * 0.72 * uu, si * 0.72 * uu); g.lineTo(co * 0.98 * uu, si * 0.98 * uu);
-        if (burst) { const bc = Math.cos(an + Math.PI / 4), bs = Math.sin(an + Math.PI / 4); g.moveTo(bc * 0.74 * uu, bs * 0.74 * uu); g.lineTo(bc * 0.9 * uu, bs * 0.9 * uu); }
-      }
-      g.stroke();
-      g.fillStyle = dotCol; g.beginPath(); g.arc(0, 0, dotR, 0, TAU); g.fill();
+    const g = cv.getContext('2d'), u = sz * k / 2.1;
+    g.translate(sz * k / 2, sz * k / 2);
+    const pass = (lw, col) => {
+      g.lineWidth = lw; g.strokeStyle = col; g.beginPath(); g.arc(0, 0, 0.6 * u, 0, TAU); g.stroke();
+      g.beginPath();
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2, c = Math.cos(a), s = Math.sin(a); g.moveTo(c * 0.72 * u, s * 0.72 * u); g.lineTo(c * 0.98 * u, s * 0.98 * u); }
+      g.stroke(); g.fillStyle = col; g.beginPath(); g.arc(0, 0, Math.max(1, 0.09 * u), 0, TAU); g.fill();
     };
-    const dark = 'rgba(10,7,6,0.75)';
-    pass(lw + 0.14 * uu, dark, dark, dot + 0.07 * uu, dark);
-    pass(lw, foe && !burst ? COL.bone : col, col, dot, burst ? '#ffffff' : col);
+    pass(Math.max(1.5, 0.12 * u) + 0.14 * u, 'rgba(10,7,6,0.75)'); pass(Math.max(1.5, 0.12 * u), '#ffb56b');
     return cv.toDataURL('image/png');
-  }
-  // CSS cursor value of a reticle (1x and 2x bitmaps, hot spot at the centre).
-  function cursorOf(sz, col, foe, burst) {
-    const one = reticle(sz, 1, col, foe, burst), two = reticle(sz, 2, col, foe, burst), h = sz / 2;
-    const hd = `image-set(url(${one}) 1x, url(${two}) 2x) ${h} ${h}, crosshair`;
-    return window.CSS && CSS.supports && CSS.supports('cursor', hd) ? hd : `url(${one}) ${h} ${h}, crosshair`;
-  }
-
-  // Applies the Cursor settings: `syscursor` on the body for the OS crosshair, else the two reticle bitmaps as CSS variables (style.css owns the rules).
+  };
+  // Sets the reticle as the page cursor (CSS variable --aim-cur; style.css uses it on the game canvas).
   A.applyCursor = () => {
-    const set = (ED.App && ED.App.settings) || {}, root = document.documentElement.style;
-    const sys = set.cursor === 'system';
-    document.body.classList.toggle('syscursor', sys);
-    const sz = Math.min(64, Math.ceil(unit() * 1.05 * (SZ[set.reticle] || 1)) * 2); // even, so the hot spot sits on a pixel centre
-    A.uCss = sz / 2.1; curSz = sz; empCol = null; // the empowered reticle is rebuilt at this size on the next frame
-    if (sys) return;
-    const key = sz + '|' + (set.reticleCol || 'ember');
-    if (key === curKey) return;
-    curKey = key;
     try {
-      const col = COL[set.reticleCol] || COL.ember;
-      root.setProperty('--aim-cur', cursorOf(sz, col, false)); root.setProperty('--aim-cur-foe', cursorOf(sz, col, true));
-    } catch (e) { root.setProperty('--aim-cur', 'crosshair'); root.setProperty('--aim-cur-foe', 'crosshair'); curKey = ''; }
+      const sz = Math.min(64, Math.round(U.clamp(Math.min(window.innerWidth / 110, window.innerHeight / 62), 13, 36) * 1.05) * 2), h = sz / 2;
+      document.documentElement.style.setProperty('--aim-cur', `url(${reticle(sz, 1)}) ${h} ${h}, crosshair`);
+    } catch (e) { document.documentElement.style.setProperty('--aim-cur', 'crosshair'); }
   };
-  window.addEventListener('resize', () => A.applyCursor());
-
-  // Body classes: `pad` hides the cursor on a gamepad, `aim-foe` swaps in the foe reticle while the cursor is over a foe.
-  let padOn = false, foeOn = false;
-  A.hover = (pad, foe) => {
-    const cl = document.body.classList;
-    if (pad !== padOn) { padOn = pad; cl.toggle('pad', pad); }
-    foe = foe && !pad;
-    if (foe !== foeOn) { foeOn = foe; cl.toggle('aim-foe', foe); }
-  };
-
-  // Empowered reticle while the local hero's next attack is empowered (col: its ED.EMPOWER colour, '' off): body.aim-emp over the --aim-cur-emp(-foe) bitmaps, cached per (size, colour).
-  // Never with the system crosshair or a gamepad (the more specific emp rules would beat theirs).
-  const empCache = new Map();
-  function setEmp(col) {
-    const set = (ED.App && ED.App.settings) || {};
-    if (set.cursor === 'system' || padOn) col = '';
-    if (col === empCol) return;
-    empCol = col;
-    document.body.classList.toggle('aim-emp', !!col);
-    if (!col) return;
-    const key = curSz + '|' + col;
-    let v = empCache.get(key);
-    if (!v) { try { v = [cursorOf(curSz, col, false, true), cursorOf(curSz, col, true, true)]; } catch (e) { v = ['crosshair', 'crosshair']; } empCache.set(key, v); }
-    const root = document.documentElement.style;
-    root.setProperty('--aim-cur-emp', v[0]); root.setProperty('--aim-cur-emp-foe', v[1]);
-  }
-
-  // ---------------- world-space extras ----------------
-  let ovs = null;
-  const overlayOpen = () => {
-    if (!ovs) ovs = ['ov-pause', 'ov-settings', 'modal', 'ov-sheet', 'ov-map', 'ov-boon'].map(id => document.getElementById(id));
-    for (const o of ovs) if (o && !o.hidden) return true;
-    return false;
-  };
-  const lineW = (v) => U.clamp(Math.round(v), 1, 2); // crisp 1-2 world px lines
-
-  function cursorExtras(c, a, uw, S, now) {
-    const cx = Math.round(a.wx * S) / S, cy = Math.round(a.wy * S) / S;
-    if (a.cd > 0) { // attack cooldown: 300 degrees clockwise from the top, fills as the cooldown ends
-      const r = 1.25 * uw, a0 = -Math.PI / 2, sweep = TAU * (300 / 360);
-      c.lineWidth = lineW(0.14 * uw) + 1; c.strokeStyle = 'rgba(10,7,6,0.6)'; c.beginPath(); c.arc(cx, cy, r, a0, a0 + sweep); c.stroke();
-      c.lineWidth = lineW(0.14 * uw); c.strokeStyle = 'rgba(255,181,107,0.9)'; c.beginPath(); c.arc(cx, cy, r, a0, a0 + sweep * (1 - a.cd)); c.stroke();
-    }
-    const pt = (now - a.pulseT) / 100;
-    if (pt >= 0 && pt < 1) { c.globalAlpha = 0.85 * (1 - pt); c.lineWidth = lineW(0.12 * uw); c.strokeStyle = '#fff1d6'; c.beginPath(); c.arc(cx, cy, 0.6 * uw * (1 + 0.18 * (1 - pt)), 0, TAU); c.stroke(); c.globalAlpha = 1; }
-    const ct = (now - a.critT) / 120;
-    if (ct >= 0 && ct < 1) { c.globalAlpha = 1 - ct; c.lineWidth = lineW(0.16 * uw); c.strokeStyle = '#f0cf8a'; c.beginPath(); c.arc(cx, cy, 0.6 * uw, 0, TAU); c.stroke(); c.globalAlpha = 1; }
-  }
-
-  // Gamepad aim indicator: an ember chevron 26 world px from the aim origin along the aim (col: the empower colour of the next attack, else ember).
-  function chevron(c, me, a, uw, S, col) {
-    const s = 0.9 * uw, x = Math.round((me.x + Math.cos(a.a) * 26) * S) / S, y = Math.round((me.y - 4 + Math.sin(a.a) * 26) * S) / S;
-    c.save(); c.translate(x, y); c.rotate(a.a); c.lineJoin = 'miter';
-    for (let i = 0; i < 2; i++) {
-      c.lineWidth = i ? lineW(0.22 * uw) : lineW(0.22 * uw) + 1; c.strokeStyle = i ? col || 'rgba(255,181,107,0.85)' : 'rgba(10,7,6,0.7)';
-      c.beginPath(); c.moveTo(-s * 0.5, -s * 0.7); c.lineTo(s * 0.5, 0); c.lineTo(-s * 0.5, s * 0.7); c.stroke();
-    }
-    c.restore();
-  }
-
-  // Dashed ring over a thin dark underlay so it reads on every biome floor.
-  function dashed(c, x, y, r, dash, lw, col, alpha) {
-    c.setLineDash(dash);
-    c.beginPath(); c.arc(x, y, r, 0, TAU);
-    c.globalAlpha = alpha * 0.8; c.lineWidth = lw + 1; c.strokeStyle = '#0a0706'; c.stroke();
-    c.globalAlpha = alpha; c.lineWidth = lw; c.strokeStyle = col; c.stroke();
-    c.setLineDash([]); c.globalAlpha = 1;
-  }
-
-  // Fireball: a faint line along the aim from the shot's spawn point to where it bursts (the first foe it would touch, a wall or its range) and the burst ring there.
-  function shotLine(c, view, me, a, g, uw, S) {
-    const ca = Math.cos(a.a), sa = Math.sin(a.a), x0 = me.x + ca * 10, y0 = me.y - 4 + sa * 10, rr = ED.CONST.FB_R || 7;
-    const end = Sim.castMove(view.room, x0, y0 + 4, a.a, g.range, 2, view.locked);
-    let len = Math.hypot(end.x - x0, end.y - 4 - y0);
-    for (const e of view.enemies) {
-      if (e.hp <= 0 || e.burrowed || e.spawnT > 0) continue;
-      const t = (e.x - x0) * ca + (e.y - y0) * sa;
-      if (t <= 0 || t >= len) continue;
-      const px = x0 + ca * t - e.x, py = y0 + sa * t - e.y, rs = e.r + rr;
-      if (px * px + py * py <= rs * rs) len = Math.max(0, t - Math.sqrt(Math.max(0, rs * rs - px * px - py * py)));
-    }
-    const ex = Math.round((x0 + ca * len) * S) / S, ey = Math.round((y0 + sa * len) * S) / S;
-    c.setLineDash([0.3 * uw, 0.35 * uw]); c.globalAlpha = 0.3; c.lineWidth = lineW(0.08 * uw); c.strokeStyle = '#ff8a3d';
-    c.beginPath(); c.moveTo(Math.round(x0 * S) / S, Math.round(y0 * S) / S); c.lineTo(ex, ey); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
-    dashed(c, ex, ey, g.r, [0.3 * uw, 0.25 * uw], lineW(0.08 * uw), '#ffb56b', 0.4);
-  }
-
-  const SLOT_KEY = ['skill1', 'skill2', 'skill3'];
-  // Landing preview of each ready ground skill (and the Shadowstep diamond, the Fireball line). The area equals the real one (ED.skillRadius).
-  function preview(c, view, me, a, uw, S) {
-    let grounds = 0;
-    for (let i = 0; i < a.ground.length; i++) if (!a.ground[i].move && !a.ground[i].line) grounds++;
-    for (let i = 0; i < a.ground.length; i++) {
-      const g = a.ground[i];
-      if (g.line) { shotLine(c, view, me, a, g, uw, S); continue; }
-      if (g.move) {
-        const l = A.stepLand(view, me, a), x = Math.round(l.x * S) / S, y = Math.round(l.y * S) / S, d = 0.4 * uw;
-        c.globalAlpha = 0.4; c.lineWidth = lineW(0.1 * uw); c.strokeStyle = '#ffb56b'; c.fillStyle = 'rgba(255,181,107,0.25)';
-        c.beginPath(); c.moveTo(x, y - d); c.lineTo(x + d, y); c.lineTo(x, y + d); c.lineTo(x - d, y); c.closePath(); c.fill(); c.stroke(); c.globalAlpha = 1;
-        continue;
-      }
-      const w = A.want(me, a, g.range), tx = w.x, ty = w.y, l = Sim.groundPoint(view.room, view.locked, me.x, me.y, tx, ty, g.range, g.walk);
-      const lx = Math.round(l.x * S) / S, ly = Math.round(l.y * S) / S, near = Math.hypot(l.x - tx, l.y - ty) < 3;
-      if (near) dashed(c, lx, ly, g.r, [0.4 * uw, 0.3 * uw], lineW(0.08 * uw), '#ffb56b', 0.35);
-      else {
-        dashed(c, Math.round(me.x * S) / S, Math.round(me.y * S) / S, g.range, [0.5 * uw, 0.5 * uw], lineW(0.08 * uw), '#ff8a3d', 0.3);
-        c.beginPath(); c.arc(lx, ly, g.r, 0, TAU);
-        c.globalAlpha = 0.08; c.fillStyle = '#ffb56b'; c.fill();
-        c.globalAlpha = 0.75; c.lineWidth = lineW(0.1 * uw); c.strokeStyle = '#ffb56b'; c.stroke();
-        const q = 0.15 * uw; c.beginPath(); c.moveTo(lx - q, ly); c.lineTo(lx + q, ly); c.moveTo(lx, ly - q); c.lineTo(lx, ly + q); c.stroke();
-        c.globalAlpha = 1;
-        if (a.pointer) { // dotted tether from the cursor to the landing point
-          c.setLineDash([0.15 * uw, 0.3 * uw]); c.globalAlpha = 0.35; c.lineWidth = lineW(0.08 * uw); c.strokeStyle = '#ffb56b';
-          c.beginPath(); c.moveTo(tx, ty); c.lineTo(lx, ly); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
-        }
-      }
-      if (grounds > 1) // several ground skills ready: label each landing with its key in the HUD's pixel font (1 buffer px per font px, outlined)
-        ED.HUD.pixText(c, ED.Input.label(SLOT_KEY[g.slot] || 'skill1'), lx + g.r + 4, ly, 1, '#ffd9a8', 'b', 'left', 700, 1);
-    }
-  }
-
-  // Draws the extras with the world transform active (called by the renderer after the overhead labels).
-  A.draw = (c, view) => {
-    const G = ED.Game, s = G && G.s, a = s && s.aim;
-    const open = !a || !a.show || !view.room || overlayOpen(), em = !open && s.me && ED.Render.empower ? ED.Render.empower(s.me) : null; // the local hero's empowered next attack (render.js R.empower)
-    setEmp(em ? em.col : '');
-    if (open) return;
-    const R = ED.Render, set = (ED.App && ED.App.settings) || {}, me = s.me, m = ED.Input.mouse;
-    const k0 = R.dpr / R.scale, uw = A.uCss * k0, S = R.scale, now = performance.now(); // k0: world px per CSS px
-    if (a.pointer) { const w = R.toWorld(m.x * R.dpr, m.y * R.dpr); a.wx = w.x; a.wy = w.y; } // the camera has moved since control()
-    c.save();
-    c.lineCap = 'butt';
-    if (a.device === 'pad') chevron(c, me, a, uw, S, em ? em.col : '');
-    else if (a.pointer && m.inside) cursorExtras(c, a, uw, S, now);
-    if (set.aimPreview !== false && a.ground.length) preview(c, view, me, a, uw, S);
-    c.restore();
+  // Gamepad aim marker in the world (drawn by the caller between the actors and the overlays).
+  A.draw = (B, me) => {
+    if (!me || ED.Input.device !== 'pad') return;
+    B.circ(A.wx, A.wy, 4, 0xffb56bcc, 1);
   };
 })(globalThis.ED || (globalThis.ED = {}));

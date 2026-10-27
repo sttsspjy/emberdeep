@@ -1,6 +1,6 @@
 // WebGL present + post-process. R.frame draws the world into a small offscreen canvas (1 px = 1 world px); this uploads it as a texture, renders bloom (1/2 of
 // the buffer, 2 separable blur iterations) at buffer resolution, then composites to the screen-size WebGL canvas with a sharp-bilinear upscale (crisp art pixels at
-// non-integer scales, the fractional camera offset applied here), a per-biome colour grade, vignette, film grain and FX-driven chromatic aberration. The WebGL canvas sits
+// non-integer scales, the fractional camera offset applied here), a per-stage colour grade (Post.grade(theme): { id, pal: { accent, light } }), vignette, film grain and FX-driven chromatic aberration. The WebGL canvas sits
 // beneath the transparent HUD canvas. Any failure leaves Post.ready false and Render falls back to the plain 2D present.
 (function (ED) {
   'use strict';
@@ -135,6 +135,10 @@ void main(){
     } catch (err) { Post.fail(err); }
     return Post.ready;
   };
+
+  // The WebGL context and canvas (null before init / after a failure): gl.js draws the world through the same context so post samples it without a 2D upload.
+  Post.gl = () => gl;
+  Post.glCanvas = () => glc;
 
   Post.fail = (err) => { Post.ready = false; Post.error = String(err && err.message || err); if (glc) glc.style.display = 'none'; };
 

@@ -1,8 +1,8 @@
 // Pixel-art helpers of the effects layer (client only): element ramps, luminance-ramp recolours of atlas anims and cached art-grid sprites (discs, orbs, rings, ellipses, puffs) and 2 px row fills of convex shapes (telegraph lanes and cones).
-// 1 art px = 2 world px; every sprite here is baked once at art resolution and blitted at x2 with smoothing off, so nothing in the effects layer is anti-aliased except glows and light.
+// 1 art px = 1 world px; every sprite here is baked once at art resolution and blitted with smoothing off, so nothing in the effects layer is anti-aliased except glows and light.
 (function (ED) {
   'use strict';
-  const U = ED.U, Bmp = ED.Bmp, K = 2;
+  const U = ED.U, Bmp = ED.Bmp, K = 1; // world px per art px (matches ED.Atlas.K)
   const Pix = ED.Pix = { K, baked: 0 };
 
   // ---------------- ramps ----------------

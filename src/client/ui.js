@@ -1,1179 +1,151 @@
-// DOM screens and overlays: main menu, sections (Descend, Hearth, Heroes), lobby, results, boon picker, character sheet, settings with key rebinding.
+// DOM screens (client only): title -> hero select -> stage select -> run; level-up card overlay, pause, results, Camp shop and save code, credits.
+// ED.UI.show(name) shows one screen ('title' | 'hero' | 'stage' | 'camp' | 'results' | 'none'); overlays are toggled separately.
 (function (ED) {
   'use strict';
-  const U = ED.U, S = ED.Save;
-  const UI = ED.UI = {};
+  const U = ED.U;
   const $ = (id) => document.getElementById(id);
-  const esc = (s) => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const UI = ED.UI = { offerSig: '' };
+  const SCREENS = ['title', 'hero', 'stage', 'camp', 'results'];
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   UI.esc = esc;
-  const LOCK = '<i class="px-lock" aria-hidden="true"></i>'; // pixel padlock (screenart.js 'lock')
-  const keys = (action) => ED.Input.labels(action).map(k => `<kbd>${esc(k)}</kbd>`).join('');
 
   UI.show = (name) => {
-    for (const el of document.querySelectorAll('.screen')) el.hidden = el.id !== 'scr-' + name;
-    $('loading').hidden = true;
-    requestAnimationFrame(() => { const f = document.querySelector(`#scr-${name} [data-focus]`); if (f && f.offsetParent) f.focus({ preventScroll: true }); });
+    for (const s of SCREENS) $('scr-' + s).hidden = s !== name;
+    $('ui').classList.toggle('in-run', name === 'none');
+    const f = name !== 'none' && document.querySelector('#scr-' + name + ' [data-focus]');
+    if (f) f.focus();
   };
-  UI.hideScreens = () => { for (const el of document.querySelectorAll('.screen')) el.hidden = true; };
-
-  UI.toast = (html, icon, life) => {
-    const el = document.createElement('div');
-    el.className = 'toast';
-    el.style.setProperty('--life', (life || 3.4) + 's');
-    el.innerHTML = (icon ? `<img src="${icon}" alt="">` : '') + `<span>${html}</span>`;
-    $('toasts').appendChild(el);
-    setTimeout(() => el.remove(), ((life || 3.4) + 0.5) * 1000);
+  // Atlas icon as a small canvas (cards, slots).
+  UI.iconCanvas = (id, size) => {
+    const cv = document.createElement('canvas'); cv.width = cv.height = size; cv.className = 'icon';
+    if (ED.Atlas.ok) ED.HUD.icon(cv.getContext('2d'), id, 0, 0, size);
+    return cv;
   };
 
-  UI.confirm = (title, text, yesLabel, onYes) => {
-    $('modal-title').textContent = title; $('modal-text').textContent = text; $('modal-yes').textContent = yesLabel || 'Confirm';
-    $('modal').hidden = false;
-    $('modal-yes').onclick = () => { $('modal').hidden = true; onYes(); };
-    $('modal-no').onclick = () => { $('modal').hidden = true; };
-    $('modal-no').focus();
-  };
-
-  const copy = (text, btn) => {
-    const done = () => { const o = btn.textContent; btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = o; }, 1400); };
-    try { navigator.clipboard.writeText(text).then(done, () => { selectText(btn.previousElementSibling); }); } catch (e) { selectText(btn.previousElementSibling); }
-  };
-  const selectText = (el) => { if (!el) return; const r = document.createRange(); r.selectNodeContents(el); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); };
-
-  const portrait = (cls, size, slot, weapon, skin) => { const cv = document.createElement('canvas'); cv.width = cv.height = size * 2; ED.Sprites.portrait(cv, cls, slot || 0, weapon, skin); if (ED.Actors && ED.Actors.on()) ED.Actors.fit(cv, () => ED.Sprites.portrait(cv, cls, slot || 0, weapon, skin)); return cv; }; // skin: a Wardrobe skin suffix (ED.Cos.skinKey)
-  UI.portrait = portrait;
-
-  // Path helpers: the elemental paths share ids with their elements (fire, ice, lightning).
-  const pathIcon = (k) => ED.Icons.url(ED.PATHS[k].icon, ED.PATHS[k].color);
-  const pathName = (k, wrap) => (ED.PATHS[k] ? (wrap ? `<i style="color:${ED.PATHS[k].color}">${ED.PATHS[k].name}</i>` : ED.PATHS[k].name) : '');
-  // Evolved weapon name from a weapon name (the fork's name after an Attack fork: 'Cinder Greatsword').
-  UI.evoName = (path, weaponName) => (ED.PATHS[path] ? ED.PATHS[path].evo : '') + ' ' + (weaponName || 'Arms');
-  const heroWeaponName = (p) => (p && p.stats && p.stats.weapon ? p.stats.weapon.name : p && ED.WEAPONS[p.weapon] ? ED.WEAPONS[p.weapon].name : '');
-
-  // Roster keys: arrows move between menu entries and tabs.
-  const arrowNav = (root, sel, prev, next) => root.addEventListener('keydown', (e) => {
-    if (e.code !== prev && e.code !== next) return;
-    const items = [...root.querySelectorAll(sel)].filter(b => !b.hidden && !b.disabled), i = items.indexOf(document.activeElement);
-    if (i < 0) return;
-    e.preventDefault(); items[(i + (e.code === next ? 1 : -1) + items.length) % items.length].focus();
-  });
-
-  // ---------------- main menu ----------------
+  // ---------------- title ----------------
   UI.renderTitle = () => {
     const A = ED.App, p = A.profile;
-    const has = !!A.hasProfile;
-    $('title-new').hidden = has; $('title-menu').hidden = !has; $('title-profile').hidden = !has;
-    if (has) {
-      $('title-name').textContent = p.name; $('title-embers').textContent = p.embers;
-      $('dot-hearth').hidden = !canBuy(p);
-    }
-    $('title-load').hidden = true;
-    const jc = A.pendingJoin;
-    $('title-join').hidden = !jc || !has;
-    if (jc) $('title-join-code').textContent = jc;
+    $('name-row').hidden = A.hasProfile;
+    $('profile-line').textContent = A.hasProfile ? p.name + '  -  ' + p.gold + ' gold  -  ' + p.stats.runs + ' runs' : '';
   };
 
-  // One-time notice for a profile made before the current rules (profile.news = the oldest part not yet seen): 4 the v7 changes, 3 also the v6 changes, 2 also the v5 changes, 1 also relic and Hearth changes, the v3 rules and the embers the Codex refunded. Closing it clears the flag.
-  const V7 = [
-    '<b>Paths:</b> four paths, follow up to two. Steel sharpens your weapon, Flame spreads Burn when a burning foe dies, Frost freezes foes for any hit to Shatter, Storm charges foes until they discharge into each other. A run starts with a pick of the four. Poison, Holy and Shadow are no longer paths (the Cleric and the Necromancer keep Radiance and Doom). Most boon rooms name a path on their door ("Flame boon").',
-    '<b>Dash:</b> the dash is only a dash: at most 2 charges, and no path rides it.',
-    '<b>Knight:</b> Bulwark replaces Shield Throw: hold to raise the shield and block every hit and shot from the front, release to bash the foes ahead and stun them. Each block makes the bash stronger.',
-    '<b>Skills:</b> every hero skill does one clear thing and hits harder; heals and extra effects moved to the route cards (Ghost Walk, Sanctum, Verdict, Bone Armor).',
-    '<b>Relics:</b> 63 relics that each change a rule or make a trade, 10 boss relics with a big upside and a real cost, and curses that lift after a while. Elite and champion fights give each hero a pick of three relics, the first two bosses a pick of three boss relics, and shops sell three relics. Stratum I pays double gold.',
-    '<b>Events:</b> 36 event rooms with a story and 2 to 4 choices (a party votes), 5 minigames, and 26 lore pages to find for the Hearth\'s Codex.',
-    '<b>Map key:</b> M opens the whole stratum\'s map, from the start at the bottom to the boss at the top.',
-    '<b>Clockwork Colossus:</b> the second champion of stratum IV is a huge neon machine: break two of its arms or its eye to open its core.',
-    '<b>Sound:</b> new music for every stratum and room (exploring, fights, elites, dark rooms, bosses, shop and rest), and hits that sound like your weapon.',
-  ];
-  const V6 = [
-    '<b>Map:</b> each stratum is a map of rooms in rows from the start to the boss. Paths split and merge, every door shows the room behind it and its reward, and there is no way back. Tab shows the whole map.',
-    '<b>Strata:</b> there are four: Ossuary, Glowmire, Drowned Sanctum and the Starless Abyss, the last. Rimefrost Halls and the Cinderforge are gone, and no stratum is weak to or resists an element.',
-    '<b>Removed:</b> Ascended boons, duo boons, Mutations, Twists, the Attunement boons and twelve plain stat boons (Fleet Foot, Lodestar, Sharpened Edge, Quickened Hands, Bounty, Stalwart, Mending, Forager, Thornmail, Battle Ward, Glass Heart, Overcharge).',
-    '<b>Pyromancer:</b> a caster now. Ember Bolt hits make your spells recharge sooner, and Fireball (2 charges) is a third skill on right mouse or R (B on a pad). Skill 1 is Q alone (RB on a pad); heroes without a third skill cast skill 1 on its key.',
-    '<b>Bosses:</b> new fights. The Bone Warden duels and raises bone walls, the Sporemother spreads spores from her pods, the Drowned King floods the room, and stratum IV ends with two champion fights (the twins, the Clockwork Colossus) before the Hollow King.',
-    '<b>Fights:</b> fodder takes a few hits and sets off no kill effects. Every wave is marked before it arrives, the room clears when the last wave falls, and damage over time shows its numbers and makes a sound.',
-  ];
-  const V5 = [
-    '<b>Health:</b> health numbers are small and hits are hard. A Knight has 40 health and a hit from a foe costs 2 to 4; healing, shields and health from boons and relics are scaled to match.',
-    '<b>Hearth:</b> upgrades and hero mastery give more (Vitality +2 health a rank, Might +3% damage a rank, mastery up to +8% damage and +4 health). Pacts 1–3 are gentle; Pacts 4 and 5 are the steep climb.',
-    '<b>Armory:</b> each hero has three weapon variants in the Hearth: the same strength with a different attack, bought with embers once the base weapon is unlocked. An owned variant is its own choice in the weapon picker.',
-    '<b>Melee:</b> blades swing from the hero\'s hand, from one side to the other, and rest lowered between strikes.',
-  ];
-  UI.maybeNews = () => {
-    const A = ED.App, p = A.profile;
-    if (!A.hasProfile || !p.news) return;
-    $('news-body').innerHTML = (p.news === 4 ? V7 : p.news === 3 ? V7.concat(V6) : p.news === 2 ? V7.concat(V6, V5) : V7.concat(V6, V5, [
-      '<b>Relics:</b> the Codex is gone. Every relic can drop from your first run, and relics no longer belong to an element.',
-      p.refunded > 0 ? `<b>Refunded:</b> the ${p.refunded} embers you spent on the Codex are back in your purse.` : '',
-      '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. Upgrades are small now, so your build choices decide a run. The Reliquary became the Stash (starting gold), Head Start starts the run with some experience and Deep Wick boosts the gold and experience of dark rooms.',
-      '<b>Builds:</b> generic health and armor boons are smaller; a path (its boons, keystone and weapon evolution) is what makes a build strong.',
-      '<b>Aim:</b> attacks and ground skills go toward the mouse cursor (right stick on a pad). The Auto-aim setting is gone.',
-      `<b>Paths:</b> follow up to ${ED.MAX_PATHS} of ${ED.PATH_IDS.map(k => pathName(k, true)).join(', ')}. Blood and Spirit are gone.`,
-      '<b>No life steal:</b> hits do not heal you any more. Shields take their place.',
-      '<b>Dark rooms:</b> optional rooms marked with a violet moon: harder foes, better rewards. They replace the lantern.',
-      '<b>Hordes:</b> fight rooms are about twice as big and scroll with you, and packs of weak fodder pour in beside the foes that matter.',
-      '<b>Dash:</b> dashing uses charges that refill one at a time; Light Step adds charges.',
-      '<b>Late power:</b> your route fork gains rank 2 at the stratum II boss and transforms at rank 3 at the stratum III boss, skill forks included.',
-      '<b>Fury:</b> the stratum IV boss grows furious when it lives too long and hits harder and faster; its bar shows when.',
-    ])).filter(Boolean).map(t => `<p>${t}</p>`).join('');
-    $('ov-news').hidden = false;
-    requestAnimationFrame(() => $('btn-news-close').focus({ preventScroll: true })); // after the screen's own focus
-  };
-
-  // ---------------- sections ----------------
-  UI.tab = 'descend';
-  const SECTION = { descend: 'Play', upgrades: 'Hearth', wardrobe: 'Hearth', chronicle: 'Hearth', codex: 'Hearth', heroes: 'Heroes' };
-  UI.setTab = (t) => {
-    UI.tab = t;
-    $('sec-title').textContent = SECTION[t] || 'Play';
-    $('hearth-tabs').hidden = SECTION[t] !== 'Hearth';
-    for (const b of document.querySelectorAll('#hearth-tabs .tab')) b.classList.toggle('on', b.dataset.tab === t);
-    for (const p of document.querySelectorAll('.pane')) p.hidden = p.dataset.pane !== t;
-    UI.renderHearth();
-  };
-
-  const canBuyUpgrade = (p) => ED.UPGRADES.some(u => S.upgradeAvailable(p, u) && p.up[ED.UPGRADE_IDX[u.id]] < u.costs.length && p.embers >= u.costs[p.up[ED.UPGRADE_IDX[u.id]]]);
-  const armoryOf = (cls) => ED.ARMORY[cls] || [];
-  const armoryHas = (p, cls, i) => !!(p.armory && p.armory[cls] && p.armory[cls][i]);
-  // An Armory entry of an unlocked hero is affordable.
-  const canBuyArmory = (p) => ED.CLASS_IDS.some(c => S.classUnlocked(p, c) && armoryOf(c).some((e, i) => !armoryHas(p, c, i) && p.embers >= e.cost && S.armoryOpen(p, c, e.id)));
-  const canBuy = (p) => canBuyUpgrade(p) || canBuyArmory(p);
-  // A Wardrobe skin of an unlocked hero is open, unowned and affordable.
-  const canBuyCos = (p) => ED.COSMETICS.some(c => c.gate.cost && S.classUnlocked(p, c.cls) && S.cosOpen(p, c.id) && !ED.cosOwned(p, c.id, c.cls) && p.embers >= c.gate.cost);
-
-  UI.renderHearth = () => {
-    const p = ED.App.profile;
-    $('hearth-embers').textContent = p.embers;
-    $('dot-upgrades').hidden = !canBuy(p);
-    $('dot-wardrobe').hidden = !canBuyCos(p);
-    if (UI.tab === 'descend') renderDescend();
-    else if (UI.tab === 'upgrades') renderUpgrades();
-    else if (UI.tab === 'heroes') renderHeroes($('heroes-view'));
-    else if (UI.tab === 'wardrobe') renderWardrobe($('wardrobe-view'));
-    else if (UI.tab === 'chronicle') renderChronicle();
-    else if (UI.tab === 'codex') renderCodex();
-  };
-
-  // A locked hero whose unlock is a riddle (unlock.hint) shows as a silhouette named "???" with the hint, never its condition.
-  const mystery = (p, id) => !!ED.CLASSES[id].unlock && !!ED.CLASSES[id].unlock.hint && !S.classUnlocked(p, id);
-  // Hero tiles. `inspect` lets locked heroes be picked too (Heroes view); otherwise a locked tile only says how to unlock it.
-  // A riddle tile in the one-row roster (Descend) says only "Locked" (its hint stands in the goal box, so the row keeps its height); list and compact rosters print the hint.
-  function rosterTiles(container, selected, onPick, inspect) {
-    const p = ED.App.profile, row = !container.classList.contains('list') && !container.classList.contains('compact');
-    container.innerHTML = '';
-    container.style.setProperty('--heroes', ED.CLASS_IDS.length);
-    for (const id of ED.CLASS_IDS) {
-      const c = ED.CLASSES[id];
-      const unlocked = S.classUnlocked(p, id), hid = mystery(p, id);
+  // ---------------- hero select ----------------
+  UI.renderHeroes = () => {
+    const A = ED.App, list = $('hero-list');
+    list.textContent = '';
+    for (const cls of ED.HERO_IDS) {
+      const h = ED.HEROES[cls]; if (!h) continue;
+      const unlocked = ED.Save.heroUnlocked(A.profile, cls), rule = ED.UNLOCKS.heroes[cls];
       const b = document.createElement('button');
-      b.className = 'hero-tile' + (id === selected ? ' on' : '') + (unlocked ? '' : ' locked') + (hid ? ' mystery' : '');
-      b.type = 'button'; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', id === selected ? 'true' : 'false');
-      b.appendChild(portrait(id, 64));
-      const info = document.createElement('div');
-      info.innerHTML = `<div class="cn">${hid ? '???' : c.name}</div><div class="cm">${unlocked ? 'Mastery ' + S.masteryLevel(p, id) : LOCK + esc(hid ? (row ? 'Locked' : c.unlock.hint) : c.unlock.text)}</div>`;
-      b.appendChild(info);
-      if (hid) b.setAttribute('aria-label', '??? (locked): ' + c.unlock.hint);
-      if (unlocked || inspect) b.onclick = () => { ED.Audio.play('click'); onPick(id); };
-      else b.onclick = () => UI.toast(hid ? esc(c.unlock.hint) : `${c.name} unlocks: ${esc(c.unlock.text)}`);
-      container.appendChild(b);
+      b.className = 'card hero-card' + (A.sel.cls === cls ? ' on' : '') + (unlocked ? '' : ' locked');
+      b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', A.sel.cls === cls ? 'true' : 'false');
+      b.appendChild(UI.iconCanvas(h.icon, 64));
+      const sig = ED.WEAPONS[h.sig], q = ED.SKILLS[h.skills[0]], e = ED.SKILLS[h.skills[1]];
+      b.insertAdjacentHTML('beforeend', `<b class="card-name">${esc(h.name)}</b><span class="card-line">HP ${h.hp}  Speed ${h.speed}</span>` +
+        `<span class="card-line">${esc(sig ? sig.name : '')}</span><span class="card-sub">Q ${esc(q ? q.name : '')}  E ${esc(e ? e.name : '')}</span>` +
+        (unlocked ? '' : `<span class="card-lock">${esc(rule.txt || 'Locked')}</span>`));
+      b.onclick = () => { A.sel.cls = cls; A.saveSel(); UI.renderHeroes(); };
+      list.appendChild(b);
     }
-    requestAnimationFrame(() => fitRoster(container));
-  }
-  // .tight on a roster whose hero names do not fit their tiles at the menu size (a narrow window): names drop to the body size.
-  function fitRoster(r) {
-    if (!r.offsetParent) return;
-    r.classList.remove('tight');
-    if ([...r.querySelectorAll('.cn')].some(n => n.scrollWidth > n.clientWidth + 1)) r.classList.add('tight');
-  }
-
-  // The hero's base weapons, each followed by its owned Armory variants; a variant is wieldable where its base is unlocked.
-  function weaponChips(container, cls, selected, onPick) {
-    const p = ED.App.profile, ml = S.masteryLevel(p, cls), owned = S.metaBundle(p, cls).armory;
-    container.innerHTML = '';
-    for (const wid of ED.weaponChoices(cls)) {
-      const w = ED.WEAPONS[wid], i = ED.weaponIndex(cls, wid), ok = ED.weaponUnlocked(cls, i, ml);
-      if (w.variant && owned.indexOf(wid) < 0) continue;
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'weapon-chip' + (wid === selected ? ' on' : '') + (ok ? '' : ' locked') + (w.variant ? ' variant' : '');
-      b.style.setProperty('--wc', String(i + 1)); // column of the base weapon; a variant takes the row below it
-      b.innerHTML = `<b>${w.name}</b><small>${ok ? esc(w.desc) : LOCK + (w.variant ? ED.WEAPONS[w.variant].name + ' unlocks' : 'Unlocks') + ' at mastery ' + (i === 1 ? 3 : 6)}</small>`;
-      if (ok) b.onclick = () => { ED.Audio.play('click'); onPick(wid); };
-      container.appendChild(b);
-    }
-  }
-
-  // Pact levels 0..max as steps; every step up to the chosen one is lit because pacts stack.
-  function pactSteps(container, value, max, onPick) {
-    container.innerHTML = '';
-    container.classList.toggle('ro', !onPick);
-    for (let i = 0; i <= max; i++) {
-      const b = document.createElement('button');
-      b.type = 'button'; b.textContent = i; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', i === value ? 'true' : 'false');
-      b.className = 'pact-step' + (i === value ? ' on' : i < value ? ' lit' : '');
-      b.title = i ? ED.PACTS[i].desc : 'No pact';
-      if (onPick) b.onclick = () => { ED.Audio.play('click'); onPick(i); }; else b.tabIndex = -1;
-      container.appendChild(b);
-    }
-  }
-
-  // One line per skill of the numbers its parts have for a boonless hero ("Impact 49 · stun 1s · Shockwave …"), from the sheet model.
-  function skillFacts(cls, st) {
-    const out = {};
-    try {
-      const Sh = ED.Sheet, p = { pid: 'camp', name: '', cls, weapon: st.weaponId.split('@')[0], boons: {}, relics: [], meta: { up: [], mastery: 1 }, stats: st, hp: st.maxHp, maxHp: st.maxHp, shield: 0, picks: 0, slot: 0 };
-      const m = Sh.compute(p, Sh.ctx({ stratum: 1, pact: 0, players: new Map(), allies: [] }, p), { raw: true });
-      for (const k of m.skills) {
-        out[k.id] = k.parts.filter(q => q.kind !== 'zone').map(q => {
-          const bits = [q.label + ' ' + Sh.n1(q.kind === 'status' ? q.here : q.hit)];
-          if (q.kind === 'tick' || q.kind === 'sec') bits.push(`${q.oneFoe} ticks`);
-          else if (q.kind === 'minion') bits.push(`${q.hitsEach} strikes each`);
-          if (q.r) bits.push('radius ' + q.r);
-          if (q.stun) bits.push('stun ' + Sh.n1(q.stun) + 's');
-          return bits.join(' ');
-        }).join(' · ');
-      }
-    } catch (e) { /* the description alone */ }
-    return out;
-  }
-
-  function renderDescend() {
-    const A = ED.App, p = A.profile;
-    const cls = A.sel.cls, c = ED.CLASSES[cls];
-    rosterTiles($('class-list'), cls, (id) => { A.selectClass(id); renderDescend(); });
-    const st = ED.Stats.compute({ cls, weapon: A.sel.weapon, boons: {}, relics: [], meta: S.metaBundle(p, cls), pact: A.sel.pact });
-    const skills = [[c.skill, 'skill1', st.skillCd], [c.skill2, 'skill2', st.skill2Cd], [c.skill3, 'skill3', st.skill3Cd]].filter(x => ED.SKILLS[x[0]]);
-    const facts = skillFacts(cls, st);
-    $('hero-detail').innerHTML = `
-      <div class="hd-top"><div id="hd-port"></div><div><div class="hd-name">${c.name}</div><div class="hd-title">${c.title}</div><p class="hd-desc">${esc(c.desc)}</p></div></div>
-      <div class="hd-skills">${skills.map(([id, act, cd]) => { const sk = ED.SKILLS[id]; return `<div class="hd-skill"><img alt="" src="${ED.Icons.url(sk.icon, c.col.c)}"><div><div class="sk-head"><b>${sk.name}</b>${keys(act)}<span class="cd">${cd.toFixed(1)}s cooldown</span></div><p>${esc(sk.desc)}</p>${facts[id] ? `<div class="sk-facts">${esc(facts[id])}</div>` : ''}</div></div>`; }).join('')}</div>`;
-    $('hd-port').appendChild(portrait(cls, 96, 0, A.sel.weapon));
-    weaponChips($('weapon-row'), cls, A.sel.weapon, (wid) => { A.sel.weapon = wid; A.saveSel(); renderDescend(); });
-    const ar = $('asc-row');
-    ar.hidden = p.pactMax <= 0;
-    if (p.pactMax > 0) {
-      const v = Math.min(A.sel.pact, p.pactMax);
-      $('asc-val').textContent = v;
-      pactSteps($('asc-steps'), v, p.pactMax, (i) => { A.sel.pact = i; A.saveSel(); renderDescend(); });
-      $('asc-desc').textContent = pactText(v);
-    }
-    $('btn-host').disabled = !ED.Net.available();
-    $('btn-join').disabled = !ED.Net.available();
-    $('run-goal').innerHTML = goalText(p);
-  }
-
-  function pactText(v) {
-    const lines = [];
-    for (let i = 1; i <= v; i++) lines.push(ED.PACTS[i].desc);
-    return v ? lines.join(' ') + ` Embers +${Math.round(ED.PACT_EMBER_BONUS * v * 100)}%.` : 'No pact: normal difficulty.';
-  }
-
-  // The single most useful next goal; the first two descents also get the two rules that shape a run.
-  function goalText(p) {
-    const next = ED.CLASS_IDS.find(c => !S.classUnlocked(p, c) && !mystery(p, c)); // a riddle hero is never a stated goal
-    const tierNext = ED.UPGRADES.find(u => u.tier > p.stats.deepest);
-    const lines = [];
-    if (p.stats.runs < 2) {
-      lines.push('<b>Aim:</b> aim with the mouse; skills go to the cursor. At level 3 you choose a class route.');
-      lines.push(`<b>Paths:</b> follow up to ${ED.MAX_PATHS} of ${ED.PATH_IDS.map(k => pathName(k, true)).join(', ')}. A path's boons, keystone and weapon evolution make the build; a door may promise a path boon.`);
-      lines.push('<b>Dark rooms:</b> a door marked with a violet moon leads to a dark room: foes hit harder and an extra elite joins, but the reward is one step better and foes drop more gold and experience.');
-    }
-    if (p.stats.runs === 0) lines.push('<b>First goal:</b> reach the Bone Warden at the end of the Ossuary. Every run pays embers, win or lose.');
-    else if (next) lines.push(`<b>Next hero:</b> ${ED.CLASSES[next].name} (${esc(ED.CLASSES[next].unlock.text)}).`);
-    else if (tierNext) lines.push(`<b>Reach stratum ${U.roman(tierNext.tier)}</b> to reveal new Hearth upgrades.`);
-    else if (!p.stats.wins) lines.push('<b>Next goal:</b> defeat the Hollow King to win a run and unlock Pacts.');
-    else if (p.pactMax < 10) lines.push(`<b>Pacts:</b> win a run at Pact ${p.pactMax} to unlock Pact ${p.pactMax + 1}.`);
-    else if (ED.CLASS_IDS.some(c => mystery(p, c))) lines.push('<b>All pacts unlocked.</b> A hero is still hidden.');
-    else lines.push('<b>All heroes and pacts unlocked.</b> See the Records tab for deeds left to earn.');
-    for (const c of ED.CLASS_IDS) if (mystery(p, c) && p.stats.runs >= 2) lines.push(`<b>???:</b> ${esc(ED.CLASSES[c].unlock.hint)}`); // the riddle hero's hint (its roster tile only says Locked), once the first two descents' rules are gone
-    return lines.map(l => '<p>' + l + '</p>').join('');
-  }
-
-  function buyButton(cost, can, label, onClick) {
-    const b = document.createElement('button'); b.type = 'button';
-    b.className = 'btn buy' + (can ? ' btn-primary' : ' cant');
-    b.innerHTML = `<span class="ember-ico"></span>${cost}`;
-    b.disabled = !can; b.setAttribute('aria-label', label); b.title = label;
-    b.onclick = onClick;
-    return b;
-  }
-
-  function refundButton(gain, label, onClick) {
-    const b = document.createElement('button'); b.type = 'button';
-    b.className = 'btn btn-small btn-ghost refund';
-    b.textContent = `Refund +${gain}`;
-    b.setAttribute('aria-label', label); b.title = label;
-    b.onclick = onClick;
-    return b;
-  }
-  // Refund and Buy stacked in a card's last column; data-fk names each button so a re-render can put keyboard focus back.
-  function actionsCell(card, key, refund, buy) {
-    const d = document.createElement('div'); d.className = 'up-act';
-    if (refund) { refund.dataset.fk = key + ':refund'; d.appendChild(refund); }
-    if (buy) { buy.dataset.fk = key + ':buy'; d.appendChild(buy); }
-    card.appendChild(d);
-  }
-  // After a re-render: focus the button with the same key, else a sibling button of the same card or section, else nothing.
-  function restoreFocus(grid, fk) {
-    if (!fk) return;
-    const btns = [...grid.querySelectorAll('[data-fk]')].filter(b => !b.disabled);
-    const stem = (k) => k.slice(0, k.lastIndexOf(':'));
-    const el = btns.find(b => b.dataset.fk === fk) || btns.find(b => stem(b.dataset.fk) === stem(fk));
-    if (el) el.focus({ preventScroll: true });
-  }
-
-  // Reset all: the first click arms the button for 3 s (a click elsewhere disarms it), the second refunds every upgrade rank and Armory unlock.
-  let resetTimer = 0;
-  function paintReset(b) {
-    const n = S.refundTotal(ED.App.profile), armed = !!resetTimer && n > 0;
-    b.textContent = armed ? `Confirm reset (+${n} embers)` : 'Reset all';
-    b.classList.toggle('btn-danger', armed);
-    b.disabled = n <= 0;
-    const label = armed ? `Confirm: refund every upgrade rank and Armory unlock for ${n} embers` : `Reset all: refund every upgrade rank and Armory unlock (${n} embers)`;
-    b.setAttribute('aria-label', label); b.title = label;
-  }
-  function disarmReset() {
-    if (!resetTimer) return;
-    clearTimeout(resetTimer); resetTimer = 0;
-    for (const b of document.querySelectorAll('.btn-reset')) paintReset(b);
-  }
-
-  // Buy feedback: the bought entry's key and time; the re-render right after marks that card .burst (plaque flash and ember burst, 0.45 s) and its new rank pip .new.
-  let bought = { key: '', t: 0 };
-  const markBuy = (key) => { bought = { key, t: performance.now() }; };
-  const fresh = (key) => bought.key === key && performance.now() - bought.t < 500;
-
-  function renderUpgrades(grid) {
-    const p = ED.App.profile;
-    grid = grid || $('up-grid');
-    const fk = document.activeElement && grid.contains(document.activeElement) ? document.activeElement.dataset.fk : null;
-    grid.innerHTML = '';
-    for (let tier = 1; tier <= 4; tier++) {
-      const list = ED.UPGRADES.filter(u => u.tier === tier);
-      const open = tier <= 1 || p.stats.deepest >= tier;
-      const h = document.createElement('div'); h.className = 'tier-head';
-      h.textContent = open ? (tier === 1 ? 'Basic upgrades' : `Stratum ${U.roman(tier)} upgrades`) : `Reach stratum ${U.roman(tier)} to reveal`;
-      grid.appendChild(h);
-      for (const u of list) {
-        const i = ED.UPGRADE_IDX[u.id], r = p.up[i], max = u.costs.length, key = 'u:' + u.id, hot = fresh(key);
-        const card = document.createElement('div');
-        card.className = 'up-card' + (open ? '' : ' locked') + (r >= max ? ' maxed' : '') + (hot ? ' burst' : '');
-        const pips = Array.from({ length: max }, (_, k) => `<span class="pip${k < r ? ' on' : ''}${hot && k === r - 1 ? ' new' : ''}"></span>`).join('');
-        card.innerHTML = `${open ? '<span class="up-ember" aria-hidden="true"></span>' : ''}<img alt="" src="${ED.Icons.url(u.icon, '#ff9a4a')}"><div><div class="un">${u.name}${r >= max ? ' <span class="badge-max">Max</span>' : ''}</div><div class="ud">${open ? (r ? esc(u.desc(r)) : 'Not bought yet') : '???'}</div>${open && r < max ? `<div class="un2">Next: ${esc(u.step)}</div>` : ''}<div class="pips">${pips}</div></div>`;
-        if (r > 0 || (open && r < max)) {
-          const back = r > 0 ? refundButton(u.costs[r - 1], `Refund ${u.name} rank ${r}: +${u.costs[r - 1]} embers`, () => { if (S.refundUpgrade(p, u.id)) ED.App.afterMetaChange(); }) : null;
-          const cost = u.costs[r];
-          const buy = open && r < max ? buyButton(cost, p.embers >= cost, `Buy ${u.name}: ${u.step} for ${cost} embers`, () => { if (S.buyUpgrade(p, u.id)) { markBuy(key); ED.Audio.play('buy'); ED.App.afterMetaChange(); } }) : null;
-          actionsCell(card, 'u:' + u.id, back, buy);
-        }
-        grid.appendChild(card);
-      }
-    }
-    // Armory: each unlocked hero's weapon variants (a hero section is absent while its list is empty); an entry names its base weapon and stays locked until that weapon is unlocked
-    for (const c of ED.CLASS_IDS) {
-      const list = armoryOf(c);
-      if (!list.length || !S.classUnlocked(p, c)) continue;
-      const cl = ED.CLASSES[c];
-      const h = document.createElement('div'); h.className = 'tier-head'; h.textContent = `${cl.name} Armory`;
-      grid.appendChild(h);
-      list.forEach((e, i) => {
-        const own = armoryHas(p, c, i), open = S.armoryOpen(p, c, e.id), bw = e.weapon && ED.WEAPONS[e.weapon], wi = e.weapon ? ED.weaponIndex(c, e.weapon) : 0;
-        const req = bw ? (open ? `Variant of the ${bw.name}` : `${LOCK}Variant of the ${bw.name}, which unlocks at mastery ${wi === 1 ? 3 : 6}`) : '';
-        const card = document.createElement('div'), key = `a:${c}:${e.id}`;
-        card.className = 'up-card arm' + (own ? ' maxed' : '') + (open || own ? '' : ' locked') + (fresh(key) ? ' burst' : '');
-        card.innerHTML = `<img alt="" src="${ED.Icons.url(e.icon || (bw ? cl.icon : 'chest'), cl.col.c)}"><div><div class="un">${esc(e.name)}${own ? ' <span class="badge-max">Owned</span>' : ''}</div><div class="ud">${esc(e.desc)}</div>${req ? `<div class="un2">${req}</div>` : ''}</div>`;
-        if (own) actionsCell(card, key, refundButton(e.cost, `Refund ${e.name}: +${e.cost} embers`, () => { if (S.refundArmory(p, c, e.id)) ED.App.afterMetaChange(); }), null);
-        else if (open) actionsCell(card, key, null, buyButton(e.cost, p.embers >= e.cost, `Buy ${e.name} for ${e.cost} embers`, () => { if (S.buyArmory(p, c, e.id)) { markBuy(key); ED.Audio.play('buy'); ED.App.afterMetaChange(); } }));
-        grid.appendChild(card);
-      });
-    }
-    const foot = document.createElement('div'); foot.className = 'up-foot';
-    const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'btn btn-reset'; reset.dataset.fk = 'reset:all';
-    paintReset(reset);
-    reset.onclick = () => {
-      if (!resetTimer) { resetTimer = setTimeout(disarmReset, 3000); paintReset(reset); return; }
-      clearTimeout(resetTimer); resetTimer = 0;
-      if (S.resetUpgrades(p) > 0) { ED.Audio.play('buy'); ED.App.afterMetaChange(); } else paintReset(reset);
-    };
-    foot.appendChild(reset);
-    grid.insertBefore(foot, grid.firstChild); // above the first tier, visible without scrolling
-    restoreFocus(grid, fk);
-  }
-
-  // Heroes: roster on the left, stats and mastery of the inspected hero on the right.
-  UI.heroSel = null;
-  function renderHeroes(container) {
-    const A = ED.App, p = A.profile;
-    if (!UI.heroSel || !ED.CLASSES[UI.heroSel]) UI.heroSel = A.sel.cls;
-    const cls = UI.heroSel, c = ED.CLASSES[cls], ci = ED.CLASS_IDS.indexOf(cls);
-    const un = S.classUnlocked(p, cls);
-    container.innerHTML = '<div class="roster list"></div><div class="plate hv-detail"></div>';
-    const list = container.firstChild, detail = container.lastChild;
-    rosterTiles(list, cls, (id) => { UI.heroSel = id; renderHeroes(container); }, true);
-    const xp = p.mastery[ci], ml = ED.masteryLevel(xp);
-    const next = ED.MASTERY_XP[ml] !== undefined ? ED.MASTERY_XP[ml] : null, prev = ED.MASTERY_XP[ml - 1];
-    const frac = next === null ? 1 : (xp - prev) / (next - prev);
-    const hid = mystery(p, cls);
-    let html = hid ? '<div class="hd-top mystery"><div id="hv-port"></div><div><div class="hd-name">???</div></div></div>'
-      : `<div class="hd-top"><div id="hv-port"></div><div><div class="hd-name">${c.name}</div><div class="hd-title">${c.title}</div><p class="hd-desc">${esc(c.desc)}</p></div></div>`;
-    if (!un) {
-      html += `<div class="hd-skill"><div></div><div><div class="sk-head"><b>${LOCK}Locked</b></div><p>${esc(hid ? c.unlock.hint : c.unlock.text)}</p></div></div>`;
-    } else {
-      const st = ED.Stats.compute({ cls, weapon: A.weaponFor(cls), boons: {}, relics: [], meta: S.metaBundle(p, cls), pact: 0 });
-      html += `<div class="hd-stats">
-        <div class="hd-stat"><b>${st.maxHp}</b><span>Health</span></div><div class="hd-stat"><b>${Math.round(st.armor)}</b><span>Armor</span></div>
-        <div class="hd-stat"><b>${Math.round(st.moveSpeed)}</b><span>Speed</span></div><div class="hd-stat"><b>${Math.round(st.crit * 100)}%</b><span>Crit</span></div>${st.dodge > 0 ? `<div class="hd-stat"><b>${Math.round(st.dodge * 100)}%</b><span>Dodge</span></div>` : ''}</div>
-        <div><div class="mast-head"><b>Mastery ${ml}</b><span>${next !== null ? `${xp} / ${next} xp` : 'Complete'}</span></div><div class="bar"><i style="width:${Math.round(U.clamp(frac, 0, 1) * 100)}%"></i></div></div>
-        <ul class="mast-rewards">${[2, 3, 4, 5, 6, 7, 8, 9, 10].map(l => {
-    let label = ED.MASTERY_REWARDS[l];
-    if (l === 3) label = 'Weapon: ' + ED.WEAPONS[c.weapons[1]].name;
-    if (l === 6) label = 'Weapon: ' + ED.WEAPONS[c.weapons[2]].name;
-    return `<li class="${ml >= l ? 'got' : ''}"><b>Lv ${l}</b><span>${esc(label)}</span></li>`;
-  }).join('')}</ul>`;
-    }
-    detail.innerHTML = html;
-    detail.querySelector('#hv-port').appendChild(portrait(cls, 96, 0, un ? A.weaponFor(cls) : undefined));
-    if (un) {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-lg hv-pick' + (A.sel.cls === cls ? '' : ' btn-primary');
-      b.textContent = A.sel.cls === cls ? 'Selected for the next run' : `Select ${c.name}`; b.disabled = A.sel.cls === cls;
-      b.onclick = () => { A.selectClass(cls); if (A.state === 'lobby') A.lobbyPick(); renderHeroes(container); };
-      detail.appendChild(b);
-    }
-  }
-
-  // ---------------- Wardrobe ----------------
-  // Optional preview hook (the cosmetic renderer sets it): UI.wardrobePreview(host, cls, wear, camp) draws hero `cls` wearing `wear` ({ skin, aura, hat, pet, trail, death, title, tints })
-  // into the element `host` (emptied first); `camp` is the worn Hearth item. Called on every render and with the hovered or focused item swapped in. Without it the host shows the plain portrait.
-  UI.wardrobePreview = null;
-  const SLOT_INFO = { skin: ['Skin', 'cloak'], tint: ['Weapon tint', 'gem'], aura: ['Aura', 'sun'], hat: ['Hat', 'crown'], pet: ['Pet', 'feather'], trail: ['Trail', 'boot'], death: ['Death effect', 'skull'], title: ['Title', 'scroll'], camp: ['Hearth', 'campfire'] };
-  const cosName = (c, p, cls) => (c.gate.secret && !ED.cosOwned(p, c.id, cls) ? '???' : c.name); // a secret's reward stays unnamed until earned
-  // The reward text of a secret: "<item name>" (a reward whose item does not exist yet reads "a new look").
-  UI.secretReward = (s) => (ED.COSMETIC[s.reward] ? ED.COSMETIC[s.reward].name : 'a new look');
-  // Out of a run: "Secret found" toast; the open Hearth section refreshes.
-  UI.secretToast = (s) => {
-    UI.toast(`Secret found: <b>${esc(s.name)}</b> (${esc(UI.secretReward(s))})`, ED.Icons.url(s.icon, '#b8a6ff'), 5);
-    if (ED.App.state === 'hearth') UI.renderHearth(); else if (ED.App.state === 'lobby') UI.renderPartyHearth();
   };
 
-  UI.wardSel = null;
-  function renderWardrobe(container) {
-    const A = ED.App, p = A.profile;
-    if (!UI.wardSel || !ED.CLASSES[UI.wardSel] || !S.classUnlocked(p, UI.wardSel)) UI.wardSel = A.sel.cls;
-    const cls = UI.wardSel, c = ED.CLASSES[cls];
-    const fk = document.activeElement && container.contains(document.activeElement) ? document.activeElement.dataset.fk : null;
-    container.innerHTML = '<div class="roster list"></div><div class="plate hv-detail wd-detail"></div>';
-    const list = container.firstChild, detail = container.lastChild;
-    rosterTiles(list, cls, (id) => { UI.wardSel = id; renderWardrobe(container); });
-    const worn = S.wearBundle(p, cls), camp = p.wear && p.wear.camp ? p.wear.camp : null;
-    detail.innerHTML = `<div class="hd-top"><div class="wd-port"></div><div><div class="hd-name">${esc(c.name)}${worn.title ? ` <small class="wd-title">${esc(ED.COSMETIC[worn.title].name)}</small>` : ''}</div><div class="hd-title">${esc(c.title)}</div><p class="hd-desc">Hover or focus an item to see it. Click an item you own to wear it; click it again to take it off.</p></div></div>`;
-    const host = detail.querySelector('.wd-port');
-    const preview = (slot, id) => {
-      if (!UI.wardrobePreview) return;
-      const w = Object.assign({}, worn, { tints: worn.tints.slice() });
-      let cp = camp;
-      if (slot === 'camp') cp = id; else if (slot === 'tint') { const wc = ED.COSMETIC[id]; if (wc && w.tints.indexOf(wc.weapon) < 0) w.tints.push(wc.weapon); } else if (slot) w[slot] = id;
-      host.innerHTML = '';
-      try { UI.wardrobePreview(host, cls, w, cp); } catch (e) { host.innerHTML = ''; host.appendChild(portrait(cls, 96, 0, A.weaponFor(cls))); }
-    };
-    if (UI.wardrobePreview) preview(null, null); else host.appendChild(portrait(cls, 96, 0, A.weaponFor(cls)));
-    const changed = () => { ED.App.afterMetaChange(); };
-    const slots = document.createElement('div'); slots.className = 'wd-slots';
-    detail.appendChild(slots);
-    for (const slot of ['skin', 'tint', 'aura', 'hat', 'pet', 'trail', 'death', 'title', 'camp']) {
-      const items = slot === 'tint' ? (ED.COS_SCOPE[cls] || []).filter(x => x.slot === 'tint') : ED.cosFor(slot === 'camp' ? null : cls, slot);
-      if (!items.length) continue;
-      const sec = document.createElement('div'); sec.className = 'wd-slot' + (items.length > 2 ? ' wide' : ''); // slots of up to two items share a row
-      sec.innerHTML = `<h3 class="plate-h">${SLOT_INFO[slot][0]}</h3>`;
-      const row = document.createElement('div'); row.className = 'wd-items';
-      const cur = slot === 'camp' ? camp : slot === 'tint' ? null : worn[slot];
-      const chip = (id, cls2, html, label, onClick) => {
-        const b = document.createElement('button'); b.type = 'button';
-        b.className = 'wd-item ' + cls2; b.innerHTML = html; b.dataset.fk = `w:${slot}:${id || 'none'}`;
-        b.setAttribute('aria-label', label); b.title = label;
-        b.onclick = onClick;
-        b.onmouseenter = b.onfocus = () => preview(slot, id);
-        b.onmouseleave = b.onblur = () => preview(null, null);
-        row.appendChild(b);
-        return b;
-      };
-      if (slot !== 'tint') {
-        chip(null, cur ? '' : 'on', `<span class="wd-ico none"></span><span><b>None</b><small>${cur ? 'Take off' : 'Worn'}</small></span>`, `${SLOT_INFO[slot][0]}: none`, () => {
-          if (cur && S.wear(p, slot === 'camp' ? null : cls, slot, null)) { ED.Audio.play('click'); changed(); }
-        });
-      }
-      for (const it of items) {
-        const own = ED.cosOwned(p, it.id, cls), on = slot === 'tint' ? worn.tints.indexOf(it.weapon) >= 0 : cur === it.id;
-        const open = !own && S.cosOpen(p, it.id), cost = it.gate.cost | 0, name = cosName(it, p, cls);
-        const state = on ? 'Worn' : own ? 'Owned' : open ? `<span class="ember-ico"></span>${cost} embers` : LOCK + esc(ED.cosGateText(it, p));
-        const ico = `<img alt="" src="${ED.Icons.url(SLOT_INFO[slot][1], on ? '#ffd36b' : own ? '#e6dcc8' : open ? '#ff9a4a' : '#6a5e52')}">`;
-        const label = `${name}: ${on ? 'worn' : own ? 'owned' : open ? `buy for ${cost} embers` : ED.cosGateText(it, p)}`;
-        chip(it.id, (on ? 'on' : own ? 'own' : open ? 'open' : 'locked') + (fresh('c:' + it.id) ? ' burst' : ''), `${ico}<span><b>${esc(name)}</b><small>${state}</small></span>`, label, () => {
-          if (own) {
-            const ok = slot === 'tint' ? S.wear(p, cls, 'tint', it.id, !on) : S.wear(p, slot === 'camp' ? null : cls, slot, on ? null : it.id);
-            if (ok) { ED.Audio.play('click'); changed(); }
-          } else if (open) {
-            if (p.embers < cost) { UI.toast(`${esc(it.name)} costs ${cost} embers; you have ${p.embers}.`); return; }
-            UI.confirm(`Buy ${it.name}?`, `${it.name} for the ${c.name} costs ${cost} embers. Wardrobe items are never refunded, and Reset all does not touch them.`, `Buy for ${cost}`, () => {
-              if (S.buyCosmetic(p, it.id)) { S.wear(p, cls, slot, it.id); markBuy('c:' + it.id); ED.Audio.play('buy'); changed(); }
-            });
-          } else UI.toast(`${esc(name)}: ${esc(ED.cosGateText(it, p))}`);
-        });
-      }
-      arrowNav(row, '.wd-item', 'ArrowLeft', 'ArrowRight');
-      sec.appendChild(row);
-      slots.appendChild(sec);
-    }
-    restoreFocus(detail, fk);
-  }
-
-  // Codex: every lore page the profile found (S.loreHas), unfound ones as "???".
-  function renderCodex() {
-    const p = ED.App.profile, L = ED.LORE || [], n = L.filter((pg, i) => S.loreHas(p, i)).length;
-    $('codex-count').textContent = `${n} / ${L.length} pages found`;
-    $('codex-list').innerHTML = L.map((pg, i) => (S.loreHas(p, i) ? `<details class="codex-page"><summary>${esc(pg.title)}</summary><p>${esc(pg.text)}</p></details>` : '<div class="codex-page none">???</div>')).join('');
-  }
-
-  function renderChronicle() {
-    const p = ED.App.profile;
-    const dl = $('deed-list'); dl.innerHTML = '';
-    ED.DEEDS.forEach((d, i) => {
-      const done = !!(p.deeds & (1 << i));
-      dl.insertAdjacentHTML('beforeend', `<div class="deed${done ? ' done' : ''}"><img alt="" src="${ED.Icons.url(d.icon, done ? '#e6c27a' : '#8a7a6a')}"><div><div class="dn">${esc(d.name)}</div><div class="dd">${esc(d.desc)}</div></div><div class="dr">${done ? 'Earned' : '+' + d.reward + ' embers'}</div></div>`);
+  // ---------------- stage select ----------------
+  UI.renderStages = () => {
+    const A = ED.App, list = $('stage-list');
+    list.textContent = '';
+    ED.STAGES.forEach((sd, i) => {
+      const open = ED.Save.stageUnlocked(A.profile, i), best = A.profile.best[sd.id], rule = ED.UNLOCKS.stages[i];
+      const b = document.createElement('button');
+      b.className = 'card stage-card' + (A.sel.stage === i ? ' on' : '') + (open ? '' : ' locked');
+      b.disabled = !open;
+      b.insertAdjacentHTML('beforeend', `<b class="card-name">${i + 1}. ${esc(sd.name)}</b>` +
+        (best ? `<span class="card-line">Best ${U.fmtTime(best.time)}  ${best.won ? 'Beaten' : ''}</span>` : '<span class="card-line">Not played</span>') +
+        (open ? '' : `<span class="card-lock">${esc(rule.txt || 'Locked')}</span>`));
+      b.onclick = () => { if (!open) return; A.sel.stage = i; A.saveSel(); UI.renderStages(); };
+      list.appendChild(b);
     });
-    // secrets: the earned ones in full, the rest as one "???" line
-    const sec = $('secret-list'), left = ED.SECRETS.filter(s => !ED.secretHas(p, s.id)).length;
-    sec.innerHTML = ED.SECRETS.filter(s => ED.secretHas(p, s.id)).map(s => `<div class="deed done secret"><img alt="" src="${ED.Icons.url(s.icon, '#b8a6ff')}"><div><div class="dn">${esc(s.name)}</div><div class="dd">${esc(s.desc)}</div></div><div class="dr">${esc(UI.secretReward(s))}</div></div>`).join('')
-      + (left ? `<div class="deed secret"><img alt="" src="${ED.Icons.url('eye', '#8a7a6a')}"><div><div class="dn">???</div><div class="dd">${left} secret${left === 1 ? '' : 's'} remain${left === 1 ? 's' : ''}</div></div><div class="dr"></div></div>` : '');
-    const st = p.stats;
-    $('records').innerHTML = [
-      ['Runs', st.runs], ['Wins', st.wins], ['Deepest stratum', st.deepest ? U.roman(st.deepest) : '—'], ['Foes killed', st.kills],
-      ['Bosses killed', st.bossKills], ['Fastest win', st.bestTime ? U.fmtTime(st.bestTime) : '—'], ['Highest pact won', p.pactWin >= 0 ? p.pactWin : '—'], ['Lifetime embers', p.lifetime],
-    ].map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
-    const sl = $('strata-list'); sl.innerHTML = '';
-    ED.BIOMES.forEach((b, i) => {
-      const seen = st.deepest > i, slain = !!(p.bosses & (1 << i));
-      sl.insertAdjacentHTML('beforeend', `<div class="stratum${seen ? '' : ' unseen'}"><i style="--sa:${b.pal.accent};--sb:${b.pal.floorA}"></i><div><b>${U.roman(i + 1)}. ${seen ? b.name : '???'}</b><small>${seen ? esc(b.blurb) + (slain ? ` Boss defeated: ${esc(ED.ENEMIES[b.boss] ? ED.ENEMIES[b.boss].name : '')}.` : '') : 'Not reached yet'}</small></div></div>`);
-    });
-  }
+  };
 
-  // Names travel inside the save code, so only a small alphabet is kept. Say so instead of silently changing it.
-  function nameHint(inp, msg) {
-    const raw = inp.value.trim();
-    const kept = raw.split('').filter(ch => S.NAME_CHARS.indexOf(ch) >= 0).join('').trim();
-    const off = !!raw && kept !== raw;
-    msg.textContent = off ? `Only letters A–Z, numbers, spaces and hyphens are kept: you will appear as "${S.sanitizeName(raw)}".` : 'Letters A–Z, numbers, spaces and hyphens, up to 12';
-    msg.className = 'msg name-msg' + (off ? ' warn' : '');
-  }
-
-  // ---------------- lobby ----------------
-  UI.renderLobby = (state, myPid, isHost) => {
-    const A = ED.App;
-    $('lobby-code').textContent = state.code || '-----';
-    const mem = $('lobby-members'); mem.innerHTML = '';
-    for (let i = 0; i < ED.CONST.MAX_PLAYERS; i++) {
-      const m = state.members.find(x => x.slot === i);
-      const div = document.createElement('div');
-      if (!m) { div.className = 'member empty'; div.textContent = 'Waiting for a hero…'; mem.appendChild(div); continue; }
-      div.className = 'member';
-      div.style.setProperty('--pc', ED.PLAYER_COLORS[m.slot]);
-      div.appendChild(portrait(m.cls, 64, m.slot, m.weapon, ED.Cos && m.wear ? ED.Cos.skinKey(m.wear) : ''));
-      div.insertAdjacentHTML('beforeend', `<div><div class="mn" style="color:${ED.PLAYER_COLORS[m.slot]}">${esc(ED.Cos ? ED.Cos.named(m.name, ED.Cos.titleOf(m.wear)) : m.name)}${m.pid === myPid ? ' (you)' : ''}</div><div class="mc">${ED.CLASSES[m.cls].name} · ${ED.WEAPONS[m.weapon].name}</div></div><div class="mr${m.ready || m.isHost ? ' ready' : ''}">${m.isHost ? 'Host' : m.ready ? 'Ready' : 'Not ready'}</div>`);
-      mem.appendChild(div);
-    }
-    rosterTiles($('lobby-classes'), A.sel.cls, (id) => { A.selectClass(id); A.lobbyPick(); });
-    weaponChips($('lobby-weapons'), A.sel.cls, A.sel.weapon, (wid) => { A.sel.weapon = wid; A.saveSel(); A.lobbyPick(); });
-    // pact: the host sets it; friends see what they are agreeing to
-    const la = $('lobby-asc');
-    la.hidden = isHost ? A.profile.pactMax <= 0 : !(state.pact > 0);
-    $('lobby-asc-lbl').textContent = isHost ? 'Pact' : 'Pact (set by the host)';
-    $('lobby-asc-val').textContent = state.pact;
-    pactSteps($('lobby-asc-steps'), state.pact | 0, isHost ? A.profile.pactMax : (state.pact | 0), isHost ? (i) => A.setLobbyPact(i) : null);
-    $('lobby-asc-desc').textContent = pactText(state.pact | 0);
-    $('dot-lobby-hearth').hidden = !canBuy(A.profile);
-    const me = state.members.find(x => x.pid === myPid);
-    const go = $('btn-lobby-go');
-    if (isHost) {
-      const allReady = state.members.every(m => m.ready || m.isHost);
-      go.textContent = state.members.length < 2 ? 'Start (solo)' : allReady ? 'Start run' : 'Waiting for players…';
-      go.disabled = !allReady;
-    } else {
-      go.textContent = me && me.ready ? 'Not ready' : 'Ready';
-      go.disabled = false;
+  // ---------------- camp ----------------
+  UI.renderCamp = () => {
+    const A = ED.App, p = A.profile, S = ED.Save, list = $('shop-list');
+    $('camp-gold').textContent = p.gold;
+    list.textContent = '';
+    for (const s of ED.SHOP) {
+      const r = S.rank(p, s.id), cost = S.shopCost(p, s.id), row = document.createElement('div');
+      row.className = 'shop-row';
+      row.innerHTML = `<b>${esc(s.name)}</b><span>${esc(s.txt)}</span><span class="rank">${r} / ${s.max}</span>`;
+      const b = document.createElement('button');
+      b.className = 'btn btn-sm'; b.textContent = cost ? 'Buy ' + cost : 'Max';
+      b.disabled = !cost || p.gold < cost;
+      b.onclick = () => { if (S.buy(p, s.id)) { A.persist(); UI.renderCamp(); } };
+      row.appendChild(b); list.appendChild(row);
     }
   };
-  UI.lobbyStatus = (text, err) => { $('lobby-status').textContent = text; $('lobby-status').style.color = err ? 'var(--danger)' : ''; };
 
-  // ---------------- party Hearth (spend embers without leaving the lobby) ----------------
-  UI.phTab = 'upgrades';
-  UI.openPartyHearth = () => { $('ov-hearth').hidden = false; UI.renderPartyHearth(); };
-  UI.renderPartyHearth = () => {
-    if ($('ov-hearth').hidden) return;
-    const p = ED.App.profile;
-    $('ph-embers').textContent = p.embers;
-    $('ph-dot-upgrades').hidden = !canBuy(p);
-    for (const b of document.querySelectorAll('#ph-tabs .tab')) b.classList.toggle('on', b.dataset.tab === UI.phTab);
-    for (const t of ['upgrades', 'heroes', 'wardrobe']) $('ph-' + t).hidden = t !== UI.phTab;
-    if (UI.phTab === 'upgrades') renderUpgrades($('ph-upgrades'));
-    else if (UI.phTab === 'wardrobe') renderWardrobe($('ph-wardrobe'));
-    else renderHeroes($('ph-heroes'));
-  };
-
-  // ---------------- boon picker ----------------
-  // Cards ignore every pick input (click, confirm key, pad, reroll) for OFFER_LOCK_MS after a hand opens, so a press meant for combat never picks one; #boon-cards.locking sweeps a fill across each card (.bc-lock) meanwhile.
-  let boonFocus = 0, boonOffer = null, boonLock = 0, lockT = 0;
-  const BOON_LOCK_MS = UI.OFFER_LOCK_MS = 600;
-  UI.offerLocked = () => !!boonOffer && performance.now() < boonLock;
-  const OFFER_HEAD = { start: 'Choose your first path', level: 'Choose a boon', epic: 'Choose an epic boon', forge: 'Forge: rank up a boon' };
-
-  // [header, subtitle, path colour key] for an offer message { src, forge, path (a room's path boon) }.
-  function offerHead(offer, me) {
-    const src = offer.forge ? 'forge' : (offer.src || 'level');
-    const boons = me && me.boons ? me.boons : {}, main = ED.mainPath(boons);
-    if (src === 'room') {
-      const n = ED.gatePaths(boons).length, pk = offer.path && ED.PATHS[offer.path] ? offer.path : null;
-      if (pk && (n < ED.MAX_PATHS || ED.gatePaths(boons).includes(pk))) return [`${ED.PATHS[pk].name} boon`, `Boons of the ${ED.PATHS[pk].name} path`, pk];
-      return [OFFER_HEAD.level, n < ED.MAX_PATHS ? `A new path may be offered (${n}/${ED.MAX_PATHS} used)` : 'Boons of your paths', main];
-    }
-    if (src === 'class') {
-      const cn = me && ED.CLASSES[me.cls] ? ED.CLASSES[me.cls].name : 'Class', rt = me && me.boons ? ED.classRoute(me.boons, me.cls) : null;
-      if (offer.ctier === 1) return ['Choose your route', `It shapes how ${cn} fights`, null];
-      return [`${rt && rt.route ? ED.routeLabel(me.cls, rt.route) : 'Route'}: choose your fork`, 'A fork changes how the route plays; the second and third bosses rank it up', null];
-    }
-    if (src === 'start') return [OFFER_HEAD.start, `Your paths decide your boons: up to ${ED.MAX_PATHS} of ${ED.PATH_IDS.length}`, null];
-    if (src === 'forge') return [OFFER_HEAD.forge, 'The boon you pick gains one rank.', null];
-    return [OFFER_HEAD[src] || OFFER_HEAD.level, '', null];
-  }
-
-  // Path or owner line in the card header, ribbon for the card's role (gate, keystone, evolution, route).
-  function boonPathLine(b) {
-    if (b.path) return [`<span class="bc-path">${ED.PATHS[b.path].name}</span>`, false];
-    if (b.cross) return [`<span class="bc-path">${b.cross.map(k => ED.PATHS[k].name).join(' + ')}</span>`, false];
-    if (b.cls) return [`<span class="bc-path">${esc(b.route ? ED.routeLabel(b.cls, b.route) : ED.CLASSES[b.cls].name)}</span>`, false];
-    return ['<span class="bc-path">Open</span>', false];
-  }
-  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.key ? 'Keystone' : b.gate ? 'Path gate' : b.cross ? 'Cross-path' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
-  // The fork weapon of a class card as a small canvas drawn from the pixel atlas (null without art): tilted up-right about its grip.
-  function weaponThumb(wid) {
-    const A = ED.Atlas, id = ED.Sprites.forkAnim(wid); // the baked fork look: the same sprite the hero holds
-    if (!id || !A || !A.ok || !A.has(id)) return null;
-    const cv = document.createElement('canvas'); cv.width = cv.height = 88; cv.className = 'bc-wimg';
-    const c = cv.getContext('2d'), an = A.anim(id), dir = (an && an.anchors && typeof an.anchors.dir === 'number') ? an.anchors.dir : 0;
-    const rot = (45 - dir) * Math.PI / 180, vx = (an.fw / 2 - an.ax) * 2, vy = (an.fh / 2 - an.ay) * 2; // the sprite's centre, rotated about the grip, lands on the middle of the canvas
-    A.draw(c, id, 0, Math.round(44 - (vx * Math.cos(rot) - vy * Math.sin(rot))), Math.round(44 - (vx * Math.sin(rot) + vy * Math.cos(rot))), { rot, anchor: 'grip' });
-    return cv;
-  }
-  // Card body of a class route or fork card: the text at the offered rank (+ rider2 from rank 2, the transform from rank 3), "Plays as" and "Forks" on a route card, the next rank's rider and transform names on lower ranks, the fork weapon of an Attack fork.
-  function classBody(b, id, have, me) {
-    const rk = Math.min(b.max, have + 1), P = ED.cardParts(id, rk, me && me.stats);
-    let h = `<div class="bd">${esc(P.text)}${P.rider2 ? ` <b>${esc(P.rider2Name)}</b>: ${esc(P.rider2)}` : ''}${P.form ? ` <b>${esc(P.form.name)}</b>: ${esc(P.form.desc)}` : ''}</div>`;
-    if (b.tier === 1) h += `<div class="bplay">Plays as: ${esc(b.plays)}</div><div class="bplay">Forks: ${b.forks.map(f => esc(ED.BOONS[f].name)).join(' / ')}</div>`;
-    else {
-      const nx = [];
-      if (P.rider2Name && !P.rider2) nx.push('Rank 2: ' + P.rider2Name);
-      if (b.form && !P.form) nx.push('Rank 3: ' + b.form.name);
-      if (nx.length) h += `<div class="bplay">${esc(nx.join(' · '))}</div>`;
-    }
-    if (b.weapon && b.weapon.kind && me && ED.CLASSES[me.cls]) {
-      const base = me.stats && me.stats.weaponId ? me.stats.weaponId.split('@')[0] : me.weapon, fw = ED.forkWeapon(base, id);
-      h += `<div class="bweap" data-w="${base}@${b.weapon.kind}"><div><span>${esc(fw.name)}</span><small>${fw.kind === 'bell' ? `${(fw.dmg * ED.CONST.HURL_K).toFixed(1)} per full-wind hurl · winding strikes up to ${(fw.dmg * ED.CONST.WIND_CAP).toFixed(1)}, each foe once per ${fw.rate.toFixed(2)} s` : `${fw.dmg.toFixed(1)} damage every ${fw.rate.toFixed(2)} s`}</small></div></div>`;
-    }
-    return h;
-  }
-
-  // The (at most 2) numbers each offered card changes most: [[{ label, from, to, unit, better }]] from the hero's sheet models now and with each card (computed once per offer).
-  function offerDeltas(offer, me) {
-    const s = ED.Game.s;
-    if (!s || !me || !me.stats) return [];
-    try {
-      const Sh = ED.Sheet, ctx = Sh.ctx(s.view, me), base = Sh.compute(me, ctx);
-      return offer.boons.map(id => Sh.deltas(base, Sh.compute(Sh.withBoon(me, id, ctx), ctx)));
-    } catch (e) { return []; }
-  }
-  const deltaHtml = (list) => (list && list.length ? `<div class="bdl">${list.map(d => `<span class="${d.better ? 'up' : 'down'}">${esc(d.label)} ${ED.Sheet.n1(d.from)} → ${ED.Sheet.n1(d.to)}${d.unit ? ' ' + d.unit : ''}</span>`).join('')}</div>` : '');
-  // Card identity of boon `id`: kind (ED.PickFx), big (keystone, evolution, path gate), frame metal (rarity), the frame CSS value, identity colours and icon colour.
-  // Identity hue of boon `id` (card kind per ED.PickFx): pc = the card's path colour (route: class colour, purse gold), icol = its icon colour (the same).
-  function boonHue(id, b) {
-    const kind = ED.PickFx ? ED.PickFx.kind(id) : 'general', path = b.path || (b.cross ? b.cross[1] : null), cl = b.cls ? ED.CLASSES[b.cls] : null;
-    const pc = kind === 'route' && cl ? cl.col.c : kind === 'purse' ? '#ffd36b' : path && ED.PATHS[path] ? ED.PATHS[path].color : ED.PATHS.general.color;
-    return { kind, path, pc, icol: pc }; // the icon wears the card's identity hue; rarity lives in the frame metal and the socket gem
-  }
-  UI.boonIconColor = (id) => boonHue(id, ED.BOONS[id]).icol;
-  function cardLook(id, b) {
-    const PF = ED.PickFx, CA = ED.CardArt, { kind, path, pc, icol } = boonHue(id, b), big = !!(PF && PF.big(id)), metal = CA ? CA.metal(b.rar) : 'iron';
-    const frame = !CA ? '' : kind === 'route' ? CA.frame('route', metal, { cls: b.cls }) : CA.frame(kind, metal, { big });
-    return { kind, big, metal, path, pc, frame, icol };
-  }
-  // Decoration layer of a card (aria-hidden): crest, idle sprites, focus carets and the rarity socket gem; kinds per ED.PickFx.
-  const IDLE = {
-    fire: '<i class="ca-spark s1"></i><i class="ca-spark s2"></i><i class="ca-spark s3"></i>',
-    ice: '<i class="ca-frost f1"></i><i class="ca-frost f2"></i>',
-    lightning: '<i class="ca-zap"></i>',
-    general: '', purse: '<i class="ca-knot"></i><i class="ca-glint"></i>',
-  };
-  function cardArt(L, b, have, max) {
-    const CA = ED.CardArt; if (!CA) return '';
-    let h = L.kind === 'route' ? '' : IDLE[L.kind] || '';
-    if (L.kind === 'route') {
-      const c = CA.crest(b.cls), cl = ED.CLASSES[b.cls], n = b.max || 1;
-      h += `<i class="ca-streamer l" style="--st:${c.streamer}"></i><i class="ca-streamer r" style="--st:${c.streamer}"></i><i class="ca-shield" style="--sh:${c.shield}"><img alt="" src="${CA.icon(cl.icon, cl.col.c)}"></i>`;
-      if (n > 1) h += `<i class="ca-pips">${Array.from({ length: n }, (_, k) => `<b class="${k < have ? 'own' : k === have ? 'next' : ''}"></b>`).join('')}</i>`;
-    }
-    return `<span class="bc-art" aria-hidden="true">${h}<i class="ca-car l"></i><i class="ca-car r"></i><i class="ca-gem" style="--gm:${CA.gem(b.rar, L.big)}"></i></span>`;
-  }
-  function boonCard(id, i, offer, me, deltas) {
-    const b = ED.BOONS[id], max = me && me.stats ? ED.maxRank(b, me.stats) : (b.max || 5);
-    const have = me && me.boons ? (me.boons[id] || 0) : 0;
-    const L = cardLook(id, b);
-    const el = document.createElement('button'); el.type = 'button';
-    el.className = ['boon-card', 'k-' + L.kind, 'm-' + L.metal, L.big && 'big', b.key && 'key', b.evo && 'evo', b.gate && 'gate', offer.forge && 'forge'].filter(Boolean).join(' ');
-    el.dataset.kind = L.kind;
-    el.style.setProperty('--rc', ED.RARITY[b.rar].color);
-    el.style.setProperty('--pc', L.pc);
-    if (L.frame) el.style.setProperty('--cf', L.frame);
-    const rank = have ? (have < max ? `Rank ${have} → ${have + 1} (max ${max})` : `Rank ${have} (max)`) : max > 1 ? `Max rank ${max}` : '';
-    const ribbon = boonRibbon(b, id), [line] = boonPathLine(b);
-    const icon = ED.CardArt ? ED.CardArt.icon(b.icon, L.icol) : ED.Icons.boonUrl(id);
-    el.innerHTML = `<i class="bc-lock" aria-hidden="true"></i>${cardArt(L, b, have, max)}${ribbon ? `<span class="bc-ribbon">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${icon}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, heroWeaponName(me)))}</div>` : ''}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats, ED.Game.s && ED.Game.s.view && ED.Game.s.view.stratum))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
-    const wb = el.querySelector('.bweap');
-    if (wb) { const th = weaponThumb(wb.dataset.w); if (th) wb.insertBefore(th, wb.firstChild); }
-    el.onclick = () => { if (performance.now() >= boonLock) UI.pickBoon(i); };
-    el.onmouseenter = () => { if (!boonOffer || boonFocus === i) return; boonFocus = i; paintFocus(); ED.Audio.play('hover'); };
-    return el;
-  }
-
-  // Five or six cards, or a phone-width screen, use the compact card layout.
-  // n1-n3: hands of one to three cards size their cards for that many per row (CSS --n, 4 by default).
-  const paintDense = () => {
-    const w = $('boon-cards'), n = boonOffer ? boonOffer.boons.length : w.children.length, dense = n > 4 || window.innerWidth <= 560;
-    w.classList.toggle('dense', dense);
-    for (const k of [1, 2, 3]) w.classList.toggle('n' + k, !dense && n === k);
-  };
-
-  UI.showBoons = (offer) => {
-    if (pickT) { pickNext = offer; return; } // the pick animation of the last hand finishes first
-    boonOffer = offer; boonFocus = 0; boonLock = performance.now() + BOON_LOCK_MS;
-    const wrap = $('boon-cards'); wrap.innerHTML = ''; wrap.classList.remove('picking');
-    wrap.style.setProperty('--lock', BOON_LOCK_MS + 'ms'); wrap.classList.add('locking'); // the fresh cards start their sweep
-    clearTimeout(lockT); lockT = setTimeout(() => wrap.classList.remove('locking'), BOON_LOCK_MS);
-    $('ov-boon').classList.toggle('low', lowFx());
-    const me = ED.Game.s && ED.Game.s.me;
-    const dl = offerDeltas(offer, me);
-    offer.boons.forEach((id, i) => wrap.appendChild(boonCard(id, i, offer, me, dl[i])));
-    paintDense();
-    const [head, sub, hp] = offerHead(offer, me);
-    $('boon-head').textContent = head;
-    $('boon-head').style.color = hp ? ED.PATHS[hp].color : '';
-    $('boon-sub').textContent = sub; $('boon-sub').hidden = !sub;
-    $('boon-count').textContent = offer.picks > 1 ? `(${offer.picks} waiting)` : '';
-    const fixed = offer.src === 'class'; // a route or fork pick is a fixed choice: no reroll
-    const rr = $('btn-reroll'), canRe = offer.rerolls > 0 && !offer.forge && !fixed;
-    const pad = ED.Input.device === 'pad';
-    rr.hidden = !canRe; rr.innerHTML = `<kbd>${pad ? 'Y' : esc(ED.Input.label('skill1'))}</kbd> Reroll (${offer.rerolls})`;
-    $('boon-hint').innerHTML = (pad ? '<kbd>D-pad</kbd> select · <kbd>X</kbd> take · <kbd>Back</kbd> sheet' : `${keyPair('left', 'right')} select · <kbd>${esc(ED.Input.label('attack'))}</kbd> or <kbd>Enter</kbd> take · <kbd>${esc(ED.Input.label('map'))}</kbd> character sheet`) + (fixed ? ' · Routes are fixed choices' : '');
-    rr.onclick = () => UI.boonReroll(false);
-    $('ov-boon').hidden = false;
-    $('ov-boon').scrollTop = 0;
-    paintFocus();
-  };
-  const keyPair = (a, b) => `<kbd>${esc(ED.Input.label(a))}</kbd><kbd>${esc(ED.Input.label(b))}</kbd>`;
-  const paintFocus = () => { [...$('boon-cards').children].forEach((el, i) => el.classList.toggle('focus', i === boonFocus)); };
-  UI.boonMove = (d) => { if (!boonOffer) return; boonFocus = (boonFocus + d + boonOffer.boons.length) % boonOffer.boons.length; paintFocus(); ED.Audio.play('hover'); };
-  UI.boonConfirm = () => { if (!boonOffer || performance.now() < boonLock) return; UI.pickBoon(boonFocus); };
-  UI.boonReroll = (byKey) => {
-    if (!boonOffer || !(boonOffer.rerolls > 0) || boonOffer.forge || boonOffer.src === 'class' || performance.now() < boonLock) return;
-    boonLock = performance.now() + BOON_LOCK_MS; // the fresh hand arrives in a moment; don't send twice
-    if (byKey) ED.Audio.play('click');
-    ED.Game.act({ t: 'reroll' });
-  };
-  // A pick sends the act at once, plays the kind's cue (ED.PickFx.play) and its card animation (PICK_MS, PICK_LOW_MS under Low quality or reduced motion), then hides the overlay.
-  // An offer that arrives meanwhile shows when the animation ends; hideBoons meanwhile only drops it.
-  const PICK_MS = 380, PICK_LOW_MS = 160;
-  let pickT = 0, pickNext = null;
-  const lowFx = () => (ED.Render && ED.Render.quality === 'low') || !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
-  UI.pickBoon = (i) => {
-    if (!boonOffer) return;
-    const id = boonOffer.boons[i];
-    boonOffer = null;
-    ED.Input.mask(['attack', 'skill1', 'skill2', 'skill3', 'dash']); // the pick press (or a held attack) must not reach the hero; movement keys stay live
-    const PF = ED.PickFx;
-    if (PF && ED.BOONS[id]) PF.play(PF.kind(id), PF.big(id), id);
-    ED.Game.act({ t: 'pick', i });
-    if (ED.Game.s) { ED.Game.s.offerOpen = false; ED.Game.s.offer = null; }
-    pickAnim(i);
-  };
-  function pickAnim(i) {
-    const wrap = $('boon-cards'), card = wrap.children[i], low = lowFx();
-    clearTimeout(pickT); pickNext = null;
-    if (!card) { pickT = 0; $('ov-boon').hidden = true; return; }
-    wrap.classList.add('picking'); card.classList.add('picked');
-    if (!low) pickFx(card);
-    pickT = setTimeout(pickDone, low ? PICK_LOW_MS : PICK_MS);
-  }
-  // Effect layer of the picked card (fixed over its box, so the card itself may clip, scale or fade): sprites per kind, CSS-animated.
-  const FX = {
-    fire: '<i class="pf-burn"></i>', ice: '<i class="pf-flash"></i>' + [0, 1, 2, 3, 4, 5, 6, 7].map(k => { const a = (k * 45 + 20) * Math.PI / 180; return `<i class="pf-shard" style="--dx:${Math.round(Math.cos(a) * 40)};--dy:${Math.round(Math.sin(a) * 48)};--sv:${k % 3}"></i>`; }).join(''),
-    lightning: '<i class="pf-flash"></i><i class="pf-bolt"></i>',
-    general: '<i class="pf-anvil"></i><i class="pf-flash"></i>', route: '<i class="pf-banner"></i>',
-    purse: [0, 1, 2, 3, 4, 5].map(k => `<i class="pf-coin" style="--cx:${12 + k * 15}%;--cd:${(k % 3) * 0.04}s"></i>`).join(''),
-  };
-  function pickFx(card) {
-    const r = card.getBoundingClientRect(), kind = card.dataset.kind, fx = document.createElement('div');
-    fx.className = 'pick-fx k-' + kind; fx.setAttribute('aria-hidden', 'true');
-    fx.style.cssText = `left:${Math.round(r.left)}px;top:${Math.round(r.top)}px;width:${Math.round(r.width)}px;height:${Math.round(r.height)}px;--pc:${card.style.getPropertyValue('--pc')}`;
-    fx.innerHTML = FX[kind] || '';
-    $('ov-boon').appendChild(fx);
-  }
-  function pickDone() {
-    pickT = 0;
-    for (const f of document.querySelectorAll('#ov-boon .pick-fx')) f.remove();
-    const ov = $('ov-boon'), next = pickNext; pickNext = null;
-    if (next && !ov.hidden) UI.showBoons(next);
-    else { ov.hidden = true; $('boon-cards').classList.remove('picking'); }
-  }
-  UI.hideBoons = () => { boonOffer = null; if (pickT) { pickNext = null; return; } $('ov-boon').hidden = true; };
-
-  // ---------------- fork rank reveal ----------------
-  // A card at the top of the screen for FORK_REVEAL_MS when a boss ranks the hero's fork up ({ id, rank }): rank 2 names the new behaviour, rank 3 the transform big, with its text and the card's art. It takes no input.
-  const FORK_REVEAL_MS = 8000;
-  let forkTimer = 0;
-  UI.forkReveal = (m) => {
-    const b = ED.BOONS[m.id], el = $('ov-fork');
-    if (!b || !el || !(m.rank >= 2)) return;
-    const me = ED.Game.s && ED.Game.s.me, P = ED.cardParts(m.id, m.rank, me && me.stats), big = m.rank >= 3, form = big && P.form;
-    const name = form ? P.form.name : P.rider2Name || P.riderName || ED.cardName(m.id, m.rank), text = form ? P.form.desc : big && P.rider ? P.rider : P.rider2;
-    const route = b.route ? ED.routeLabel(b.cls, b.route) : '';
-    const CA = ED.CardArt, cl = ED.CLASSES[b.cls], col = cl ? cl.col.c : ED.RARITY[b.rar].color; // the route identity: class-coloured banner frame, silver at rank 2, gold at rank 3
-    el.className = 'fork-reveal k-route ' + (big ? 'big' : 'small');
-    el.style.setProperty('--pc', col);
-    let art = '';
-    if (CA) {
-      el.style.setProperty('--cf', CA.frame('route', big ? 'gold' : 'silver', { cls: b.cls }));
-      art = `<span class="bc-art" aria-hidden="true"><i class="ca-pips">${Array.from({ length: b.max || 3 }, (_, k) => `<b class="${k < m.rank ? 'own' : ''}"></b>`).join('')}</i></span>`;
-    }
-    el.innerHTML = `${art}<img class="fr-icon" alt="" src="${CA ? CA.icon(b.icon, col) : ED.Icons.boonUrl(m.id)}"><div class="fr-body"><div class="fr-kick">${esc(route)}${route ? ' · ' : ''}${esc(b.name)} · rank ${m.rank}${form ? ' · transformed' : ''}</div><div class="fr-name">${esc(name)}</div><div class="fr-text">${esc(text ? text.charAt(0).toUpperCase() + text.slice(1) : '')}</div></div>`;
-    el.hidden = true; void el.offsetWidth; el.hidden = false; // restarts the animation of a card that is still up
-    clearTimeout(forkTimer);
-    forkTimer = setTimeout(() => { el.hidden = true; }, FORK_REVEAL_MS);
-  };
-
-  // ---------------- event dialog (events.js) ----------------
-  // Host messages: evOpen { k, title, text, ch: [[label, note, disabled]], v (vote seconds, 0: a personal choice), n (voters), lock }, evTally { k, n: votes per choice }, evResult { k, title, text, out, lp, o }, evClose.
-  // The choices ignore input for `lock` s after opening (a bar fills across them); digits 1-4 (e.code), arrows / d-pad, the confirm key and clicks pick. A result with o (an offer opens) or in a locked room closes into a toast.
-  let evD = null, evFocus = 0, evLockT = 0, evVoteT = 0, evTickS = 0; // evTickS: the last countdown second that ticked
-  const evParas = (t) => String(t || '').split('\n').filter(Boolean).map(l => `<p>${esc(l)}</p>`).join('');
-  const evLore = (i) => { const pg = ED.LORE && ED.LORE[i]; return pg ? `<blockquote class="ev-lore"><b>${esc(pg.title)}</b><span>${esc(pg.text)}</span></blockquote>` : ''; };
-  UI.evOpen = () => !!evD;
-  UI.evMsg = (m) => {
-    if (m.t === 'evOpen') evShow(m);
-    else if (m.t === 'evTally') { if (evD && evD.k === m.k) { evD.tally = m.n; evPaint(); ED.Audio.play('vtick', 1, 'vote'); } } // a vote cast: a tick
-    else if (m.t === 'evResult') evResult(m);
-    else if (m.t === 'evClose') { if (evD && !evD.res) UI.evClose(false); }
-  };
-  function evShow(m) {
-    evD = { k: m.k, ch: m.ch, safe: m.s | 0, vote: m.v > 0, n: m.n | 0, voted: -1, wait: false, res: null, tally: null };
-    evFocus = Math.max(0, m.ch.findIndex(c => !c[2]));
-    const lock = (m.lock || 0.6) * 1000;
-    evLockT = performance.now() + lock; evVoteT = m.v > 0 ? performance.now() + m.v * 1000 : 0; evTickS = 0;
-    $('ev-title').textContent = m.title;
-    $('ev-text').innerHTML = evParas(m.text);
-    const box = $('ev-choices'); box.innerHTML = '';
-    box.style.setProperty('--lock', lock + 'ms');
-    m.ch.forEach((c, i) => {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'ev-ch'; b.disabled = !!c[2];
-      b.innerHTML = `<kbd>${i + 1}</kbd><span class="ev-l">${esc(c[0])}</span>${c[1] ? `<small>${esc(c[1])}</small>` : ''}<b class="ev-n"></b>`;
-      b.onclick = () => evPick(i);
+  // ---------------- level-up offer ----------------
+  // Shows the hero's current offer (cards with icon, name, level, one line, optional second line); hides when there is none. Rebuilt only when the offer changes.
+  UI.syncOffer = (me, solo) => {
+    const ov = $('ov-offer'), offer = me && !me.dead ? me.offer : null;
+    const sig = offer ? offer.map(c => c.kind + c.id + c.lvl).join('|') + '|' + me.rerolls + me.skips : '';
+    if (sig === UI.offerSig) return;
+    UI.offerSig = sig;
+    ov.hidden = !offer;
+    ov.classList.toggle('strip', !solo);
+    if (!offer) return;
+    const box = $('offer-cards'); box.textContent = '';
+    offer.forEach((c, i) => {
+      const b = document.createElement('button');
+      b.className = 'card offer-card k-' + c.kind;
+      b.appendChild(UI.iconCanvas(c.icon, 48));
+      const lv = c.kind === 'weapon' || c.kind === 'passive' ? 'New' : c.lvl ? 'Lv ' + c.lvl : '';
+      b.insertAdjacentHTML('beforeend', `<span class="key">${i + 1}</span><b class="card-name">${esc(c.name)}</b><span class="card-lv">${lv}</span><span class="card-txt">${esc(c.txt)}</span>` + (c.sub ? `<span class="card-sub">${esc(c.sub)}</span>` : ''));
+      b.onclick = () => ED.Game.pick(i);
       box.appendChild(b);
     });
-    box.classList.remove('locking'); void box.offsetWidth; box.classList.add('locking'); // restarts the fill
-    const pad = ED.Input.device === 'pad';
-    $('ev-hint').innerHTML = pad ? '<kbd>D-pad</kbd> select · <kbd>X</kbd> choose' : `<kbd>1</kbd>-<kbd>${m.ch.length}</kbd> or <kbd>${esc(ED.Input.label('up'))}</kbd><kbd>${esc(ED.Input.label('down'))}</kbd> and <kbd>${esc(ED.Input.label('attack'))}</kbd> / <kbd>Enter</kbd> choose`;
-    $('ov-event').hidden = false;
-    evPaint();
-    ED.Audio.play('hover');
-  }
-  function evPaint() {
-    if (!evD) return;
-    const sub = $('ev-sub');
-    if (evD.res) sub.textContent = '';
-    else if (evD.vote && evD.n > 1) sub.textContent = `Party vote · ${Math.max(0, Math.ceil((evVoteT - performance.now()) / 1000))} s` + (evD.voted >= 0 ? ' · waiting for the others' : '') + ` · no vote counts as ${(evD.ch[evD.safe] || evD.ch[0])[0]}`;
-    else sub.textContent = evD.wait ? '…' : '';
-    [...$('ev-choices').children].forEach((b, i) => {
-      b.classList.toggle('focus', i === evFocus);
-      b.classList.toggle('picked', evD.voted === i);
-      const n = b.querySelector('.ev-n'); if (n) n.textContent = evD.tally && evD.tally[i] ? '×' + evD.tally[i] : '';
-    });
-  }
-  function evPick(i) {
-    if (!evD) return;
-    if (evD.res) { if (performance.now() >= evLockT) UI.evClose(false); return; }
-    if (performance.now() < evLockT || evD.wait || (evD.vote && evD.voted >= 0)) return;
-    const c = evD.ch[i]; if (!c || c[2]) return;
-    ED.Input.mask(['attack', 'skill1', 'skill2', 'skill3', 'dash']);
-    ED.Audio.play('click');
-    ED.Game.act({ t: 'evChoice', i, k: evD.k });
-    if (evD.vote) evD.voted = i; else evD.wait = true;
-    evFocus = i; evPaint();
-  }
-  function evResult(m) {
-    if (evD && evD.vote && evD.n > 1 && evD.k === m.k) ED.Audio.play('vtally'); // a party vote closed: the tally
-    const s = ED.Game.s, body = evParas(m.text) + (m.out && m.out.length ? `<ul class="ev-out">${m.out.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : '') + evLore(m.lp);
-    if (m.o || (s && s.view && s.view.locked)) { // an offer or a fight follows: the result goes to a toast
-      if (evD) UI.evClose(false);
-      UI.toast(`<b>${esc(m.title)}</b> ${esc((m.out || []).join(' · '))}`, null, 5);
-      return;
-    }
-    evD = { k: m.k, ch: [], vote: false, voted: -1, res: m, tally: null };
-    evFocus = 0; evLockT = performance.now() + 300;
-    $('ev-title').textContent = m.title;
-    $('ev-text').innerHTML = body;
-    const box = $('ev-choices'); box.innerHTML = ''; box.classList.remove('locking');
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'ev-ch'; b.innerHTML = '<span class="ev-l">Continue</span>';
-    b.onclick = () => UI.evClose(false);
-    box.appendChild(b);
-    $('ev-hint').innerHTML = '';
-    $('ov-event').hidden = false;
-    evPaint();
-  }
-  // Closes the dialog; toast: a shown result's outcome lines go to a toast (a fight started under it).
-  UI.evClose = (toast) => {
-    if (toast && evD && evD.res && evD.res.out && evD.res.out.length) UI.toast(`<b>${esc(evD.res.title)}</b> ${esc(evD.res.out.join(' · '))}`, null, 5);
-    evD = null;
-    $('ov-event').hidden = true;
-    ED.Input.mask(['attack', 'skill1', 'skill2', 'skill3', 'dash']);
-  };
-  // Menu input while the dialog is open (game.js): focus moves, digit picks, confirm; returns the frame's input with the hero held still.
-  UI.evInput = (inp) => {
-    if (evD) {
-      const n = evD.res ? 1 : evD.ch.length, I = ED.Input;
-      if (inp.left || inp.up || inp.navX < 0 || inp.navY < 0) { evFocus = (evFocus + n - 1) % n; evPaint(); }
-      if (inp.right || inp.down || inp.navX > 0 || inp.navY > 0) { evFocus = (evFocus + 1) % n; evPaint(); }
-      for (let d = 1; d <= 4; d++) if (evD && (I.pressed.has('Digit' + d) || I.pressed.has('Numpad' + d))) evPick(evD.res ? 0 : d - 1);
-      if (evD && inp.confirm) evPick(evD.res ? 0 : evFocus);
-      if (evD && evD.vote && !evD.res) { // the vote countdown; its last 5 s tick while this hero has not voted
-        evPaint();
-        const sec = Math.ceil((evVoteT - performance.now()) / 1000);
-        if (evD.n > 1 && evD.voted < 0 && sec >= 1 && sec <= 5 && sec !== evTickS) { evTickS = sec; ED.Audio.play('vtick', 1, sec); }
-      }
-    }
-    return Object.assign({}, inp, { mx: 0, my: 0, atk: false, atkPressed: false, skill: false, skill2: false, skill3: false, dash: false });
+    $('offer-foot').textContent = `Reroll (R): ${me.rerolls}    Skip (X): ${me.skips}`;
   };
 
   // ---------------- results ----------------
-  UI.renderResults = (sum, res, note) => {
-    const A = ED.App, p = A.profile;
-    const win = sum.victory;
-    const banner = $('res-banner');
-    banner.textContent = win ? 'Victory' : sum.abandoned ? 'Abandoned' : note ? 'Disconnected' : 'Defeat';
-    banner.classList.toggle('win', !!win); banner.parentNode.classList.toggle('win', !!win); // the flag frame around the word
-    const biome = ED.biomeFor(sum.stratum || 1);
-    const tail = res.rewards.total > 0 ? 'You keep the embers you earned.' : 'A run pays embers only after you clear a room.';
-    $('res-sub').textContent = note || (win ? 'You defeated the Hollow King and won the run.'
-      : sum.abandoned ? `${sum.party > 1 ? 'Your party' : 'You'} left the run in ${biome.name}. ${tail}` : `You died in ${biome.name}. ${tail}`);
-    // world-summary fields below may be missing from a client's partial summary
-    const total = sum.roomsTotal | 0, seen = Math.min(total, sum.roomsVisited | 0);
-    $('res-stats').innerHTML = [
-      ['Deepest stratum', `${U.roman(sum.stratum || 1)} · ${biome.short}`], ['Time', U.fmtTime(sum.time || 0)], ['Level reached', sum.level || 1],
-      ['Rooms cleared', sum.roomsCleared || 0], total > 0 ? ['Rooms explored', `${seen} / ${total} (${Math.round(seen / total * 100)}%)`] : null,
-      ['Foes killed', sum.kills || 0], ['Bosses killed', sum.bossCount || 0], ['Party', (sum.party || 1) + (sum.party > 1 ? ' heroes' : ' hero')],
-      sum.pact ? ['Pact', sum.pact] : null,
-    ].filter(Boolean).map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
-    const evo = sum.myEvo && ED.PATHS[sum.myEvo.path] ? sum.myEvo : null, evoEl = $('res-evo');
-    evoEl.hidden = !evo && !sum.partyEvolved;
-    evoEl.style.setProperty('--pc', evo ? ED.PATHS[evo.path].color : 'var(--r-legend)');
-    evoEl.innerHTML = evo ? `<img alt="" src="${pathIcon(evo.path)}"><span>Evolved: <b>${esc(UI.evoName(evo.path, evo.weapon))}</b> <small>${ED.PATHS[evo.path].name} path</small></span>` : sum.partyEvolved ? '<span>A hero in your party evolved their weapon.</span>' : '';
-    $('res-embers').innerHTML = res.rewards.lines.map(([a, b]) => `<dt>${esc(a)}</dt><dd>+${b}</dd>`).join('') || '<dt>Nothing this time</dt><dd>0</dd>';
-    $('res-ember-total').textContent = res.rewards.total;
-    const ci = ED.CLASS_IDS.indexOf(sum.cls);
-    const xp = p.mastery[ci], ml = ED.masteryLevel(xp);
-    const next = ED.MASTERY_XP[ml], prev = ED.MASTERY_XP[ml - 1];
-    const frac = next === undefined ? 1 : (xp - prev) / (next - prev);
-    $('res-progress').innerHTML = `
-      <div class="prog-line">${ED.CLASSES[sum.cls].name} mastery ${ml} <small>(+${res.rewards.masteryXp} xp)</small><div class="bar"><i style="width:${Math.round(frac * 100)}%"></i></div></div>
-      <div class="prog-line">Embers now: <b>${p.embers}</b></div>
-      ${res.deeds.map(d => `<div class="prog-line">Deed: <b>${esc(d.name)}</b> +${d.reward} embers</div>`).join('')}
-      ${(res.secrets || []).map(s => `<div class="prog-line secret">Secret found: <b>${esc(s.name)}</b> — ${esc(UI.secretReward(s))}</div>`).join('')}`;
-    const ul = $('res-unlocks'); ul.innerHTML = '';
-    for (const u of res.unlocks) ul.insertAdjacentHTML('beforeend', `<span class="unlock-pill">${esc(u)}</span>`);
-    $('res-code').textContent = S.encode(p);
-  };
-
-  // ---------------- settings ----------------
-  UI.settingsTab = 'sound';
-  const fill = (inp) => { inp.style.setProperty('--fill', ((inp.value - inp.min) / (inp.max - inp.min) * 100) + '%'); const o = $('out-' + inp.id.slice(4)); if (o) o.textContent = inp.value; };
-  UI.setSettingsTab = (t) => {
-    if (t === 'profile' && $('stab-profile').hidden) t = 'sound';
-    UI.settingsTab = t;
-    for (const b of document.querySelectorAll('#set-tabs .tab')) b.classList.toggle('on', b.dataset.stab === t);
-    for (const p of document.querySelectorAll('.set-pane')) p.hidden = p.dataset.spane !== t;
-    if (t === 'controls') renderBindings();
-    else { ED.Input.stopCapture(); }
-    if (t === 'profile') renderProfile();
-  };
-  // The menu behind the Credits / Settings dialogs takes no focus while one is open.
-  const titleInert = (on) => { const t = $('scr-title'); if (t) t.inert = on; };
-  UI.openSettings = (tab) => {
-    const A = ED.App, s = A.settings;
-    $('set-master').value = s.master; $('set-music').value = s.music; $('set-sfx').value = s.sfx;
-    $('set-quality').value = s.quality; $('set-framecap').value = s.frameCap; $('set-shake').checked = s.shake; $('set-dmg').checked = s.dmg;
-    $('set-cursor').value = s.cursor; $('set-reticle').value = s.reticle; $('set-retcol').value = s.reticleCol; $('set-aimprev').checked = s.aimPreview !== false;
-    for (const id of ['set-master', 'set-music', 'set-sfx']) fill($(id));
-    $('stab-profile').hidden = A.inRun() || !A.hasProfile; // profile tools never appear mid-descent
-    if (A.state === 'title') titleInert(true);
-    $('ov-settings').hidden = false;
-    UI.setSettingsTab(tab || UI.settingsTab);
-    const on = document.querySelector('#set-tabs .tab.on'); if (on) on.focus({ preventScroll: true });
-  };
-  UI.closeSettings = () => {
-    ED.Input.stopCapture();
-    $('ov-settings').hidden = true;
-    titleInert(false);
-    const A = ED.App;
-    if (A.state === 'hearth') UI.renderHearth(); else if (A.state === 'title') UI.renderTitle();
-  };
-
-  function renderProfile() {
-    const p = ED.App.profile;
-    $('save-code').textContent = S.encode(p);
-    $('inp-rename').value = p.name;
-    $('load-msg').textContent = ''; $('load-msg').className = 'msg';
-    nameHint($('inp-rename'), $('rename-msg'));
-  }
-
-  // Key bindings: one row per action, two slots. Click a slot, press a key or mouse button; conflicts swap and say so.
-  const setBindMsg = (text, kind) => { const m = $('bind-msg'); m.textContent = text || ''; m.className = 'bind-msg' + (kind === 'err' ? ' err' : ''); };
-  function renderBindings(flash) {
-    const I = ED.Input, list = $('bind-list');
-    list.innerHTML = '';
-    const cols = [document.createElement('div'), document.createElement('div')];
-    cols.forEach(c => { c.className = 'bind-group'; });
-    const place = { Movement: 0, Interface: 0, Combat: 1 };
-    for (const grp of ['Movement', 'Combat', 'Interface']) {
-      const col = cols[place[grp]];
-      col.insertAdjacentHTML('beforeend', `<div class="bind-row bind-h"><h4>${grp}</h4><span class="bs">Primary</span><span class="bs">Alternate</span></div>`);
-      for (const a of I.ACTIONS.filter(x => x.group === grp)) {
-        const row = document.createElement('div'); row.className = 'bind-row';
-        row.innerHTML = `<span>${a.label}</span>`;
-        for (let s = 0; s < 2; s++) {
-          const code = I.binds[a.id][s], b = document.createElement('button');
-          b.type = 'button'; b.className = 'bind-slot' + (code ? '' : ' empty') + (flash && flash[0] === a.id && flash[1] === s ? ' flash' : '');
-          b.dataset.a = a.id; b.dataset.s = s;
-          b.textContent = code ? I.keyName(code) : 'empty';
-          b.setAttribute('aria-label', `${a.label}, ${s ? 'alternate' : 'primary'} key: ${code ? I.keyName(code) : 'empty'}. Click to change.`);
-          b.onclick = () => startCapture(b, a, s);
-          row.appendChild(b);
-        }
-        col.appendChild(row);
+  UI.renderResults = (sum, gained) => {
+    $('res-title').textContent = sum.won ? 'Victory' : 'Fallen';
+    $('res-stats').innerHTML = `<div><b>${U.fmtTime(sum.time)}</b><span>Time</span></div><div><b>${sum.kills}</b><span>Kills</span></div><div><b>${sum.level}</b><span>Level</span></div><div><b>${sum.gold}</b><span>Gold</span></div>`;
+    const me = sum.perHero.find(h => h.pid === ED.Game.myPid) || sum.perHero[0], chart = $('res-chart');
+    chart.textContent = '';
+    if (me) {
+      const rows = Object.entries(me.dealt).sort((a, b) => b[1] - a[1]).slice(0, 10), max = rows.length ? rows[0][1] : 1;
+      for (const [id, v] of rows) {
+        const name = ED.WEAPONS[id] ? ED.WEAPONS[id].name : ED.SKILLS[id] ? ED.SKILLS[id].name : id;
+        chart.insertAdjacentHTML('beforeend', `<div class="bar-row"><span class="bar-name">${esc(name)}</span><span class="bar"><i style="width:${Math.max(2, 100 * v / max).toFixed(1)}%"></i></span><span class="bar-v">${U.fmtNum(v)}</span></div>`);
       }
     }
-    cols.forEach(c => list.appendChild(c));
-  }
-  function startCapture(btn, action, slot) {
-    const I = ED.Input;
-    for (const b of document.querySelectorAll('.bind-slot.listening')) { b.classList.remove('listening'); }
-    btn.classList.add('listening'); btn.textContent = 'Press a key…';
-    setBindMsg(`${action.label}: press a key or mouse button. Esc cancels, Backspace clears.`, '');
-    I.capture((code) => {
-      let r = null;
-      if (code === null) setBindMsg('', '');
-      else {
-        r = code === 'Backspace' ? I.clearSlot(action.id, slot) : I.rebind(action.id, slot, code);
-        setBindMsg(r.msg, r.ok ? 'ok' : 'err');
-        if (r.ok) { const A = ED.App; A.settings.binds = I.exportBinds(); S.storeSettings(A.settings); }
-      }
-      renderBindings(r && r.ok ? [action.id, slot] : null);
-      setTimeout(() => { const nb = document.querySelector(`.bind-slot[data-a="${action.id}"][data-s="${slot}"]`); if (nb && !$('ov-settings').hidden && UI.settingsTab === 'controls') nb.focus({ preventScroll: true }); }, 250);
-    });
-  }
+    const un = [];
+    if (gained) {
+      for (const c of gained.unlocked) un.push('New hero: ' + (ED.HEROES[c] ? ED.HEROES[c].name : c));
+      for (const s of gained.stages) un.push('New stage: ' + ED.STAGES[s].name);
+    }
+    $('res-unlocks').innerHTML = un.map(s => `<p>${esc(s)}</p>`).join('');
+  };
 
-  // <html data-quality="high|low">: menu CSS pauses its idle animations under Low quality.
-  const markQuality = () => { document.documentElement.dataset.quality = ED.App.settings.quality; };
-
-  UI.init = () => {
+  UI.bind = () => {
     const A = ED.App;
-    markQuality();
-    // title
-    $('btn-begin').onclick = () => A.createProfile($('inp-name').value);
-    $('inp-name').addEventListener('keydown', (e) => { if (e.code === 'Enter' || e.code === 'NumpadEnter') A.createProfile($('inp-name').value); });
-    $('inp-name').addEventListener('input', () => nameHint($('inp-name'), $('name-msg')));
-    $('btn-have-code').onclick = () => { $('title-load').hidden = !$('title-load').hidden; if (!$('title-load').hidden) $('inp-title-code').focus(); };
-    $('btn-title-code').onclick = () => {
-      const msg = $('title-code-msg');
-      try { A.importProfile(S.decode($('inp-title-code').value)); $('inp-title-code').value = ''; msg.textContent = ''; } catch (e) { msg.textContent = e.message; msg.className = 'msg err'; }
+    $('btn-play').onclick = () => { if (!A.hasProfile) A.createProfile($('inp-name').value); UI.renderHeroes(); UI.show('hero'); };
+    $('btn-camp').onclick = () => { if (!A.hasProfile) A.createProfile($('inp-name').value); UI.renderCamp(); UI.show('camp'); };
+    $('btn-credits').onclick = () => { $('ov-credits').hidden = false; };
+    $('btn-credits-close').onclick = () => { $('ov-credits').hidden = true; };
+    $('btn-hero-back').onclick = () => { UI.renderTitle(); UI.show('title'); };
+    $('btn-hero-next').onclick = () => { UI.renderStages(); UI.show('stage'); };
+    $('btn-stage-back').onclick = () => { UI.renderHeroes(); UI.show('hero'); };
+    $('btn-start').onclick = () => A.startSolo();
+    $('btn-camp-back').onclick = () => { UI.renderTitle(); UI.show('title'); };
+    $('btn-refund').onclick = () => { ED.Save.refundAll(A.profile); A.persist(); UI.renderCamp(); };
+    $('btn-code-copy').onclick = () => { $('inp-code').value = ED.Save.encode(A.profile); $('code-msg').textContent = 'Copy this code to restore your progress anywhere.'; };
+    $('btn-code-load').onclick = () => {
+      try { A.replaceProfile(ED.Save.decode($('inp-code').value)); $('code-msg').textContent = 'Progress restored.'; UI.renderCamp(); }
+      catch (e) { $('code-msg').textContent = e.message; }
     };
-    $('mm-descend').onclick = () => A.enterHearth('descend');
-    $('mm-hearth').onclick = () => A.enterHearth('upgrades');
-    $('mm-heroes').onclick = () => A.enterHearth('heroes');
-    $('mm-settings').onclick = () => UI.openSettings();
-    $('mm-credits').onclick = () => { titleInert(true); $('ov-credits').hidden = false; $('btn-credits-close').focus({ preventScroll: true }); };
-    $('btn-credits-close').onclick = () => { $('ov-credits').hidden = true; titleInert(false); $('mm-credits').focus({ preventScroll: true }); };
-    $('btn-news-close').onclick = () => { $('ov-news').hidden = true; A.profile.news = 0; A.profile.refunded = 0; A.persist(); if ($('mm-descend').offsetParent) $('mm-descend').focus({ preventScroll: true }); };
-    document.addEventListener('click', (e) => { if (resetTimer && !e.target.closest('.btn-reset')) disarmReset(); }, true);
-    for (const m of document.querySelectorAll('.menu')) arrowNav(m, '.menu-btn', 'ArrowUp', 'ArrowDown');
-    arrowNav($('hearth-tabs'), '.tab', 'ArrowLeft', 'ArrowRight');
-    arrowNav($('set-tabs'), '.tab:not([hidden])', 'ArrowLeft', 'ArrowRight');
-    // sections
-    $('btn-back').onclick = () => A.goHome();
-    for (const b of document.querySelectorAll('#hearth-tabs .tab')) b.onclick = () => { ED.Audio.play('click'); UI.setTab(b.dataset.tab); };
-    $('btn-solo').onclick = () => A.startSolo();
-    $('btn-host').onclick = () => A.hostParty();
-    $('btn-join').onclick = () => { $('join-row').hidden = !$('join-row').hidden; if (!$('join-row').hidden) $('inp-join').focus(); };
-    $('btn-join-go').onclick = () => A.joinParty($('inp-join').value);
-    $('inp-join').addEventListener('keydown', (e) => { if (e.code === 'Enter' || e.code === 'NumpadEnter') A.joinParty($('inp-join').value); });
-    // settings: profile tab
-    $('btn-copy-code').onclick = () => copy($('save-code').textContent, $('btn-copy-code'));
-    $('btn-load-code').onclick = () => {
-      const msg = $('load-msg');
-      try {
-        const prof = S.decode($('inp-code').value);
-        UI.confirm('Load this save?', `This replaces the profile in this browser with "${prof.name}" (${prof.embers} embers, ${prof.stats.runs} runs).`, 'Load save', () => {
-          A.replaceProfile(prof); msg.textContent = 'Save loaded. Welcome back, ' + prof.name + '.'; msg.className = 'msg ok'; $('inp-code').value = ''; renderProfile();
-        });
-      } catch (e) { msg.textContent = e.message; msg.className = 'msg err'; }
-    };
-    $('inp-rename').addEventListener('input', () => nameHint($('inp-rename'), $('rename-msg')));
-    $('btn-rename').onclick = () => { A.profile.name = S.sanitizeName($('inp-rename').value); A.persist(); renderProfile(); UI.toast('Name saved: <b>' + esc(A.profile.name) + '</b>'); };
-    $('btn-reset').onclick = () => UI.confirm('Erase this profile?', 'Every ember, upgrade and unlock in this browser will be lost. Copy your save code first if you want to keep it.', 'Erase', () => { $('ov-settings').hidden = true; A.resetProfile(); });
-    // lobby
-    $('btn-copy-invite').onclick = () => copy(A.inviteLink(), $('btn-copy-invite'));
-    $('btn-lobby-leave').onclick = () => A.leaveLobby();
-    $('btn-lobby-go').onclick = () => A.lobbyGo();
-    $('btn-lobby-hearth').onclick = () => UI.openPartyHearth();
-    for (const b of document.querySelectorAll('#ph-tabs .tab')) b.onclick = () => { ED.Audio.play('click'); UI.phTab = b.dataset.tab; UI.renderPartyHearth(); };
-    $('btn-ph-close').onclick = () => { $('ov-hearth').hidden = true; if (A.lobbyState) UI.renderLobby(A.lobbyState, A.myPid, !!A.host); };
-    // results
-    $('btn-res-back').onclick = () => A.goHome();
-    $('btn-res-copy').onclick = () => copy($('res-code').textContent, $('btn-res-copy'));
-    // pause & settings
     $('btn-resume').onclick = () => A.togglePause(false);
-    $('btn-pause-settings').onclick = () => UI.openSettings();
-    $('btn-abandon').onclick = () => UI.confirm('Abandon this run?', 'You keep the embers earned so far.', 'Abandon', () => A.abandonRun());
-    for (const b of document.querySelectorAll('#set-tabs .tab')) b.onclick = () => { ED.Audio.play('click'); UI.setSettingsTab(b.dataset.stab); };
-    const setChange = (e) => {
-      const s = A.settings;
-      s.master = +$('set-master').value; s.music = +$('set-music').value; s.sfx = +$('set-sfx').value;
-      s.quality = $('set-quality').value; s.frameCap = $('set-framecap').value; s.shake = $('set-shake').checked; s.dmg = $('set-dmg').checked;
-      s.cursor = $('set-cursor').value; s.reticle = $('set-reticle').value; s.reticleCol = $('set-retcol').value; s.aimPreview = $('set-aimprev').checked;
-      if (e && e.target.type === 'range') fill(e.target);
-      A.applySettings(); markQuality();
-      if (ED.AimFx) ED.AimFx.applyCursor();
-    };
-    for (const id of ['set-master', 'set-music', 'set-sfx', 'set-quality', 'set-framecap', 'set-shake', 'set-dmg', 'set-cursor', 'set-reticle', 'set-retcol', 'set-aimprev']) $(id).addEventListener('input', setChange);
-    $('btn-bind-reset').onclick = () => { ED.Input.resetBinds(); A.settings.binds = ED.Input.exportBinds(); S.storeSettings(A.settings); renderBindings(); setBindMsg('Controls reset to defaults.', 'ok'); };
-    $('btn-settings-close').onclick = () => UI.closeSettings();
-    window.addEventListener('resize', () => { if (!$('ov-boon').hidden) paintDense(); for (const r of document.querySelectorAll('.roster')) fitRoster(r); });
-    // Esc closes menu overlays and steps back outside a run (in a run the frame loop owns Esc)
-    window.addEventListener('keydown', (e) => {
-      if (e.code !== 'Escape' || A.inRun()) return;
-      if (!$('modal').hidden) $('modal').hidden = true;
-      else if (!$('ov-news').hidden) $('btn-news-close').click();
-      else if (!$('ov-credits').hidden) $('btn-credits-close').click();
-      else if (!$('ov-settings').hidden) UI.closeSettings();
-      else if (!$('ov-hearth').hidden) $('btn-ph-close').click();
-      else if (A.state === 'hearth' && !(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) A.goHome();
-    });
-    nameHint($('inp-name'), $('name-msg'));
-    UI.wireSheet();
-    ED.Icons.fit(); window.addEventListener('resize', () => ED.Icons.fit());
-    // UI sounds
-    document.addEventListener('click', (e) => { if (e.target.closest('.btn, .menu-btn')) ED.Audio.play('click'); });
+    $('btn-quit').onclick = () => A.quitRun();
+    $('btn-res-back').onclick = () => { UI.renderTitle(); UI.show('title'); };
   };
 })(globalThis.ED || (globalThis.ED = {}));
