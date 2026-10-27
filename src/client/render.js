@@ -1,8 +1,9 @@
 // Frame renderer (client only). Draws ED.Game.view through ED.Batch at 1 world px per buffer px, integer-scaled so about VIEW_W x VIEW_H world px are visible. HUD draws on top (hud.js).
 // Backends: quality 'high' with a hardware WebGL context -> Batch 'gl' (instanced quads into Batch.out, composited by Post without an upload); otherwise Batch '2d' into the buffer canvas,
 // presented through Post (upload) when it is usable, else a nearest-neighbour 2D blit.
-// Layer order (ARCHITECTURE §10): floor chunks -> zones / telegraph fills -> pickups -> y-sorted actors (heroes, foes, bosses, obstacles, braziers) -> projectiles -> FX ->
-// hostile telegraph outlines (over the horde) -> overlays (names, bars, numbers). Every list is culled to the view rect; the y-sort is an allocation-free radix sort on typed arrays.
+// Layer order (ARCHITECTURE §10): floor chunks -> own-team zones (faded by coverage) -> enemy zones / telegraph fills -> pickups -> y-sorted actors (heroes, foes, bosses, obstacles, braziers)
+// -> projectiles -> zone overlays -> FX -> hostile telegraph outlines (over the horde) -> hero markers (Actors.heroTop) -> overlays (names, bars, numbers).
+// Every list is culled to the view rect; the y-sort is an allocation-free radix sort on typed arrays.
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST;
@@ -84,6 +85,9 @@
   // ---------------- zones ----------------
   const ZCOL = { fire: 0xff8a3d, meteor: 0xff6a2a, holy: 0xffe08a, poison: 0x7fe39a, arrows: 0xd8d0c0, web: 0xe8e8f0, frost: 0x9fdcff, dot: 0xffffff };
   const hostile = (z) => z.warn && z.team === 1;
+  // Own-team zones covering more than ZFADE of the view fade together (alpha sqrt(ZFADE / coverage), floor 0.4) so heroes, foes and telegraphs stay readable.
+  const ZFADE = 0.6, PI = Math.PI;
+  const zoneArea = (z) => (z.len > 0 ? z.len * (z.w || 0) : z.arc > 0 ? z.r * z.r * z.arc / 2 : PI * z.r * z.r);
   // Ground pass. Hostile telegraph: dark-red fill that brightens toward resolve plus a growing progress fill (outline drawn by drawTele over the actors).
   function drawZone(B, z, t) {
     const fx = ED.WeaponFx[z.wid] || ED.SkillFx[z.wid];
@@ -176,8 +180,12 @@
     drawFloor(B, A, view.seed | 0, cx, cy);
     vx0 = cx - 48; vy0 = cy - 48; vx1 = cx + R.bw + 48; vy1 = cy + R.bh + 64;
     const zones = view.zones;
-    let tele = 0;
-    for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && zoneInView(z)) { drawZone(B, z, t); if (hostile(z)) tele++; } }
+    let tele = 0, zn = 0, za = 0;
+    for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (z.dead || !zoneInView(z)) continue; if (z.team === 1) { if (hostile(z)) tele++; } else { zn++; za += zoneArea(z); } }
+    const zl = za / (R.bw * R.bh), zf = zl <= ZFADE ? 1 : Math.max(0.4, Math.sqrt(ZFADE / zl));
+    B.zoneLoad = zl; B.zoneN = zn; B.zoneLite = !gpu && (zl > 1 || zn > 40); B.zoneUnion = B.zoneLite && !!(P && P.soft); // 2D zone LOD: the hooks draw a fill + rim through B.zcirc (union per colour at B.zflush on a software canvas)
+    if (zn) { if (zf < 1) B.fade(zf); for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && z.team !== 1 && zoneInView(z)) drawZone(B, z, t); } B.zflush(); if (zf < 1) B.fade(1); }
+    for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && z.team === 1 && zoneInView(z)) drawZone(B, z, t); }
     const pk = view.pickups;
     for (let i = 0; i < pk.length; i++) { const g = pk[i]; if (!g.dead && inView(g)) ED.Actors.pickup(B, g, t); }
     // actors
@@ -195,16 +203,22 @@
     for (let i = 0; i < n; i++) {
       const a = items[iA[i]];
       if (a.def) ED.Actors.foe(B, a, t, heroes);
-      else if (a.pid !== undefined) { ED.Actors.hero(B, a, t); const h = ED.HeroFx && ED.HeroFx[a.cls]; if (h) h(B, a, t); }
+      else if (a.pid !== undefined) { ED.Actors.hero(B, a, t, heroes.length > 1); const h = ED.HeroFx && ED.HeroFx[a.cls]; if (h) h(B, a, t); }
       else if (a.dur !== undefined) ED.ZoneActor[a.k](B, a, t);
       else if (a.hp !== undefined) ED.Actors.brazier(B, a, t);
       else ED.Actors.obstacle(B, a, wallRgba);
     }
     const prs = view.projs;
     for (let i = 0; i < prs.length; i++) { const pr = prs[i]; if (!pr.dead && inView(pr)) drawProj(B, pr, t); }
-    for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (z.dead || !zoneInView(z)) continue; const zf = ED.WeaponFx[z.wid] || ED.SkillFx[z.wid]; if (zf && zf.top) zf.top(B, z, t); } // zone overlays above actors
+    for (let i = 0; i < zones.length; i++) { // zone overlays above actors (own-team ones share the zone fade)
+      const z = zones[i]; if (z.dead || !zoneInView(z)) continue;
+      const h = ED.WeaponFx[z.wid] || ED.SkillFx[z.wid]; if (!h || !h.top) continue;
+      const f = z.team === 1 ? 1 : zf; if (f < 1) B.fade(f); h.top(B, z, t); if (f < 1) B.fade(1);
+    }
     ED.FX.draw(B, t);
     if (tele) for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && hostile(z) && zoneInView(z)) drawTele(B, z, t); }
+    const busy = heroes.length === 1 && (tele > 0 || zl > 0.5 || crowd > 150);
+    for (let i = 0; i < heroes.length; i++) { const p = heroes[i]; if (!p.dead && inView(p)) ED.Actors.heroTop(B, p, t, p === me, busy); } // hero markers over FX and telegraphs
     // overlays: hero names / revive bars (co-op), elite HP bars
     if (heroes.length > 1) for (const p of heroes) {
       if (p.dead || !inView(p)) continue;
@@ -228,7 +242,10 @@
     if (!shown) {
       if (P && P.setVisible) P.setVisible(false);
       R.usePost = false;
-      if (!gpu) { ctx.fillStyle = bgCss; ctx.fillRect(0, 0, R.canvas.width, R.canvas.height); ctx.imageSmoothingEnabled = false; ctx.drawImage(R.buf, 0, 0, R.bw * R.scale, R.bh * R.scale); }
+      if (!gpu) { // the opaque buffer covers the canvas (bw * scale >= width); the bg fill only runs when it does not
+        if (R.bw * R.scale < R.canvas.width || R.bh * R.scale < R.canvas.height) { ctx.fillStyle = bgCss; ctx.fillRect(0, 0, R.canvas.width, R.canvas.height); }
+        ctx.imageSmoothingEnabled = false; ctx.drawImage(R.buf, 0, 0, R.bw * R.scale, R.bh * R.scale);
+      }
     }
     if (ED.Atlas.tick) ED.Atlas.tick(1);
     if (ED.Bmp) ED.Bmp.sweep();

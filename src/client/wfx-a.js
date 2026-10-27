@@ -13,17 +13,17 @@
   const fade = (z, tail) => Math.max(0, Math.min(1, (z.dur - z.t) / tail));
   const grow = (z, t0) => Math.min(1, z.t / t0);
 
-  // Jagged bolt from (x0, y0) to (x1, y1): segs pieces, sideways jitter amp, re-rolled 20 times a second; glow pass then a white core.
+  // Jagged bolt from (x0, y0) to (x1, y1): segs pieces (a third under B.zoneLite), sideways jitter amp, re-rolled 20 times a second; glow polyline then a white core polyline.
   const PTS = new Float32Array(64);
   const bolt = (B, x0, y0, x1, y1, seed, segs, amp, lw, glow, core, alpha) => {
     const dx = x1 - x0, dy = y1 - y0, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len;
-    segs = Math.min(30, segs);
+    segs = Math.min(30, B.zoneLite ? Math.max(2, Math.ceil(segs / 3)) : segs);
     for (let i = 0; i <= segs; i++) {
       const f = i / segs, off = i === 0 || i === segs ? 0 : (hs(seed + i * 7.31) - 0.5) * 2 * amp * Math.sin(f * PI);
       PTS[i * 2] = x0 + dx * f + nx * off; PTS[i * 2 + 1] = y0 + dy * f + ny * off;
     }
-    for (let i = 0; i < segs; i++) B.line(PTS[i * 2], PTS[i * 2 + 1], PTS[i * 2 + 2], PTS[i * 2 + 3], lw, ca(glow, 110 * alpha));
-    for (let i = 0; i < segs; i++) B.line(PTS[i * 2], PTS[i * 2 + 1], PTS[i * 2 + 2], PTS[i * 2 + 3], Math.max(1, lw * 0.35), ca(core, 255 * alpha));
+    B.poly(PTS, segs + 1, lw, ca(glow, 110 * alpha));
+    B.poly(PTS, segs + 1, Math.max(1, lw * 0.35), ca(core, 255 * alpha));
   };
 
   // Spinning blade disc of radius r at angle rot: dark hub, rim, three hooked blades.
@@ -83,11 +83,12 @@
   // ---------------- zones: ground layer ----------------
   const ZONE = {
     sunring(B, z, t) {
-      B.circ(z.x, z.y - 4, z.r, ca(0xff7a2a, 16), 0);
-      B.circ(z.x, z.y - 4, z.r, ca(0xff7a2a, 90), 3);
-      B.circ(z.x, z.y - 4, z.r - 3, ca(0xffd36b, 120), 1);
+      const disc = B.zoneLite ? B.zcirc : B.circ; // 2D zone LOD: batched discs
+      disc(z.x, z.y - 4, z.r, ca(0xff7a2a, 16), 0);
+      disc(z.x, z.y - 4, z.r, ca(0xff7a2a, 90), 3);
+      disc(z.x, z.y - 4, z.r - 3, ca(0xffd36b, 120), 1);
     },
-    stormbolt(B, z) { const k = fade(z, z.dur); B.circ(z.x, z.y, z.r * (1.2 - 0.4 * k), ca(0x2a3c80, 90 * k), 0); },
+    stormbolt(B, z) { const k = fade(z, z.dur); (B.zoneLite ? B.zcirc : B.circ)(z.x, z.y, z.r * (1.2 - 0.4 * k), ca(0x2a3c80, 90 * k), 0); },
     frostring(B, z, t) {
       const k = fade(z, 0.3);
       B.circ(z.x, z.y, z.r, ca(0x9fdcff, 20 * k), 0);
@@ -100,18 +101,20 @@
       B.circ(z.x, z.y, z.r, ca(0x7fe3ff, 30 * k), 0);
       B.circ(z.x, z.y, z.r, ca(0x1c3358, 170 * k), 9);
       B.circ(z.x, z.y, z.r, ca(0x7fe3ff, 220 * k), 5);
+      if (B.zoneLite) return;
       B.circ(z.x, z.y, z.r, ca(0xffffff, 200 * k), 1.5);
       if (hold) B.circ(z.x, z.y, z.r * 0.92, ca(0xc8f6ff, (60 + 40 * Math.sin(t * 8)) * k), 1);
     },
     // Thorn patch: dark ground stain, spikes erupting (first 0.14 s) then withering (last 0.4 s).
     bramble(B, z, t) { thorns(B, z, t, 0x14300c, 0x3f7a18, 0x9be33c, 4, 1); },
-    thicket(B, z, t) { thorns(B, z, t, 0x2a0c1c, 0x5a2f40, 0xd2ff82, 6, 1.25); B.circ(z.x, z.y, z.r, ca(0x9be33c, 60 * fade(z, 0.5)), 1); },
+    thicket(B, z, t) { thorns(B, z, t, 0x2a0c1c, 0x5a2f40, 0xd2ff82, 6, 1.25); if (!B.zoneLite) B.circ(z.x, z.y, z.r, ca(0x9be33c, 60 * fade(z, 0.5)), 1); },
     // Meteor / star / comet target: a pulsing ring that fills as the fall completes.
     meteor(B, z, t) { target(B, z, t, 0xff6a2a); },
     star(B, z, t) { target(B, z, t, 0xffe66b); },
     comet(B, z, t) { target(B, z, t, 0xff4a2a); B.circ(z.x, z.y, z.r * 1.15, ca(0xff4a2a, 90), 1); },
     crater(B, z, t) {
       const k = fade(z, 0.5) * grow(z, 0.2), r = z.r, pulse = 0.5 + 0.5 * Math.sin(t * 9 + z.id);
+      if (B.zoneLite) { B.zcirc(z.x, z.y, r, ca(0x6a1a08, 90 * k), 0); B.zcirc(z.x, z.y, r, ca(0xff7a2a, 150 * k), 1.5); return; } // 2D zone LOD: batched disc + rim
       B.circ(z.x, z.y, r, ca(0x4a1006, 70 * k), 0);
       B.circ(z.x, z.y, r * 0.55, ca(0xff7a2a, (40 + 30 * pulse) * k), 0);
       B.circ(z.x, z.y, r, ca(0xff7a2a, (110 + 80 * pulse) * k), 1.5);
@@ -121,9 +124,11 @@
       }
     },
   };
+  // B.zoneLite (2D zone LOD): batched stain + a rim in the tip colour only.
   const thorns = (B, z, t, stain, body, tip, n, sc) => {
     const g = grow(z, 0.14), k = fade(z, 0.4), r = z.r;
-    B.circ(z.x, z.y, r, ca(stain, 110 * k), 0);
+    if (B.zoneLite) { B.zcirc(z.x, z.y, r, ca(stain, 90 * k), 0); B.zcirc(z.x, z.y, r, ca(tip, 70 * k), 1); return; }
+    B.circ(z.x, z.y, r, ca(stain, 80 * k), 0);
     for (let i = 0; i < n; i++) {
       const a = hs(z.id * 1.7 + i) * TAU, d = r * 0.75 * hs(z.id * 2.3 + i * 3.1), x = z.x + Math.cos(a) * d, y = z.y + Math.sin(a) * d * 0.6;
       const h = (7 + 7 * hs(z.id + i * 5.3)) * sc * g * (0.4 + 0.6 * k), lean = (hs(z.id + i * 9.1) - 0.5) * 6 * sc;
@@ -132,19 +137,22 @@
     }
     if (n > 4 && g >= 1) B.spr('proj.thorn', frame('proj.thorn', t + z.id * 0.1), z.x, z.y - 4, so(0.85 * k, -PI / 2, 0.7 * sc));
   };
+  // B.zoneLite (2D zone LOD): batched discs and a steady ring.
   const target = (B, z, t, col) => {
     const k = Math.min(1, z.t / z.dur), pulse = 0.5 + 0.5 * Math.sin(t * 20 + z.id);
+    if (B.zoneLite) { B.zcirc(z.x, z.y, z.r, ca(col, 26 + 40 * k), 0); B.zcirc(z.x, z.y, z.r * k, ca(col, 60), 0); B.zcirc(z.x, z.y, z.r, ca(col, 200), 1.5); return; }
     B.circ(z.x, z.y, z.r, ca(col, 26 + 40 * k), 0);
     B.circ(z.x, z.y, z.r * k, ca(col, 60), 0);
     B.circ(z.x, z.y, z.r, ca(col, 140 + 100 * pulse), 1.5);
   };
 
   // ---------------- zones: overlays above actors ----------------
+  // Under B.zoneLite (2D zone LOD) the overlays draw a third of their motes / crystals and one bolt pass.
   const FALL = { meteor: [70, 240, 'proj.fireball', 1.7, 0xff7a2a, 5], star: [50, 200, '', 0, 0xfff0c2, 2], comet: [110, 300, 'proj.fireball', 3.2, 0xff4a2a, 9] };
   const TOP = {
     // Sun Wheel: embers spinning along the ring.
     sunring(B, z, t) {
-      for (let i = 0; i < 18; i++) {
+      for (let i = 0, st = B.zoneLite ? 3 : 1; i < 18; i += st) {
         const a = i * TAU / 18 + t * 1.3, rr = z.r + Math.sin(t * 7 + i * 2.1) * 3;
         B.rect(z.x + Math.cos(a) * rr - 1, z.y - 4 + Math.sin(a) * rr - 1, 2, 2, ca(i & 1 ? 0xffc24a : 0xfff4c0, 200));
       }
@@ -159,14 +167,14 @@
       const k = fade(z, z.dur), ex = z.x + Math.cos(z.a) * z.len, ey = z.y + Math.sin(z.a) * z.len, seed = z.id * 13 + Math.floor(t * 20);
       const segs = Math.max(2, Math.round(z.len / 9));
       bolt(B, z.x, z.y, ex, ey, seed, segs, Math.min(10, z.len * 0.18), 5, 0x6ab8ff, 0xffffff, k);
-      if (k > 0.5) bolt(B, z.x, z.y, ex, ey, seed + 91, segs, Math.min(7, z.len * 0.12), 2, 0xc8e6ff, 0xe8f4ff, k * 0.6);
+      if (k > 0.5 && !B.zoneLite) bolt(B, z.x, z.y, ex, ey, seed + 91, segs, Math.min(7, z.len * 0.12), 2, 0xc8e6ff, 0xe8f4ff, k * 0.6);
       B.circ(ex, ey, 4 + 3 * k, ca(0xc8e6ff, 160 * k), 0);
     },
     // Sky strike: a thick bolt from above the screen into the foe, a thunder flash, a white ground flash.
     stormbolt(B, z, t) {
       const k = fade(z, z.dur), seed = z.id * 7 + Math.floor(t * 24);
       bolt(B, z.x + 18, z.y - 190, z.x, z.y - 6, seed, 14, 12, 8, 0x5a7aff, 0xffffff, k);
-      bolt(B, z.x + 18, z.y - 190, z.x, z.y - 6, seed + 33, 10, 16, 3, 0xa0c0ff, 0xe8f0ff, k * 0.5);
+      if (!B.zoneLite) bolt(B, z.x + 18, z.y - 190, z.x, z.y - 6, seed + 33, 10, 16, 3, 0xa0c0ff, 0xe8f0ff, k * 0.5);
       B.spr('fx.thunder', Math.min(7, Math.floor((1 - k) * 8)), z.x, z.y - 8, so(k, 0, 1.6, true));
       B.circ(z.x, z.y, z.r * (0.5 + 0.5 * (1 - k)), ca(0xe8f0ff, 180 * k), 2);
     },
@@ -184,12 +192,12 @@
     // Frost ring: snow motes riding the ring.
     frostring(B, z, t) {
       const k = fade(z, 0.3);
-      for (let i = 0; i < 14; i++) { const a = hs(z.id + i) * TAU + t * 0.6, rr = z.r - 2 + 4 * hs(i + z.id * 2); B.rect(z.x + Math.cos(a) * rr - 1, z.y + Math.sin(a) * rr - 1, 2, 2, ca(0xffffff, 220 * k)); }
+      for (let i = 0, st = B.zoneLite ? 3 : 1; i < 14; i += st) { const a = hs(z.id + i) * TAU + t * 0.6, rr = z.r - 2 + 4 * hs(i + z.id * 2); B.rect(z.x + Math.cos(a) * rr - 1, z.y + Math.sin(a) * rr - 1, 2, 2, ca(0xffffff, 220 * k)); }
     },
     // Glacier: ice crystals jutting out of the ring, a freezing mist burst when it reaches full size.
     glacier(B, z, t) {
       const k = fade(z, 0.35), n = 22;
-      for (let i = 0; i < n; i++) {
+      for (let i = 0, st = B.zoneLite ? 3 : 1; i < n; i += st) {
         const a = i * TAU / n + hs(z.id + i) * 0.2, h = 6 + 10 * hs(z.id * 3 + i), c = Math.cos(a), s = Math.sin(a);
         const x0 = z.x + c * (z.r - 4), y0 = z.y + s * (z.r - 4), x1 = z.x + c * (z.r + h * 0.4), y1 = z.y + s * (z.r + h * 0.4) - h;
         B.line(x0, y0, x1, y1, 4, ca(0x3a78b0, 220 * k));
@@ -222,10 +230,10 @@
     const k = Math.min(1, z.t / z.dur), e = k * k, ox = f[0] * (1 - e), oy = f[1] * (1 - e), x = z.x + ox, y = z.y - 6 - oy;
     fallX = x; fallY = y;
     const l = Math.hypot(f[0], f[1]), ux = f[0] / l, uy = -f[1] / l, tail = 18 + f[5] * 6;
-    B.line(x, y, x + ux * tail * 2, y + uy * tail * 2, f[5], ca(f[4], 60));
+    if (!B.zoneLite) B.line(x, y, x + ux * tail * 2, y + uy * tail * 2, f[5], ca(f[4], 60));
     B.line(x, y, x + ux * tail, y + uy * tail, Math.max(1, f[5] * 0.5), ca(0xfff4c0, 200));
     if (f[2]) B.spr(f[2], frame(f[2], t + z.id * 0.1), x, y, so(1, Math.atan2(-uy, -ux) - 7 * PI / 4, f[3]));
-    else { B.circ(x, y, 5, ca(f[4], 120), 0); B.circ(x, y, 2.5, 0xffffffff, 0); }
+    else { if (!B.zoneLite) B.circ(x, y, 5, ca(f[4], 120), 0); B.circ(x, y, 2.5, 0xffffffff, 0); }
   };
 
   // ---------------- registration ----------------

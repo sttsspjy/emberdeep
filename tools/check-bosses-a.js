@@ -20,6 +20,7 @@ for (const id of ['warden', 'spore', 'twins', 'twinhammer']) {
 const calls = { n: 0 };
 const mockB = new Proxy({}, { get: (o, k) => (k === 'crowd' ? 0 : (...a) => { calls.n++; for (const v of a) if (typeof v === 'number' && !isFinite(v)) throw new Error('non-finite arg to B.' + String(k)); return true; }) });
 ED.Atlas = { ok: true, has: () => true, anim: () => ({ n: 8, f: [0, 1, 2, 3, 4, 5, 6, 7] }), frameAt: () => 0 };
+ED.Actors = { hitFlash: (e) => e.flash > 0 }; // actors.js stand-in (shared hit-flash throttle)
 function drawAll(w) {
   ED.Game = { view: { heroes: w.heroes } };
   for (const e of w.foes) { const f = !e.dead && ED.BossFx[e.def.id]; if (f && f.draw) f.draw(mockB, e, w.time); }

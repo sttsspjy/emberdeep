@@ -8,6 +8,9 @@
 //   crowdN: a knight run (god cheat) held at N live foes; after 2 s of warm-up measures --seconds (6) s, p50 / p95 / max: frame time (rAF interval; the browser runs uncapped,
 //          no vsync, when a crowd scenario is requested), main-thread work (all rAF callbacks of a frame), sim ms per 60 Hz tick and Render.frame ms.
 //          --software launches without the GPU (software GL: the Canvas2D fallback path). --gate fails crowd900 when GPU-path frame p95 > 8 ms (ARCHITECTURE §11; report-only by default).
+//   late[a|b|c]: staged late game for the render budget: the knight with six evolved weapons (set a: whirlwind sunwheel stormcrown starfall plague barrage, b: hail choir thornwood
+//          impaler avalanche glacier, c: inferno bonestorm wrath shadowfan cathedral twinmoons), max passives, clock 25:00, the stage boss and 900 last-roster foes held at real HP
+//          (about 1,000 kills/s); measures like crowdN plus own-zone count / coverage. --gate fails when Render.frame p95 > 4 ms (GAME-DESIGN §13), either backend.
 //   coop: two pages of one browser context on ?net=local (BroadcastChannel transport): host + guest through the ED.Net lobby API (host, join, ready, start), then the real co-op
 //         run on both peers for --seconds (6) s: the guest's mirror shows 2 heroes and foes, snapshots <= 12 KB.
 // In-page debug API (injected only by this harness, absent in normal play; every call is a no-op without a solo / host run): ED.Debug.{fastForward(sec), give(id, lvl), evolve(wid?),
@@ -21,7 +24,7 @@ const fs = require('fs'), os = require('os'), path = require('path'), http = req
 const FLAGS = { scen: 's', cls: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', json: 'b', help: 'b' };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
-const SCEN_RE = /^(smoke|shots|coop|crowd\d{1,4})$/;
+const SCEN_RE = /^(smoke|shots|coop|crowd\d{1,4}|late[abc]?)$/;
 function parseArgs(argv) {
   const o = { scen: '', cls: HEROES.join(','), browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
   const pos = [];
@@ -37,7 +40,7 @@ function parseArgs(argv) {
   }
   o.scens = (o.scen ? o.scen.split(',') : []).concat(pos).map(s => s.trim()).filter(Boolean);
   if (!o.scens.length) o.scens = ['smoke'];
-  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, crowdN, coop)');
+  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, crowdN, late[a|b|c], coop)');
   if (!['chromium', 'firefox'].includes(o.browser)) throw new Fail('--browser is chromium or firefox');
   const vp = /^(\d{3,5})x(\d{3,5})$/.exec(o.viewport);
   if (!vp) throw new Fail('--viewport is WxH');
@@ -259,15 +262,15 @@ function pageBoot(cfg) {
   BR.stop = () => { BR.drive = false; BR.crowd = 0; clearInterval(BR.holdT); const E = ED(); if (E.App.state === 'run') E.App.quitRun(); };
   BR.debug = (name, args) => { const D = ED().Debug; return D && D[name] ? D[name](...(args || [])) : null; };
   BR.visible = (id) => { const el = document.getElementById(id); return !!el && !el.hidden && el.getClientRects().length > 0; };
-  // Keeps n foes alive on a ring 120-330 px around the hero (spawned directly; foes stay put when far by recycling).
-  BR.hold = (n) => {
+  // Keeps n foes alive on a ring 120-330 px around the hero (spawned directly; foes stay put when far by recycling). late: the last timeline roster at real HP, refilled every 50 ms.
+  BR.hold = (n, late) => {
     BR.crowd = n;
     clearInterval(BR.holdT);
     BR.holdT = setInterval(() => {
       const E = ED(), w = E.Game.w; if (!w || !BR.crowd) return;
-      const me = w.heroes[0], ids = w.sdef.timeline[0].roster.map(r => r[0]);
-      for (let k = 0; w.foes.length < BR.crowd && k < 200; k++) { const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 210, x = me.x + Math.cos(a) * d, y = me.y + Math.sin(a) * d; if (!E.Arena.blocked(w.arena, x, y, 8)) w.spawnFoe(ids[k % ids.length], x, y, { hpMul: 40 }); }
-    }, 100);
+      const me = w.heroes[0], tl = w.sdef.timeline, ids = tl[late ? tl.length - 1 : 0].roster.map(r => r[0]).filter(id => !E.FOES[id].boss);
+      for (let k = 0; w.foes.length < BR.crowd && k < (late ? 300 : 200); k++) { const a = Math.random() * Math.PI * 2, d = 120 + Math.random() * 210, x = me.x + Math.cos(a) * d, y = me.y + Math.sin(a) * d; if (!E.Arena.blocked(w.arena, x, y, 8)) w.spawnFoe(ids[k % ids.length], x, y, { hpMul: late ? 1 : 40 }); }
+    }, late ? 50 : 100);
   };
   // Over msec: frame time (rAF interval), main-thread work, sim update ms and Render.frame ms per frame: p50 / p95 / max.
   BR.measure = (msec) => new Promise((resolve) => {
@@ -347,7 +350,7 @@ async function launch() {
   const o = S.opt, opts = { headless: true };
   if (o.browser === 'chromium') {
     opts.args = ['--mute-audio', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows'];
-    if (o.scens.some(s => s.startsWith('crowd'))) opts.args.push('--disable-frame-rate-limit', '--disable-gpu-vsync'); // frame interval = real throughput, not the 60 Hz vsync cap
+    if (o.scens.some(s => s.startsWith('crowd') || s.startsWith('late'))) opts.args.push('--disable-frame-rate-limit', '--disable-gpu-vsync'); // frame interval = real throughput, not the 60 Hz vsync cap
     if (o.software) opts.args.push('--disable-gpu');
     else opts.args.push('--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist');
   } else opts.firefoxUserPrefs = { 'media.volume_scale': '0.0', 'layout.frame_rate': 60 };
@@ -520,6 +523,42 @@ async function scenCrowd(sc) {
   return res;
 }
 
+const LATE = { a: ['whirlwind', 'sunwheel', 'stormcrown', 'starfall', 'plague', 'barrage'], b: ['hail', 'choir', 'thornwood', 'impaler', 'avalanche', 'glacier'], c: ['inferno', 'bonestorm', 'wrath', 'shadowfan', 'cathedral', 'twinmoons'] };
+async function scenLate(sc) {
+  const o = S.opt, set = sc.slice(4) || 'a', res = newResult(sc), secs = o.seconds || 6;
+  const { ctx, page, errors, info } = await openPage();
+  try {
+    res.notes.push(bootNote(info) + (o.software ? ', launched without GPU' : ''));
+    await call(page, 'settings', o.quality);
+    await call(page, 'start', 'knight', 0, { god: true });
+    await wait(500);
+    const prep = await page.evaluate((W) => {
+      const E = window.ED, D = E.Debug, p = E.Game.w.heroes[0];
+      p.weapons.length = 0;
+      for (const id of W) D.give(id, 8);
+      for (const id of ['might', 'reach', 'duration', 'multishot', 'haste', 'velocity']) D.give(id, 99);
+      D.setTime(1500);
+      const boss = D.spawnBoss();
+      return { weapons: p.weapons.map(x => x.id + x.lvl), boss };
+    }, LATE[set]);
+    res.notes.push('staged: weapons ' + prep.weapons.join(',') + (prep.boss ? ', boss' : ', no boss'));
+    if (prep.weapons.length < 6) fail(res, 'staging gave only ' + prep.weapons.length + ' of 6 weapons');
+    await call(page, 'hold', 900, true);
+    await wait(2500);
+    const m = await call(page, 'measure', secs * 1000);
+    const z = await page.evaluate(() => { const B = window.ED.Batch; return { n: B.zoneN, load: +B.zoneLoad.toFixed(2), lite: B.zoneLite, union: B.zoneUnion }; });
+    res.rows.push(Object.assign({ quality: o.quality }, m));
+    const over = m.render.p95 > 4;
+    res.notes.push(`own zones in view ${z.n}, coverage ${z.load}x view, 2D zone LOD ${z.lite ? (z.union ? 'on (union paths)' : 'on') : 'off'}`);
+    res.notes.push(`gate (Render.frame p95 <= 4 ms, ${m.batch}): ${over ? 'OVER' : 'ok'} — p95 ${m.render.p95} ms`);
+    if (o.gate && over) fail(res, `render p95 ${m.render.p95} ms > 4 ms`);
+    await shoot(page, res, sc + (o.software ? '-soft' : ''));
+    await call(page, 'stop');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 // Host + guest pages in one context over the BroadcastChannel transport.
 async function scenCoop() {
   const o = S.opt, res = newResult('coop'), secs = o.seconds || 6, errors = [];
@@ -594,7 +633,7 @@ async function main() {
     for (const sc of S.opt.scens) {
       const t0 = Date.now();
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'coop' ? await scenCoop() : await scenCrowd(sc); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'coop' ? await scenCoop() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
       catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); fail(r, 'harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); }
       r.wallMs = Date.now() - t0;
       if (S.server.missing.size) { r.missing = [...S.server.missing]; fail(r, 'missing files: ' + r.missing.join(', ')); S.server.missing.clear(); }

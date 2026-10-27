@@ -7,6 +7,8 @@
   'use strict';
   const U = ED.U, TAU = U.TAU, PI = Math.PI;
   const F = ED.FX = { shake: 0, shakeOn: true, numbers: true, hold: 0, now: 0, sx: 0, sy: 0 };
+  const P2D = 280; // Canvas2D particle budget: above it each particle's fixed eighth (p.q) decides whether it is drawn, so the kept subset is stable frame to frame
+  let pq = 0;
   const MAXP = 700, MAXS = 72, MAXR = 48, MAXL = 24, MAXW = 24, MAXC = 16, MAXN = 60, MAXD = 64, MAXQ = 24;
   const aq = (k) => Math.max(0, Math.min(255, Math.round(k * 15) * 17)); // alpha quantised to 16 steps (keeps the Canvas2D colour-string cache small)
   const rgbaK = (col, k) => ((col & 0xffffff00) | aq(k)) >>> 0;
@@ -47,7 +49,7 @@
   // ---------------- primitives ----------------
   // Particle: col 0xRRGGBB00, size px, grav px/s², drag per second factor (0..1 kept), add (additive glow when the backend supports it).
   F.part = (x, y, vx, vy, life, col, size, grav, drag) => {
-    const p = parts.get(); p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.life = p.max = life; p.col = col; p.size = size || 2; p.grav = grav === undefined ? 60 : grav; p.drag = drag === undefined ? 0.9 : drag;
+    const p = parts.get(); p.q = pq = (pq + 1) & 7; p.x = x; p.y = y; p.vx = vx; p.vy = vy; p.life = p.max = life; p.col = col; p.size = size || 2; p.grav = grav === undefined ? 60 : grav; p.drag = drag === undefined ? 0.9 : drag;
   };
   // n particles bursting from (x, y) at speed sp (±40%), upward bias up.
   F.burst = (x, y, n, col, sp, life, size, up) => {
@@ -259,7 +261,7 @@
           if (ev.fid) track(ev.fid, 9999, 0xff5a4aff);
         } else if (ev.phase === 'enrage') { F.banner('ENRAGED!', 0xff3a2a, 2.2, { k: 3 }); F.screen(0xff302000, 0.5, 0.6); F.addShake(6, 0); }
         else if (ev.phase === -1) { F.banner(up(foeName(ev.id)) + ' FALLS', 0xffd27a, 2.2, { big: true, k: 3, band: true }); for (const q of tracks) if (q.id === ev.fid) q.t = 0; }
-        else if (ev.phase > 0) { F.banner('PHASE ' + (ev.phase + 1), 0xff7a6a, 1.6, { k: 2 }); F.addShake(5, 0); F.hitStop(0.06); const v = view(), b = v && v.boss; if (b) { F.ring(b.x, b.y - 20, 120, 0xff5a4aff, 0.5, 10, 4); F.flash(b.x, b.y - 20, 50, 0xffffff00, 0.15, 0.7); } }
+        else if (ev.phase > 0) { F.banner('PHASE ' + ev.phase, 0xff7a6a, 1.6, { k: 2 }); F.addShake(5, 0); F.hitStop(0.06); const v = view(), b = v && v.boss; if (b) { F.ring(b.x, b.y - 20, 120, 0xff5a4aff, 0.5, 10, 4); F.flash(b.x, b.y - 20, 50, 0xffffff00, 0.15, 0.7); } }
         break;
       }
       case 'down': { const p = heroOf(ev.pid); if (p) { F.ring(p.x, p.y - 8, 50, 0xff3a2aff, 0.5, 6, 3); F.burst(p.x, p.y - 8, 16, 0xff4a4a00, 90, 0.6, 2, 20); } if (mine) { F.screen(0xff202000, 0.5, 0.5); F.addShake(5, 0); hurtV = 1; } break; }
@@ -347,6 +349,7 @@
         B.line(p[i], p[i + 1] - 6, mx, my, 1, rgbaK(0xffffff00, k)); B.line(mx, my, p[i + 2], p[i + 3] - 6, 1, rgbaK(0xffffff00, k));
       }
     }
+    const popA = B.crowd > 250 ? 0.6 : 1; // a crowd's death pops stay translucent so a 1,000 kills/s horde does not wash the screen white
     for (const d of pops.a) {
       const age = d.max - d.life;
       SO.flip = d.flip; SO.rot = 0; SO.tint = 0; SO.add = false;
@@ -356,7 +359,7 @@
         B.spr(d.anim, fi, d.x, d.y, SO);
       } else {
         const k = U.clamp(age / d.max, 0, 1);
-        SO.flash = 1; SO.sx = d.sx * (1 + 0.45 * k); SO.sy = d.sy * (1 - 0.7 * k); SO.alpha = 1 - k * k;
+        SO.flash = 1; SO.sx = d.sx * (1 + 0.45 * k); SO.sy = d.sy * (1 - 0.7 * k); SO.alpha = (1 - k * k) * popA;
         B.spr(d.id, d.fi, d.x, d.y, SO);
       }
     }
@@ -365,7 +368,8 @@
       SO.flip = s.flip; SO.flash = 0; SO.sx = SO.sy = s.sc; SO.rot = s.rot; SO.tint = s.tint; SO.alpha = s.al; SO.add = false;
       B.spr(s.id, fi, s.x, s.y, SO);
     }
-    for (const p of parts.a) { const k = p.life / p.max, sz = k < 0.35 && p.size > 1 ? p.size - 1 : p.size; B.rect(Math.round(p.x - sz / 2), Math.round(p.y - sz / 2), sz, sz, rgbaK(p.col, Math.min(1, k * 1.6))); }
+    const np = parts.a.length, qk = B.mode === '2d' && np > P2D ? Math.max(2, Math.floor(8 * P2D / np)) : 8;
+    for (const p of parts.a) { if (p.q >= qk) continue; const k = p.life / p.max, sz = k < 0.35 && p.size > 1 ? p.size - 1 : p.size; B.rect(Math.round(p.x - sz / 2), Math.round(p.y - sz / 2), sz, sz, rgbaK(p.col, Math.min(1, k * 1.6))); }
   };
 
   // ---------------- overlays ----------------

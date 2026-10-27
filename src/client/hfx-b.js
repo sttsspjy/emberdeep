@@ -15,22 +15,24 @@
 
   // ---------------- cleric ----------------
   // Falling pillar: target ring closing in, a light column whose bright head drops onto the target, brighter as it lands.
+  // B.zoneLite (2D zone LOD): batched target disc and ring, the core column only.
   function pillar(B, z, t, big) {
-    const k = kOf(z), r = z.r, top = z.y - 150 - r, head = top + (z.y - top) * k, cw = r * (0.35 + 0.45 * k) * (big ? 1.3 : 1);
-    B.circ(z.x, z.y, r, ca(HOLY, 0.12 + 0.25 * k), 0);
-    B.circ(z.x, z.y, r * (1.6 - 0.6 * k), ca(WHITE, 0.4 + 0.5 * k), 1.5);
-    B.rect(z.x - cw / 2, top, cw, head - top, ca(GOLD, 0.18 + 0.3 * k));
+    const k = kOf(z), r = z.r, top = z.y - 150 - r, head = top + (z.y - top) * k, cw = r * (0.35 + 0.45 * k) * (big ? 1.3 : 1), lite = B.zoneLite;
+    const disc = lite ? B.zcirc : B.circ;
+    disc(z.x, z.y, r, ca(HOLY, 0.12 + 0.25 * k), 0);
+    disc(z.x, z.y, r * (1.6 - 0.6 * k), ca(WHITE, 0.4 + 0.5 * k), 1.5);
+    if (!lite) B.rect(z.x - cw / 2, top, cw, head - top, ca(GOLD, 0.18 + 0.3 * k));
     B.rect(z.x - cw / 5, top, cw / 2.5, head - top, ca(WHITE, 0.35 + 0.5 * k));
     B.rect(z.x - cw / 2 - 1, head - 6, cw + 2, 8, ca(WHITE, 0.9));
-    if (big) for (let i = 0; i < 4; i++) { const a = t * 3 + i * TAU / 4; B.line(z.x, z.y, z.x + Math.cos(a) * r * 1.4 * k, z.y + Math.sin(a) * r * 0.7 * k, 1, ca(WHITE, 0.7)); }
+    if (big && !lite) for (let i = 0; i < 4; i++) { const a = t * 3 + i * TAU / 4; B.line(z.x, z.y, z.x + Math.cos(a) * r * 1.4 * k, z.y + Math.sin(a) * r * 0.7 * k, 1, ca(WHITE, 0.7)); }
   }
-  // Afterglow of a landed pillar: a fading full-height column and a ground burst.
+  // Afterglow of a landed pillar: a fading full-height column and a ground burst. B.zoneLite: batched burst, the core column only.
   function glow(B, z, t) {
-    const k = kOf(z), f = 1 - k, r = z.r, top = z.y - 170 - r;
-    B.circ(z.x, z.y, r * (1 + 0.6 * k), ca(WHITE, 0.55 * f), 0);
-    B.rect(z.x - r * 0.45 * f, top, r * 0.9 * f, z.y - top, ca(GOLD, 0.55 * f));
+    const k = kOf(z), f = 1 - k, r = z.r, top = z.y - 170 - r, lite = B.zoneLite, disc = lite ? B.zcirc : B.circ;
+    disc(z.x, z.y, r * (1 + 0.6 * k), ca(WHITE, 0.55 * f), 0);
+    if (!lite) B.rect(z.x - r * 0.45 * f, top, r * 0.9 * f, z.y - top, ca(GOLD, 0.55 * f));
     B.rect(z.x - r * 0.15 * f, top, r * 0.3 * f, z.y - top, ca(WHITE, 0.9 * f));
-    B.circ(z.x, z.y, r * (1.2 + 0.8 * k), ca(GOLD, 0.8 * f), 2);
+    disc(z.x, z.y, r * (1.2 + 0.8 * k), ca(GOLD, 0.8 * f), 2);
   }
   // Rising motes inside a circle (deterministic from the zone id and t).
   function motes(B, z, t, n, col, size) {
@@ -42,6 +44,7 @@
   }
   function conse(B, z, t) {
     const f = fade(z, 0.15, 0.4), pulse = 0.5 + 0.5 * Math.sin(t * 6 + z.id);
+    if (B.zoneLite) { B.zcirc(z.x, z.y, z.r, ca(HOLY, 0.18 * f), 0); B.zcirc(z.x, z.y, z.r, ca(GOLD, 0.55 * f), 1); return; } // 2D zone LOD: batched fill + rim
     B.circ(z.x, z.y, z.r, ca(HOLY, (0.14 + 0.06 * pulse) * f), 0);
     B.circ(z.x, z.y, z.r, ca(GOLD, 0.55 * f), 1);
     motes(B, z, t, 5, WHITE, 1);
@@ -49,7 +52,7 @@
   function sanct(B, z, t) {
     const f = fade(z, 0.2, 0.35), pulse = 0.5 + 0.5 * Math.sin(t * 5), r = z.r;
     B.circ(z.x, z.y, r, ca(HOLY, 0.16 * f), 0);
-    B.circ(z.x, z.y, r * (0.55 + 0.1 * pulse), ca(WHITE, 0.08 * f), 0);
+    if (!B.zoneLite) B.circ(z.x, z.y, r * (0.55 + 0.1 * pulse), ca(WHITE, 0.08 * f), 0);
     B.circ(z.x, z.y, r, ca(GOLD, (0.7 + 0.3 * pulse) * f), 3);
     B.circ(z.x, z.y, r - 6, ca(WHITE, 0.45 * f), 1);
     for (let i = 0; i < 10; i++) { const a = t * 0.9 + i * TAU / 10, x = z.x + Math.cos(a) * (r - 13), y = z.y + Math.sin(a) * (r - 13); B.rect(x - 2, y - 2, 4, 4, ca(WHITE, 0.85 * f)); }
@@ -126,6 +129,7 @@
   function waveRing(B, z, band, col, fill) {
     if (z.r < 2) return;
     const k = kOf(z), f = 1 - k * k;
+    if (B.zoneLite) { B.zcirc(z.x, z.y, z.r, ca(col, fill * f), 0); B.zcirc(z.x, z.y, z.r, ca(col, 0.9 * f), band); return; } // 2D zone LOD: batched fill + band
     B.circ(z.x, z.y, z.r, ca(col, fill * f), 0);
     B.circ(z.x, z.y, z.r, ca(col, 0.9 * f), band);
     B.circ(z.x, z.y, Math.max(1, z.r - band - 2), ca(WHITE, 0.6 * f), 1);
@@ -135,6 +139,7 @@
     if (z.r < 2) return;
     const k = kOf(z), f = 1 - k;
     if (z.t < 0.18) B.circ(z.x, z.y, 40 + z.r * 0.3, ca(WHITE, 0.5 * (1 - z.t / 0.18)), 0);
+    if (B.zoneLite) { B.zcirc(z.x, z.y, z.r, ca(BRONZE, 0.1 * f), 0); B.zcirc(z.x, z.y, z.r, ca(BRONZE, 0.95 * f), 7); return; }
     B.circ(z.x, z.y, z.r, ca(BRONZE, 0.1 * f), 0);
     B.circ(z.x, z.y, z.r, ca(BRONZE, 0.95 * f), 7);
     B.circ(z.x, z.y, z.r - 5, ca(WHITE, 0.9 * f), 2);

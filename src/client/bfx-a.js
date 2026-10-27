@@ -30,12 +30,12 @@
       const At = A(), o = reset();
       B.shadow(e.x, e.y, e.r * 1.1);
       cues(B, e, t, e.r, 52);
-      o.flip = e.face < 0; o.flash = e.flash > 0 ? 1 : (e.st === 1 && Math.floor(t * 12) % 2 ? 0.4 : 0);
+      o.flip = e.face < 0; o.flash = ED.Actors.hitFlash(e) ? 1 : (e.st === 1 && Math.floor(t * 12) % 2 ? 0.4 : 0);
       let id, f;
       if (e.st === 3) { id = 'boss.bonewarden.hit'; f = Math.min(3, Math.floor(e.stT * 4) % 4); }
       else if (e.st === 1 || e.st === 2) { id = 'boss.bonewarden.attack'; f = atkFrame(id, e, t); }
       else { id = At.has('boss.bonewarden.walk') ? 'boss.bonewarden.walk' : 'boss.bonewarden.idle'; f = At.frameAt(id, t); }
-      if (!B.spr(id, f, e.x, e.y, o)) { B.circ(e.x, e.y - e.r, e.r, e.flash > 0 ? 0xffffffff : 0xb8b0a0ff, 0); B.circ(e.x, e.y - e.r, e.r, 0xffd27aff, 2); }
+      if (!B.spr(id, f, e.x, e.y, o)) { B.circ(e.x, e.y - e.r, e.r, o.flash === 1 ? 0xffffffff : 0xb8b0a0ff, 0); B.circ(e.x, e.y - e.r, e.r, 0xffd27aff, 2); }
       return true;
     },
   };
@@ -61,12 +61,12 @@
       if (rooted) for (let i = 0; i < 7; i++) { const a = i * TAU / 7 + e.id * 0.37, l = e.r * (1.2 + 0.25 * Math.sin(t * 2 + i)); B.line(e.x, e.y - 2, e.x + Math.cos(a) * l, e.y + Math.sin(a) * l * 0.5, 2, 0x3d5a2aff); }
       B.shadow(e.x, e.y, e.r * 1.2);
       cues(B, e, t, e.r, 58 * (e.scale || 1));
-      o.flip = e.face < 0; o.sx = o.sy = e.scale || 1; o.flash = e.flash > 0 ? 1 : (e.st === 1 && Math.floor(t * 12) % 2 ? 0.4 : 0);
+      o.flip = e.face < 0; o.sx = o.sy = e.scale || 1; o.flash = ED.Actors.hitFlash(e) ? 1 : (e.st === 1 && Math.floor(t * 12) % 2 ? 0.4 : 0);
       let id, f;
       if (e.st === 1) { id = 'boss.sporemother.charge'; f = At.frameAt(id, e.stT); }
       else if (e.st === 2) { id = 'boss.sporemother.attack'; f = atkFrame(id, e, t); }
       else { id = rooted ? 'boss.sporemother.idle' : 'boss.sporemother.walk'; f = At.frameAt(id, t); }
-      if (!B.spr(id, f, e.x, e.y, o)) { B.circ(e.x, e.y - e.r, e.r, e.flash > 0 ? 0xffffffff : 0x6a4a8cff, 0); B.circ(e.x, e.y - e.r, e.r, 0x7fe39aff, 2); }
+      if (!B.spr(id, f, e.x, e.y, o)) { B.circ(e.x, e.y - e.r, e.r, o.flash === 1 ? 0xffffffff : 0x6a4a8cff, 0); B.circ(e.x, e.y - e.r, e.r, 0x7fe39aff, 2); }
       return true;
     },
   };
@@ -76,8 +76,8 @@
       const p = 0.5 + 0.5 * Math.sin(t * 4 + e.id), o = reset();
       B.circ(e.x, e.y - 8, 16 + 3 * p, rgba(0x7fe39a, 40 + 30 * p), 0);
       B.shadow(e.x, e.y, 10);
-      o.sx = o.sy = 2 + 0.15 * p; o.flash = e.flash > 0 ? 1 : 0;
-      if (!B.spr('foe.sporepuff.idle', A().frameAt('foe.sporepuff.idle', t), e.x, e.y, o)) { B.circ(e.x, e.y - 10, 11 + p, e.flash > 0 ? 0xffffffff : 0x4a8a3aff, 0); B.circ(e.x - 3, e.y - 13, 2, 0xc9ffd9ff, 0); B.circ(e.x + 4, e.y - 8, 2, 0xc9ffd9ff, 0); }
+      o.sx = o.sy = 2 + 0.15 * p; o.flash = ED.Actors.hitFlash(e) ? 1 : 0;
+      if (!B.spr('foe.sporepuff.idle', A().frameAt('foe.sporepuff.idle', t), e.x, e.y, o)) { B.circ(e.x, e.y - 10, 11 + p, o.flash === 1 ? 0xffffffff : 0x4a8a3aff, 0); B.circ(e.x - 3, e.y - 13, 2, 0xc9ffd9ff, 0); B.circ(e.x + 4, e.y - 8, 2, 0xc9ffd9ff, 0); }
       return true;
     },
   };
@@ -103,9 +103,9 @@
       B.shadow(e.x, e.y, e.r * (air ? 1.4 : 1));
       B.circ(e.x, e.y, e.r + 2, rgba(col, 170), 2);
       cues(B, e, t, e.r, 54);
-      o.flip = f < 0; o.sx = o.sy = sc; o.flash = e.flash > 0 ? 1 : (e.st === 1 && Math.floor(t * 12) % 2 ? 0.4 : 0);
+      o.flip = f < 0; o.sx = o.sy = sc; o.flash = ED.Actors.hitFlash(e) ? 1 : (e.st === 1 && Math.floor(t * 12) % 2 ? 0.4 : 0);
       const id = e.st ? 'foe.skelknight.walk' : 'foe.skelknight.idle';
-      if (!B.spr(id, At.frameAt(id, t + e.id * 0.3), e.x, y, o)) B.circ(e.x, y - 20, 16, e.flash > 0 ? 0xffffffff : rgba(col, 255), 0);
+      if (!B.spr(id, At.frameAt(id, t + e.id * 0.3), e.x, y, o)) B.circ(e.x, y - 20, 16, o.flash === 1 ? 0xffffffff : rgba(col, 255), 0);
       const w = reset();
       w.sx = w.sy = 1.4;
       w.rot = e.st === 1 ? f * wind : e.st === 2 ? toHero(e) + PI / 2 : f * rest;

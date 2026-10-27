@@ -60,7 +60,7 @@
     if (!id) return false;
     const fi = A.frameAt(id, st === 'wind' || st === 'act' ? t - m.st0 : t + e.id * 0.37), o = reset();
     o.flip = e.face < 0; o.sx = o.sy = e.scale || 1;
-    o.flash = e.flash > 0 ? 0.3 : 0;
+    o.flash = ED.Actors.hitFlash(e) ? 0.3 : 0;
     if (e.st === 1 && Math.floor(t * 12) % 2) o.flash = Math.max(o.flash, 0.25);
     if (e.enraged) { o.tint = 0xff7070; const p = 0.5 + 0.5 * Math.sin(t * 10); B.circ(e.x, e.y - 2, e.r + 10 + 4 * p, rgba(0xff3a2a, 60 + 60 * p), 0); }
     B.shadow(e.x, e.y, e.r);

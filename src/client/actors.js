@@ -6,11 +6,12 @@
   'use strict';
   const U = ED.U, PI = Math.PI, TAU = U.TAU;
   const Ac = ED.Actors = {};
-  const O = { flip: false, flash: 0, alpha: 1, rot: 0, sx: 1, sy: 1, tint: 0, add: false };
-  const reset = () => { O.flip = false; O.flash = 0; O.alpha = 1; O.rot = 0; O.sx = 1; O.sy = 1; O.tint = 0; O.add = false; return O; };
+  const O = { flip: false, flash: 0, alpha: 1, rot: 0, sx: 1, sy: 1, tint: 0, add: false, variant: '' };
+  const reset = () => { O.flip = false; O.flash = 0; O.alpha = 1; O.rot = 0; O.sx = 1; O.sy = 1; O.tint = 0; O.add = false; O.variant = ''; return O; };
   const WIND_T = 0.6; // nominal telegraph length (s): lean grows over it, the shiver starts at 60%
-  const FLASH_T = 0.06; // sim hit flash length (s)
+  const FLASH_T = 0.06, FLASH_GAP = 0.25, FLASH_GAP_CROWD = 0.6; // shown hit flash: at most FLASH_T s once per gap (longer above 250 foes on screen), so constant damage never holds a sprite white
   const RED = '#ff3a2a', GOLD = '#ffc94a', ICE = '#9fdcff';
+  const SLOT_COL = Ac.SLOT_COL = ['#ffd27a', '#6ad7ff', '#7fe39a', '#ff8ad8']; // co-op player colours by slot (hud.js keeps the same list)
   const hexN = (h) => parseInt(h.slice(1), 16);
   let now = 0; // real seconds (FX clock)
 
@@ -23,7 +24,7 @@
     if (!s) {
       s = FREE.pop() || {};
       s.k = k; s.lx = x; s.ly = y; s.hd = 0; s.mv = -9; s.st = 0; s.ss = now; s.hold = -1; s.d4 = 'd'; s.atk = 0; s.hitAt = -9; s.hitNext = 0; s.spk = 0;
-      s.an = ''; s.fi = 0; s.flip = false; s.sx = 1; s.sy = 1; s.ox = 0; s.oy = 0; s.h = 16;
+      s.an = ''; s.fi = 0; s.flip = false; s.sx = 1; s.sy = 1; s.ox = 0; s.oy = 0; s.h = 16; s.flA = -9;
       ST.set(id, s);
     }
     s.seen = now;
@@ -37,6 +38,10 @@
   // Last drawn pose of entity id ({ an, fi, flip, sx, sy, ox, oy, h }) or null (FX death pops).
   Ac.pose = (id) => { const s = ST.get(id); return s && s.an && now - s.seen < 0.25 ? s : null; };
   Ac.size = () => ST.size;
+  // Shown hit flash of e (state s): true for FLASH_T s from a hit, then off for the rest of gap s even while e.flash stays set.
+  const flashOn = (s, e, gap) => { if (e.flash > 0 && now - s.flA >= gap) s.flA = now; return now - s.flA < FLASH_T; };
+  // Same for a boss or BossFx body (ED.BossFx draw hooks call this instead of reading e.flash).
+  Ac.hitFlash = (e) => flashOn(stOf(e.id, e.x, e.y, 2), e, FLASH_GAP);
 
   // ---------------- variant drawing ----------------
   const VO = { flip: false, alpha: 1, rot: 0, variant: '' }, O2 = { flip: false, flash: 1, alpha: 1, rot: 0, sx: 1, sy: 1, tint: 0, add: false };
@@ -52,10 +57,11 @@
     return true;
   }
   // Coloured 1 px outline under a sprite: the outline variant on Canvas2D, else four tinted white copies offset by one scaled px.
-  function outline(B, id, fi, x, y, o, hex, alpha) {
+  // force: draw the tinted copies in a crowd too (the local hero marker).
+  function outline(B, id, fi, x, y, o, hex, alpha, force) {
     if (alpha <= 0.02) return;
     if (varDraw(B, id, fi, x, y, o, 'outline:' + hex, alpha)) return;
-    if (B.crowd > 250) return;
+    if (B.crowd > 250 && !force) return;
     O2.flip = o.flip; O2.sx = o.sx; O2.sy = o.sy; O2.alpha = alpha; O2.tint = hexN(hex);
     const dx = Math.max(1, Math.round(o.sx)), dy = Math.max(1, Math.round(o.sy));
     B.spr(id, fi, x - dx, y, O2); B.spr(id, fi, x + dx, y, O2); B.spr(id, fi, x, y - dy, O2); B.spr(id, fi, x, y + dy, O2);
@@ -154,9 +160,10 @@
       ox += q1(Math.cos(tgtA) * 3 * k); oy += q1(Math.sin(tgtA) * 2 * k);
       o.sx *= 0.94; o.sy *= 1.08; // stretch into the strike
     }
+    const fl = flashOn(s, e, lite ? FLASH_GAP_CROWD : FLASH_GAP);
     if (e.flash > 0) {
       const k = U.clamp(e.flash / FLASH_T, 0, 1);
-      o.flash = 1;
+      if (fl) o.flash = 1;
       if (def.kb > 0) { ox -= q1(Math.cos(tgtA) * 2 * k * base); oy -= q1(Math.sin(tgtA) * k * base); o.sx *= 1 + 0.2 * k; o.sy *= 1 - 0.16 * k; }
       else { o.sx *= 1 + 0.08 * k; o.sy *= 1 - 0.06 * k; }
     }
@@ -172,13 +179,13 @@
     }
     if (!id) { B.circ(e.x, e.y - e.r, e.r, e.flash > 0 ? 0xffffffff : 0xc05050ff, 0); return; }
     // outlines (under the body)
-    if (!e.flash || e.flash <= 0) {
+    if (!fl) {
       if (wk > 0) outline(B, id, fi, x, y, o, RED, 0.4 + 0.6 * wk);
       else if (e.elite) outline(B, id, fi, x, y, o, GOLD, 0.7 + 0.3 * Math.sin(t * 6 + e.id));
     }
     let drawn = false;
-    if (e.freezeT > 0 && !(e.flash > 0)) { drawn = varDraw(B, id, fi, x, y, o, 'frozen', 1); if (!drawn) o.tint = hexN(ICE); }
-    if (!drawn && !B.spr(id, fi, x, y, o)) B.circ(e.x, e.y - e.r, e.r, e.flash > 0 ? 0xffffffff : 0xc05050ff, 0);
+    if (e.freezeT > 0 && !fl) { drawn = varDraw(B, id, fi, x, y, o, 'frozen', 1); if (!drawn) o.tint = hexN(ICE); }
+    if (!drawn && !B.spr(id, fi, x, y, o)) B.circ(e.x, e.y - e.r, e.r, fl ? 0xffffffff : 0xc05050ff, 0);
     if (wk > 0.25 && !lite) B.text('!', e.x, y - h - 5, Math.floor(now * 10) % 2 ? 0xff4a3a : 0xffd84a, base > 1 ? 2 : 1);
     if (e.stunT > 0 && !lite) { const sa = t * 6; B.rect(q1(e.x + Math.cos(sa) * 6) - 1, q1(y - h - 3 + Math.sin(sa) * 2) - 1, 2, 2, 0xffe66bff); B.rect(q1(e.x - Math.cos(sa) * 6) - 1, q1(y - h - 3 - Math.sin(sa) * 2) - 1, 2, 2, 0xffe66bff); }
     s.an = id; s.fi = fi; s.flip = o.flip; s.sx = base; s.sy = base; s.ox = ox; s.oy = oy; s.h = h;
@@ -242,7 +249,7 @@
     } else if (b.hit && now - s.hitAt < A.anim(b.hit).n / A.anim(b.hit).fps) {
       id = b.hit; s.hold = -1; fi = Math.min(A.anim(id).n - 1, Math.floor((now - s.hitAt) * A.anim(id).fps));
     } else { id = moving ? b.walk : b.idle; s.hold = -1; fi = A.frameAt(id, t); }
-    if (e.flash > 0) o.flash = 0.45;
+    if (flashOn(s, e, FLASH_GAP)) o.flash = 0.45;
     if (e.enraged) o.tint = 0xff7060;
     const x = e.x + ox, y = e.y;
     if (wk > 0) outline(B, id, fi, x, y, o, RED, 0.35 + 0.65 * wk);
@@ -298,14 +305,28 @@
     WO.flip = flip; WO.rot = a - (flip ? PI - w.src : w.src); WO.alpha = p.downed ? 0 : 1;
     if (WO.alpha) B.spr(w.id, 0, hx + Math.cos(a) * (ext + rk), hy + Math.sin(a) * (ext + rk), WO);
   }
+  // Co-op player colour: Atlas variant 'pal:pc<slot>' of hero anim id mapping ED.ART.swaps[cls].key (ranked dark to light) onto shades of the slot colour; '' when unavailable.
+  const PCK = ['pal:pc0', 'pal:pc1', 'pal:pc2', 'pal:pc3'], pcMake = {};
+  const lum = (h) => { const v = hexN(h); return (v >> 16) * 0.299 + ((v >> 8) & 255) * 0.587 + (v & 255) * 0.114; };
+  const shade = (h, k) => { const v = hexN(h); return '#' + ((Math.round((v >> 16) * k) << 16) | (Math.round(((v >> 8) & 255) * k) << 8) | Math.round((v & 255) * k)).toString(16).padStart(6, '0'); };
+  function slotVar(id, cls, slot) {
+    const sw = ED.ART && ED.ART.swaps && ED.ART.swaps[cls]; if (!sw || !sw.key || !sw.key.length) return '';
+    const s = slot & 3, mk = pcMake[cls] || (pcMake[cls] = []);
+    if (!mk[s]) {
+      const keys = sw.key.slice().sort((a, b) => lum(a) - lum(b)), n = keys.length;
+      mk[s] = () => { const m = {}; keys.forEach((k, i) => { m[k] = shade(SLOT_COL[s], n > 1 ? 0.62 + 0.38 * i / (n - 1) : 1); }); return m; };
+    }
+    return ED.Atlas.variant(id, PCK[s], mk[s]) ? PCK[s] : '';
+  }
   // Hero p (feet at p.x, p.y): idle / run / hit by state, faces its aim, weapon in hand (swing on 'swing', recoil on ranged 'shoot'), dash afterimages,
-  // blinks while invulnerable, white flash on a hit, downed: lies down with a pulsing bleed-out ring and a revive progress ring.
-  Ac.hero = (B, p, t) => {
+  // blinks while invulnerable, white flash on a hit, downed: lies down with a pulsing bleed-out ring and a revive progress ring. coop: player-colour recolour.
+  // The drawn pose is kept for Ac.heroTop.
+  Ac.hero = (B, p, t, coop) => {
     const cls = ED.HEROES[p.cls] ? p.cls : 'knight', A = ED.Atlas, h = heroSt(p.pid);
     let id = 'hero.' + cls + (p.hurtT > 0 ? '.hit' : p.moving ? '.run' : '.idle');
     if (!A.has(id)) id = 'hero.' + cls + '.idle';
     const o = reset(), flip = Math.cos(p.face) < 0, fi = A.frameAt(id, t + p.slot * 0.31);
-    o.flip = flip;
+    o.flip = flip; o.variant = coop ? slotVar(id, cls, p.slot) : '';
     // dash afterimages
     if (p.dashT > 0 && now - h.gT > 0.03) { const g = h.ghosts[h.gi]; h.gi = (h.gi + 1) % h.ghosts.length; g.x = p.x; g.y = p.y; g.id = id; g.fi = fi; g.flip = flip; g.t = now; h.gT = now; }
     for (const g of h.ghosts) {
@@ -327,11 +348,31 @@
     if (p.dashT > 0) o.alpha = 0.7;
     if (p.hurtT > 0.12) o.flash = 1;
     if (p.moving) { const bob = Math.sin((t + p.slot) * 14); o.sy = 1 + 0.04 * bob; o.sx = 1 - 0.03 * bob; }
+    h.id = id; h.fi = fi; h.flip = flip; h.sx = o.sx; h.sy = o.sy; h.al = o.alpha; h.fl = o.flash; h.vk = o.variant;
     B.shadow(p.x, p.y, 7);
     const w = heldOf(p), behind = w && Math.sin(p.face) < -0.35 && now - h.swT > 0.18;
     if (w && behind) drawWeapon(B, p, h, w, id, flip, t);
     if (!B.spr(id, fi, p.x, p.y, o)) B.circ(p.x, p.y - 8, 8, 0xe8d8b8ff, 0);
     if (w && !behind) drawWeapon(B, p, h, w, id, flip, t);
+  };
+
+  // Marker pass drawn over FX and hostile telegraphs (render.js), from the pose Ac.hero drew this frame. Local hero (mine): slot-colour ground ring, 1 px slot outline,
+  // the sprite again at 0.55 alpha, and a bobbing chevron overhead when busy; allies: the outline at half strength.
+  const TO = { flip: false, flash: 0, alpha: 1, rot: 0, sx: 1, sy: 1, tint: 0, add: false, variant: '' }, OUTK = {};
+  Ac.heroTop = (B, p, t, mine, busy) => {
+    const h = HS.get(p.pid); if (!h || !h.id || p.downed || p.dead) return;
+    const s = p.slot & 3, hex = SLOT_COL[s], col = hexN(hex), ok = OUTK[hex] || (OUTK[hex] = 'outline:' + hex);
+    TO.flip = h.flip; TO.sx = h.sx; TO.sy = h.sy; TO.flash = 0; TO.alpha = mine ? 0.95 : 0.5; TO.variant = ok;
+    if (mine) B.circ(p.x, p.y - 1, 9, ((col << 8) | 0xb0) >>> 0, 1);
+    B.spr(h.id, h.fi, p.x, p.y, TO);
+    if (!mine) return;
+    TO.alpha = 0.55 * h.al; TO.flash = h.fl; TO.variant = h.vk;
+    B.spr(h.id, h.fi, p.x, p.y, TO);
+    if (busy) {
+      const y = q1(p.y - 34 + Math.sin(t * 6) * 1.5), x = q1(p.x);
+      B.rect(x - 3, y + 1, 7, 1, 0x000000a0); B.rect(x - 2, y + 2, 5, 1, 0x000000a0); B.rect(x - 1, y + 3, 3, 1, 0x000000a0);
+      B.rect(x - 3, y, 7, 1, ((col << 8) | 0xff) >>> 0); B.rect(x - 2, y + 1, 5, 1, ((col << 8) | 0xff) >>> 0); B.rect(x - 1, y + 2, 3, 1, ((col << 8) | 0xff) >>> 0);
+    }
   };
 
   // ---------------- props ----------------

@@ -3,13 +3,15 @@
 //        cone / soft ellipse); premultiplied blending lets normal and additive instances share a draw, so a frame is one draw per texture switch (atlas pages are packed into one texture).
 //        Flash, tint and the 'grey' / 'frozen' variants are shader work; 'pal:*' / 'outline:*' variant sheets (ED.Atlas.variant), runtime pages (ED.Pix.define), font and small img() sources
 //        are uploaded once into a dynamic region of the atlas texture (shelf allocator, reset when full); large img() sources (floor chunks) get their own textures.
-//  '2d': Canvas2D through ED.Atlas.draw with crowd LOD (above LOD_CROWD foes on screen: no shadows, no partial flashes) and view-rect culling.
+//  '2d': Canvas2D through ED.Atlas.draw with crowd LOD (above LOD_CROWD foes on screen: no shadows, no partial flashes), zone LOD (zcirc / zflush) and view-rect culling.
 // Coordinates are world px; begin() sets the camera. Colours: rgba = 0xRRGGBBAA (unsigned), tint / text colour = 0xRRGGBB. Callers y-sort; the batch draws in call order.
 // B.ctx: the 2D context to draw on directly (2d: the world buffer; gl: a transparent bridge canvas uploaded and composited in call order at the next Batch call; costs one upload per use).
 (function (ED) {
   'use strict';
   const LOD_CROWD = 250, PI = Math.PI;
-  const B = ED.Batch = { mode: '2d', crowd: 0, stats: { spr: 0, shapes: 0, draws: 0, inst: 0 }, out: { tex: null, w: 0, h: 0 }, glError: '' };
+  // zoneLoad / zoneN / zoneLite: own-team zone coverage (sum of disc areas / view area), count and the 2D zone LOD flag, set by render.js each frame for the zone hooks.
+  // zoneUnion: zcirc batches union paths (render.js sets it when the 2D canvas is software-rasterised).
+  const B = ED.Batch = { mode: '2d', crowd: 0, stats: { spr: 0, shapes: 0, draws: 0, inst: 0 }, out: { tex: null, w: 0, h: 0 }, glError: '', zoneLoad: 0, zoneN: 0, zoneLite: false, zoneUnion: false };
   let c = null, sc = 1, cx = 0, cy = 0, vx0 = 0, vy0 = 0, vx1 = 0, vy1 = 0;
   const css = new Map(), hex = new Map();
   // 0xRRGGBBAA -> CSS colour (cached).
@@ -38,6 +40,8 @@
     B.stats.spr = 0; B.stats.shapes = 0; B.stats.draws = 0; B.stats.inst = 0;
   };
   D.end = () => { c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; };
+  // Global alpha multiplier (0..1) for every following draw until the next fade() or begin().
+  D.fade = (k) => { c.globalAlpha = k; };
 
   const AO = { flip: false, alpha: 1, rot: 0, variant: '' };
   // Sprite: frame `frame` of atlas anim `id` with its pivot at (x, y). o: { flip, flash (0..1 white), alpha, rot (rad), sx, sy (scale about the pivot), tint (0xRRGGBB multiply; gl only), add (additive), variant (Atlas variant key) }.
@@ -72,12 +76,46 @@
   D.line = (x0, y0, x1, y1, lw, rgba) => {
     if (Math.max(x0, x1) + lw < vx0 || Math.min(x0, x1) - lw > vx1 || Math.max(y0, y1) + lw < vy0 || Math.min(y0, y1) - lw > vy1) return;
     B.stats.shapes++; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.lineWidth = lw; c.strokeStyle = rgbaCss(rgba); c.lineCap = 'butt'; c.stroke(); };
+  // Polyline through n points P[0..2n) (x, y pairs), width lw: one stroke on Canvas2D.
+  D.poly = (P, n, lw, rgba) => {
+    if (n < 2) return;
+    let x0 = P[0], x1 = P[0], y0 = P[1], y1 = P[1];
+    for (let i = 1; i < n; i++) { const x = P[i * 2], y = P[i * 2 + 1]; if (x < x0) x0 = x; else if (x > x1) x1 = x; if (y < y0) y0 = y; else if (y > y1) y1 = y; }
+    if (x1 + lw < vx0 || x0 - lw > vx1 || y1 + lw < vy0 || y0 - lw > vy1) return;
+    B.stats.shapes++; c.beginPath(); c.moveTo(P[0], P[1]);
+    for (let i = 1; i < n; i++) c.lineTo(P[i * 2], P[i * 2 + 1]);
+    c.lineWidth = lw; c.strokeStyle = rgbaCss(rgba); c.lineCap = 'butt'; c.lineJoin = 'round'; c.stroke(); c.lineJoin = 'miter';
+  };
   // Cone (sector) from (x, y), radius r, centred on angle a, arc wide: filled (lw 0) or outlined.
   D.cone = (x, y, r, a, arc, rgba, lw) => {
     if (x + r < vx0 || x - r > vx1 || y + r < vy0 || y - r > vy1) return;
     B.stats.shapes++;
     c.beginPath(); c.moveTo(x, y); c.arc(x, y, r, a - arc / 2, a + arc / 2); c.closePath();
     if (lw > 0) { c.lineWidth = lw; c.strokeStyle = rgbaCss(rgba); c.stroke(); } else { c.fillStyle = rgbaCss(rgba); c.fill(); }
+  };
+  // Zone LOD disc / ring (lw 0 = fill). With B.zoneUnion (a software-rasterised canvas): collected per colour (alpha in steps of 8) and width, then drawn by zflush()
+  // as one path per bucket, fills before rings, so overlapping ground discs cost their union once; otherwise drawn at once (a GPU canvas stalls on big self-overlapping paths).
+  // Buckets and their coordinate arrays persist across frames (no per-frame allocation).
+  const ZB = new Map();
+  D.zcirc = (x, y, r, rgba, lw) => {
+    if (!B.zoneUnion) { D.circ(x, y, r, rgba, lw); return; }
+    if (x + r < vx0 || x - r > vx1 || y + r < vy0 || y - r > vy1) return;
+    const a = Math.min(255, ((rgba & 255) + 4) & ~7); if (!a) return;
+    const col = ((rgba & 0xffffff00) | a) >>> 0, w = lw > 0 ? Math.max(1, Math.round(lw * 2)) : 0, key = col * 64 + Math.min(63, w);
+    let b = ZB.get(key);
+    if (!b) { b = { col, lw: w / 2, n: 0, p: new Float32Array(96) }; ZB.set(key, b); }
+    if (b.n * 3 + 3 > b.p.length) { const q = new Float32Array(b.p.length * 2); q.set(b.p); b.p = q; }
+    const o = b.n++ * 3; b.p[o] = x; b.p[o + 1] = y; b.p[o + 2] = Math.max(0.5, r);
+  };
+  D.zflush = () => {
+    for (let pass = 0; pass < 2; pass++) for (const b of ZB.values()) {
+      if (!b.n || (b.lw > 0) !== (pass === 1)) continue;
+      const P = b.p; c.beginPath();
+      for (let i = 0, o = 0; i < b.n; i++, o += 3) { c.moveTo(P[o] + P[o + 2], P[o + 1]); c.arc(P[o], P[o + 1], P[o + 2], 0, PI * 2); }
+      if (pass) { c.lineWidth = b.lw; c.strokeStyle = rgbaCss(b.col); c.stroke(); } else { c.fillStyle = rgbaCss(b.col); c.fill(); }
+      B.stats.shapes++; b.n = 0;
+    }
+    if (ZB.size > 256) ZB.clear();
   };
   // Soft ground shadow (ellipse rx wide); skipped in a crowd.
   D.shadow = (x, y, rx) => { if (B.crowd > LOD_CROWD || x + rx < vx0 || x - rx > vx1 || y < vy0 || y > vy1 + rx) return; c.fillStyle = 'rgba(0,0,0,0.32)'; c.beginPath(); c.ellipse(x, y, rx, rx * 0.4, 0, 0, PI * 2); c.fill(); };
@@ -104,7 +142,7 @@
   const ab = new ArrayBuffer(CAP * STRIDE * 4), f32 = new Float32Array(ab), u32 = new Uint32Array(ab);
   let gl = null, gl2 = false, ext = null, glGen = -1, failGen = -2, prog = null, UL = null, cornerBuf = null, instBuf = null;
   let mainTex = null, TW = 0, TH = 0, packed = false, packFail = false, fbo = null, fboTex = null, tw = 0, th = 0;
-  let base = 0, n = 0, curTex = null, curTW = 1, curTH = 1, frameN = 0, dgen = 0, dynY = 0, seg = false, segVer = 0, bridge = null, bctx2 = null;
+  let base = 0, n = 0, curTex = null, curTW = 1, curTH = 1, frameN = 0, dgen = 0, dynY = 0, seg = false, segVer = 0, bridge = null, bctx2 = null, fadeK = 1;
   const shelves = [], regs = new Map(), FG = {}, textCache = new Map(), bridgeKey = { bridge: true };
   let fontCv = null;
 
@@ -295,6 +333,7 @@ void main(){
   function push(px, py, lx, ly, lw, lh, rot, p4, a, b, cc, d, col, misc) {
     if (base + n >= CAP) { flush(); gl.bufferData(gl.ARRAY_BUFFER, ab.byteLength, gl.STREAM_DRAW); base = 0; }
     const o = (base + n) * STRIDE; n++;
+    if (fadeK < 1) col = ((col & 0x00ffffff) | (Math.round((col >>> 24) * fadeK) << 24)) >>> 0;
     f32[o] = px; f32[o + 1] = py; f32[o + 2] = lx; f32[o + 3] = ly; f32[o + 4] = lw; f32[o + 5] = lh; f32[o + 6] = rot; f32[o + 7] = p4;
     f32[o + 8] = a; f32[o + 9] = b; f32[o + 10] = cc; f32[o + 11] = d; u32[o + 12] = col; u32[o + 13] = misc;
   }
@@ -315,8 +354,9 @@ void main(){
     gl.bindBuffer(gl.ARRAY_BUFFER, cornerBuf); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); gl.enableVertexAttribArray(0); divisor(0, 0);
     for (let i = 1; i < ATTR.length; i++) { gl.enableVertexAttribArray(i); divisor(i, 1); }
     gl.bindBuffer(gl.ARRAY_BUFFER, instBuf); gl.bufferData(gl.ARRAY_BUFFER, ab.byteLength, gl.STREAM_DRAW); // orphan last frame's instances
-    base = 0; n = 0; curTex = mainTex; curTW = TW; curTH = TH; seg = false;
+    base = 0; n = 0; curTex = mainTex; curTW = TW; curTH = TH; seg = false; fadeK = 1;
   };
+  G.fade = (k) => { if (seg) closeSeg(); fadeK = k; };
   G.end = () => {
     if (seg) closeSeg();
     flush();
@@ -356,6 +396,8 @@ void main(){
     B.stats.shapes++;
     push(mx, my, -hx - 1, -hy - 1, 2 * hx + 2, 2 * hy + 2, 0, 0, hx, hy, 0, 0, rgbaLE(rgba), K_RECT);
   };
+  G.zcirc = (x, y, r, rgba, lw) => G.circ(x, y, r, rgba, lw);
+  G.zflush = () => {};
   G.circ = (x, y, r, rgba, lw) => {
     if (seg) closeSeg();
     r = Math.max(0.5, r); const l = lw > 0 ? lw : 0, ext = r + l / 2 + 1;
@@ -370,6 +412,7 @@ void main(){
     B.stats.shapes++;
     push((x0 + x1) / 2, (y0 + y1) / 2, -len / 2 - 1, -lw / 2 - 1, len + 2, lw + 2, Math.atan2(dy, dx), 0, len / 2, lw / 2, 0, 0, rgbaLE(rgba), K_RECT);
   };
+  G.poly = (P, n, lw, rgba) => { for (let i = 0; i + 1 < n; i++) G.line(P[i * 2], P[i * 2 + 1], P[i * 2 + 2], P[i * 2 + 3], lw, rgba); };
   G.cone = (x, y, r, a, arc, rgba, lw) => {
     if (seg) closeSeg();
     const l = lw > 0 ? lw : 0, ext = r + l / 2 + 1;
@@ -453,7 +496,7 @@ void main(){
     if (!seg) {
       seg = true;
       bctx2.setTransform(1, 0, 0, 1, 0, 0); bctx2.clearRect(0, 0, bridge.width, bridge.height);
-      bctx2.globalAlpha = 1; bctx2.globalCompositeOperation = 'source-over';
+      bctx2.globalAlpha = fadeK; bctx2.globalCompositeOperation = 'source-over';
       bctx2.setTransform(sc, 0, 0, sc, -cx * sc, -cy * sc);
     }
     return bctx2;
@@ -462,7 +505,9 @@ void main(){
     seg = false; segVer++;
     const e = region(bridgeKey, bridge, segVer); if (!e) return;
     setTex(e);
+    const fk = fadeK; fadeK = 1; // the bridge content already carries the fade (globalAlpha)
     push(cx, cy, 0, 0, bridge.width / sc, bridge.height / sc, 0, 0, 0, 0, bridge.width, bridge.height, 0xffffffff, K_SPR);
+    fadeK = fk;
   }
 
   // Checks: RGBA pixels of the last GL frame (top row first) as { w, h, data }, or null outside gl mode.

@@ -61,9 +61,10 @@
   // Grow-in over g s and fade over the last 20% of the zone's life: { grow 0..1, fade 0..1 }.
   const LF = { grow: 1, fade: 1 };
   const life = (z, g) => { const f = z.dur > 0 ? z.t / z.dur : 0; LF.grow = U.easeOut(Math.min(1, z.t / g)); LF.fade = f > 0.8 ? Math.max(0, (1 - f) / 0.2) : 1; return LF; };
-  // Blight / plague pool: wobbling disc, off-centre inner pool, bright rim, popping bubbles; plague adds violet core and rising spores.
+  // Blight / plague pool: wobbling disc, off-centre inner pool, bright rim, popping bubbles; plague adds violet core and rising spores. B.zoneLite (2D LOD): disc + rim only.
   function pool(B, z, t, plague) {
     const L = life(z, 0.18), fade = L.fade, ph = z.id * 0.618, r = z.r * (0.4 + 0.6 * L.grow) * (1 + 0.03 * Math.sin(t * 3 + ph * 6));
+    if (B.zoneLite) { B.zcirc(z.x, z.y, r, ca(plague ? 0x5a6a30 : 0x4a8a30, 110 * fade), 0); B.zcirc(z.x, z.y, r, ca(plague ? 0xc8ff4a : 0xa8ff6a, 160 * fade), 1); return true; }
     B.circ(z.x, z.y, r, ca(plague ? 0x4f7a1e : 0x3f8f2a, 95 * fade), 0);
     B.circ(z.x + Math.cos(ph * 7) * r * 0.15, z.y + Math.sin(ph * 7) * r * 0.12, r * 0.62, ca(plague ? 0x8a4fc0 : 0x7fd34a, 75 * fade), 0);
     B.circ(z.x, z.y, r, ca(plague ? 0xc8ff4a : 0xa8ff6a, 160 * fade), 1);
@@ -76,9 +77,10 @@
     }
     return true;
   }
-  // Mortar burning ground: orange disc and rim with additive flame sprites (circles without the atlas).
+  // Mortar burning ground: orange disc and rim with additive flame sprites (circles without the atlas). B.zoneLite: batched disc + rim only.
   function burn(B, z, t) {
     const L = life(z, 0.12), fade = L.fade, r = z.r * (0.5 + 0.5 * L.grow), ph = z.id * 0.618;
+    if (B.zoneLite) { B.zcirc(z.x, z.y, r, ca(0xff6a24, 64 * fade), 0); B.zcirc(z.x, z.y, r, ca(0xff8a3a, 130 * fade), 1); return true; }
     B.circ(z.x, z.y, r, ca(0xff5a1a, 42 * fade), 0);
     B.circ(z.x, z.y, r * 0.6, ca(0xffb040, 34 * fade), 0);
     B.circ(z.x, z.y, r, ca(0xff8a3a, 130 * fade), 1);
@@ -91,10 +93,17 @@
     return true;
   }
   // Mortar shell / bomblet in flight: landing reticle (ring + closing ring + ticks for shells), ground shadow, lobbed shell on a parabola from the launch point
-  // (z.x + cos z.a * z.w, z.y + sin z.a * z.w), smoke trail, lit fuse.
+  // (z.x + cos z.a * z.w, z.y + sin z.a * z.w), smoke trail, lit fuse. B.zoneLite (2D zone LOD): batched reticle disc / ring and the shell body only.
   function lob(B, z, t, big) {
     const k = U.clamp(z.dur > 0 ? z.t / z.dur : 1, 0, 1), lx = z.x + Math.cos(z.a) * z.w, ly = z.y + Math.sin(z.a) * z.w;
     const H = (big ? 0.45 : 0.3) * z.w + (big ? 22 : 10);
+    if (B.zoneLite) {
+      if (big) B.zcirc(z.x, z.y, z.r, ca(0xffb040, 10 + 22 * k), 0);
+      B.zcirc(z.x, z.y, z.r, ca(big ? 0xffd070 : 0xffb040, big ? 110 + 120 * k : 60 + 100 * k), 1);
+      lobAt(lx, ly, z.x, z.y, H, k);
+      B.circ(P2[0], P2[1], big ? 3.6 : 2.3, 0x2e2a28ff, 0);
+      return true;
+    }
     if (big) {
       B.circ(z.x, z.y, z.r, ca(0xffb040, 10 + 22 * k), 0);
       B.circ(z.x, z.y, z.r, ca(0xffd070, 110 + 120 * k), 1);
@@ -121,12 +130,12 @@
     const R = z.r, x = z.x, y = z.y - 2, ph = z.id * 0.618, fade = Math.min(1, z.t / 0.25);
     const fill = holy ? 0xffe08a : 0xc8a060, rim = holy ? 0xfff0b0 : 0xe0c080;
     B.circ(x, y, R, ca(fill, (holy ? 34 : 24) * fade), 0);
-    if (holy) for (let i = 0; i < 6; i++) { const a = t * 0.6 + i * TAU / 6; B.line(x, y, x + Math.cos(a) * R, y + Math.sin(a) * R, 3, ca(0xfff0a0, 34 * fade)); }
+    if (holy && !B.zoneLite) for (let i = 0; i < 6; i++) { const a = t * 0.6 + i * TAU / 6; B.line(x, y, x + Math.cos(a) * R, y + Math.sin(a) * R, 3, ca(0xfff0a0, 34 * fade)); }
     B.circ(x, y, R, ca(rim, 120 * fade), 1);
     const q = (t * 1.6 + ph) % 1;
     B.circ(x, y, R * (0.55 + 0.45 * q), ca(holy ? 0xffffff : 0xffe0a0, (1 - q) * 130 * fade), 1.5);
     for (let i = 0; i < 10; i++) { const a = (holy ? -t : t) * 0.7 + i * TAU / 10; B.circ(x + Math.cos(a) * R * 0.92, y + Math.sin(a) * R * 0.92, 1.3, ca(0xfff4d0, 170 * fade), 0); }
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0, ns = B.zoneLite ? 0 : 4; i < ns; i++) {
       const s = (t * 0.5 + i / 4 + ph) % 1, a = i * 2.3 + ph * 5;
       B.circ(x + Math.cos(a) * R * 0.5, y + Math.sin(a) * R * 0.3 - s * 24, 3 + s * 5, ca(holy ? 0xfff4e0 : 0xbfb8b0, (1 - s) * 50 * fade), 0);
     }

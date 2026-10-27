@@ -26,13 +26,17 @@
 
   // ---------------- shared zone looks ----------------
   // Fire pool / crater: dark scorch disc, flickering flames scattered inside (count by area), ember sparks; crater opens with an explosion.
+  // B.zoneLite (2D zone LOD): batched disc + rim, and the crater impact.
   function firePool(B, z, t, crater) {
-    const k = life(z, 0.15, 0.5), r = z.r;
+    const k = life(z, 0.15, 0.5), r = z.r, lite = B.zoneLite;
     if (r < 1 || k <= 0) return true;
-    B.circ(z.x, z.y, r, rgba(crater ? 0x2a0c04 : 0x4a1a08, 120 * k), 0);
-    B.circ(z.x, z.y, r * 0.75, rgba(0xff6a1a, 46 * k), 0);
-    B.circ(z.x, z.y, r, rgba(0xff8a3d, 150 * k), 1);
-    const n = U.clamp(Math.round(r * r / 150), 3, crater ? 26 : 18);
+    if (lite) { B.zcirc(z.x, z.y, r, rgba(crater ? 0x5a1a08 : 0x8a2a0c, 110 * k), 0); B.zcirc(z.x, z.y, r, rgba(0xff8a3d, 150 * k), 1); }
+    else {
+      B.circ(z.x, z.y, r, rgba(crater ? 0x2a0c04 : 0x4a1a08, 120 * k), 0);
+      B.circ(z.x, z.y, r * 0.75, rgba(0xff6a1a, 46 * k), 0);
+      B.circ(z.x, z.y, r, rgba(0xff8a3d, 150 * k), 1);
+    }
+    const n = lite ? 0 : U.clamp(Math.round(r * r / 150), 3, crater ? 26 : 18);
     for (let i = 0; i < n; i++) {
       const a = H(z.id, i, 1) * TAU, d = Math.sqrt(H(z.id, i, 2)) * r * 0.85;
       const fx = z.x + Math.cos(a) * d, fy = z.y + Math.sin(a) * d * 0.9 + 4;
@@ -47,7 +51,7 @@
         if (kk > 0 && kk < 1) B.spr('fx.explosion', at('fx.explosion', kk), z.x + Math.cos(a) * d, z.y + Math.sin(a) * d - 6, o(1, i ? 2 : 3, 0, true));
       }
     }
-    if (Math.random() < 0.15 * k) spark(z.x + (Math.random() - 0.5) * r, z.y + (Math.random() - 0.5) * r, 0xffb04aff, 1, 30);
+    if (!lite && Math.random() < 0.15 * k) spark(z.x + (Math.random() - 0.5) * r, z.y + (Math.random() - 0.5) * r, 0xffb04aff, 1, 30);
     return true;
   }
   // Expanding shockwave: thick fading ring, faint fill, shock sprite at the centre.
@@ -170,7 +174,7 @@
       return true;
     }
     if (z.k === 'scorch') { // burning band at the ring's full radius
-      const k = life(z, 0.2, 0.6), n = U.clamp(Math.round(TAU * z.r / 16), 10, 48);
+      const k = life(z, 0.2, 0.6), n = U.clamp(Math.round(TAU * z.r / (B.zoneLite ? 48 : 16)), B.zoneLite ? 4 : 10, 48);
       B.circ(z.x, z.y, z.r - 10, rgba(0x4a1a08, 110 * k), 18);
       for (let i = 0; i < n; i++) {
         const a = i / n * TAU + H(z.id, i, 0) * 0.3, d = z.r - 10 + (H(z.id, i, 1) - 0.5) * 16;
