@@ -147,6 +147,7 @@ Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 400 × min
 - **Gold** carries over. The Camp shop sells permanent ranks: Might (5), Vigor (5), Plating (3), Mending (5), Swiftness (3), Magnet (3), Growth (+5% XP, 5), Greed (+10% gold, 5), Fortune (5), Revival (2), Reroll (5), Skip (3), Banish (3). Cost: `base × (rank + 1)`, base 200; a refund button resets all.
 - **Unlocks**: start with Knight, Ranger and Pyro. Necro: survive 10 minutes. Cleric: beat stage 1 (also opens stage 2; beating stage 2 opens stage 3). Shade: kill 3000 foes in one run. Bell: reach level 40 in one run. Each hero's signature weapon joins the general pool after the hero's first run.
 - Profile autosaves in localStorage, plus a portable save code.
+- **Encyclopedia** reveals only what the player met: heroes and stages a run started with, weapons (evolutions included) and passives the own hero owned, foes in the own view, bosses fought. Recorded on every client from its own view, merged at run end (win, defeat or quit); bot runs never save. Unmet entries list as a "???" silhouette (detail: "Not discovered yet"; locked heroes and stages keep their unlock rule and progress).
 
 ## 12. Feel (juice)
 

@@ -9,6 +9,8 @@
   const $ = (id) => document.getElementById(id);
   const A = ED.App = { state: 'boot', profile: null, settings: null, hasProfile: false, sel: { cls: 'knight', stage: 0 }, lastT: 0 };
   const BOT_MS = 10; // bot watch: sim work budget per frame (ms); a slower machine runs below N instead of dropping frames
+  const SEEN_DT = 0.25; // s between Encyclopedia discovery samples of the view (ED.Save.seenView)
+  let seenRec = null, seenT = 0; // this run's discoveries (null on bot runs), merged into the profile at run end
 
   // ?bot params -> { speed, weapon, fill, meta, seed, err, tag, pick, picks, rate } or null.
   A.bot = (() => {
@@ -67,6 +69,7 @@
   A.enterRun = (stage) => {
     ED.Game.onEnd = (sum) => A.onRunEnd(sum);
     A.runStage = stage;
+    seenRec = ED.Game.bot ? null : S.seenRun(); seenT = 0;
     A.state = 'run'; ED.UI.show('none'); ED.UI.offerSig = '';
     if (ED.Audio && ED.Audio.init) ED.Audio.init();
     ED.Input.mask();
@@ -74,6 +77,8 @@
   A.onRunEnd = (sum) => {
     const botRun = !!ED.Game.bot;
     if (botRun && !sum.note) sum.note = 'Bot run: nothing was saved to the profile.';
+    if (seenRec && !botRun) { seenSample(); S.mergeSeen(A.profile, seenRec); }
+    seenRec = null;
     const gained = botRun ? null : S.applyRun(A.profile, sum, A.runStage, ED.Game.myPid);
     if (!botRun) A.persist();
     A.state = 'results';
@@ -99,6 +104,8 @@
   };
 
   // ---------------- frame loop ----------------
+  // Records what the own view shows right now (camera rect of the last rendered frame) into this run's discoveries.
+  const seenSample = () => { const R = ED.Render; if (seenRec && ED.Game.view) S.seenView(seenRec, ED.Game.view, R.camX, R.camY, R.bw, R.bh); };
   function frame(now) {
     const dt = Math.min(0.1, Math.max(0, (now - A.lastT) / 1000));
     A.lastT = now;
@@ -116,6 +123,7 @@
         const v = ED.Game.view;
         if (v) {
           ED.Render.frame(v, dt);
+          if (seenRec && (seenT -= dt) <= 0) { seenT = SEEN_DT; seenSample(); }
           ED.HUD.draw(ED.Render.ctx, v, dt);
           ED.UI.syncOffer(bot ? null : v.me, ED.Game.mode === 'solo');
           if (ED.Music) ED.Music.update(v, dt);

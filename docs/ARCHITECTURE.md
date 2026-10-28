@@ -20,7 +20,7 @@ src/data/foes.js            ED.FOES, ED.FOE_IDS, ED.FOE_IDX (append-only wire in
 src/data/stages.js          ED.STAGES (theme {floor, deco, features, brazier, pal}, arena, foe {hp, dmg} stage multipliers, timeline [{rate, cap, floor, roster}] per minute, events {swarm {ring, stampede}}, elites, bosses)
 src/data/passives.js        ED.PASSIVES, ED.PASSIVE_IDS
 src/data/meta.js            ED.SHOP / ED.SHOP_IDS (permanent ranks), ED.SHOP_BASE, ED.UNLOCKS
-src/save.js                 profile load/save, binary save code (v1, count-prefixed lists, append-only), ED.Meta (profile facade)
+src/save.js                 profile load/save, binary save code (v1, count-prefixed lists, append-only), Encyclopedia seen record, ED.Meta (profile facade)
 src/sim/stats.js            ED.Stats: hero stat block, weapon effective numbers
 src/sim/arena.js            ED.Arena: arena gen (obstacles, braziers), collision (bounds + circles), movement helpers
 src/sim/grid.js             ED.Grid (mixed into World.prototype): foe spatial grid + separation
@@ -128,6 +128,7 @@ Weapon def (`ED.WEAPONS[id]`):
 - Gems merge above 350 on the ground. Magnet radius = stats.pickup. The magnet pickup vacuums all gems.
 - `w.openChest(p, val)` → chest results (also the `chest` event). `ED.dmgRows(hero)` → `[{id, kind, name, icon, dmg, frac}]` for the results screen (pre-evolution damage folded into the evolved row).
 - `ED.Meta` (save.js) wraps the profile main.js shares through `ED.Meta.use(p)`: `get, save, gold, shop(), buy(id), refund(), refundTotal(), unlocked(cls), stageUnlocked(i), heroes(), stages(), bundle(), recordRun(sum, pid) → news, code(), restore(code)`. Profile-explicit rules stay on `ED.Save` (`rank, shopCost, buy, refundAll, heroUnlocked, stageUnlocked, applyRun → {gold, unlocked, stages, weapons, records, news}`).
+- `profile.seen {heroes, weapons, passives, foes, stages}` (Encyclopedia reveals, ids in `ED.Save.seenOrder(k)`): main.js samples `ED.Save.seenView(rec, view, camera rect)` every 0.25 s of a non-bot run (own hero class / weapons / passives, stage, foes overlapping the camera, `view.boss`) and folds it in with `mergeSeen` at run end before `applyRun`. `normalize` back-fills played heroes + signatures and stages with a best or a win. Save code: an optional seen section after the stats (bitsets over HERO_IDS, `ED.Save.SEEN_WEAPONS` (append-only; `ED.WEAPON_IDS` is load order), PASSIVE_IDS, FOE_IDS, STAGE_IDS); codes without it still decode.
 
 ## 9. Net
 

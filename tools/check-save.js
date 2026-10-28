@@ -1,7 +1,8 @@
 // Headless profile / meta check (exit 1 on failure). Usage: node tools/check-save.js
 // 1. Default profile and unlock state. 2. Shop costs, buy, refund. 3. Save code round trip, typo tolerance, rejection messages, append-only lists.
 // 4. normalize clamps junk. 5. applyRun: gold, records, each hero unlock rule, stage unlocks, signature weapon news. 6. ED.Meta API with a mock localStorage.
-// 7. Meta ranks reach ED.Stats and the run's reroll / skip / banish counts. 9. Settings: old LMB / RMB skill binds cleared once, other mouse binds kept.
+// 7. Meta ranks reach ED.Stats and the run's reroll / skip / banish counts. 8. seen: back-fill, run record (view rect, boss), merge, save code round trip, old / future codes.
+// 9. Settings: old LMB / RMB skill binds cleared once, other mouse binds kept.
 'use strict';
 const store = new Map();
 globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
@@ -40,7 +41,7 @@ rich.best = { [ED.STAGE_IDS[0]]: { time: 912, kills: 15000, level: 61, won: true
 rich.stats = { runs: 77, wins: 3, kills: 400000, bestLevel: 61, bestKills: 15000, bestTime: 912 };
 const code = S.encode(rich), back = S.decode(code);
 ok(eq(back, S.normalize(rich)), 'rich profile round trip (' + code.length + ' chars)');
-ok(code.length <= 160, 'code stays short: ' + code.length + ' chars');
+ok(code.length <= 200, 'code stays short: ' + code.length + ' chars');
 ok(eq(S.decode(code.toLowerCase().replace(/-/g, ' ')), back), 'lowercase and spaces accepted');
 const typo = code.replace(/0/g, 'O').replace(/1/g, 'I');
 ok(eq(S.decode(typo), back), 'O/0 and I/1 confusions accepted');
@@ -129,6 +130,36 @@ ok(near(st.might, 0.15) && st.maxHp === base.hp + 20 && st.armor === 1 && near(s
 ok(near(st.growth, 0.05) && near(st.greed, 0.2) && near(st.luck, 0.2) && st.revival === 1, 'shop ranks: growth, greed, fortune, revival');
 ok(h.rerolls === 2 && h.skips === 1 && h.banishes === 3 && eq(h.banned, []), 'run starts with 2 rerolls, 1 skip, 3 banishes');
 ok(h.hp === h.maxHp, 'hero starts at full HP with vigor');
+
+// 8. seen
+const ids = (k) => S.seenOrder(k);
+ok(S.SEEN_KEYS.every(k => eq(S.defaultProfile().seen[k], [])), 'default profile: nothing seen');
+ok(ED.WEAPON_IDS.every(id => S.SEEN_WEAPONS.indexOf(id) >= 0) && new Set(S.SEEN_WEAPONS).size === S.SEEN_WEAPONS.length, 'every registered weapon has a slot in the append-only SEEN_WEAPONS order');
+const bf = S.normalize({ played: ['necro', 'knight'], beat: [0], best: { [ED.STAGE_IDS[1]]: { time: 5 } }, seen: { foes: ['bat', 'nope'], weapons: ['zzz'] } });
+ok(eq(bf.seen.heroes, ['knight', 'necro']) && eq(bf.seen.weapons, [ED.HEROES.knight.sig, ED.HEROES.necro.sig].sort((x, y) => ids('weapons').indexOf(x) - ids('weapons').indexOf(y)))
+  && eq(bf.seen.stages, [ED.STAGE_IDS[0], ED.STAGE_IDS[1]]) && eq(bf.seen.foes, ['bat']), 'normalize back-fills played heroes + signatures and played stages, drops unknown ids');
+const rec = S.seenRun(), FX = ED.FOE_IDX;
+const view = { stage: 2, me: { cls: 'shade', weapons: [{ id: 'daggers' }, { id: 'shadowfan' }], passives: [{ id: 'haste' }] }, boss: { k: FX.samurai, dead: false },
+  foes: [{ k: FX.bat, x: 100, y: 100, r: 6 }, { k: FX.slime, x: 700, y: 100, r: 6 }, { k: FX.skeleton, x: 643, y: 50, r: 6 }, { k: FX.jelly, x: 50, y: 50, r: 6, dead: true }] };
+S.seenView(rec, view, 0, 0, 640, 360);
+ok(eq([...rec.heroes], ['shade']) && eq([...rec.weapons], ['daggers', 'shadowfan']) && eq([...rec.passives], ['haste']) && eq([...rec.stages], [ED.STAGE_IDS[2]]), 'seenView: own hero, weapons (evolved included), passives, stage');
+ok(eq([...rec.foes].sort(), ['bat', 'samurai', 'skeleton']), 'seenView: foes overlapping the view rect and the live boss; off-view and dead foes skipped');
+const sp = S.normalize({ played: ['knight'] }), added = S.mergeSeen(sp, rec);
+ok(added === 8 && eq(sp.seen.heroes, ['knight', 'shade']) && eq(sp.seen.foes, ids('foes').filter(id => ['bat', 'samurai', 'skeleton'].indexOf(id) >= 0)) && S.isSeen(sp, 'weapons', 'shadowfan') && !S.isSeen(sp, 'weapons', 'longbow'), 'mergeSeen folds the run in save order (' + added + ' new)');
+ok(S.mergeSeen(sp, rec) === 0, 'merging the same run again adds nothing');
+const full = S.normalize(rich); for (const k of S.SEEN_KEYS) full.seen[k] = ids(k).slice();
+const fullBack = S.decode(S.encode(full));
+ok(eq(fullBack.seen, full.seen), 'everything seen: round trip (' + S.encode(full).length + ' chars)');
+ok(eq(S.decode(S.encode(sp)).seen, sp.seen), 'partial seen: round trip');
+// A v1 code from before the seen section: played Knight, stage 1 best -> back-fill only.
+const wv = S._writer(); wv.u8(1); wv.vu(0); wv.vu(0); wv.vu(0); wv.vu(0); wv.vu(1); wv.u8(3); wv.vu(1); wv.u8(4); wv.vu(30); wv.vu(5); wv.vu(2); wv.vu(0);
+const pre = S.decode(S._pack(wv.b));
+ok(eq(pre.seen, { heroes: ['knight'], weapons: [ED.HEROES.knight.sig], passives: [], foes: [], stages: [ED.STAGE_IDS[0]] }), 'code without a seen section decodes; seen = back-fill');
+// A future code: one more seen list and longer id lists; extras are dropped.
+const wz = S._writer(); wz.u8(1); wz.vu(0); wz.vu(0); wz.vu(0); wz.vu(0); wz.vu(0); wz.vu(0); wz.vu(0);
+wz.vu(S.SEEN_KEYS.length + 1); for (let li = 0; li <= S.SEEN_KEYS.length; li++) { const m = (li < S.SEEN_KEYS.length ? (li === 1 ? S.SEEN_WEAPONS.length : ids(S.SEEN_KEYS[li]).length) : 3) + 9; wz.vu(m); for (let i = 0; i < m; i += 8) wz.u8(255); }
+const fz = S.decode(S._pack(wz.b));
+ok(S.SEEN_KEYS.every(k => eq(fz.seen[k], ids(k).filter(id => k !== 'weapons' || S.SEEN_WEAPONS.indexOf(id) >= 0))), 'future code with more seen lists / ids decodes, extras dropped');
 
 // 9. settings migration
 const SK = 'wickdeep.survivors.settings.v1';

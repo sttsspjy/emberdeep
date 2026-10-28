@@ -61,9 +61,9 @@ Knight, Ranger and Pyro are open from the start. Necro: survive 10 minutes. Cler
 
 Gold buys permanent ranks at Camp (damage, health, armor, regen, speed, pickup radius, XP, gold, luck, revivals, rerolls, skips, banishes). Refund all gives every coin back.
 
-**Achievements** (main menu) lists every unlock with your progress toward it, plus your records: runs, wins, lifetime kills, best time, kills and level, and each stage's best run. **Encyclopedia** (main menu) describes every hero, weapon (with its levels and evolution recipe), passive, foe, boss and stage, locked ones included.
+**Achievements** (main menu) lists every unlock with your progress toward it, plus your records: runs, wins, lifetime kills, best time, kills and level, and each stage's best run. **Encyclopedia** (main menu) describes every hero, weapon (with its levels and evolution recipe), passive, foe, boss and stage you have met: heroes and stages you started a run with, weapons and passives you owned, foes you saw and bosses you fought. The rest shows as a dark "???" until you find it; locked heroes and stages still show how to unlock them.
 
-Progress saves in the browser automatically. Camp → **Show my code** gives a save code you can paste into **Load code** on another browser or device.
+Progress saves in the browser automatically. Camp → **Show my code** gives a save code you can paste into **Load code** on another browser or device. The code carries your Encyclopedia discoveries too; an older code still loads.
 
 ## Hosting it
 

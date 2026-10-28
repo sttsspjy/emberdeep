@@ -306,6 +306,8 @@ input[type="range"]::-moz-range-thumb { width: 0.9em; height: 1.4em; background:
 .cx-item.evo span { color: var(--gold); }
 .cx-item.locked canvas, .cx-head canvas.locked { filter: brightness(0) opacity(0.55); }
 .cx-item.locked span { color: var(--dim); }
+.cx-item.unseen canvas, .cx-ref.unseen canvas, .cx-roster .unseen canvas { filter: brightness(0) opacity(0.55); }
+.cx-item.unseen span, .cx-ref.unseen b, .cx-roster .unseen { color: var(--dim); }
 .cx-detail { overflow-y: auto; display: flex; flex-direction: column; gap: 0.45em; min-width: 0; min-height: 0; }
 .cx-head { display: flex; gap: 0.8em; align-items: center; }
 .cx-head canvas { width: calc(var(--u) * 5.5); height: calc(var(--u) * 5.5); flex: none; background: radial-gradient(circle at 50% 65%, rgba(255, 138, 61, 0.18), transparent 65%); }
