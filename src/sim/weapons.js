@@ -1,14 +1,14 @@
 // Weapon runtime and registry (ARCHITECTURE §6). ED.addWeapon(def, impl) registers ED.WEAPONS[id] / ED.WIMPL[id]; ED.WEAPON_IDS is registration order (wire / card order, append only).
-// Slots: p.weapons = [{ id, lvl, evo, cd, st (impl state), S (effective numbers, cached until stats / level / id change) }], max 6. Each tick per living hero and slot:
-// impl.tick?(w, p, ws, S, dt); ws.cd -= dt; at <= 0 impl.fire(w, p, ws, S) -> true resets cd = S.cd and emits { t: 'shoot', pid, wid }, false retries in 0.1 s.
-// No-target rule (GAME-DESIGN §3): signatures and facing-mode weapons fire on cooldown with no foe in range, along p.mdir (the last movement direction).
-// Evolution: level 8 + the def.pair passive owned = ready; the next chest swaps id to def.evo (slot and level 8 kept, st reset, impl.init re-run).
+// One weapon per hero: the signature. Root def: paths [{ id, name, ranks: [{ mods, txt }] x 3, form: formId | null }] x 3, hybrids [{ need: [i, j], form }] (0-2).
+// Form def: { evolved: true, form: true, from: rootId, refine: [{ mods, txt }] x 2 }. A path at rank 3 unlocks its Form card; a hybrid needs both paths at rank 3; one Form per run.
+// Slot ws = { id (root, then the Form once taken), root, lvl (display: 1 + sum pr + form + fl), pr: [rank x 3], fl (refine 0-2), evo, cd, st (impl state), S (cached numbers) }.
+// Each tick per living hero and slot: impl.tick?(w, p, ws, S, dt); ws.cd -= dt; at <= 0 impl.fire(w, p, ws, S) -> true resets cd = S.cd and emits { t: 'shoot', pid, wid }, false retries in 0.1 s.
+// No-target rule (GAME-DESIGN §3): signatures fire on cooldown with no foe in range, along p.mdir (the last movement direction). Targeting sees only the holder's view (w.vclamp, combat.js).
 (function (ED) {
   'use strict';
   const U = ED.U, W = ED.World.prototype;
   ED.WEAPONS = {}; ED.WIMPL = {}; ED.WEAPON_IDS = [];
-  ED.MAX_WEAPONS = 6; ED.MAX_PASSIVES = 6; ED.WEAPON_MAX_LVL = 8;
-  // def: { id, name, icon (forced to the atlas icon.w.<id>; the given icon becomes held), look, sig, mode, base, levels, pair, evo, evolved, txt (card line for a new weapon), noAmount }.
+  ED.MAX_WEAPONS = 1; ED.MAX_PASSIVES = 6; ED.PATH_MAX = 3;
   // impl: { fire, tick?, init?(w, p, ws), kill?(w, p, ws, S, e) (any foe e its holder kills, by any source), draw? }.
   ED.addWeapon = (def, impl) => {
     if (!ED.WEAPONS[def.id]) ED.WEAPON_IDS.push(def.id);
@@ -18,27 +18,66 @@
     if (def.look) ED.regLook(def.look);
     return def;
   };
-  ED.weaponMaxLvl = (def) => (def.evolved ? ED.WEAPON_MAX_LVL : Math.min(ED.WEAPON_MAX_LVL, 1 + (def.levels ? def.levels.length : 0)));
+  // Root weapon id of a slot or weapon id.
+  ED.weaponRoot = (x) => { const id = typeof x === 'string' ? x : x.root || x.id, d = ED.WEAPONS[id]; return d && d.from ? d.from : id; };
+  // Forms of root weapon `rid`: [{ id, path (i or -1 hybrid), need: [i] | [i, j] }].
+  ED.weaponForms = (rid) => {
+    const d = ED.WEAPONS[rid], out = [];
+    if (!d) return out;
+    (d.paths || []).forEach((pa, i) => { if (pa.form && ED.WEAPONS[pa.form]) out.push({ id: pa.form, path: i, need: [i] }); });
+    for (const h of d.hybrids || []) if (ED.WEAPONS[h.form]) out.push({ id: h.form, path: -1, need: h.need.slice() });
+    return out;
+  };
+  const setLvl = (ws) => { ws.lvl = 1 + ws.pr[0] + ws.pr[1] + ws.pr[2] + (ws.evo ? 1 : 0) + ws.fl; };
 
   W.addWeapon = function (p, id) {
     if (p.weapons.length >= ED.MAX_WEAPONS || !ED.WEAPONS[id] || p.weapons.some(ws => ws.id === id)) return null;
-    const ws = { id, lvl: 1, evo: !!ED.WEAPONS[id].evolved, cd: 0.4, st: {}, S: null, Sv: -1, Sl: 0, Sid: '' };
+    const ws = { id, root: ED.weaponRoot(id), lvl: 1, pr: [0, 0, 0], fl: 0, evo: !!ED.WEAPONS[id].evolved, cd: 0.4, st: {}, S: null, Sv: -1, Sk: -1, Sid: '' };
+    setLvl(ws);
     p.weapons.push(ws);
     const im = ED.WIMPL[id]; if (im && im.init) im.init(this, p, ws);
     return ws;
   };
-  W.weaponReady = function (p, ws) {
-    const def = ED.WEAPONS[ws.id];
-    return !!(def && !def.evolved && def.evo && ED.WEAPONS[def.evo] && ws.lvl >= ED.WEAPON_MAX_LVL && def.pair && p.passives.some(ps => ps.id === def.pair));
+  // Ranks path i of slot ws (max ED.PATH_MAX). Returns the new rank or 0.
+  W.rankPath = function (p, ws, i) {
+    const pa = (ED.WEAPONS[ws.root].paths || [])[i];
+    if (!pa || ws.pr[i] >= Math.min(ED.PATH_MAX, pa.ranks.length)) return 0;
+    ws.pr[i]++; setLvl(ws);
+    return ws.pr[i];
   };
-  W.evolve = function (p, ws) {
-    const from = ws.id, to = ED.WEAPONS[from].evo;
-    ws.id = to; ws.evo = true; ws.st = {}; ws.cd = 0.2; ws.Sid = '';
+  // Form ids slot ws may take now (none once a Form is taken): pure forms of paths at rank 3, hybrids with both paths at rank 3.
+  W.formsReady = function (p, ws) {
+    if (ws.evo) return [];
+    return ED.weaponForms(ws.root).filter(f => f.need.every(i => ws.pr[i] >= ED.PATH_MAX));
+  };
+  // Takes Form `to` on slot ws: id swaps, impl state resets and re-inits, emits 'evolve' { pid, wid, from }.
+  W.takeForm = function (p, ws, to) {
+    if (ws.evo || !ED.WEAPONS[to]) return false;
+    const from = ws.id;
+    ws.id = to; ws.evo = true; ws.fl = 0; ws.st = {}; ws.cd = 0.2; ws.Sid = '';
+    setLvl(ws);
     const im = ED.WIMPL[to]; if (im && im.init) im.init(this, p, ws);
     this.emit({ t: 'evolve', pid: p.pid, wid: to, from });
+    return true;
   };
-  // Effective numbers of slot i (cached).
-  W.weaponS = function (p, i) { const ws = p.weapons[i]; return ws.S && ws.Sv === p.statsV && ws.Sl === ws.lvl && ws.Sid === ws.id ? ws.S : ED.Stats.weapon(p, i); };
+  // Refines the taken Form once (max def.refine.length). Returns the new refine level or 0.
+  W.refineForm = function (p, ws) {
+    const d = ED.WEAPONS[ws.id];
+    if (!ws.evo || !d.refine || ws.fl >= d.refine.length) return 0;
+    ws.fl++; setLvl(ws);
+    return ws.fl;
+  };
+  // Test / tool helper: spends n path ranks on slot ws (path 0 first, then 1, then 2); form: also takes the first ready Form and refines it fully.
+  W.setRanks = function (p, ws, n, form) {
+    for (let i = 0; i < 3 && n > 0; i++) while (n > 0 && this.rankPath(p, ws, i)) n--;
+    if (form) { const f = this.formsReady(p, ws)[0]; if (f && this.takeForm(p, ws, f.id)) while (this.refineForm(p, ws)); }
+    this.recalc(p, false);
+    return ws;
+  };
+  // Effective numbers of slot i (cached until stats, ranks, refine or id change).
+  const rkey = (ws) => ws.pr[0] + ws.pr[1] * 4 + ws.pr[2] * 16 + ws.fl * 64;
+  W.weaponS = function (p, i) { const ws = p.weapons[i]; return ws.S && ws.Sv === p.statsV && ws.Sk === rkey(ws) && ws.Sid === ws.id ? ws.S : ED.Stats.weapon(p, i); };
+  ED.weaponKey = rkey;
 
   // Aim helper for fire(): 'facing' -> facingAim (p.mdir without a foe), 'around' -> p.mdir, else the angle toward the weapon's target (mode as w.target), or null when there is none.
   W.aimAngle = function (p, mode, range) {
@@ -55,10 +94,10 @@
   const offCone = (e) => Math.abs(U.angDiff(FA, Math.atan2(e.y - FY, e.x - FX))) > FC;
   W.coneFoe = function (p, a0, range, cone) {
     FA = a0; FC = cone || ED.FACING_CONE; FX = p.x; FY = p.y;
-    const e = this.nearestFoe(p.x, p.y, range, offCone);
+    const e = this.heroFoe(p, range, offCone);
     return e ? Math.atan2(e.y - p.y, e.x - p.x) : null;
   };
-  W.nearAngle = function (p, range) { const e = this.nearestFoe(p.x, p.y, range); return e ? Math.atan2(e.y - p.y, e.x - p.x) : null; };
+  W.nearAngle = function (p, range) { const e = this.heroFoe(p, range); return e ? Math.atan2(e.y - p.y, e.x - p.x) : null; };
   W.facingAim = function (p, a0, range, cone) {
     let a = this.coneFoe(p, a0, range, cone);
     if (a === null) a = this.nearAngle(p, range);
@@ -71,6 +110,7 @@
 
   W.updateWeapons = function (dt) {
     for (const p of this.living) {
+      this.vclamp = p;
       for (let i = 0; i < p.weapons.length; i++) {
         const ws = p.weapons[i], im = ED.WIMPL[ws.id];
         if (!im) continue;
@@ -82,5 +122,6 @@
         else ws.cd = 0.1;
       }
     }
+    this.vclamp = null;
   };
 })(globalThis.ED || (globalThis.ED = {}));

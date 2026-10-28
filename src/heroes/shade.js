@@ -1,11 +1,11 @@
-// Shade: hero data, signature Twin Daggers (facing knives that ricochet) + evolution Shadow Fan (boomerang fan, the return leg always crits), Q Shadow Step, E Fan of Knives.
+// Shade: hero data, signature Twin Daggers (facing knives that ricochet; 3 paths x 3 ranks) + Form Shadow Fan (path 0; boomerang fan, the return leg always crits), Q Shadow Step.
 // Ricochet counts ride on the projectile as a shared constant st (BOUNCE[n]): no allocation per dagger. Zone looks: stepcut (blink slash), afterimg (afterimage).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU;
   ED.regLook('stepcut', 'afterimg', 'sknife');
 
-  ED.addHero({ id: 'shade', name: 'Shade', hp: 80, speed: 100, crit: 0.15, sig: 'daggers', skills: ['step', 'fan'], icon: 'hero.shade.idle', col: '#8a9bd6', txt: 'Fast daggers, deadly crits.' });
+  ED.addHero({ id: 'shade', name: 'Shade', hp: 80, speed: 80, crit: 0.15, sig: 'daggers', skills: ['step'], icon: 'hero.shade.idle', col: '#8a9bd6', txt: 'Fast daggers, deadly crits.' });
 
   // ---------------- Twin Daggers ----------------
   const BOUNCE = []; for (let i = 0; i < 6; i++) BOUNCE.push(Object.freeze({ b: i }));
@@ -42,25 +42,33 @@
   ED.addWeapon({
     id: 'daggers', name: 'Twin Daggers', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'facing', txt: 'Fast daggers where you face',
     base: { dmg: 12, cd: 0.6, n: 2, pierce: 0, area: 1, speed: 420, dur: 0, knock: 10, range: 300, crit: 0.1, bounce: 0 },
-    levels: [
-      { mods: { n: 1 }, txt: '+1 dagger' },
-      { mods: { pierce: 1 }, txt: 'Daggers pierce 1 more foe' },
-      { mods: { dmg: 0.25, back: true }, txt: '+25% damage, also throws behind' },
-      { mods: { n: 1 }, txt: '+1 dagger' },
-      { mods: { bounce: 1 }, txt: 'Daggers ricochet to another foe' },
-      { mods: { n: 1, pierce: 1 }, txt: '+1 dagger, pierce 1 more foe' },
-      { mods: { dmg: 0.25, bounce: 1, crit: 0.1 }, txt: '+25% dmg, +1 ricochet, +10% crit' },
+    paths: [
+      { id: 'flurry', name: 'Flurry', form: 'shadowfan', ranks: [
+        { mods: { n: 1 }, txt: '+1 dagger' },
+        { mods: { n: 1 }, txt: '+1 dagger' },
+        { mods: { n: 1, pierce: 1 }, txt: '+1 dagger, pierce 1 more foe' }] },
+      { id: 'ricochet', name: 'Ricochet', form: null, ranks: [
+        { mods: { bounce: 1 }, txt: 'Daggers ricochet to another foe' },
+        { mods: { dmg: 0.25, bounce: 1, crit: 0.1 }, txt: '+25% dmg, +1 ricochet, +10% crit' },
+        { mods: { pierce: 1 }, txt: 'Daggers pierce 1 more foe' }] },
+      { id: 'backstab', name: 'Backstab', form: null, ranks: [
+        { mods: { dmg: 0.25, back: true }, txt: '+25% damage, also throws behind' },
+        { mods: { pierce: 1 }, txt: 'Daggers pierce 1 more foe' },
+        { mods: { crit: 0.1 }, txt: '+10% crit chance' }] },
     ],
-    pair: 'velocity', evo: 'shadowfan',
+    hybrids: [],
   }, { fire: volley });
 
   // Shadow Fan: S.n boomerang daggers in a fan toward the facing aim (w.facingAim, p.mdir without a foe) and a mirrored fan behind; they pierce everything and always crit on the way back.
   function backCrit(w, pr) { if (pr.back) pr.critC = 1; }
   const FAN_OPT = { look: 'sknife', pierce: 999, ret: true, tick: backCrit };
   ED.addWeapon({
-    id: 'shadowfan', name: 'Shadow Fan', icon: 'weapon.knives', look: 'sknife', sig: 'shade', mode: 'facing', evolved: true, from: 'daggers', txt: 'Daggers return and crit twice',
+    id: 'shadowfan', name: 'Shadow Fan', icon: 'weapon.knives', look: 'sknife', sig: 'shade', mode: 'facing', evolved: true, form: true, from: 'daggers', txt: 'Daggers return and crit twice',
     base: { dmg: 20, cd: 0.8, n: 5, pierce: 999, area: 1, speed: 460, dur: 0, knock: 30, range: 440, crit: 0.2 },
-    levels: [],
+    refine: [
+      { mods: { n: 2 }, txt: '+2 daggers' },
+      { mods: { dmg: 0.25, crit: 0.1 }, txt: '+25% damage, +10% crit' },
+    ],
   }, {
     fire(w, p, ws, S) {
       const n = Math.max(1, S.n | 0), spread = Math.min(0.28, 1.6 / n);
@@ -127,38 +135,12 @@
     }
   }
 
-  // ---------------- Fan of Knives ----------------
-  // N.n knives in a full circle (pierce 2); waves: extra rings 0.18 s later, offset half a step (hook tick); ret: knives fly back through foes (pierce all).
-  ED.addSkill({
-    id: 'fan', name: 'Fan of Knives', icon: 'weapon.knives', cd: 10, txt: '24 knives in a full circle',
-    base: { dmg: 22, n: 24, speed: 360, range: 300, waves: 1 },
-    levels: [
-      { mods: { n: 12 }, txt: '+12 knives' },
-      { mods: { waves: 1 }, txt: 'A second ring follows' },
-      { mods: { ret: true, dmg: 0.25 }, txt: 'Knives fly back, +25% damage' },
-    ],
-  }, (w, p, x, y, N) => {
-    ring(w, p, N, 0);
-    p.fanQ = Math.max(0, (N.waves | 0) - 1); p.fanT = 0.18; p.fanO = 0.5;
-    return { shake: 4 };
-  });
-  const FOPT = { look: 'knife', dmg: 0, speed: 0, pierce: 2, life: 1, knock: 40, ret: false };
-  function ring(w, p, N, off) {
-    const n = Math.max(1, N.n | 0);
-    FOPT.dmg = N.dmg; FOPT.speed = N.speed; FOPT.ret = !!N.ret; FOPT.pierce = N.ret ? 999 : 2; FOPT.life = N.range / N.speed * (N.ret ? 2 : 1);
-    for (let i = 0; i < n; i++) w.shoot(p, 'fan', p.x, p.y - 6, (i + off) / n * TAU, null, FOPT);
-  }
-
   ED.HOOK.shade = {
-    init(w, p) { p.stepRe = 0; p.stepArm = false; p.stepRest = 0; p.fanQ = 0; p.fanT = 0; p.fanO = 0; },
+    init(w, p) { p.stepRe = 0; p.stepArm = false; p.stepRest = 0; },
     tick(w, p, dt) {
       const sk = p.skills[0];
       if (p.stepArm) { p.stepArm = false; p.stepRest = sk.cd; sk.cd = 0; }
       else if (p.stepRe > 0) { p.stepRe -= dt; p.stepRest -= dt; if (p.stepRe <= 0) sk.cd = Math.max(0, p.stepRest); }
-      if (p.fanQ > 0 && (p.fanT -= dt) <= 0) {
-        p.fanQ--; p.fanT = 0.18;
-        ring(w, p, w.skillN(p, 1), p.fanO); p.fanO = p.fanO ? 0 : 0.5;
-      }
     },
   };
 })(globalThis.ED || (globalThis.ED = {}));

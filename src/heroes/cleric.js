@@ -1,11 +1,11 @@
-// Cleric: hero data, signature Smite (holy pillars: team 0 warn zones that resolve after a short fall) + evolution Wrath (pillars cascade to neighbours), Q Sanctuary, E Judgment.
-// Pillar flags ride on the zone as a shared constant st (PST[mask]): no allocation per pillar. Zone looks: smite / wrath (falling pillar), pglow (landed pillar, visual only), conse (consecrated ground), sanct, judge (beam).
+// Cleric: hero data, signature Smite (holy pillars: team 0 warn zones that resolve after a short fall; 3 paths x 3 ranks) + Form Wrath (path 0; pillars cascade to neighbours), Q Sanctuary.
+// Pillar flags ride on the zone as a shared constant st (PST[mask]): no allocation per pillar. Zone looks: smite / wrath (falling pillar), pglow (landed pillar, visual only), conse (consecrated ground), sanct.
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU;
-  ED.regLook('smite', 'wrath', 'pglow', 'conse', 'sanct', 'judge');
+  ED.regLook('smite', 'wrath', 'pglow', 'conse', 'sanct');
 
-  ED.addHero({ id: 'cleric', name: 'Cleric', hp: 110, speed: 88, crit: 0.05, sig: 'smite', skills: ['sanctuary', 'judgment'], icon: 'hero.cleric.idle', col: '#ffe08a', txt: 'Holy pillars strike foes on screen.' });
+  ED.addHero({ id: 'cleric', name: 'Cleric', hp: 110, speed: 70, crit: 0.05, sig: 'smite', skills: ['sanctuary'], icon: 'hero.cleric.idle', col: '#ffe08a', txt: 'Holy pillars strike foes on screen.' });
 
   // ---------------- pillars ----------------
   // mask bits: 1 echo (strikes again 0.3 s later), 2 consecrate (leaves burning holy ground), 4 cascade (Wrath: 3 smaller pillars jump to the nearest foes), 8 second generation.
@@ -72,23 +72,31 @@
   ED.addWeapon({
     id: 'smite', name: 'Smite', icon: 'weapon.mace', sig: 'cleric', mode: 'random', txt: 'Holy pillars on random foes',
     base: { dmg: 20, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 70, range: 400, r: 22 },
-    levels: [
-      { mods: { n: 1 }, txt: '+1 pillar' },
-      { mods: { conse: true }, txt: 'Pillars leave burning holy ground' },
-      { mods: { dmg: 0.25, area: 0.25 }, txt: '+25% damage, +25% pillar size' },
-      { mods: { n: 1 }, txt: '+1 pillar' },
-      { mods: { echo: true }, txt: 'Every pillar strikes twice' },
-      { mods: { n: 2 }, txt: '+2 pillars' },
-      { mods: { dmg: 0.25, area: 0.3 }, txt: '+25% damage, +30% pillar size' },
+    paths: [
+      { id: 'storm', name: 'Storm', form: 'wrath', ranks: [
+        { mods: { n: 1 }, txt: '+1 pillar' },
+        { mods: { n: 1 }, txt: '+1 pillar' },
+        { mods: { n: 2 }, txt: '+2 pillars' }] },
+      { id: 'radiance', name: 'Radiance', form: null, ranks: [
+        { mods: { dmg: 0.25, area: 0.25 }, txt: '+25% damage, +25% pillar size' },
+        { mods: { dmg: 0.25, area: 0.3 }, txt: '+25% damage, +30% pillar size' },
+        { mods: { area: 0.2 }, txt: '+20% pillar size' }] },
+      { id: 'consecrate', name: 'Consecrate', form: null, ranks: [
+        { mods: { conse: true }, txt: 'Pillars leave burning holy ground' },
+        { mods: { echo: true }, txt: 'Every pillar strikes twice' },
+        { mods: { area: 0.15 }, txt: '+15% pillar size' }] },
     ],
-    pair: 'reach', evo: 'wrath',
+    hybrids: [],
   }, { fire: (w, p, ws, S) => strike(w, p, ws, S, (S.echo ? 1 : 0) | (S.conse ? 2 : 0)) });
 
   // Wrath: bigger pillars that strike twice, sear the ground (slowing) and each cascade into 3 pillars on the nearest foes.
   ED.addWeapon({
-    id: 'wrath', name: 'Wrath', icon: 'weapon.dawnhammer', sig: 'cleric', mode: 'random', evolved: true, from: 'smite', txt: 'Pillars chain to neighbours',
+    id: 'wrath', name: 'Wrath', icon: 'weapon.dawnhammer', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Pillars chain to neighbours',
     base: { dmg: 42, cd: 0.9, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 110, range: 420, r: 34 },
-    levels: [],
+    refine: [
+      { mods: { n: 1 }, txt: '+1 pillar' },
+      { mods: { dmg: 0.25, area: 0.2 }, txt: '+25% damage, +20% pillar size' },
+    ],
   }, { fire: (w, p, ws, S) => strike(w, p, ws, S, 1 | 2 | 4) });
 
   // ---------------- Sanctuary ----------------
@@ -116,44 +124,5 @@
       const a = w.rng.next() * TAU, d = Math.sqrt(w.rng.next()) * z.r * 0.9;
       pillar(w, z.p, 'sanctuary', z.x + Math.cos(a) * d, z.y + Math.sin(a) * d, 20, st.pd, 60, 0, 0.18);
     }
-  }
-
-  // ---------------- Judgment ----------------
-  // A holy beam (N.r long, N.w wide) from the hero toward the cursor that sweeps N.arc rad in N.t s (centred on the aim), passes times (alternating direction; each pass may hit a foe once),
-  // beams = 1 + extra beams spread evenly around the circle. Each hit: N.dmg, a 0.3 s stun, a shove along the sweep.
-  ED.addSkill({
-    id: 'judgment', name: 'Judgment', icon: 'weapon.dawnhammer', cd: 9, txt: 'A holy beam sweeps 90 degrees',
-    base: { dmg: 60, r: 250, w: 26, arc: Math.PI / 2, t: 0.45, passes: 1, beams: 1 },
-    levels: [
-      { mods: { passes: 1 }, txt: 'Sweeps back a second time' },
-      { mods: { r: 0.4, w: 12, dmg: 0.25 }, txt: '+40% length, wider, +25% damage' },
-      { mods: { beams: 2 }, txt: 'Two more beams around you' },
-    ],
-  }, (w, p, x, y, N) => {
-    const a = Math.atan2(y - p.y, x - p.x), nb = Math.max(1, N.beams | 0), passes = Math.max(1, N.passes | 0);
-    for (let i = 0; i < nb; i++) {
-      const a0 = a + i * TAU / nb;
-      w.zone({ team: 0, p, wid: 'judgment', x: p.x, y: p.y, a: a0 - N.arc / 2, len: N.r, w: N.w, dur: N.t * passes + 0.05, look: 'judge', follow: p.pid,
-        st: { a0, arc: N.arc, t: N.t, np: passes, pass: 0, dmg: N.dmg, hits: new Set() }, onTick: judgeTick });
-    }
-    return { a, shake: 5 };
-  });
-  let jz = null, jw = null, jdir = 1;
-  function judgeHit(e) {
-    const z = jz, st = z.st, w = jw;
-    if (st.hits.has(e.id)) return;
-    st.hits.add(e.id);
-    const s = w.src(z.p, 'judgment', 'skill', 170); s.x = z.x; s.y = z.y; s.kx = -Math.sin(z.a) * jdir; s.ky = Math.cos(z.a) * jdir;
-    w.hitFoe(e, st.dmg, s);
-    if (!e.dead) w.stun(e, 0.3);
-  }
-  function judgeTick(w, z) {
-    const st = z.st, pass = Math.min(Math.floor(z.t / st.t), st.np - 1), k = U.clamp(z.t / st.t - pass, 0, 1), fwd = pass % 2 === 0;
-    if (pass !== st.pass) { st.pass = pass; st.hits.clear(); }
-    const e = U.easeInOut(k);
-    z.a = st.a0 - st.arc / 2 + st.arc * (fwd ? e : 1 - e);
-    jz = z; jw = w; jdir = fwd ? 1 : -1;
-    w.zoneFoes(z, judgeHit);
-    jz = null; jw = null;
   }
 })(globalThis.ED || (globalThis.ED = {}));

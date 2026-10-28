@@ -1,12 +1,12 @@
-// Pyro: hero data, signature Fire Bolt (8 levels) + evolution Inferno, Q Meteor, E Flame Ring (3 skill levels each).
+// Pyro: hero data, signature Fire Bolt (3 paths x 3 ranks) + Form Inferno (path 0), Q Meteor (3 skill levels).
 // Fire pools are zones (look 'firepool'); at most POOL_MAX live pools per hero (ws.st.pools ring, refs checked by id).
 (function (ED) {
   'use strict';
-  const U = ED.U, TAU = U.TAU, TICK = ED.CONST.TICK;
+  const U = ED.U, TAU = U.TAU;
   const POOL_MAX = 14, INF_MAX = 22, INF_R = 95;
 
-  ED.regLook('firepool', 'ember', 'meteor', 'crater', 'flamering', 'scorch');
-  ED.addHero({ id: 'pyro', name: 'Pyro', hp: 85, speed: 92, crit: 0.05, sig: 'firebolt', skills: ['meteor', 'flamering'], icon: 'hero.pyro.idle', col: '#ff8a3d', txt: 'Bolts that burst into flame.' });
+  ED.regLook('firepool', 'ember', 'meteor', 'crater');
+  ED.addHero({ id: 'pyro', name: 'Pyro', hp: 85, speed: 74, crit: 0.05, sig: 'firebolt', skills: ['meteor'], icon: 'hero.pyro.idle', col: '#ff8a3d', txt: 'Bolts that burst into flame.' });
 
   // Live pool list of a weapon slot: ws.st.pools = [zone], ws.st.ids = [id]; returns the live count after dropping dead entries.
   const livePools = (ws) => {
@@ -51,16 +51,21 @@
   ED.addWeapon({
     id: 'firebolt', name: 'Fire Bolt', icon: 'weapon.firestaff', look: 'fireball', sig: 'pyro', mode: 'nearest', txt: 'Bolt that bursts into fire',
     base: { dmg: 16, cd: 1.1, n: 1, pierce: 0, area: 1, speed: 260, dur: 2, knock: 30, range: 340, embers: 0 },
-    levels: [
-      { mods: { n: 1 }, txt: '+1 bolt' },
-      { mods: { area: 0.3 }, txt: 'Bigger bursts and fire pools' },
-      { mods: { dmg: 0.25, pierce: 1 }, txt: '+25% damage, bolts pierce 1' },
-      { mods: { n: 1 }, txt: '+1 bolt' },
-      { mods: { dur: 0.6 }, txt: 'Fire pools last 60% longer' },
-      { mods: { embers: 4 }, txt: 'Bursts throw 4 embers' },
-      { mods: { dmg: 0.25, n: 1 }, txt: '+25% damage, +1 bolt' },
+    paths: [
+      { id: 'salvo', name: 'Salvo', form: 'inferno', ranks: [
+        { mods: { n: 1 }, txt: '+1 bolt' },
+        { mods: { n: 1 }, txt: '+1 bolt' },
+        { mods: { dmg: 0.25, n: 1 }, txt: '+25% damage, +1 bolt' }] },
+      { id: 'blaze', name: 'Blaze', form: null, ranks: [
+        { mods: { area: 0.3 }, txt: 'Bigger bursts and fire pools' },
+        { mods: { dur: 0.6 }, txt: 'Fire pools last 60% longer' },
+        { mods: { area: 0.25 }, txt: '+25% burst and pool size' }] },
+      { id: 'embers', name: 'Embers', form: null, ranks: [
+        { mods: { dmg: 0.25, pierce: 1 }, txt: '+25% damage, bolts pierce 1' },
+        { mods: { embers: 4 }, txt: 'Bursts throw 4 embers' },
+        { mods: { embers: 2 }, txt: 'Bursts throw 2 more embers' }] },
     ],
-    pair: 'duration', evo: 'inferno',
+    hybrids: [],
   }, { fire: (w, p, ws, S) => bolts(w, p, ws, S, 0.18) });
 
   // Inferno: bolts (nearest foe, else p.mdir) burst as Fire Bolt; a new pool touching a live pool merges into it (grows to INF_R at most, timer refreshed); each pool spreads once,
@@ -91,9 +96,12 @@
   };
   const IBOLT = { look: 'fireball', onHit: infBurst, st: null };
   ED.addWeapon({
-    id: 'inferno', name: 'Inferno', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'nearest', evolved: true, from: 'firebolt', txt: 'Pools merge and spread',
+    id: 'inferno', name: 'Inferno', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'nearest', evolved: true, form: true, from: 'firebolt', txt: 'Pools merge and spread',
     base: { dmg: 26, cd: 0.9, n: 4, pierce: 1, area: 1.5, speed: 290, dur: 3.5, knock: 40, range: 380, embers: 4 },
-    levels: [],
+    refine: [
+      { mods: { n: 1 }, txt: '+1 bolt' },
+      { mods: { area: 0.25, dur: 0.3 }, txt: '+25% pool size, last 30% longer' },
+    ],
   }, {
     fire(w, p, ws, S) {
       const t = w.nearestFoe(p.x, p.y, S.range);
@@ -130,59 +138,5 @@
     const m = N.extra | 0, a0 = Math.atan2(y - p.y, x - p.x);
     for (let i = 0; i < m; i++) { const a = a0 + Math.PI / 2 + i / m * TAU; meteor(w, p, x + Math.cos(a) * N.r * 1.25, y + Math.sin(a) * N.r * 1.25, N.r * 0.7, N.dmg * 0.6, N.fall + 0.15 * (i + 1), N.shards >> 1); }
     return { r: Math.round(N.r), shake: 4, stop: 0.03 };
-  });
-  // Flame Ring: a ring expanding from the hero to N.r over N.t s (follows the hero); each foe it crosses takes N.dmg, burn and an outward shove.
-  // twice: a second ring 0.35 s later; scorch: the ring leaves burning ground in a band at its full radius for 3 s.
-  const RING = { burn: null };
-  const ringTick = (w, z) => {
-    const s = z.st, t = z.t - s.delay;
-    if (t < 0) { z.r = 0; return; }
-    const k = Math.min(1, t / s.T), rr = 14 + (s.R - 14) * (1 - (1 - k) * (1 - k)), r0 = s.prev;
-    z.r = rr; s.prev = rr;
-    const q = w.foeScan(z.x, z.y, rr);
-    for (let i = 0; i < q.length; i++) {
-      const e = q[i]; if (e.dead) continue;
-      const d = Math.sqrt(U.dist2(z.x, z.y, e.x, e.y)), m = d - e.r;
-      if (m > rr || m <= r0 - 2 * e.r) continue;
-      const src = w.src(s.p, 'flamering', 'skill', 260); src.x = z.x; src.y = z.y;
-      w.hitFoe(e, s.dmg, src);
-      if (!e.dead) w.burn(e, s.dmg * 0.15, 3, s.p);
-    }
-    w.foeEnd();
-    if (k >= 1 && s.scorch && !s.done) {
-      s.done = true;
-      w.zone({ team: 0, p: s.p, wid: 'flamering', x: z.x, y: z.y, r: s.R, dur: 3 * (1 + s.p.stats.duration), look: 'scorch', st: { p: s.p, dps: s.dmg * 0.35, tt: 0, R: s.R }, onTick: scorchTick });
-    }
-  };
-  // Scorch: every 0.5 s, foes within the band [R - 26, R + 6] take dps x 0.5 and burn.
-  const scorchTick = (w, z) => {
-    const s = z.st;
-    if ((s.tt -= TICK) > 0) return;
-    s.tt += 0.5;
-    const q = w.foeScan(z.x, z.y, s.R + 6), lo = (s.R - 26) * (s.R - 26);
-    for (let i = 0; i < q.length; i++) {
-      const e = q[i]; if (e.dead) continue;
-      const d2 = U.dist2(z.x, z.y, e.x, e.y);
-      if (d2 < lo || d2 > (s.R + 6 + e.r) ** 2) continue;
-      const src = w.src(s.p, 'flamering', 'zone', 0); src.x = z.x; src.y = z.y;
-      w.hitFoe(e, s.dps * 0.5, src);
-      if (!e.dead) w.burn(e, s.dps * 0.3, 2, s.p);
-    }
-    w.foeEnd();
-  };
-  const ring = (w, p, N, delay) => w.zone({ team: 0, p, wid: 'flamering', x: p.x, y: p.y, r: 0, dur: N.t + delay + 0.05, follow: p.pid, look: 'flamering',
-    st: { p, R: N.r, T: N.t, dmg: N.dmg, delay, prev: 0, scorch: !!N.scorch, done: false }, onTick: ringTick });
-  ED.addSkill({
-    id: 'flamering', name: 'Flame Ring', icon: 'fx.flame', cd: 8, txt: 'A ring of fire around you',
-    base: { dmg: 50, r: 150, t: 0.5 },
-    levels: [
-      { mods: { r: 0.3 }, txt: '+30% ring size' },
-      { mods: { twice: true }, txt: 'A second ring follows' },
-      { mods: { scorch: true }, txt: 'Leaves a ring of burning ground' },
-    ],
-  }, (w, p, x, y, N) => {
-    ring(w, p, N, 0);
-    if (N.twice) ring(w, p, N, 0.35);
-    return { r: Math.round(N.r), shake: 5, stop: 0.04 };
   });
 })(globalThis.ED || (globalThis.ED = {}));
