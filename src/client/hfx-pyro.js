@@ -1,4 +1,4 @@
-// Pyro visuals (loaded after hfx-a.js; its entries replace the pyro ones there): ED.WeaponFx for firebolt / inferno / firestorm / wildfire / pyre / napalm and the Meteor skill.
+// Pyro visuals (loaded after fx.js): ED.WeaponFx for firebolt / inferno / firestorm / wildfire / pyre / napalm and the Meteor skill.
 // Zones dispatch on the look z.k: firepool, crater, pyre (charging fuse), napalm (fire line, z.len / z.w), shell / bomblet (lob from z.a / z.w), meteor / echo (falling rock, core rumble).
 // Projectiles dispatch on pr.k: fireball, ember, seed. Everything derives from render-visible fields and view time; per-zone variation from U.hash3(z.id, i, ...).
 (function (ED) {

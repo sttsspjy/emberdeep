@@ -116,12 +116,12 @@ for (const [cls, id] of [['cleric', 'boneshard'], ['bell', 'bonestorm']]) {
   for (const p of w.heroes) { w.setRanks(p, p.weapons[0], 9, false); for (const sk of p.skills) sk.lvl = 4; }
   const S = (p) => ED.Stats.weapon(p, 0), N = (p, i) => ED.Stats.skill(p, i);
   ok(S(k).back && S(k).spin && S(k).ret && S(k).slam === 1 && S(k).wave === 3 && S(k).n === 2, 'knight: Cleave 333 swings back, spins, slams, 3 returning waves, 2 swings');
-  ok(S(r).back && S(r).ring === 4 && S(r).ringN === 24 && S(r).n === 4 && S(r).pierce === 3, 'ranger: Longbow 333 fires behind, ring of 24 every 4th, 4 arrows, pierce 3');
+  ok(S(r).heavy === 2 && S(r).two && S(r).n === 5 && S(r).pierce === 12 && S(r).bounce === 4 && S(r).kshot === 1, 'ranger: Longbow 333 heavy every 2nd, two targets, 5 arrows, pierce 12, 4 bounces, kill shots');
   ok(S(py).shells === 2 && S(py).cluster === 4 && S(py).combust === 3 && S(py).cemb === 3 && S(py).spread === 1 && S(py).flare > 0, 'pyro: Fire Bolt 333 shells 2, bomblets 4, death blasts, embers 3, leaps, flare');
   ok(S(n).cap === 5 && S(n).raise === 2 && S(n).over === 4 && S(n).split === 3 && S(n).homing === 3 && S(n).n === 4 && S(n).pools === 2 && S(n).pburst === 1,
     'necro: Bone Shard 333 cap 5, raise 2, 4 over the cap, 4 homing shards splitting in 3, 2 pools that burst');
   ok(N(k, 0).shards === 8 && N(k, 0).quake && N(k, 0).dist === 180, 'knight: Charge longer, quake + shards');
-  ok(N(r, 0).follow && N(r, 0).flank === 2, 'ranger: Volley follow + flank');
+  ok(N(r, 0).pin && N(r, 0).follow && N(r, 0).flank === 2, 'ranger: Volley pin + follow + flank');
   ok(N(py, 0).echo === 1 && N(py, 0).extra === 2, 'pyro: Meteor echo + extra');
   ok(N(n, 0).shards && N(n, 0).rerise, 'necro: Corpse Blast shards + rerise');
   // Skill damage: base x levels x might x weapon factor x (1 + 0.05 (party level - 1)).

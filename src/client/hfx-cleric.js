@@ -1,4 +1,4 @@
-// Cleric visuals (ED.WeaponFx / ED.SkillFx hooks for smite, its Forms and sanctuary); loaded after hfx-a.js. Every hook reads only snapshot-visible zone fields
+// Cleric visuals (ED.WeaponFx / ED.SkillFx hooks for smite, its Forms and sanctuary); loaded after fx.js. Every hook reads only snapshot-visible zone fields
 // (k, x, y, r, a, len, w, t, dur, id) and routes by look name z.k. Ground pass: pillars, afterglow, grounds, aura / halo discs. Top pass (over the actors): censers, beams, rays.
 // Censer angle = SW_W x zone age and pulse phase = zone age mod PULSE, the same clocks the sim uses (cleric.js), so clients need no extra wire fields.
 (function (ED) {

@@ -11,7 +11,8 @@
   ED.MAX_WEAPONS = 1; ED.MAX_PASSIVES = 6; ED.PATH_MAX = 3;
   // impl: { fire, tick?, init?(w, p, ws), kill?(w, p, ws, S, e) (any foe e its holder kills, by any source), draw? }.
   ED.addWeapon = (def, impl) => {
-    if (!ED.WEAPONS[def.id]) ED.WEAPON_IDS.push(def.id);
+    if (ED.WEAPONS[def.id]) throw new Error('weapon id registered twice: ' + def.id); // ids are wire / save keys: one owner each
+    ED.WEAPON_IDS.push(def.id);
     if (!def.held) def.held = def.icon; // in-world sprite the hero holds (actors.js)
     def.icon = 'icon.w.' + def.id;
     ED.WEAPONS[def.id] = def; ED.WIMPL[def.id] = impl;
