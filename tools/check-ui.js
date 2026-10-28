@@ -79,7 +79,7 @@ async function main() {
     await shot(page, 'hero-locked');
     await page.locator('.hero-tile[data-cls="ranger"]').click();
     const hd = await page.locator('#hero-detail').innerText();
-    check(/Longbow/.test(hd) && /Volley/.test(hd) && /Snare/.test(hd), 'detail lists signature weapon and Q / E');
+    check(/Longbow/.test(hd) && /Volley/.test(hd) && !/Snare/.test(hd), 'detail lists the weapon and the one Q skill');
     check(await minFont(page, '#hero-detail span, #hero-detail b, .hero-tile .t-name') >= 20, 'hero select text >= 20 px');
     await shot(page, 'hero');
     await page.keyboard.press('Enter'); // focused tile is the chosen hero: continue
@@ -115,15 +115,15 @@ async function main() {
     check(await vis(page, 'scr-title'), 'Esc leaves the camp');
 
     console.log('achievements');
-    await page.evaluate(() => { const p = ED.App.profile; p.stats.bestTime = 432; p.stats.bestKills = 1840; p.stats.bestLevel = 31; p.played = ['knight']; ED.App.persist(); });
+    await page.evaluate(() => { const p = ED.App.profile; p.stats.bestTime = 432; p.stats.bestKills = 1840; p.stats.bestLevel = 21; p.played = ['knight']; ED.App.persist(); });
     await page.locator('#btn-achieve').click();
     check(await vis(page, 'scr-achieve'), 'Achievements opens');
-    const nAch = await page.evaluate(() => { const U0 = ED.UNLOCKS; return ED.HERO_IDS.filter(c => !U0.heroes[c].start).length + Object.keys(U0.stages).filter(i => !U0.stages[i].start).length + (U0.sigAfterRun ? ED.HERO_IDS.length : 0); });
-    check(await page.locator('.ach-row').count() === nAch, nAch + ' unlock rows');
-    check(await page.locator('.ach-row.done').count() === 1, 'one done (Cleave after a Knight run)');
+    const nAch = await page.evaluate(() => { const U0 = ED.UNLOCKS; return ED.HERO_IDS.filter(c => !U0.heroes[c].start).length + Object.keys(U0.stages).filter(i => !U0.stages[i].start).length; });
+    check(await page.locator('.ach-row').count() === nAch, nAch + ' unlock rows (heroes and stages only)');
+    check(await page.locator('.ach-row.done').count() === 0, 'none done yet');
     const at = await page.locator('#ach-list').innerText();
-    check(/7:12 \/ 10:00/.test(at) && /1840 \/ 3000/.test(at) && /Level 31 \/ 40/.test(at), 'unlock progress texts');
-    check(/1 \/ \d+ unlocked/.test(await page.locator('#ach-count').innerText()), 'header counts unlocks');
+    check(/7:12 \/ 10:00/.test(at) && /1840 \/ 3000/.test(at) && /Level 21 \/ 25/.test(at), 'unlock progress texts (Bell: level 25)');
+    check(/0 \/ \d+ unlocked/.test(await page.locator('#ach-count').innerText()), 'header counts unlocks');
     check(/Lifetime kills/.test(await page.locator('#ach-rec').innerText()) && await page.locator('.rec-stage').count() === 3, 'records and 3 stage bests');
     check(await minFont(page, '#scr-achieve span, #scr-achieve b') >= 20, 'achievements text >= 20 px');
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.getElementById('scr-achieve').scrollWidth <= innerWidth), 'achievements: no horizontal scroll');
