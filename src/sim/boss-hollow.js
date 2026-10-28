@@ -11,7 +11,7 @@
   // Orbit shards: per ring { n, R (px), dir } added at phase 2 and 3; spd rad/s (x1.6 enraged), touch damage x boss damage, arm s harmless after appearing, r px.
   const SHARDS = { rings: [{ n: 3, R: 62, dir: 1 }, { n: 3, R: 112, dir: -1 }], spd: 2.0, mul: 0.6, arm: 1.0, r: 8 };
   // Crown: lane length, speed px/s, x boss damage, radius.
-  const CROWN = { len: 360, speed: 400, mul: 1.1, r: 9 };
+  const CROWN = { len: 360, speed: 340, mul: 1.1, r: 9 };
   ED.Bosses.HOLLOW = { SHARDS, CROWN };
 
   const shardUpd = (w, z, e, st) => {
@@ -46,7 +46,7 @@
         if (s.i >= 3) return t >= s.next;
         if (!s.b && t >= s.next) {
           const tg = e.tgt, d = Math.hypot(tg.x - e.x, tg.y - e.y), last = s.i === 2;
-          s.b = true; s.a = aim(e); s.t0 = t; s.d = T(e, last ? 0.7 : 0.6); s.step = U.clamp(d - 50, 0, 70) / 0.35;
+          s.b = true; s.a = aim(e); s.t0 = t; s.d = T(e, last ? 0.7 : 0.6); s.step = U.clamp(d - 50, 0, 70) / 0.35 * 0.8;
           if (last) line(w, e, e.x, e.y, s.a, 230, 28, s.d, 1.5, { followSrc: true });
           else cone(w, e, s.a, 92, 2.0, s.d, 1.3);
         }
@@ -97,7 +97,7 @@
       start(w, e) { const s = e.vars.s; s.at = T(e, 0.7); s.k = 0; tele(w, e, e.x, e.y, e.r + 26, s.at, 0, { followSrc: true }); },
       update(w, e, dt, t) {
         const s = e.vars.s;
-        if (s.k < 3 && t >= s.at + s.k * 0.45) { ring(w, e, 14, 105, 'skull', (s.k % 2) * TAU / 28, 0.7, 6); s.k++; }
+        if (s.k < 3 && t >= s.at + s.k * 0.45) { ring(w, e, 14, 89, 'skull', (s.k % 2) * TAU / 28, 0.7, 6); s.k++; }
         return t >= s.at + 1.4;
       },
     },

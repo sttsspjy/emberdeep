@@ -16,7 +16,7 @@ function setup(n) {
   const w = new ED.World({ seed: 42, stage: 0, players: [{ pid: 'p1', name: 'P', slot: 0, cls: 'ranger', meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
   for (const row of w.sdef.timeline) { row.rate = 0; }
   w.sp.swarmT = w.sp.eliteT = Infinity; w.sdef = Object.assign({}, w.sdef, { bosses: [] });
-  const p = w.heroes[0], rng = U.RNG(9), ids = ['bat', 'skeleton', 'slime', 'skelknight', 'bonearcher'].filter(id => ED.FOES[id]);
+  const p = w.heroes[0], rng = U.RNG(9), ids = ['bat', 'skeleton', 'slime', 'skelknight', 'bonearcher', 'bulwark', 'bonecaller', 'stalker', 'mirecrab', 'colossus'].filter(id => ED.FOES[id]);
   for (const id of ['knight', 'pyro', 'necro', 'cleric', 'bell']) { const h = ED.HEROES[id]; if (h) w.addWeapon(p, h.sig); }
   for (const ws of p.weapons) ws.lvl = ED.weaponMaxLvl(ED.WEAPONS[ws.id]);
   w.recalc(p, true);

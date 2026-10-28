@@ -8,7 +8,7 @@
   const { tele, line, cone, aim, approach, runner, force } = B.lib;
   const { T, hz, adds } = B.libB;
   ED.regLook('maw', 'inhale', 'darkring', 'voidorb');
-  ED.addFoe('wickeater', { name: 'The Wick-Eater', look: 'foe.horror', ai: 'boss', boss: true, hp: 0, spd: 40, dmg: 2, r: 26, xp: 25, kb: 0, noElite: true, scale: 3.4 });
+  ED.addFoe('wickeater', { name: 'The Wick-Eater', look: 'foe.horror', ai: 'boss', boss: true, hp: 0, spd: 32, dmg: 2, r: 26, xp: 25, kb: 0, noElite: true, scale: 3.4 });
 
   // Devour: cone radius / arc, warn s, inhale s, pull px/s at the mouth (half at the rim), bite radius and x boss damage.
   const DEVOUR = { r: 230, arc: 1.3, warn: 0.9, suck: 1.3, pull: 60, bite: 60, mul: 2.6 };
@@ -18,7 +18,7 @@
   // Lashes: lanes per phase, length, width, fan step rad, warn s, x boss damage; P3 a second fan between the first one's lanes after again s.
   const LASH = { n: [3, 5, 7], len: 300, w: 22, step: 0.3, warn: 0.85, mul: 1.5, again: 0.45 };
   // Bloom: warned pulse radius past the body / warn s / x boss damage, rings per phase, orbs per ring, speed, s between rings, twist rad per ring, x boss damage, orb radius.
-  const BLOOM = { pad: 40, warn: 0.8, pmul: 1.2, rings: [3, 4, 6], n: 14, speed: 120, gap: 0.3, twist: 0.11, mul: 0.9, r: 6 };
+  const BLOOM = { pad: 40, warn: 0.8, pmul: 1.2, rings: [3, 4, 6], n: 14, speed: 102, gap: 0.3, twist: 0.11, mul: 0.9, r: 6 };
   const ADDS = ['starspawn', 'shade', 'voideye'];
   const SWELL = 1.2; // P3 size factor
   B.WICK = { DEVOUR, DARK, LASH, BLOOM, ADDS, SWELL };

@@ -13,7 +13,7 @@
     pods: { n: 4, d: [170, 230], first: 0.8, warn: 1.2, regrow: [14, 9], clear: 100 }, // pod ring distance, first growth, spawn telegraph, regrowth s by phase, carpet cleared on death (px)
     lash: { len: 440, w: 26, wind: 0.9, mul: 1.0, fan: 0.32 },
     slam: { r: 125, wind: 1.0, mul: 1.4, near: 150, calm: 4 },
-    burst: { n: [10, 14, 16], waves: 3, speed: 115, gap: 0.5, wind: 0.75, mul: 0.7, spin: 0.27 },
+    burst: { n: [10, 14, 16], waves: 3, speed: 98, gap: 0.5, wind: 0.75, mul: 0.7, spin: 0.27 },
     chase: 0.9, paint: { step: 34, life: 10, r: 30 }, // phase 3: walking speed x spd; a patch every `step` px walked
   };
   ED.addFoe('sporepod', { name: 'Spore Pod', look: 'foe.sporepuff', ai: 'boss', boss: true, hp: 60, spd: 0, dmg: 0, r: 12, xp: 5, kb: 0, noElite: true, noContact: true, scale: 2 });

@@ -1,6 +1,6 @@
 // Bosses (GAME-DESIGN §8): ED.Bosses[id] = fn(w, e, dt) (the foe brain of a boss foe def, ai 'boss'), built with ED.Bosses.lib.runner; spawn / kill / enrage / bar bookkeeping on World.
 // HP = W.bossHp (foes.js: 1500 x (boss minute / 5)^2.5 x party x stage HP factor; a multi-body boss splits it in its spawn hook). A living boss halves normal spawns (spawner). The fight ends when its last listed body dies:
-// a chest (evolution first) plus gems and gold drop there, hostile shots and telegraphs of its bodies vanish; the final boss's death wins the run; at ED.CONST.ENRAGE_T a living final boss enrages (x3 damage and speed).
+// a chest (evolution first) plus gems and a coin of ED.CONST.GOLD.mid x stage gold drop there (the final boss pays ED.CONST.GOLD.final straight to the party, World.payGold), hostile shots and telegraphs of its bodies vanish; the final boss's death wins the run; at ED.CONST.ENRAGE_T a living final boss enrages (x3 damage and speed).
 // Boss attack state lives in e.vars ({ phase, st, t, atk, last, at, s: per-attack scratch, force, fq, rage }). Boss parts (foes with def.boss outside w.bossList, e.g. spore pods) drop only their def.xp gem.
 (function (ED) {
   'use strict';
@@ -122,11 +122,11 @@
     o = o || {};
     return runner({
       slam: { w: 2, wind: 0.9, start(w, e) { const t = e.tgt; tele(w, e, t ? t.x : e.x, t ? t.y : e.y, 52, 0.9, 2.5, { detached: true }); }, update: (w, e, dt, t) => t >= 1.1 },
-      ring: { w: 2, wind: 0.7, start(w, e) { tele(w, e, e.x, e.y, e.r + 20, 0.7, 1.5, { followSrc: true }); }, update(w, e, dt, t) { if (t >= 0.7 && !e.vars.s.done) { e.vars.s.done = true; ring(w, e, o.n || 14, 130, o.look || 'orb', w.rng.next(), 1.2, 5); } return t >= 1.0; } },
+      ring: { w: 2, wind: 0.7, start(w, e) { tele(w, e, e.x, e.y, e.r + 20, 0.7, 1.5, { followSrc: true }); }, update(w, e, dt, t) { if (t >= 0.7 && !e.vars.s.done) { e.vars.s.done = true; ring(w, e, o.n || 14, 110, o.look || 'orb', w.rng.next(), 1.2, 5); } return t >= 1.0; } },
       charge: {
         w: 1, wind: 0.7,
         start(w, e) { const a = aim(e); e.vars.s.a = a; line(w, e, e.x, e.y, a, 220, e.r * 2, 0.7, 2, { followSrc: true }); },
-        update(w, e, dt, t) { if (t < 0.7) return false; const a = e.vars.s.a; mv(w, e, Math.cos(a), Math.sin(a), 320, dt); return t >= 1.4; },
+        update(w, e, dt, t) { if (t < 0.7) return false; const a = e.vars.s.a; mv(w, e, Math.cos(a), Math.sin(a), 256, dt); return t >= 1.4; },
       },
     }, o);
   };
@@ -162,10 +162,10 @@
     // hostile shots and telegraphs of dead boss bodies vanish
     for (const pr of this.projs) if (pr.team === 1 && pr.e && pr.e.boss && (pr.e.dead || pr.e.id !== pr.owner)) pr.dead = true;
     for (const z of this.zones) if (z.team === 1 && z.src && z.src.boss && (z.src.dead || z.src.id !== z.srcId)) z.dead = true;
-    if (e.final) { this.finalDown = true; return; }
+    if (e.final) { this.payGold(C.GOLD.final); this.finalDown = true; return; }
     this.spawnPickup('chest', e.x, e.y, 2);
     for (let k = 0; k < 3; k++) this.dropGem(e.x + (k - 1) * 12, e.y + 10, 25);
-    this.spawnPickup('gold', e.x, e.y - 12, this.rng.int(5, 10));
+    this.spawnPickup('gold', e.x, e.y - 12, Math.round(C.GOLD.mid * (this.sdef.gold || 1)));
   };
   W.updateBosses = function () {
     if (this.time >= C.ENRAGE_T) for (const e of this.bossList) if (e.final && !e.enraged && !e.dead) { e.enraged = true; e.dmg *= 3; e.spd *= 3; this.emit({ t: 'boss', id: e.def.id, fid: e.id, phase: 'enrage' }); }

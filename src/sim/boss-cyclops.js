@@ -11,7 +11,7 @@
   // Laser: warm-up s, len (cut by obstacles), w, x boss damage per touch, sweep rad over t s per pass, P3 fan spread rad between beams, eye height px.
   const LASER = { warm: 0.9, len: 360, w: 14, mul: 1.0, sweep: 2.1, t: 1.4, spread: 0.5, eye: 30 };
   // Stomp: warned radius and x boss damage; the wave rolls from r to r + speed x dur, hurting heroes within band px of its rim.
-  const STOMP = { r: 86, mul: 1.5, speed: 200, dur: 1.0, band: 7, wmul: 0.8 };
+  const STOMP = { r: 86, mul: 1.5, speed: 170, dur: 1.0, band: 7, wmul: 0.8 };
   ED.Bosses.CYCLOPS = { LASER, STOMP };
 
   const laserUpd = (w, z, e, st) => {
@@ -56,11 +56,11 @@
     },
     // Leap slam onto the target's spot, a ring of fireballs on landing.
     leap: {
-      w: 2, wind: 0.95,
-      start(w, e) { leapStart(w, e, e.vars.s, 80, 0.95, 1.8); },
+      w: 2, wind: 1.19,
+      start(w, e) { leapStart(w, e, e.vars.s, 80, 1.19, 1.8); },
       update(w, e, dt, t) {
         const s = e.vars.s;
-        if (leapTo(e, s, t)) ring(w, e, 12, 130, 'fireball', w.rng.next() * TAU, 0.6, 5);
+        if (leapTo(e, s, t)) ring(w, e, 12, 110, 'fireball', w.rng.next() * TAU, 0.6, 5);
         return t >= s.fl + 0.55;
       },
     },
@@ -73,7 +73,7 @@
         if (s.fire < 0 && s.k < 3 && t >= s.next) { s.a = aim(e); s.fire = t + T(e, 0.6); line(w, e, e.x, e.y, s.a, 420, 16, s.fire - t, 0); }
         if (s.fire >= 0 && t >= s.fire) {
           const j = Math.floor((t - s.fire) / 0.08);
-          if (j >= (s.j || 0) && (s.j || 0) < 3) { shot(w, e, s.a, 300, 'fireball', 0.8, 6, { life: 1.6 }); s.j = (s.j || 0) + 1; }
+          if (j >= (s.j || 0) && (s.j || 0) < 3) { shot(w, e, s.a, 255, 'fireball', 0.8, 6, { life: 1.9 }); s.j = (s.j || 0) + 1; }
           if (s.j >= 3) { s.j = 0; s.fire = -1; s.k++; s.next = t + 0.25; }
         }
         return s.k >= 3 && t >= s.next;
