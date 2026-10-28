@@ -6,7 +6,7 @@
 
 ## north-star (Ultimate goal for all plans/tasks)
 
-A browser **co-op survivors-like** (solo or up to 4 friends) where **a strong run turns the screen into a blender**: hordes of hundreds pour into an open arena, weapons fire on their own, each hero brings a signature weapon and two big hand-fired skills, and every level-up changes the *shape* of an attack (more projectiles, area, pierce, orbitals, evolutions), never just a number. Rules: **① Zero install** (static site, no build step, no backend; opens from any static host or `file://`) **② No runtime asset files** (art is embedded as data URIs built by `tools/art.js` from vendored CC0/CC-BY sources in `art-src/`; all audio synthesized with WebAudio) **③ Host-authoritative deterministic sim** (the same sim code runs headless in Node for checks) **④ Every death is earned** (telegraphed elite and boss attacks, crowd pressure over burst damage, no sustain-by-default) **⑤ Hordes stay smooth** (900 foes on screen at 60 fps in a browser).
+A browser **co-op survivors-like** (solo or up to 4 friends) where **a strong run turns the screen into a blender**: hordes of hundreds pour into an open arena, weapons fire on their own, each hero brings one weapon that grows along its own three paths into one hidden Form, plus one big hand-fired skill, and every level-up changes the *shape* of an attack (more projectiles, area, pierce, orbitals, Forms), never just a number. Rules: **① Zero install** (static site, no build step, no backend; opens from any static host or `file://`) **② No runtime asset files** (art is embedded as data URIs built by `tools/art.js` from vendored CC0/CC-BY sources in `art-src/`; all audio synthesized with WebAudio) **③ Host-authoritative deterministic sim** (the same sim code runs headless in Node for checks) **④ Every death is earned** (telegraphed elite and boss attacks, crowd pressure over burst damage, no sustain-by-default) **⑤ Hordes stay smooth** (900 foes on screen at 60 fps in a browser).
 
 **NO COMPROMISES. A PLAYER MUST FINISH A RUN FEELING OVERPOWERED AND WANT ANOTHER WITH A DIFFERENT HERO.**
 
@@ -27,8 +27,7 @@ src/util.js              constants, math, seeded RNG
 src/data/                foes · stages (themes, timelines, bosses) · passives · meta (shop, unlocks)
 src/save.js              profile storage + save code
 src/sim/                 stats · arena · grid (foe grid, separation) · world · combat · foes · ai · spawner · weapons · skills · progress · bosses · boss-<id>
-src/weapons/             general weapon groups (data + impl)
-src/heroes/              one file per hero: data, signature weapon, Q/E skills
+src/heroes/              one file per hero: data, weapon (3 paths, Forms), Q skill
 src/net.js · src/game.js transports + snapshots · session, prediction, view model
 src/client/              atlas · pixfx · gl (ED.Batch) · render · post · actors · fx · audio · music · input · aim · hud · ui
 src/art/                 generated atlas pages (data URIs) from tools/art.js; never hand-edited
@@ -42,7 +41,7 @@ docs/                    GAME-DESIGN.md · ARCHITECTURE.md · MASTERPLAN.md · M
 
 1. **Sim is deterministic per seed** — never `Math.random`/`Date.now` in sim, data, weapons or heroes files; use `w.rng` or a seeded `U.RNG`. Arena gen is pure (clients rebuild it from the seed).
 2. **Clients only see what snapshots carry** — any state the renderer/HUD needs must be encoded in `net.js` (or derived from arena gen / events). Bump `ED.NET_VERSION` when the wire changes.
-3. **Sim runs in Node** (`tools/sim.js` vm) — no DOM/window in `src/util.js`, `src/data`, `src/sim`, `src/weapons`, `src/heroes`, `src/save.js`.
+3. **Sim runs in Node** (`tools/sim.js` vm) — no DOM/window in `src/util.js`, `src/data`, `src/sim`, `src/heroes`, `src/save.js`.
 4. **Script order lives twice** — a new sim-side file goes into `index.html` AND the `tools/sim.js` FILES list.
 5. **Plug in through registries** (`ED.WEAPONS`/`ED.WIMPL`, `ED.HEROES`, `ED.CAST`, `ED.AI`, `ED.Bosses`, `ED.HOOK`, client `ED.WeaponFx`/`ED.SkillFx`/`ED.BossFx`), not by editing core files.
 6. **No per-tick allocation in hot paths** — foes, projectiles, gems, hit sources are pooled; arrays compact in place.
