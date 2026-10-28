@@ -17,7 +17,7 @@
     IFRAME: 0.5,          // invulnerability after a hit (s)
     RUN_LEN: 900,         // survival length (s): the final boss spawns here
     ENRAGE_T: 1020,       // the final boss enrages at this time (s)
-    GOLD: { mid: 150, final: 300, win: 300 }, // mid-boss coin drop, final boss kill and victory gold, x the stage gold multiplier (GAME-DESIGN §9)
+    GOLD: { mid: 150, final: 300, win: 300, bounty: 25 }, // mid-boss coin drop, final boss kill and victory gold, run-end bounty (1 per 25 kills, win or loss); x the stage gold multiplier (GAME-DESIGN §9)
     VERSION: '2.0.0',
   };
 

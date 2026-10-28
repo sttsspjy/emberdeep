@@ -197,10 +197,11 @@
     let m = 0; for (const p of this.heroes) m += this.goldMul(p);
     this.gold += Math.round(v * (this.sdef.gold || 1) * m / Math.max(1, this.heroes.length));
   };
-  // Ends the run once; a win pays ED.CONST.GOLD.win (payGold) before the summary.
+  // Ends the run once; pays the kill bounty (1 per GOLD.bounty kills, win or loss) and a win ED.CONST.GOLD.win (payGold) before the summary.
   W.prototype.end = function (won) {
     if (this.state !== 'play') return;
     this.state = won ? 'won' : 'lost';
+    this.payGold(Math.floor(this.kills / C.GOLD.bounty));
     if (won) this.payGold(C.GOLD.win);
     this.emit({ t: 'end', won, summary: this.summary() });
   };

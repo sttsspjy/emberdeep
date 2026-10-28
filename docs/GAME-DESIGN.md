@@ -135,7 +135,7 @@ Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (m
 ## 9. Pickups
 
 - **XP gems**: small (1), medium (5, from elites and brutes), large (25). When more than 350 gems lie on the ground, new ones merge into the nearest gem.
-- **Gold coins**: 1–5 from braziers (75%); 1–5 × stage gold from elites; a 150 × stage gold coin from each mid-boss; worth value × (1 + greed + luck / 2) to the collector. The final boss kill (300) and the victory (300) pay × stage gold × the party's mean gold multiplier straight to the run's gold. Stage gold: ×1 / ×1.5 / ×2.
+- **Gold coins**: 1–5 from braziers (75%); 1–5 × stage gold from elites; a 150 × stage gold coin from each mid-boss; worth value × (1 + greed + luck / 2) to the collector. The final boss kill (300), the victory (300) and the run-end kill bounty (1 per 25 kills) pay × stage gold × the party's mean gold multiplier straight to the run's gold. Stage gold: ×1 / ×1.5 / ×2.
 - **Food**: heals 30 HP; braziers (20%) and elites (50%, on top of the chest). No passive regen by default.
 - **Magnet** (braziers, 3%): pulls every gem on the map.
 - **Holy Bomb** (braziers, 2%): kills every non-elite foe on screen.
@@ -150,7 +150,7 @@ Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (m
 
 ## 11. Meta progression
 
-- **Gold** carries over, including a lost run's collected gold. A winning run pays about 1,000 / 1,500 / 2,000 gold on stages 1 / 2 / 3 at Greed 0 (shop total ≈ 27,600: full meta in about 20 wins). The Camp shop sells permanent ranks: Might (5), Vigor (5), Plating (3), Mending (5), Swiftness (3), Magnet (3), Growth (+5% XP, 5), Greed (+10% gold, 5), Fortune (5), Revival (2), Reroll (5), Skip (3), Banish (3). Cost: `base × (rank + 1)`, base 200; a refund button resets all.
+- **Gold** carries over, including a lost run's collected gold. Every run ends with a kill bounty: 1 gold per 25 kills × the stage gold multiplier × gold bonus (a 6-minute loss ≈ 150). A winning run pays about 1,400 / 2,100 / 2,800 gold on stages 1 / 2 / 3 at Greed 0, bounty included (shop total ≈ 27,600: full meta in about 15 wins plus the losses on the way). The Camp shop sells permanent ranks: Might (5), Vigor (5), Plating (3), Mending (5), Swiftness (3), Magnet (3), Growth (+5% XP, 5), Greed (+10% gold, 5), Fortune (5), Revival (2), Reroll (5), Skip (3), Banish (3). Cost: `base × (rank + 1)`, base 200; a refund button resets all.
 - **Unlocks**: start with Knight, Ranger and Pyro. Necro: survive 10 minutes. Cleric: beat stage 1 (also opens stage 2; beating stage 2 opens stage 3). Shade: kill 3000 foes in one run. Bell: reach level 25 in one run.
 - Profile autosaves in localStorage, plus a portable save code.
 - **Encyclopedia** reveals only what the player met: heroes and stages a run started with, weapons (Forms included) and passives the own hero owned, foes in the own view, bosses fought. Recorded on every client from its own view, merged at run end (win, defeat or quit); bot runs never save. Unmet entries list as a "???" silhouette (detail: "Not discovered yet"; locked heroes and stages keep their unlock rule and progress).
