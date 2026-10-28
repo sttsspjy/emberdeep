@@ -46,7 +46,7 @@ void main(){
   vec2 p=uv-.5;
   vec2 o=p*(aberr*(.35+dot(p,p)*3.));
   vec2 pd=vec2(gl_FragCoord.x,res.y-gl_FragCoord.y)/scl+off;
-  vec2 od=vec2(o.x*res.x,-o.y*res.y)/scl;
+  vec2 od=floor(vec2(o.x*res.x,-o.y*res.y)/scl+.5);
   vec3 c=vec3(samp(pd+od).r,samp(pd).g,samp(pd-od).b);
   c+=texture2D(bloom,vec2(pd.x/bsz.x,1.-pd.y/bsz.y)).rgb*bloomK;
   c=c*gain+lift;

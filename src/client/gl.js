@@ -24,6 +24,27 @@
   B.rgbaCss = rgbaCss; B.hexCss = hexCss;
   const viewRect = (camX, camY, w, h) => { vx0 = camX - 2; vy0 = camY - 2; vx1 = camX + w / sc + 2; vy1 = camY + h / sc + 2; };
 
+  // ---- pixel geometry, shared by both backends: shapes are hard-edged at world px (no AA), a pixel is in a shape when its centre is ----
+  // Discs / rings / cones: outer diameter D = round(2r + lw) px (lw rounded, >= 1 px), centred on a pixel (odd D) or a pixel corner (even D); a ring is the outer lw px of the disc.
+  // Lines: width round(lw) (>= 1), ends snapped like D; widths <= 3 px are measured along the minor axis (exactly lw px per column / row, Bresenham-like).
+  // Rects: edges rounded to whole px. Shadows: ellipse rx x 0.4 rx on a whole px centre.
+  const snap = (v, d) => ((d & 1) ? Math.floor(v) + 0.5 : Math.round(v));
+  const lwPx = (lw) => (lw > 0 ? Math.max(1, Math.round(lw)) : 0);
+  let gx = 0, gy = 0, gr = 0, gw = 0; // circGeo out: centre, outer radius, ring width (0 = fill)
+  function circGeo(x, y, r, lw) { let l = lwPx(lw); const d = Math.max(1, Math.round(2 * r + l)); if (2 * l >= d) l = 0; gr = d / 2; gw = l; gx = snap(x, d); gy = snap(y, d); }
+  let lx0 = 0, ly0 = 0, lc = 1, ls = 0, lhl = 0, lht = 0, lmx = 0, lmy = 0; // lineGeo out: snapped start, direction, half length (ends inclusive), half thickness, midpoint
+  function lineGeo(x0, y0, x1, y1, lw) {
+    const l = Math.max(1, Math.round(lw)); x0 = snap(x0, l); y0 = snap(y0, l); x1 = snap(x1, l); y1 = snap(y1, l);
+    const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx * dx + dy * dy);
+    lx0 = x0; ly0 = y0; lc = len > 0 ? dx / len : 1; ls = len > 0 ? dy / len : 0; lhl = len / 2 + 0.49; lmx = (x0 + x1) / 2; lmy = (y0 + y1) / 2;
+    lht = l <= 3 ? l / 2 * Math.max(Math.abs(lc), Math.abs(ls)) : l / 2;
+  }
+  // Pie SDF (same as the WebGL shader): local frame along the cone axis (lx) / across it (ly), radius R, half-arc sin / cos sh, ch.
+  function pieD(lx, ly, R, sh, ch) {
+    const px = Math.abs(ly), py = lx, l1 = Math.sqrt(px * px + py * py) - R, t = Math.max(0, Math.min(R, px * sh + py * ch)), mx = px - sh * t, my = py - ch * t;
+    return Math.max(l1, Math.sqrt(mx * mx + my * my) * Math.sign(ch * px - sh * py));
+  }
+
   // Target: the 2D context of the world buffer (render.js).
   B.init = (ctx) => { c = ctx; };
   Object.defineProperty(B, 'ctx', { get: () => (B.mode === 'gl' ? bridgeCtx() : c), enumerable: true });
@@ -56,72 +77,206 @@
     AO.variant = fl >= 0.5 || (fl > 0 && B.crowd > LOD_CROWD) ? 'white' : (o && o.variant) || '';
     if (add) c.globalCompositeOperation = 'lighter';
     let ok;
-    if (scaled) { c.save(); c.translate(x, y); c.scale(o.sx || 1, o.sy || 1); ok = A.draw(c, id, frame, 0, 0, AO); c.restore(); }
+    if (scaled) { c.save(); c.translate(Math.round(x), Math.round(y)); c.scale(o.sx || 1, o.sy || 1); ok = A.draw(c, id, frame, 0, 0, AO); c.restore(); }
     else ok = A.draw(c, id, frame, x, y, AO);
     if (ok && fl > 0 && fl < 0.5 && B.crowd <= LOD_CROWD) { // partial flash: white overlay at the flash level
       AO.variant = 'white'; AO.alpha *= fl * 2;
-      if (scaled) { c.save(); c.translate(x, y); c.scale(o.sx || 1, o.sy || 1); A.draw(c, id, frame, 0, 0, AO); c.restore(); } else A.draw(c, id, frame, x, y, AO);
+      if (scaled) { c.save(); c.translate(Math.round(x), Math.round(y)); c.scale(o.sx || 1, o.sy || 1); A.draw(c, id, frame, 0, 0, AO); c.restore(); } else A.draw(c, id, frame, x, y, AO);
     }
     if (add) c.globalCompositeOperation = 'source-over';
     return ok;
   };
-  D.rect = (x, y, w, h, rgba) => { if (x > vx1 || y > vy1 || x + w < vx0 || y + h < vy0) return; B.stats.shapes++; c.fillStyle = rgbaCss(rgba); c.fillRect(x, y, w, h); };
-  // Disc (lw 0) or ring outline of width lw.
+  // Shapes are scan-converted into whole-px rects of one path (axis-aligned integer rects rasterise without AA) and filled once, so a shape never blends with itself.
+  // Run merger: a row span equal to the slot's span on the row above extends that rect downwards; slot = span index within the row.
+  const RN = 4, RUN = new Float64Array(RN * 4); // per slot: x0, x1 (inclusive px), y0, rows
+  let rx0 = 0, rx1 = 0, ry0 = 0, ry1 = 0, pt = null; // clip rect in whole px (view rect); pt: rect target (the context or a Path2D being built)
+  function runPut(s, x0, x1, y) {
+    if (x0 < rx0) x0 = rx0; if (x1 > rx1) x1 = rx1; if (x0 > x1) return;
+    if (s >= RN) { pt.rect(x0, y, x1 - x0 + 1, 1); return; }
+    const o = s * 4;
+    if (RUN[o + 3] > 0 && RUN[o] === x0 && RUN[o + 1] === x1 && RUN[o + 2] + RUN[o + 3] === y) { RUN[o + 3]++; return; }
+    if (RUN[o + 3] > 0) pt.rect(RUN[o], RUN[o + 2], RUN[o + 1] - RUN[o] + 1, RUN[o + 3]);
+    RUN[o] = x0; RUN[o + 1] = x1; RUN[o + 2] = y; RUN[o + 3] = 1;
+  }
+  function runEnd() { for (let o = 0; o < RN * 4; o += 4) if (RUN[o + 3] > 0) { pt.rect(RUN[o], RUN[o + 2], RUN[o + 1] - RUN[o] + 1, RUN[o + 3]); RUN[o + 3] = 0; } }
+  const clipRows = () => { rx0 = Math.floor(vx0); rx1 = Math.ceil(vx1); ry0 = Math.floor(vy0); ry1 = Math.ceil(vy1); pt = c; };
+  const FR = { rect: (x, y, w, h) => c.fillRect(x, y, w, h) }; // rect target: direct fillRect (a shape's rects never overlap)
+  const fillBegin = (css) => { clipRows(); c.fillStyle = css; pt = FR; };
+  const fillEnd = () => { runEnd(); pt = c; };
+  // Disc / ring spans of circGeo's output (gx, gy, gr, gw) into the open path.
+  function circSpans() {
+    const R = gr, R2 = R * R, Ri = R - gw, Ri2 = Ri * Ri, ya = Math.max(ry0, Math.ceil(gy - R - 0.5)), yb = Math.min(ry1, Math.floor(gy + R - 0.5));
+    for (let y = ya; y <= yb; y++) {
+      const dy = y + 0.5 - gy, h2 = R2 - dy * dy; if (h2 < 0) continue;
+      const hw = Math.sqrt(h2), x0 = Math.ceil(gx - hw - 0.5), x1 = Math.floor(gx + hw - 0.5); if (x0 > x1) continue;
+      const i2 = Ri2 - dy * dy;
+      if (gw > 0 && Ri > 0 && i2 >= 0) {
+        const hi = Math.sqrt(i2), i0 = Math.ceil(gx - hi - 0.5), i1 = Math.floor(gx + hi - 0.5);
+        if (i0 <= i1) { runPut(0, x0, i0 - 1, y); runPut(1, i1 + 1, x1, y); continue; }
+      }
+      runPut(0, x0, x1, y);
+    }
+  }
+  // dx range where lo <= k * dx + q <= hi (open lower bound when lowOpen and k = 0); false when empty. Out: ia, ib.
+  let ia = 0, ib = 0;
+  function slab(k, q, lo, hi, lowOpen) {
+    if (Math.abs(k) < 1e-9) { if (lowOpen ? q > lo && q <= hi : q >= lo && q <= hi) { ia = -1e9; ib = 1e9; return true; } return false; }
+    const a = (lo - q) / k, b = (hi - q) / k; ia = Math.min(a, b); ib = Math.max(a, b); return true;
+  }
+  // Rotated-rect spans of lineGeo's output into the open path.
+  // Per row: dx in [lo, hi] with along |lc dx + ls dy| <= lhl and across -lht < lc dy - ls dx <= lht; both bounds are linear in dy (coefficients precomputed).
+  function lineSpans() {
+    const ey = lhl * Math.abs(ls) + lht * Math.abs(lc), ya = Math.max(ry0, Math.floor(lmy - ey - 1)), yb = Math.min(ry1, Math.ceil(lmy + ey + 1));
+    const ac = Math.abs(lc) > 1e-9, as = Math.abs(ls) > 1e-9, ic = ac ? 1 / lc : 0, is = as ? 1 / ls : 0;
+    const p = -ls * ic, a0 = Math.min(-lhl * ic, lhl * ic), a1 = -a0, q = lc * is, b0 = Math.min(-lht * is, lht * is), b1 = -b0;
+    for (let y = ya; y <= yb; y++) {
+      const dy = y + 0.5 - lmy;
+      let lo = -1e9, hi = 1e9;
+      if (ac) { lo = a0 + p * dy; hi = a1 + p * dy; } else if (Math.abs(ls * dy) > lhl) continue;
+      if (as) { const l2 = b0 + q * dy, h2 = b1 + q * dy; if (l2 > lo) lo = l2; if (h2 < hi) hi = h2; } else { const v = lc * dy; if (v <= -lht || v > lht) continue; }
+      if (lo > hi) continue;
+      runPut(0, Math.ceil(lmx + lo - 0.5), Math.floor(lmx + hi - 0.5), y);
+    }
+  }
+  D.rect = (x, y, w, h, rgba) => {
+    let x0 = Math.round(x), x1 = Math.round(x + w), y0 = Math.round(y), y1 = Math.round(y + h);
+    if (x1 < x0) { const s = x0; x0 = x1; x1 = s; } if (y1 < y0) { const s = y0; y0 = y1; y1 = s; }
+    if (x0 === x1 || y0 === y1 || x0 > vx1 || y0 > vy1 || x1 < vx0 || y1 < vy0) return;
+    B.stats.shapes++; c.fillStyle = rgbaCss(rgba); c.fillRect(x0, y0, x1 - x0, y1 - y0);
+  };
+  // Disc / ring paths: circGeo's shape as a Path2D of whole-px rects with its box at (0, 0), cached by (D, width) and filled translated by whole px (one fill call per shape).
+  const PATH_MAX = 1024, PC = new Map(), PM = typeof DOMMatrix !== 'undefined' ? new DOMMatrix() : null;
+  function shapePath() {
+    const d = gr * 2, key = d * 64 + Math.min(63, gw);
+    let p = PC.get(key); if (p) return p;
+    if (PC.size >= 1500) PC.clear();
+    const sx = gx, sy = gy, a0 = rx0, a1 = rx1, b0 = ry0, b1 = ry1, st = pt; gx = gr; gy = gr;
+    p = new Path2D(); pt = p; rx0 = -1; rx1 = d + 1; ry0 = -1; ry1 = d + 1;
+    circSpans(); runEnd();
+    gx = sx; gy = sy; rx0 = a0; rx1 = a1; ry0 = b0; ry1 = b1; pt = st; PC.set(key, p);
+    return p;
+  }
+  // Disc (lw 0) or ring of width lw centred on radius r.
   D.circ = (x, y, r, rgba, lw) => {
-    if (x + r < vx0 || x - r > vx1 || y + r < vy0 || y - r > vy1) return;
-    B.stats.shapes++;
-    c.beginPath(); c.arc(x, y, Math.max(0.5, r), 0, PI * 2);
-    if (lw > 0) { c.lineWidth = lw; c.strokeStyle = rgbaCss(rgba); c.stroke(); } else { c.fillStyle = rgbaCss(rgba); c.fill(); }
+    const e = r + (lw > 0 ? lw : 0) / 2 + 1;
+    if (x + e < vx0 || x - e > vx1 || y + e < vy0 || y - e > vy1) return;
+    B.stats.shapes++; circGeo(x, y, r, lw); c.fillStyle = rgbaCss(rgba);
+    if (gr * 2 <= PATH_MAX) { const p = shapePath(), ox = gx - gr, oy = gy - gr; c.translate(ox, oy); c.fill(p); c.translate(-ox, -oy); return; }
+    clipRows(); c.beginPath(); circSpans(); runEnd(); c.fill();
   };
   D.line = (x0, y0, x1, y1, lw, rgba) => {
     if (Math.max(x0, x1) + lw < vx0 || Math.min(x0, x1) - lw > vx1 || Math.max(y0, y1) + lw < vy0 || Math.min(y0, y1) - lw > vy1) return;
-    B.stats.shapes++; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.lineWidth = lw; c.strokeStyle = rgbaCss(rgba); c.lineCap = 'butt'; c.stroke(); };
-  // Polyline through n points P[0..2n) (x, y pairs), width lw: one stroke on Canvas2D.
+    B.stats.shapes++; lineGeo(x0, y0, x1, y1, lw);
+    fillBegin(rgbaCss(rgba)); lineSpans(); fillEnd();
+  };
+  // Polyline through n points P[0..2n) (x, y pairs), width lw: per-segment lines (joints drawn twice, as on WebGL).
   D.poly = (P, n, lw, rgba) => {
     if (n < 2) return;
     let x0 = P[0], x1 = P[0], y0 = P[1], y1 = P[1];
     for (let i = 1; i < n; i++) { const x = P[i * 2], y = P[i * 2 + 1]; if (x < x0) x0 = x; else if (x > x1) x1 = x; if (y < y0) y0 = y; else if (y > y1) y1 = y; }
     if (x1 + lw < vx0 || x0 - lw > vx1 || y1 + lw < vy0 || y0 - lw > vy1) return;
-    B.stats.shapes++; c.beginPath(); c.moveTo(P[0], P[1]);
-    for (let i = 1; i < n; i++) c.lineTo(P[i * 2], P[i * 2 + 1]);
-    c.lineWidth = lw; c.strokeStyle = rgbaCss(rgba); c.lineCap = 'butt'; c.lineJoin = 'round'; c.stroke(); c.lineJoin = 'miter';
+    B.stats.shapes++; fillBegin(rgbaCss(rgba));
+    for (let i = 0; i + 1 < n; i++) { lineGeo(P[i * 2], P[i * 2 + 1], P[i * 2 + 2], P[i * 2 + 3], lw); lineSpans(); runEnd(); }
+    pt = c;
   };
-  // Cone (sector) from (x, y), radius r, centred on angle a, arc wide: filled (lw 0) or outlined.
+  // Cone (sector) from (x, y), radius r, centred on angle a, arc wide: filled (lw 0) or outlined (lw px inside the sector of radius r + lw / 2). Per-pixel pie SDF inside the disc's row spans.
   D.cone = (x, y, r, a, arc, rgba, lw) => {
-    if (x + r < vx0 || x - r > vx1 || y + r < vy0 || y - r > vy1) return;
-    B.stats.shapes++;
-    c.beginPath(); c.moveTo(x, y); c.arc(x, y, r, a - arc / 2, a + arc / 2); c.closePath();
-    if (lw > 0) { c.lineWidth = lw; c.strokeStyle = rgbaCss(rgba); c.stroke(); } else { c.fillStyle = rgbaCss(rgba); c.fill(); }
+    const e = r + (lw > 0 ? lw : 0) / 2 + 1;
+    if (r <= 0 || x + e < vx0 || x - e > vx1 || y + e < vy0 || y - e > vy1) return;
+    B.stats.shapes++; fillBegin(rgbaCss(rgba)); circGeo(x, y, r, lw);
+    const h = Math.min(PI, Math.max(0, arc / 2)), sh = Math.sin(h), ch = Math.cos(h), ca = Math.cos(a), sa = Math.sin(a), R = gr, w = gw;
+    const ya = Math.max(ry0, Math.ceil(gy - R - 0.5)), yb = Math.min(ry1, Math.floor(gy + R - 0.5));
+    // arc <= PI: convex pie = disc ∩ two edge half-planes (signed distances k1 * dx + q1, k2 * dx + q2 >= 0); an outline removes the pie shrunk by w (disc R - w, edges >= w).
+    const k1 = sh * ca + ch * sa, k2 = sh * ca - ch * sa, m1 = sh * sa - ch * ca, m2 = sh * sa + ch * ca, Ri = R - w;
+    for (let y = ya; y <= yb; y++) {
+      const dy = y + 0.5 - gy, h2 = R * R - dy * dy; if (h2 < 0) continue;
+      const hw = Math.sqrt(h2), x0 = Math.max(rx0, Math.ceil(gx - hw - 0.5)), x1 = Math.min(rx1, Math.floor(gx + hw - 0.5));
+      if (h <= PI / 2) {
+        let a0 = -hw, b0 = hw;
+        if (!slab(k1, m1 * dy, 0, 1e9, false)) continue; if (ia > a0) a0 = ia; if (ib < b0) b0 = ib;
+        if (!slab(k2, m2 * dy, 0, 1e9, false)) continue; if (ia > a0) a0 = ia; if (ib < b0) b0 = ib;
+        const o0 = Math.max(x0, Math.ceil(gx + a0 - 0.5)), o1 = Math.min(x1, Math.floor(gx + b0 - 0.5)); if (o0 > o1) continue;
+        const i2 = Ri * Ri - dy * dy;
+        if (w > 0 && Ri > 0 && i2 >= 0) {
+          let a1 = -Math.sqrt(i2), b1 = -a1, ok = slab(k1, m1 * dy, w, 1e9, false);
+          if (ok) { if (ia > a1) a1 = ia; if (ib < b1) b1 = ib; ok = slab(k2, m2 * dy, w, 1e9, false); }
+          if (ok) { if (ia > a1) a1 = ia; if (ib < b1) b1 = ib; }
+          const i0 = Math.ceil(gx + a1 - 0.5), i1 = Math.floor(gx + b1 - 0.5);
+          if (ok && i0 <= i1) { runPut(0, o0, Math.min(o1, i0 - 1), y); runPut(1, Math.max(o0, i1 + 1), o1, y); continue; }
+        }
+        runPut(0, o0, o1, y); continue;
+      }
+      let s = 0, st = 0, on = false; // arc > PI (non-convex): per-pixel pie SDF
+      for (let xi = x0; xi <= x1 + 1; xi++) {
+        let v = false;
+        if (xi <= x1) { const dx = xi + 0.5 - gx, d = pieD(dx * ca + dy * sa, dy * ca - dx * sa, R, sh, ch); v = d <= 0 && (w <= 0 || d > -w); }
+        if (v && !on) { st = xi; on = true; } else if (!v && on) { runPut(s++, st, xi - 1, y); on = false; }
+      }
+    }
+    fillEnd();
   };
   // Zone LOD disc / ring (lw 0 = fill). With B.zoneUnion (a software-rasterised canvas): collected per colour (alpha in steps of 8) and width, then drawn by zflush()
-  // as one path per bucket, fills before rings, so overlapping ground discs cost their union once; otherwise drawn at once (a GPU canvas stalls on big self-overlapping paths).
+  // as one path per bucket, fills before rings, so overlapping ground discs cost their union once; otherwise drawn at once.
   // Buckets and their coordinate arrays persist across frames (no per-frame allocation).
   const ZB = new Map();
   D.zcirc = (x, y, r, rgba, lw) => {
     if (!B.zoneUnion) { D.circ(x, y, r, rgba, lw); return; }
     if (x + r < vx0 || x - r > vx1 || y + r < vy0 || y - r > vy1) return;
     const a = Math.min(255, ((rgba & 255) + 4) & ~7); if (!a) return;
-    const col = ((rgba & 0xffffff00) | a) >>> 0, w = lw > 0 ? Math.max(1, Math.round(lw * 2)) : 0, key = col * 64 + Math.min(63, w);
+    const col = ((rgba & 0xffffff00) | a) >>> 0, w = lwPx(lw), key = col * 64 + Math.min(63, w);
     let b = ZB.get(key);
-    if (!b) { b = { col, lw: w / 2, n: 0, p: new Float32Array(96) }; ZB.set(key, b); }
+    if (!b) { b = { col, lw: w, n: 0, p: new Float32Array(96) }; ZB.set(key, b); }
     if (b.n * 3 + 3 > b.p.length) { const q = new Float32Array(b.p.length * 2); q.set(b.p); b.p = q; }
-    const o = b.n++ * 3; b.p[o] = x; b.p[o + 1] = y; b.p[o + 2] = Math.max(0.5, r);
+    const o = b.n++ * 3; b.p[o] = x; b.p[o + 1] = y; b.p[o + 2] = r;
   };
+  // Union: every bucket is scan-converted in JS into one buffer-size RGBA layer (fills, then rings; a later bucket overwrites an earlier one where they overlap),
+  // then the layer's dirty rect is put and composited once (B.fade applies). Overlaps cost nothing extra and the canvas rasterises no paths.
+  let zl = null, zlc = null, zim = null, z32 = null;
   D.zflush = () => {
+    const W = c.canvas.width, H = c.canvas.height;
+    if (!zl || zl.width !== W || zl.height !== H) { zl = zl || document.createElement('canvas'); zl.width = W; zl.height = H; zlc = zl.getContext('2d'); zim = zlc.createImageData(W, H); z32 = new Uint32Array(zim.data.buffer); }
+    let dx0 = W, dy0 = H, dx1 = -1, dy1 = -1;
     for (let pass = 0; pass < 2; pass++) for (const b of ZB.values()) {
       if (!b.n || (b.lw > 0) !== (pass === 1)) continue;
-      const P = b.p; c.beginPath();
-      for (let i = 0, o = 0; i < b.n; i++, o += 3) { c.moveTo(P[o] + P[o + 2], P[o + 1]); c.arc(P[o], P[o + 1], P[o + 2], 0, PI * 2); }
-      if (pass) { c.lineWidth = b.lw; c.strokeStyle = rgbaCss(b.col); c.stroke(); } else { c.fillStyle = rgbaCss(b.col); c.fill(); }
+      const P = b.p, v = b.col, col = (((v & 255) << 24) | (((v >>> 8) & 255) << 16) | (((v >>> 16) & 255) << 8) | (v >>> 24)) >>> 0; // 0xRRGGBBAA -> little-endian RGBA bytes
+      for (let i = 0, o = 0; i < b.n; i++, o += 3) {
+        circGeo((P[o] - cx) * sc, (P[o + 1] - cy) * sc, P[o + 2] * sc, b.lw * sc);
+        const R = gr, Ri = R - gw, ya = Math.max(0, Math.ceil(gy - R - 0.5)), yb = Math.min(H - 1, Math.floor(gy + R - 0.5));
+        if (ya > yb) continue;
+        if (ya < dy0) dy0 = ya; if (yb > dy1) dy1 = yb;
+        for (let y = ya; y <= yb; y++) {
+          const dy = y + 0.5 - gy, h2 = R * R - dy * dy; if (h2 < 0) continue;
+          const hw = Math.sqrt(h2); let x0 = Math.max(0, Math.ceil(gx - hw - 0.5)), x1 = Math.min(W - 1, Math.floor(gx + hw - 0.5)); if (x0 > x1) continue;
+          if (x0 < dx0) dx0 = x0; if (x1 > dx1) dx1 = x1;
+          const row = y * W, i2 = Ri * Ri - dy * dy;
+          if (gw > 0 && Ri > 0 && i2 >= 0) {
+            const hi = Math.sqrt(i2), i0 = Math.ceil(gx - hi - 0.5), i1 = Math.floor(gx + hi - 0.5);
+            if (i0 <= i1) { for (let x = x0; x < i0 && x <= x1; x++) z32[row + x] = col; for (let x = Math.max(x0, i1 + 1); x <= x1; x++) z32[row + x] = col; continue; }
+          }
+          z32.fill(col, row + x0, row + x1 + 1);
+        }
+      }
       B.stats.shapes++; b.n = 0;
     }
     if (ZB.size > 256) ZB.clear();
+    if (dx1 < dx0) return;
+    const w = dx1 - dx0 + 1, h = dy1 - dy0 + 1;
+    zlc.putImageData(zim, 0, 0, dx0, dy0, w, h);
+    c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(zl, dx0, dy0, w, h, dx0, dy0, w, h); c.setTransform(sc, 0, 0, sc, -cx * sc, -cy * sc);
+    z32.fill(0, dy0 * W, (dy1 + 1) * W);
   };
-  // Soft ground shadow (ellipse rx wide); skipped in a crowd.
-  D.shadow = (x, y, rx) => { if (B.crowd > LOD_CROWD || x + rx < vx0 || x - rx > vx1 || y < vy0 || y > vy1 + rx) return; c.fillStyle = 'rgba(0,0,0,0.32)'; c.beginPath(); c.ellipse(x, y, rx, rx * 0.4, 0, 0, PI * 2); c.fill(); };
+  // Ground shadow (hard ellipse rx x 0.4 rx, 32 % black); skipped in a crowd.
+  D.shadow = (x, y, rx) => {
+    if (B.crowd > LOD_CROWD || x + rx < vx0 || x - rx > vx1 || y < vy0 || y > vy1 + rx) return;
+    fillBegin('rgba(0,0,0,0.32)'); x = Math.round(x); y = Math.round(y);
+    const ry = rx * 0.4, ya = Math.max(ry0, Math.ceil(y - ry - 0.5)), yb = Math.min(ry1, Math.floor(y + ry - 0.5));
+    for (let row = ya; row <= yb; row++) { const dy = (row + 0.5 - y) * 2.5, h2 = rx * rx - dy * dy; if (h2 < 0) continue; const hw = Math.sqrt(h2); runPut(0, Math.ceil(x - hw - 0.5), Math.floor(x + hw - 0.5), row); }
+    fillEnd();
+  };
   // Canvas / ImageBitmap blitted to the world rect (floor chunks, baked effect sprites), optional alpha. A canvas whose content changes carries a `ver` number (gl re-uploads on change).
   D.img = (src, x, y, w, h, alpha) => {
     if (!src || x > vx1 || y > vy1 || x + w < vx0 || y + h < vy0) return;
+    x = Math.round(x); y = Math.round(y);
     c.imageSmoothingEnabled = false;
     if (alpha !== undefined && alpha !== 1) { const ga = c.globalAlpha; c.globalAlpha = ga * alpha; c.drawImage(src, x, y, w, h); c.globalAlpha = ga; } else c.drawImage(src, x, y, w, h);
   };
@@ -138,7 +293,7 @@
   // ================= WebGL backend =================
   const G = {};
   const STRIDE = 14, CAP = 32768, SW = 1024, DYN_W = 1024, DYN_AREA = 192 * 192, DYN_SIDE = 512;
-  const K_SPR = 0, K_RECT = 1, K_CIRC = 2, K_CONE = 3, K_SHADOW = 4;
+  const K_SPR = 0, K_RECT = 1, K_CIRC = 2, K_CONE = 3, K_SHADOW = 4, K_LINE = 5;
   const ab = new ArrayBuffer(CAP * STRIDE * 4), f32 = new Float32Array(ab), u32 = new Uint32Array(ab);
   let gl = null, gl2 = false, ext = null, glGen = -1, failGen = -2, prog = null, UL = null, cornerBuf = null, instBuf = null;
   let mainTex = null, TW = 0, TH = 0, packed = false, packFail = false, fbo = null, fboTex = null, tw = 0, th = 0;
@@ -156,7 +311,8 @@ void main(){
   gl_Position=vec4(p/vsz*2.-1.,0.,1.);
   vuv=mix(a2.xy,a2.zw,corner)*tinv;vl=l;vp=a2;vcol=col;vx=vec4(misc.x,misc.y/255.,misc.z,misc.w);
 }`;
-  // vx: kind, flash, additive, variant mode (1 grey, 2 frozen). Shapes: vl = local px from the pivot in the shape frame, vp = shape params.
+  // vx: kind, flash, additive, variant mode (1 grey, 2 frozen). Shapes: vl = local px from the pivot in the shape frame (at the world-px fragment centre), vp = shape params;
+  // hard edges (on / off per pixel, no AA), same tests as the Canvas2D scan conversion: rect |vl| <= half size; disc / pie d <= 0 (ring / outline: d > -width); shadow ellipse; line slab.
   const FS = `#ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
 #else
@@ -173,14 +329,17 @@ void main(){
       else{float q=min(1.,l*1.2);rgb=q>.82?vec3(.922,.973,1.):vec3(30.+q*190.,70.+q*170.,110.+q*145.)/255.;}}
     rgb=mix(rgb,vec3(1.),vx.y)*vcol.rgb;a=t.a*vcol.a;
   }else{
-    float d;rgb=vcol.rgb;
-    if(k<1.5){vec2 q=vp.xy-abs(vl);d=-min(q.x,q.y);}
-    else if(k<2.5){d=length(vl)-vp.x;if(vp.y>0.)d=abs(d)-vp.y*.5;}
-    else if(k<3.5){vec2 p=vec2(abs(vl.y),vl.x),cs=vec2(sin(vp.z),cos(vp.z));
-      float l1=length(p)-vp.x,m=length(p-cs*clamp(dot(p,cs),0.,vp.x));
-      d=max(l1,m*sign(cs.y*p.x-cs.x*p.y));if(vp.y>0.)d=abs(d)-vp.y*.5;}
-    else{d=(length(vl*vec2(1.,2.5))-vp.x)*.5;}
-    a=vcol.a*clamp(.5-d,0.,1.);
+    bool on;rgb=vcol.rgb;
+    if(k<1.5)on=abs(vl.x)<=vp.x&&abs(vl.y)<=vp.y;
+    else if(k<3.5){float d;
+      if(k<2.5)d=length(vl)-vp.x;
+      else{vec2 p=vec2(abs(vl.y),vl.x),cs=vec2(sin(vp.z),cos(vp.z));
+        float l1=length(p)-vp.x,m=length(p-cs*clamp(dot(p,cs),0.,vp.x));
+        d=max(l1,m*sign(cs.y*p.x-cs.x*p.y));}
+      on=d<=0.&&(vp.y<=0.||d>-vp.y);}
+    else if(k<4.5)on=length(vl*vec2(1.,2.5))<=vp.x;
+    else on=abs(vl.x)<=vp.x&&vl.y>-vp.y&&vl.y<=vp.y;
+    a=on?vcol.a:0.;
   }
   gl_FragColor=vec4(rgb*a,a*(1.-vx.z));
 }`;
@@ -391,39 +550,43 @@ void main(){
   };
   G.rect = (x, y, w, h, rgba) => {
     if (seg) closeSeg();
-    const hx = Math.abs(w) / 2, hy = Math.abs(h) / 2, mx = x + w / 2, my = y + h / 2;
-    if (mx - hx > vx1 || my - hy > vy1 || mx + hx < vx0 || my + hy < vy0) return;
+    let x0 = Math.round(x), x1 = Math.round(x + w), y0 = Math.round(y), y1 = Math.round(y + h);
+    if (x1 < x0) { const s = x0; x0 = x1; x1 = s; } if (y1 < y0) { const s = y0; y0 = y1; y1 = s; }
+    if (x0 === x1 || y0 === y1 || x0 > vx1 || y0 > vy1 || x1 < vx0 || y1 < vy0) return;
     B.stats.shapes++;
-    push(mx, my, -hx - 1, -hy - 1, 2 * hx + 2, 2 * hy + 2, 0, 0, hx, hy, 0, 0, rgbaLE(rgba), K_RECT);
+    const hx = (x1 - x0) / 2, hy = (y1 - y0) / 2;
+    push(x0 + hx, y0 + hy, -hx - 1, -hy - 1, 2 * hx + 2, 2 * hy + 2, 0, 0, hx, hy, 0, 0, rgbaLE(rgba), K_RECT);
   };
   G.zcirc = (x, y, r, rgba, lw) => G.circ(x, y, r, rgba, lw);
   G.zflush = () => {};
   G.circ = (x, y, r, rgba, lw) => {
     if (seg) closeSeg();
-    r = Math.max(0.5, r); const l = lw > 0 ? lw : 0, ext = r + l / 2 + 1;
-    if (x + ext < vx0 || x - ext > vx1 || y + ext < vy0 || y - ext > vy1) return;
-    B.stats.shapes++;
-    push(x, y, -ext, -ext, 2 * ext, 2 * ext, 0, 0, r, l, 0, 0, rgbaLE(rgba), K_CIRC);
+    const e = r + (lw > 0 ? lw : 0) / 2 + 1;
+    if (x + e < vx0 || x - e > vx1 || y + e < vy0 || y - e > vy1) return;
+    B.stats.shapes++; circGeo(x, y, r, lw);
+    const ext = gr + 1;
+    push(gx, gy, -ext, -ext, 2 * ext, 2 * ext, 0, 0, gr, gw, 0, 0, rgbaLE(rgba), K_CIRC);
   };
   G.line = (x0, y0, x1, y1, lw, rgba) => {
     if (seg) closeSeg();
-    const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx * dx + dy * dy);
-    if (len < 0.01 || Math.max(x0, x1) + lw < vx0 || Math.min(x0, x1) - lw > vx1 || Math.max(y0, y1) + lw < vy0 || Math.min(y0, y1) - lw > vy1) return;
-    B.stats.shapes++;
-    push((x0 + x1) / 2, (y0 + y1) / 2, -len / 2 - 1, -lw / 2 - 1, len + 2, lw + 2, Math.atan2(dy, dx), 0, len / 2, lw / 2, 0, 0, rgbaLE(rgba), K_RECT);
+    const dx = x1 - x0, dy = y1 - y0;
+    if (dx * dx + dy * dy < 1e-4 || Math.max(x0, x1) + lw < vx0 || Math.min(x0, x1) - lw > vx1 || Math.max(y0, y1) + lw < vy0 || Math.min(y0, y1) - lw > vy1) return;
+    B.stats.shapes++; lineGeo(x0, y0, x1, y1, lw);
+    push(lmx, lmy, -lhl - 1, -lht - 1, 2 * lhl + 2, 2 * lht + 2, Math.atan2(ls, lc), 0, lhl, lht, 0, 0, rgbaLE(rgba), K_LINE);
   };
   G.poly = (P, n, lw, rgba) => { for (let i = 0; i + 1 < n; i++) G.line(P[i * 2], P[i * 2 + 1], P[i * 2 + 2], P[i * 2 + 3], lw, rgba); };
   G.cone = (x, y, r, a, arc, rgba, lw) => {
     if (seg) closeSeg();
-    const l = lw > 0 ? lw : 0, ext = r + l / 2 + 1;
-    if (r <= 0 || x + ext < vx0 || x - ext > vx1 || y + ext < vy0 || y - ext > vy1) return;
-    B.stats.shapes++;
-    push(x, y, -ext, -ext, 2 * ext, 2 * ext, a, 0, r, l, Math.min(PI, Math.max(0, arc / 2)), 0, rgbaLE(rgba), K_CONE);
+    const e = r + (lw > 0 ? lw : 0) / 2 + 1;
+    if (r <= 0 || x + e < vx0 || x - e > vx1 || y + e < vy0 || y - e > vy1) return;
+    B.stats.shapes++; circGeo(x, y, r, lw);
+    const ext = gr + 1;
+    push(gx, gy, -ext, -ext, 2 * ext, 2 * ext, a, 0, gr, gw, Math.min(PI, Math.max(0, arc / 2)), 0, rgbaLE(rgba), K_CONE);
   };
   G.shadow = (x, y, rx) => {
     if (seg) closeSeg();
     if (x + rx < vx0 || x - rx > vx1 || y + rx < vy0 || y - rx > vy1) return;
-    push(x, y, -rx - 2, -rx * 0.4 - 2, 2 * rx + 4, rx * 0.8 + 4, 0, 0, rx, 0, 0, 0, 0x52000000, K_SHADOW);
+    push(Math.round(x), Math.round(y), -rx - 2, -rx * 0.4 - 2, 2 * rx + 4, rx * 0.8 + 4, 0, 0, rx, 0, 0, 0, 0x52000000, K_SHADOW);
   };
   G.img = (src, x, y, w, h, alpha) => {
     if (seg) closeSeg();
