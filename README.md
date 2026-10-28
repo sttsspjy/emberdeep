@@ -14,15 +14,15 @@ No build step, no backend, no install. It is a static site: open it from any web
 |---|---|---|
 | Move | WASD or arrow keys | Left stick |
 | Aim skills | Mouse | Right stick |
-| Skill 1 (Q) | Q or left mouse | RB |
-| Skill 2 (E) | E or right mouse | LB |
+| Skill 1 (Q) | Q | RB |
+| Skill 2 (E) | E | LB |
 | Dash | Space | A |
 | Pick a level-up card | 1–4 or click | X / Y / B / RT |
 | Reroll / skip cards | R / X | |
 | Banish a card | Banish button, then click the card | |
 | Pause | Esc | Start |
 
-Weapons fire automatically. Facing weapons (Cleave, Twin Daggers, Bone Spear) swing or throw toward the nearest foe in front of you, or the nearest foe anywhere when none is in front. Keys follow the physical key position, so they work on any keyboard layout.
+Mouse buttons do nothing in a run by default; the mouse only aims. Weapons fire automatically. Facing weapons (Cleave, Twin Daggers, Bone Spear) swing or throw toward the nearest foe in front of you, or the nearest foe anywhere when none is in front. Keys follow the physical key position, so they work on any keyboard layout.
 
 Menus work with the keyboard too: arrows or WASD move between buttons, Enter presses, Esc goes back.
 
@@ -32,7 +32,7 @@ Menus work with the keyboard too: arrows or WASD move between buttons, Enter pre
 2. Collect the gems foes drop. Each level offers 3–4 cards: a new weapon, a weapon level, a passive or a skill level. Solo play pauses while you choose.
 3. A weapon at level 8 evolves when you also own its paired passive: open the next chest to evolve it. Elites drop chests.
 4. Bosses arrive at 5:00 and 10:00; the final boss at 15:00. Beat it to win.
-5. Break braziers for gold, food, a magnet or a holy bomb.
+5. Break braziers for gold, food, a magnet or a holy bomb. A brazier relights a minute after it breaks once you are away from it; elites often drop food.
 6. The results screen shows how much damage each weapon and skill dealt.
 
 ## Stages and bosses
@@ -61,9 +61,9 @@ Knight, Ranger and Pyro are open from the start. Necro: survive 10 minutes. Cler
 
 Gold buys permanent ranks at Camp (damage, health, armor, regen, speed, pickup radius, XP, gold, luck, revivals, rerolls, skips, banishes). Refund all gives every coin back.
 
-**Achievements** (main menu) lists every unlock with your progress toward it, plus your records: runs, wins, lifetime kills, best time, kills and level, and each stage's best run. **Encyclopedia** (main menu) describes every hero, weapon (with its levels and evolution recipe), passive, foe, boss and stage, locked ones included.
+**Achievements** (main menu) lists every unlock with your progress toward it, plus your records: runs, wins, lifetime kills, best time, kills and level, and each stage's best run. **Encyclopedia** (main menu) describes every hero, weapon (with its levels and evolution recipe), passive, foe, boss and stage you have met: heroes and stages you started a run with, weapons and passives you owned, foes you saw and bosses you fought. The rest shows as a dark "???" until you find it; locked heroes and stages still show how to unlock them.
 
-Progress saves in the browser automatically. Camp → **Show my code** gives a save code you can paste into **Load code** on another browser or device.
+Progress saves in the browser automatically. Camp → **Show my code** gives a save code you can paste into **Load code** on another browser or device. The code carries your Encyclopedia discoveries too; an older code still loads.
 
 ## Hosting it
 

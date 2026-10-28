@@ -59,10 +59,9 @@
     wave(w, p, ws.id, z.x, z.y, R, ringDur, S.dmg, look, 'weapon', S.stun, S.knock, 0);
     if (S.echo) wave(w, p, ws.id, z.x, z.y, R * 1.35, ringDur * 1.2, S.dmg * 0.6, look, 'weapon', S.stun, S.knock * 0.7, 0.25);
   }
-  const anyNear = (w, p, S) => !!w.nearestFoe(p.x, p.y, S.orbit * Math.sqrt(S.area) + S.r * S.area + 10);
 
   // ---------------- Toll ----------------
-  // S.n bells orbit at S.orbit px (spin rad/s); every cd each bell peals a ring of S.r px (S.dmg, S.knock, S.stun s); echo: a second, wider ring.
+  // S.n bells orbit at S.orbit px (spin rad/s); every cd each bell peals a ring of S.r px (S.dmg, S.knock, S.stun s), foes near or not; echo: a second, wider ring.
   ED.addWeapon({
     id: 'toll', name: 'Toll', icon: 'weapon.bronzebell', sig: 'bell', mode: 'around', txt: 'A bell orbits you; peals push foes',
     base: { dmg: 13, cd: 1.6, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 240, range: 0, r: 64, orbit: 42, spin: 2.4, stun: 0, echo: 0, body: 0.5 },
@@ -79,7 +78,6 @@
   }, {
     tick(w, p, ws, S, dt) { orbit(w, p, ws, S, dt, 'tollb'); },
     fire(w, p, ws, S) {
-      if (!anyNear(w, p, S)) return false;
       for (let i = 0; i < Math.max(1, S.n | 0); i++) peal(w, p, ws, S, i, 'tollw', 0.3);
       return true;
     },
@@ -102,7 +100,6 @@
       if (!st.seq) wave(w, p, ws.id, p.x, p.y - 6, S.r * S.area * 2, 0.5, S.dmg * 0.75, 'cathw', 'weapon', S.stun, S.knock, 0);
     },
     fire(w, p, ws, S) {
-      if (!anyNear(w, p, S)) return false;
       ws.st.seq = Math.max(1, S.n | 0); ws.st.seqT = 0;
       return true;
     },

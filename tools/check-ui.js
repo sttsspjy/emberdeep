@@ -131,6 +131,31 @@ async function main() {
     await page.keyboard.press('Escape');
     check(await vis(page, 'scr-title'), 'Esc leaves achievements');
 
+    console.log('encyclopedia: only what was met');
+    await page.evaluate(() => { const p = ED.App.profile; p.seen = ED.Save.normalize(p).seen; ED.App.persist(); }); // back-fill of one Knight run: Knight + Cleave
+    await page.locator('#btn-codex').click();
+    check(await vis(page, 'scr-codex'), 'Encyclopedia opens');
+    const cxNames = () => page.evaluate(() => [...document.querySelectorAll('#cx-list .cx-item')].map(b => (b.classList.contains('unseen') ? '-' : '+') + b.textContent));
+    { const n = await cxNames(); check(n[0] === '+Knight' && n.slice(1).every(x => x === '-???') && n.length === 7, 'heroes: only Knight named, the rest "???" (' + n.join(',') + ')'); }
+    check(/Evolves into \?\?\? with/.test(await page.locator('#cx-detail').innerText()), 'Knight: unmet evolution reads ???');
+    await page.locator('.cx-item[data-key="ranger"]').click();
+    { const t = await page.locator('#cx-detail').innerText(); check(/Not discovered yet/.test(t) && !/Volley|Ranger/.test(t), 'unmet open hero: only "Not discovered yet"'); }
+    await page.locator('.cx-item[data-key="necro"]').click();
+    { const t = await page.locator('#cx-detail').innerText(); check(/Not discovered yet/.test(t) && /Locked: Survive 10 minutes/.test(t) && !/Lv 4|Necro/.test(t), 'unmet locked hero: unlock line kept, nothing else'); }
+    await shot(page, 'codex-unseen');
+    await page.locator('#cx-tabs [data-tab="weapons"]').click();
+    { const n = await cxNames(), nw = await page.evaluate(() => ED.WEAPON_IDS.length); check(n.filter(x => x[0] === '+').join() === '+Cleave' && n.length === nw, 'weapons: only Cleave named of ' + nw); }
+    for (const t of ['passives', 'foes', 'bosses', 'stages']) {
+      await page.locator('#cx-tabs [data-tab="' + t + '"]').click();
+      const n = await cxNames();
+      check(n.length > 0 && n.every(x => x === '-???') && /Not discovered yet/.test(await page.locator('#cx-detail').innerText()), t + ': every entry "???" (' + n.length + ')');
+    }
+    await page.locator('.cx-item[data-key="1"]').click();
+    { const t = await page.locator('#cx-detail').innerText(); check(/Not discovered yet/.test(t) && /Locked/.test(t) && !/Glowmire|Bosses/.test(t), 'unmet locked stage: unlock line kept, nothing else'); }
+    await page.locator('#cx-tabs [data-tab="heroes"]').click();
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => { const p = ED.App.profile; for (const k of ED.Save.SEEN_KEYS) p.seen[k] = ED.Save.seenOrder(k).slice(); ED.App.persist(); });
+
     console.log('encyclopedia');
     await page.locator('#btn-codex').click();
     check(await vis(page, 'scr-codex'), 'Encyclopedia opens');
@@ -167,7 +192,7 @@ async function main() {
     await page.keyboard.press('Escape');
     await page.setViewportSize({ width: +VP[1], height: +VP[2] });
     check(await vis(page, 'scr-title'), 'Esc returns to the title');
-    await page.evaluate(() => { const p = ED.App.profile; p.stats.bestTime = 0; p.stats.bestKills = 0; p.stats.bestLevel = 0; p.played = []; ED.App.persist(); });
+    await page.evaluate(() => { const p = ED.App.profile; p.stats.bestTime = 0; p.stats.bestKills = 0; p.stats.bestLevel = 0; p.played = []; for (const k of ED.Save.SEEN_KEYS) p.seen[k] = []; ED.App.persist(); });
 
     console.log('settings and credits');
     await page.locator('#btn-settings').click();
@@ -262,10 +287,29 @@ async function main() {
     check(await page.evaluate(() => ED.Game.paused), 'still paused');
     await page.locator('#btn-resume').click();
     check(!(await page.evaluate(() => ED.Game.paused)), 'Resume unpauses');
+    // mouse buttons are unbound by default: clicks on the game do nothing; a mouse button bound by the player casts
+    const sk = () => page.evaluate(() => ED.Game.w.heroes[0].skills.map(x => x.cd));
+    await page.evaluate(() => { for (const x of ED.Game.w.heroes[0].skills) x.cd = 0; });
+    await page.mouse.click(+VP[1] / 2 + 200, +VP[2] / 2, { button: 'left' }); await page.mouse.click(+VP[1] / 2 + 200, +VP[2] / 2, { button: 'right' });
+    await wait(200);
+    check((await sk()).every(c => c === 0), 'left / right click on the game casts nothing');
+    check(await page.evaluate(() => ED.Input.label('skill1') === 'Q' && ED.Input.hint('skill1') === 'Q' && ED.Input.hint('skill2') === 'E'), 'skill hints show Q / E only');
+    check(await page.evaluate(() => ED.Input.rebind('skill1', 1, 'Mouse0').ok && ED.Input.hint('skill1') === 'Q / LMB'), 'LMB can still be bound to skill 1');
+    await page.mouse.click(+VP[1] / 2 + 200, +VP[2] / 2, { button: 'left' });
+    await wait(200);
+    { const c = await sk(); check(c[0] > 0 && c[1] === 0, 'bound LMB casts skill 1 (' + c.join(',') + ')'); }
+    await page.evaluate(() => ED.Input.setBinds(ED.App.settings.binds));
+    check(await page.evaluate(() => ED.Input.isDefault()), 'binds back to the defaults');
 
     console.log('co-op HUD: strip, teammates, arrows');
+    await page.evaluate(() => ED.App.quitRun());
+    {
+      const sn = await page.evaluate(() => ED.App.profile.seen);
+      check(sn.heroes.join() === 'knight' && sn.stages.join() === 'ossuary' && sn.weapons.length >= 6 && sn.passives.length >= 5 && sn.foes.indexOf('warden') >= 0, 'quit run records hero, stage, own weapons / passives and the boss (' + sn.weapons.length + ' weapons, ' + sn.foes.join(',') + ')');
+      check(await page.evaluate(() => JSON.parse(localStorage.getItem(ED.Save.KEY)).seen.foes.indexOf('warden') >= 0), 'seen autosaved at run end');
+    }
     await page.evaluate(() => {
-      ED.App.quitRun(); ED.UI.show('none');
+      ED.UI.show('none');
       const meta = ED.Save.metaBundle(ED.App.profile);
       ED.Game.start({ mode: 'host', seed: 3, stage: 0, myPid: 'host', cheats: { god: true }, players: [{ pid: 'host', name: 'Host', slot: 0, cls: 'knight', meta }, { pid: 'p2', name: 'Robin', slot: 1, cls: 'ranger', meta }, { pid: 'p3', name: 'Ash', slot: 2, cls: 'pyro', meta }] });
       ED.App.state = 'run';

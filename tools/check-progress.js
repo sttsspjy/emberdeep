@@ -147,9 +147,28 @@ const tick = (w, s) => { for (let i = 0; i < Math.round(s * 60); i++) w.update(C
   h.stats.luck = 0.2; wg.spawnPickup('gold', h.x + 5, h.y, 10); tick(wg, 0.5);
   ok(wg.gold === 15 + 16, 'luck adds half its value to gold: ' + (wg.gold - 15));
   const wb = world(), hb = wb.heroes[0];
+  wb.sdef = Object.assign({}, wb.sdef, { timeline: wb.sdef.timeline.map(r => Object.assign({}, r, { rate: 0, floor: 0 })) }); // no spawns: a pooled foe reused by the spawner would hide the kill
   const near = wb.spawnFoe(ED.FOE_IDS[0], hb.x + 100, hb.y), far = wb.spawnFoe(ED.FOE_IDS[0], hb.x + 600, hb.y), el = wb.spawnFoe(ED.FOE_IDS[0], hb.x - 100, hb.y, { elite: true });
   wb.spawnPickup('bomb', hb.x, hb.y, 1); tick(wb, 3 / 60);
   ok(near.dead && !far.dead && !el.dead && hb.dealt.bomb > 0, 'holy bomb kills non-elites on screen only');
+}
+// ---- braziers: drops, elite food, relight 60 s after breaking only while no living hero is within 700 px
+{
+  const w = world(), p = w.heroes[0], B = w.arena.braziers;
+  w.sdef = Object.assign({}, w.sdef, { timeline: w.sdef.timeline.map(r => Object.assign({}, r, { rate: 0, floor: 0 })), events: {}, elites: null, bosses: [] });
+  p.weapons.length = 0; p.skills.length = 0;
+  ok(B.length >= 40 && B.length <= 55, 'arena has ' + B.length + ' braziers (40-55)');
+  const drops = {}; for (const b of B) { w.breakBrazier(b, p); } for (const g of w.pickups) if (!g.dead) drops[g.k] = (drops[g.k] || 0) + 1;
+  ok(B.every(b => b.broken && b.t === w.time) && drops.food > 0, 'every brazier breaks and drops (' + JSON.stringify(drops) + ')');
+  const b = B.reduce((a, c) => (Math.hypot(c.x - p.x, c.y - p.y) < Math.hypot(a.x - p.x, a.y - p.y) ? c : a));
+  p.x = b.x + 300; p.y = b.y; tick(w, 61);
+  ok(b.broken, 'a broken brazier stays broken while a hero is within 700 px (61 s)');
+  const far = B.filter(c => Math.hypot(c.x - p.x, c.y - p.y) >= 700), lit = B.filter(c => !c.broken);
+  ok(far.length > 0 && lit.length === far.length && lit.every(c => far.includes(c)), 'exactly the braziers 700+ px from the hero relit after 60 s (' + lit.length + ' lit)');
+  p.x = b.x + 760; tick(w, 1.1);
+  ok(!b.broken && b.hp === 1, 'the hero moves 760 px away: it relights within 1 s');
+  let food = 0; for (let i = 0; i < 200; i++) { const e = w.spawnFoe('skeleton', p.x + 300, p.y, { elite: true }); const n0 = w.pickups.filter(g => g.k === 'food' && !g.dead).length; w.killFoe(e, w.src(p, 'test')); if (w.pickups.filter(g => g.k === 'food' && !g.dead).length > n0) food++; }
+  ok(food > 70 && food < 130, 'elites drop food about half the time (' + food + ' / 200)');
 }
 // ---- co-op party XP
 {

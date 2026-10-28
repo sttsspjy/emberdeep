@@ -8,7 +8,7 @@
   ED.addHero({ id: 'knight', name: 'Knight', hp: 130, speed: 85, crit: 0.05, sig: 'cleave', skills: ['charge', 'bulwark'], icon: 'hero.knight.idle', col: '#c9d4e8', txt: 'Sword and shield. Holds the line.' });
 
   // ---------------- Cleave ----------------
-  // A sword arc toward the nearest foe in reach within ED.FACING_CONE of the movement direction (with back: of either direction), else toward the nearest foe in reach; holds (retry 0.1 s) while none.
+  // A sword arc toward the nearest foe in reach within ED.FACING_CONE of the movement direction (with back: of either direction), else toward the nearest foe in reach, else along p.mdir.
   // Custom numbers: arc (rad), back (also swings behind), wave (each swing flings that many piercing crescents). S.n swings: the first at once, the rest 0.15 s apart, alternating 0.3 rad either side.
   const WAVE = { look: 'crescent', speed: 250, dmg: 0, pierce: 999, r: 12, life: 0.5, knock: 0 };
   const wave = (w, p, ws, S, a, k) => {
@@ -41,7 +41,7 @@
       let a = w.coneFoe(p, p.mdir, R);
       if (a === null && S.back) { a = w.coneFoe(p, p.mdir + Math.PI, R); if (a !== null) a += Math.PI; }
       if (a === null) a = w.nearAngle(p, R);
-      if (a === null) return false;
+      if (a === null) a = p.mdir;
       swings(w, p, ws, S, a);
       ws.st.left = (S.n | 0) - 1; ws.st.t = 0.15; ws.st.a = a;
       return true;
@@ -53,7 +53,7 @@
       swings(w, p, ws, S, st.a + (st.left % 2 ? 0.3 : -0.3));
     },
   });
-  // Whirlwind: S.n 360 degree spins 0.2 s apart around the hero; each spin flings S.wave crescents outward, rotated half a step per spin.
+  // Whirlwind: S.n 360 degree spins 0.2 s apart around the hero (with or without foes near); each spin flings S.wave crescents outward, rotated half a step per spin.
   const spin = (w, p, ws, S, k) => {
     ARC.knock = S.knock; ARC.look = 'whirl';
     w.arc(p, ws.id, p.x, p.y - 4, 0, S.range * S.area, TAU, S.dmg, ARC);
@@ -67,7 +67,6 @@
     levels: [], noAmount: true,
   }, {
     fire(w, p, ws, S) {
-      if (!w.nearestFoe(p.x, p.y, S.range * S.area + 110)) return false;
       spin(w, p, ws, S, 0);
       ws.st.left = (S.n | 0) - 1; ws.st.t = 0.2; ws.st.k = 0;
       return true;

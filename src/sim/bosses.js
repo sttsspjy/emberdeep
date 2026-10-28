@@ -1,5 +1,5 @@
 // Bosses (GAME-DESIGN §8): ED.Bosses[id] = fn(w, e, dt) (the foe brain of a boss foe def, ai 'boss'), built with ED.Bosses.lib.runner; spawn / kill / enrage / bar bookkeeping on World.
-// HP = 400 x boss minute x party factor (a multi-body boss splits it in its spawn hook). A living boss halves normal spawns (spawner). The fight ends when its last listed body dies:
+// HP = W.bossHp (foes.js: 1500 x (boss minute / 5)^2.5 x party x stage HP factor; a multi-body boss splits it in its spawn hook). A living boss halves normal spawns (spawner). The fight ends when its last listed body dies:
 // a chest (evolution first) plus gems and gold drop there, hostile shots and telegraphs of its bodies vanish; the final boss's death wins the run; at ED.CONST.ENRAGE_T a living final boss enrages (x3 damage and speed).
 // Boss attack state lives in e.vars ({ phase, st, t, atk, last, at, s: per-attack scratch, force, fq, rage }). Boss parts (foes with def.boss outside w.bossList, e.g. spore pods) drop only their def.xp gem.
 (function (ED) {
@@ -141,7 +141,7 @@
     const L = this.living; if (!L.length || !ED.FOES[b.id]) return null;
     const p = L[this.rng.int(0, L.length - 1)], pt = this.ringPoint(p, 260, 320, false) || { x: p.x + 280, y: p.y };
     const e = this.spawnFoe(b.id, pt.x, pt.y);
-    e.maxHp = e.hp = Math.round(400 * (b.t / 60) * this.partyHp()); e.hpQ = 255;
+    e.maxHp = e.hp = this.bossHp(b.t); e.hpQ = 255;
     e.final = !!b.final;
     this.bossList.push(e); this.boss = e;
     const s = B[b.id];

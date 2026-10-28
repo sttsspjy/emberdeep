@@ -4,6 +4,8 @@
 // 3. Mechanics: Sanctuary heals an ally, Judgment sweeps (hits ahead, not behind), Shadow Step blinks and recasts, Fan of Knives counts and waves,
 //    Great Peal stuns the screen and pulls gems, Hurl Bell drags foes, Toll / Cathedral bell bodies.
 // 4. 60 s solo run per hero with level-ups and Q / E spam: no exceptions, same digest twice. 5. Crowd cost at 900 foes (informational).
+// 6. No-target fire: every signature (level 1) and its evolution on its own hero, standing still facing east with no foe alive, breaks a brazier 60 px ahead
+//    within the first fire (0.4 s) + its cooldown + 0.9 s travel; a hero projectile crossing a brazier breaks it and keeps its pierce and its flight.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
@@ -196,6 +198,42 @@ for (const cls of HEROES) {
     }
   } catch (e) { err = e; }
   ok(!err && tot / n < 8, `${cls} crowd 900 (${p.weapons[0].id}, skills L4): ${(tot / n).toFixed(2)} ms/tick avg, worst ${worst.toFixed(1)} ms, zones ${w.zones.length}, projs ${w.projs.length}` + (err ? ': ' + err.stack : ''));
+}
+
+// 6. no-target fire, braziers
+{
+  // World with no foes, the hero at rest facing east (mdir 0), brazier 0 moved 60 px ahead (before the first tick builds the brazier buckets).
+  const setup = (cls, wid) => {
+    const w = world([cls], 11), p = w.heroes[0], b = w.arena.braziers[0];
+    w.foes.length = 0; p.mdir = 0; p.weapons.length = 0; w.addWeapon(p, wid);
+    b.x = Math.round(p.x + 60); b.y = Math.round(p.y); b.broken = false;
+    return { w, p, b };
+  };
+  for (const cls of ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell']) {
+    const sig = ED.HEROES[cls].sig;
+    for (const wid of [sig, ED.WEAPONS[sig].evo]) {
+      const { w, p, b } = setup(cls, wid), lim = 0.4 + w.weaponS(p, 0).cd + 0.9;
+      let t = 0, shots = 0, err = null;
+      try {
+        for (; t < lim && !b.broken; t += C.TICK) {
+          w.update(C.TICK);
+          for (const ev of w.events) if (ev.t === 'shoot') shots++;
+          w.events.length = 0;
+          if (w.foes.some(e => !e.dead)) throw new Error('a foe spawned');
+        }
+      } catch (e) { err = e; }
+      ok(!err && shots > 0 && b.broken, `${wid}: fires with no foe (${shots} shot${shots === 1 ? '' : 's'}) and breaks a brazier 60 px ahead` +
+        (b.broken ? ` in ${t.toFixed(2)} s` : ` (not within ${lim.toFixed(2)} s)`) + (err ? ': ' + err.message : ''));
+    }
+  }
+  const { w, p, b } = setup('ranger', 'longbow');
+  p.weapons.length = 0;
+  const pr = w.shoot(p, 'longbow', b.x - 40, b.y, 0, null, { look: 'arrow', dmg: 5, speed: 300, pierce: 1, life: 1 });
+  for (let i = 0; i < 18; i++) { w.update(C.TICK); w.events.length = 0; }
+  ok(b.broken && !pr.dead && pr.pierce === 1 && pr.x > b.x + 20, `hero projectile breaks a brazier without spending pierce (broken ${b.broken}, alive ${!pr.dead}, pierce ${pr.pierce}, x +${Math.round(pr.x - b.x)})`);
+  const b2 = w.arena.braziers[1], e = w.foeShoot({ id: 1, x: b2.x - 40, y: b2.y + 4, r: 8 }, 0, 300, 'bolt', 1, 4);
+  for (let i = 0; i < 18; i++) { w.update(C.TICK); w.events.length = 0; }
+  ok(!b2.broken && e, 'foe projectiles never break braziers');
 }
 
 console.log(`check-heroes-b: ${fails ? fails + ' failure(s)' : 'all passed'} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);

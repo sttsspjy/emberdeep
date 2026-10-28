@@ -7,11 +7,10 @@
   ED.addHero({ id: 'ranger', name: 'Ranger', hp: 90, speed: 100, crit: 0.08, sig: 'longbow', skills: ['volley', 'snare'], icon: 'hero.ranger.idle', col: '#9fd38a', txt: 'Arrows at the nearest foe. Fast feet.' });
 
   // ---------------- Longbow ----------------
-  // S.n arrows in a fan (0.12 rad apart) at the nearest foe within S.range; back: the same fan behind; ring: every S.ring-th volley adds a full ring of S.ringN arrows.
+  // S.n arrows in a fan (0.12 rad apart) at the nearest foe within S.range, else along p.mdir; back: the same fan behind; ring: every S.ring-th volley adds a full ring of S.ringN arrows.
   const fan = (w, p, ws, S, opt) => {
     const t = w.nearestFoe(p.x, p.y, S.range);
-    if (!t) return false;
-    const a = Math.atan2(t.y - p.y, t.x - p.x), n = Math.max(1, S.n | 0);
+    const a = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.mdir, n = Math.max(1, S.n | 0);
     for (let i = 0; i < n; i++) {
       const o = (i - (n - 1) / 2) * 0.12;
       w.shoot(p, ws.id, p.x, p.y - 6, a + o, S, opt);

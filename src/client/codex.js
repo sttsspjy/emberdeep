@@ -1,6 +1,8 @@
 // Achievements and Encyclopedia screens (client only; DOM in #scr-achieve / #scr-codex, shown through ED.UI.show).
 // ED.Codex.renderAchievements(): one row per ED.UNLOCKS unlock (non-start heroes, non-start stages, signature weapons via sigAfterRun) with progress from ED.App.profile, plus lifetime and per-stage records.
-// ED.Codex.renderCodex(tab?): tab row (heroes | weapons | passives | foes | bosses | stages), entry list and detail pane, read from the data tables; nothing is gated (locked heroes / stages show their unlock line).
+// ED.Codex.renderCodex(tab?): tab row (heroes | weapons | passives | foes | bosses | stages), entry list and detail pane, read from the data tables. Only what the profile has met
+// (profile.seen via ED.Save.isSeen; bosses by their foe id) is described: the rest lists as a '???' silhouette whose detail says 'Not discovered yet' (plus the unlock line for
+// locked heroes / stages), and cross-references to unmet entries read '???'.
 // List entries select on click or on keyboard focus (a hover-focus never changes the detail).
 (function (ED) {
   'use strict';
@@ -23,6 +25,8 @@
   const finalBoss = (sd) => (sd.bosses || []).find(b => b.final) || (sd.bosses || [])[0];
   const stageIcon = (i) => { const b = finalBoss(ED.STAGES[i]); return b ? foeIcon(b.id) : ''; };
   const passName = (id) => (ED.PASSIVES[id] ? ED.PASSIVES[id].name : id);
+  const UNSEEN = 'Not discovered yet';
+  const seen = (k, id) => SV.isSeen(App().profile, k, id);
   const MODE = { facing: 'Toward your facing', nearest: 'Nearest foe', around: 'Around you', random: 'Random foes', densest: 'Densest crowd' };
 
   // ---------------- achievements ----------------
@@ -88,9 +92,10 @@
   const chips = (box, pairs) => box.appendChild(div('cx-chips', pairs.filter(Boolean).map(x => `<span>${esc(x[0])} <b>${esc(x[1])}</b></span>`).join('')));
   const h3 = (box, t) => box.appendChild(div('cx-h', esc(t)));
   const para = (box, t, cls) => box.appendChild(div('cx-p' + (cls ? ' ' + cls : ''), esc(t)));
-  // Icon row: [icon] name (+ key badge) / second line.
-  const ref = (box, icon, name, txt, key) => {
-    const d = div('cx-ref'); d.appendChild(UI.iconCanvas(icon, 48));
+  // Icon row: [icon] name (+ key badge) / second line; hide: silhouette, '???' and UNSEEN instead of name and line.
+  const ref = (box, icon, name, txt, key, hide) => {
+    if (hide) { name = '???'; txt = UNSEEN; }
+    const d = div('cx-ref' + (hide ? ' unseen' : '')); d.appendChild(UI.iconCanvas(icon, 48));
     d.insertAdjacentHTML('beforeend', `<b>${key ? `<span class="key">${esc(key)}</span>` : ''}${esc(name)}</b>${txt ? `<span>${esc(txt)}</span>` : ''}`);
     box.appendChild(d); return d;
   };
@@ -110,13 +115,13 @@
   const evoLine = (box, d) => {
     if (d.evolved) {
       const f = ED.WEAPONS[d.from];
-      if (f) { h3(box, 'Evolved from'); ref(box, f.icon, f.name, 'At level ' + ED.WEAPON_MAX_LVL + (f.pair ? ' with ' + passName(f.pair) : '') + ', at a chest'); }
+      if (f) { h3(box, 'Evolved from'); ref(box, f.icon, f.name, 'At level ' + ED.WEAPON_MAX_LVL + (f.pair ? ' with ' + passName(f.pair) : '') + ', at a chest', '', !seen('weapons', f.id)); }
       return;
     }
     const e = ED.WEAPONS[d.evo]; if (!e) return;
     h3(box, 'Evolution');
     if (d.pair && ED.PASSIVES[d.pair]) ref(box, ED.PASSIVES[d.pair].icon, 'Needs ' + passName(d.pair), 'Weapon at level ' + ED.WEAPON_MAX_LVL + ', then open a chest');
-    ref(box, e.icon, e.name, e.txt);
+    ref(box, e.icon, e.name, e.txt, '', !seen('weapons', e.id));
   };
 
   const heroDetail = (box, cls) => {
@@ -129,7 +134,7 @@
       h3(box, 'Signature weapon');
       ref(box, sig.icon, sig.name, sig.txt);
       const e = ED.WEAPONS[sig.evo];
-      if (e) para(box, 'Evolves into ' + e.name + ' with ' + passName(sig.pair) + '.');
+      if (e) para(box, 'Evolves into ' + (seen('weapons', e.id) ? e.name : '???') + ' with ' + passName(sig.pair) + '.');
     }
     h3(box, 'Skills');
     skillBlock(box, h.skills[0], UI.keyOf('skill1', 'Q'));
@@ -156,7 +161,8 @@
     if (d.lines) lvls(box, d.lines.map((t, i) => ['Lv ' + (i + 1), t]));
     else lvls(box, [['Each', d.txt], ['Lv ' + d.max, scaled(d.txt, d.max)]]);
     const evo = ED.WEAPON_IDS.map(w => ED.WEAPONS[w]).filter(w => w.pair === id && !w.evolved && ED.WEAPONS[w.evo]);
-    if (evo.length) { h3(box, 'Evolves'); for (const w of evo) ref(box, ED.WEAPONS[w.evo].icon, w.name + ' > ' + ED.WEAPONS[w.evo].name, w.sig && ED.HEROES[w.sig] ? ED.HEROES[w.sig].name + ' signature' : ''); }
+    const nm = (d) => (seen('weapons', d.id) ? d.name : '???');
+    if (evo.length) { h3(box, 'Evolves'); for (const w of evo) { const e = ED.WEAPONS[w.evo], r = ref(box, e.icon, nm(w) + ' > ' + nm(e), w.sig && ED.HEROES[w.sig] ? ED.HEROES[w.sig].name + ' signature' : ''); if (!seen('weapons', e.id)) r.classList.add('unseen'); } }
   };
 
   // Foe appearances: { id: [{ stage, min }] } from the stage timelines; split children inherit the parent's.
@@ -201,10 +207,11 @@
     weaver: ['Rift gates open into portals that shoot; threads cross your spot; blink with a bolt ring', '66%: three gates, threads stay as strands, adds', '33%: four gates firing faster, four threads per weave'],
     wickeater: ['Devour: a warned cone drags you toward its bite', 'Closing dark: a shrinking ring, walk through its gap or dash', 'Lash fans and spiralling orb blooms; it swells at 33%'],
   };
+  const bossOf = (key) => { const [si, bi] = key.split(':').map(Number); return ED.STAGES[si].bosses[bi]; }; // 'stage:index' -> stage boss row { id, t, final }
   const bossDetail = (box, key) => {
     const [si, bi] = key.split(':').map(Number), sd = ED.STAGES[si], b = sd.bosses[bi], d = ED.FOES[b.id];
     head(box, foeIcon(b.id), d.name, (b.final ? 'Final boss' : 'Mid-boss') + ', ' + sd.name + ' at ' + U.fmtTime(b.t), '');
-    chips(box, [['HP', U.fmtNum(Math.round(400 * b.t / 60)) + ' solo'], ['Speed', d.spd]]);
+    chips(box, [['HP', U.fmtNum(ED.bossHp(b.t, (sd.foe && sd.foe.hp) || 1)) + ' solo'], ['Speed', d.spd]]);
     h3(box, 'Attacks');
     lvls(box, (BOSS_TXT[b.id] || []).map((t, i) => [String(i + 1), t]));
     para(box, 'Every attack is telegraphed: a red outline marks where it lands.', 'mut');
@@ -218,7 +225,7 @@
     if (!open) lockLine(box, p, rule);
     chips(box, [['Foe HP', 'x' + sd.foe.hp], ['Foe damage', 'x' + sd.foe.dmg]]);
     h3(box, 'Bosses');
-    for (const b of sd.bosses) if (ED.FOES[b.id]) ref(box, foeIcon(b.id), ED.FOES[b.id].name, U.fmtTime(b.t) + (b.final ? ', final boss' : ''));
+    for (const b of sd.bosses) if (ED.FOES[b.id]) { const on = seen('foes', b.id), r = ref(box, foeIcon(b.id), on ? ED.FOES[b.id].name : '???', U.fmtTime(b.t) + (b.final ? ', final boss' : '')); if (!on) r.classList.add('unseen'); }
     const ev = sd.events && sd.events.swarm;
     if (ev) para(box, 'Swarm wave every ' + ev.every + ' s from ' + U.fmtTime(ev.first));
     if (sd.elites) para(box, 'Elite every ' + sd.elites.every + ' s from ' + U.fmtTime(sd.elites.first) + ': it drops a chest');
@@ -226,15 +233,22 @@
     h3(box, 'Foes');
     const ap = appearances(), ids = Object.keys(ap).filter(id => ap[id].some(a => a.stage === i)).sort((a, b) => ap[a].find(x => x.stage === i).min - ap[b].find(x => x.stage === i).min);
     const ro = div('cx-roster');
-    for (const id of ids) { const s = document.createElement('span'); s.appendChild(UI.iconCanvas(foeIcon(id), 48)); s.insertAdjacentHTML('beforeend', esc(ED.FOES[id].name)); ro.appendChild(s); }
+    for (const id of ids) { const s = document.createElement('span'), on = seen('foes', id); if (!on) s.className = 'unseen'; s.appendChild(UI.iconCanvas(foeIcon(id), 48)); s.insertAdjacentHTML('beforeend', esc(on ? ED.FOES[id].name : '???')); ro.appendChild(s); }
     box.appendChild(ro);
   };
 
+  // Unmet entry: silhouette icon, '???', UNSEEN; rule (a locked hero / stage) adds its unlock line and progress.
+  const unseenDetail = (box, icon, rule) => {
+    head(box, icon, '???', '', UNSEEN, { locked: true });
+    if (rule) lockLine(box, App().profile, rule);
+  };
+
   // ---------------- encyclopedia: tabs and lists ----------------
-  // Entry: { key, icon, name, cls } or { sec } (a list heading).
+  // Entry: { key, icon, name, cls } or { sec } (a list heading). Tab: kind (profile.seen list), seenId(key) (id in that list, default the key), hidden(box, key) (unmet entry).
   const TABS = [
-    { id: 'heroes', name: 'Heroes', detail: heroDetail, list: () => ED.HERO_IDS.filter(c => ED.HEROES[c]).map(c => ({ key: c, icon: UI.heroIcon(c), name: ED.HEROES[c].name, cls: SV.heroUnlocked(App().profile, c) ? '' : 'locked' })) },
-    { id: 'weapons', name: 'Weapons', detail: weaponDetail, list: () => {
+    { id: 'heroes', name: 'Heroes', kind: 'heroes', detail: heroDetail,
+      hidden: (box, c) => unseenDetail(box, UI.heroIcon(c), SV.heroUnlocked(App().profile, c) ? null : ED.UNLOCKS.heroes[c] || {}), list: () => ED.HERO_IDS.filter(c => ED.HEROES[c]).map(c => ({ key: c, icon: UI.heroIcon(c), name: ED.HEROES[c].name, cls: SV.heroUnlocked(App().profile, c) ? '' : 'locked' })) },
+    { id: 'weapons', name: 'Weapons', kind: 'weapons', detail: weaponDetail, hidden: (box, id) => unseenDetail(box, ED.WEAPONS[id].icon), list: () => {
       const W = ED.WEAPON_IDS.map(id => ED.WEAPONS[id]), out = [];
       const grp = (sec, ws) => { if (!ws.length) return; out.push({ sec }); for (const w of ws) out.push({ key: w.id, icon: w.icon, name: w.name, cls: w.evolved ? 'evo' : '' }); };
       const withEvo = (ws) => ws.flatMap(w => [w].concat(W.filter(e => e.evolved && e.from === w.id)));
@@ -243,8 +257,8 @@
       const seen = new Set(out.map(o => o.key)); grp('Other evolutions', W.filter(w => w.evolved && !seen.has(w.id)));
       return out;
     } },
-    { id: 'passives', name: 'Passives', detail: passiveDetail, list: () => (ED.PASSIVE_IDS || Object.keys(ED.PASSIVES)).filter(id => ED.PASSIVES[id]).map(id => ({ key: id, icon: ED.PASSIVES[id].icon, name: ED.PASSIVES[id].name })) },
-    { id: 'foes', name: 'Foes', detail: foeDetail, list: () => {
+    { id: 'passives', name: 'Passives', kind: 'passives', detail: passiveDetail, hidden: (box, id) => unseenDetail(box, ED.PASSIVES[id].icon), list: () => (ED.PASSIVE_IDS || Object.keys(ED.PASSIVES)).filter(id => ED.PASSIVES[id]).map(id => ({ key: id, icon: ED.PASSIVES[id].icon, name: ED.PASSIVES[id].name })) },
+    { id: 'foes', name: 'Foes', kind: 'foes', detail: foeDetail, hidden: (box, id) => unseenDetail(box, foeIcon(id)), list: () => {
       const ap = appearances(), out = [];
       ED.STAGES.forEach((sd, i) => {
         const ids = Object.keys(ap).filter(id => ED.FOES[id] && !ED.FOES[id].boss && ap[id][0].stage === i).sort((a, b) => ap[a][0].min - ap[b][0].min || ED.FOES[a].idx - ED.FOES[b].idx);
@@ -254,17 +268,19 @@
       });
       return out;
     } },
-    { id: 'bosses', name: 'Bosses', detail: bossDetail, list: () => {
+    { id: 'bosses', name: 'Bosses', kind: 'foes', seenId: (k) => bossOf(k).id, detail: bossDetail, hidden: (box, k) => unseenDetail(box, foeIcon(bossOf(k).id)), list: () => {
       const out = [];
       ED.STAGES.forEach((sd, i) => { out.push({ sec: sd.name }); (sd.bosses || []).forEach((b, j) => { if (ED.FOES[b.id]) out.push({ key: i + ':' + j, icon: foeIcon(b.id), name: ED.FOES[b.id].name, cls: b.final ? 'evo' : '' }); }); });
       return out;
     } },
-    { id: 'stages', name: 'Stages', detail: (box, k) => stageDetail(box, +k), list: () => ED.STAGES.map((sd, i) => ({ key: String(i), icon: stageIcon(i), name: (i + 1) + '. ' + sd.name, cls: SV.stageUnlocked(App().profile, i) ? '' : 'locked' })) },
+    { id: 'stages', name: 'Stages', kind: 'stages', seenId: (k) => ED.STAGE_IDS[+k], detail: (box, k) => stageDetail(box, +k),
+      hidden: (box, k) => unseenDetail(box, stageIcon(+k), SV.stageUnlocked(App().profile, +k) ? null : ED.UNLOCKS.stages[+k] || {}), list: () => ED.STAGES.map((sd, i) => ({ key: String(i), icon: stageIcon(i), name: (i + 1) + '. ' + sd.name, cls: SV.stageUnlocked(App().profile, i) ? '' : 'locked' })) },
   ];
   const tabOf = (id) => TABS.find(t => t.id === id) || TABS[0];
+  const met = (tab, key) => seen(tab.kind, tab.seenId ? tab.seenId(key) : key);
   const showDetail = (tab, key) => {
     const box = $('cx-detail'); box.textContent = ''; box.scrollTop = 0;
-    if (key !== undefined && key !== null) tab.detail(box, key);
+    if (key !== undefined && key !== null) (met(tab, key) ? tab.detail : tab.hidden)(box, key);
   };
   const select = (key) => {
     const tab = tabOf(C.tab); if (C.sel[tab.id] === key && $('cx-detail').childNodes.length) return;
@@ -289,11 +305,11 @@
     if (keys.indexOf(C.sel[tab.id]) < 0) C.sel[tab.id] = keys[0];
     for (const e of entries) {
       if (e.sec) { list.appendChild(div('cx-sec', esc(e.sec))); continue; }
-      const b = document.createElement('button'), on = e.key === C.sel[tab.id];
-      b.className = 'cx-item' + (e.cls ? ' ' + e.cls : '') + (on ? ' on' : ''); b.dataset.key = e.key;
+      const b = document.createElement('button'), on = e.key === C.sel[tab.id], known = met(tab, e.key);
+      b.className = 'cx-item' + (e.cls ? ' ' + e.cls : '') + (known ? '' : ' unseen') + (on ? ' on' : ''); b.dataset.key = e.key;
       b.setAttribute('role', 'option'); b.setAttribute('aria-selected', on ? 'true' : 'false');
       b.appendChild(UI.iconCanvas(e.icon, 48));
-      b.insertAdjacentHTML('beforeend', `<span>${esc(e.name)}</span>`);
+      b.insertAdjacentHTML('beforeend', `<span>${esc(known ? e.name : '???')}</span>`);
       b.onclick = () => select(e.key);
       b.onfocus = () => { if (!b.matches(':hover')) select(e.key); };
       list.appendChild(b);

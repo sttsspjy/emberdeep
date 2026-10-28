@@ -64,7 +64,7 @@
   ED.Necro = { liveMinions, raise };
 
   // ---------------- Bone Shard ----------------
-  // S.n piercing shards (0.14 rad fan) at the nearest foe; homing (turn rad/s); mshot: every minion also throws one shard at its target (or the nearest foe).
+  // S.n piercing shards (0.14 rad fan) at the nearest foe, else along p.mdir; homing (turn rad/s); mshot: every minion also throws one shard at its target (or the nearest foe).
   // S.rise: chance that a non-boss foe the holder kills (by any source) rises as a minion while under the cap (8, Bone Storm 16).
   const SHARD = { look: 'bone', homing: 0 };
   const riseKill = (w, p, ws, S, e) => {
@@ -92,8 +92,8 @@
     pair: 'haste', evo: 'bonestorm',
   }, {
     fire(w, p, ws, S) {
-      const t = w.nearestFoe(p.x, p.y, S.range); if (!t) return false;
-      const a = Math.atan2(t.y - p.y, t.x - p.x), n = Math.max(1, S.n | 0);
+      const t = w.nearestFoe(p.x, p.y, S.range);
+      const a = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.mdir, n = Math.max(1, S.n | 0);
       SHARD.homing = S.homing || 0;
       for (let i = 0; i < n; i++) w.shoot(p, ws.id, p.x, p.y - 6, a + (i - (n - 1) / 2) * 0.14, S, SHARD);
       if (S.mshot) minionShots(w, p, ws, S, SHARD);
@@ -101,7 +101,7 @@
     },
     kill: riseKill,
   });
-  // Bone Storm: S.n shards orbit the hero (radius 30, S.orbit s, re-hitting foes they touch), then launch at the nearest foe (homing); minions throw shards; minion cap 16.
+  // Bone Storm: S.n shards orbit the hero (radius 30, S.orbit s, re-hitting foes they touch), then launch at the nearest foe (homing), else along p.mdir; minions throw shards; minion cap 16.
   const orbitTick = (w, pr) => {
     const s = pr.st, p = pr.p;
     if (s.go) return;
@@ -111,7 +111,7 @@
       return;
     }
     s.go = true;
-    const t = w.nearestFoe(pr.x, pr.y, s.range), a = t ? Math.atan2(t.y - pr.y, t.x - pr.x) : Math.atan2(pr.y - p.y + 6, pr.x - p.x);
+    const t = w.nearestFoe(pr.x, pr.y, s.range), a = t ? Math.atan2(t.y - pr.y, t.x - pr.x) : p.mdir;
     pr.vx = Math.cos(a) * pr.sp; pr.vy = Math.sin(a) * pr.sp; pr.hits.length = 0; pr.rehit = 0; pr.pierce = s.pierce; pr.homing = 2.5;
   };
   const STORM = { look: 'bone', pierce: 999, rehit: 0.25, life: 1, tick: orbitTick, st: null };
@@ -121,7 +121,6 @@
     levels: [],
   }, {
     fire(w, p, ws, S) {
-      if (!w.nearestFoe(p.x, p.y, S.range)) return false;
       const n = Math.max(1, S.n | 0), a0 = w.time * 3;
       STORM.life = S.orbit + S.range / S.speed;
       for (let i = 0; i < n; i++) {

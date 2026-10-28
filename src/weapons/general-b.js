@@ -14,7 +14,7 @@
   };
 
   // ---------------- Bone Spear / Impaler ----------------
-  // Spears fly toward the nearest foe within ED.FACING_CONE of the movement direction (else the nearest foe in range), S.n in a fan 0.16 rad apart; back / cross add the rear / side directions. shards: each spear bursts into 3 bone shards at its end.
+  // Spears fly toward the nearest foe within ED.FACING_CONE of the movement direction (else the nearest foe in range, else along it; fires with no foe near), S.n in a fan 0.16 rad apart; back / cross add the rear / side directions. shards: each spear bursts into 3 bone shards at its end.
   const SP = { look: 'spear', r: 5, onEnd: null };
   const SHARD = { look: 'bone', dmg: 0, pierce: 1, speed: 300, life: 0.35, r: 3, knock: 30 };
   const shardEnd = (w, pr) => {
@@ -41,7 +41,6 @@
     pair: 'might', evo: 'impaler',
   }, {
     fire(w, p, ws, S) {
-      if (!w.nearestFoe(p.x, p.y, S.range)) return false;
       const a = w.facingAim(p, p.mdir, S.range);
       SP.r = 5 * S.area; SP.onEnd = S.shards ? shardEnd : null;
       fan(w, p, ws, S, a, 0.16, SP);
@@ -86,7 +85,6 @@
     levels: [],
   }, {
     fire(w, p, ws, S) {
-      if (!w.nearestFoe(p.x, p.y, S.range)) return false;
       const n = Math.max(1, S.n | 0), a0 = w.facingAim(p, p.mdir, S.range);
       IMP.r = 7 * S.area;
       for (let i = 0; i < n; i++) {

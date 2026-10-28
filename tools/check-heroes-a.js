@@ -1,7 +1,7 @@
 // Headless check for heroes Knight, Ranger, Pyro, Necro (exit 1 on failure). Usage: node tools/check-heroes-a.js
 // Per hero (god cheat, from 4:00 so the horde is dense): 4 phases of 15 s with skill level 1..4 and signature level 2/4/6/8, then 20 s evolved (pair passive owned).
 // Q and E are held every tick (cast on cooldown), aimed at the nearest foe; fodder rings keep targets near the hero. Each phase: no exception, both skills cast, the signature and both skills deal damage.
-// Extras: these signatures (base and evolved) on other heroes (Bone Shard / Bone Storm raise minions for them too), Cleave aims inside the facing cone, shape flags reach
+// Extras: these signatures (base and evolved) on other heroes (Bone Shard / Bone Storm raise minions for them too), Cleave aims inside the facing cone (no foe: along it), shape flags reach
 // the effective numbers, necro minions rise / obey the cap and Corpse Blast detonates,
 // same seed -> same digest, no NaN positions.
 'use strict';
@@ -96,7 +96,7 @@ for (const [cls, ids] of [['cleric', ['longbow', 'firebolt', 'boneshard', 'cleav
   ok(!err && ids.every(id => p.dealt[id] > 0), `${cls} carrying ${ids.join(', ')}: ${dealt.join(', ')}` + (err ? ': ' + err.stack : ''));
   ok(maxMin > 0, `${cls} carrying ${ids[2]}: the slain rise (peak ${maxMin} minions)`);
 }
-// Cleave aims at a foe inside the facing cone, falls back to the nearest foe in reach (behind), holds with no foe in reach.
+// Cleave aims at a foe inside the facing cone, falls back to the nearest foe in reach (behind), swings along the facing with no foe in reach.
 {
   const w = new ED.World({ seed: 3, stage: 0, players: [{ pid: 'p1', cls: 'knight' }], cheats: { god: true } }), p = w.heroes[0];
   w.foes.length = 0; p.mdir = 0;
@@ -107,7 +107,7 @@ for (const [cls, ids] of [['cleric', ['longbow', 'firebolt', 'boneshard', 'cleav
   for (const e of w.foes) e.dead = true; w.spawnFoe(FODDER, p.x + 300, p.y); const a3 = fire();
   ok(a1 !== null && Math.abs(U.angDiff(a1, 1.2)) < 0.15, `knight: Cleave swings at a foe 69 deg off its facing (a ${a1 && a1.toFixed(2)})`);
   ok(a2 !== null && Math.abs(U.angDiff(a2, Math.PI)) < 0.15, `knight: Cleave swings at the only foe, behind (a ${a2 && a2.toFixed(2)})`);
-  ok(a3 === null, 'knight: Cleave holds with no foe in reach');
+  ok(a3 !== null && Math.abs(U.angDiff(a3, 0)) < 1e-9, `knight: Cleave swings along its facing with no foe in reach (a ${a3 && a3.toFixed(2)})`);
 }
 // Shape flags reach the effective numbers.
 {

@@ -46,8 +46,9 @@
       }
     }
   }
-  // Picks up to n distinct random foes on screen (ids in a reused buffer) and drops a pillar on each. Returns whether any fell.
-  const picked = [];
+  // Picks up to n distinct random foes on screen (ids in a reused buffer) and drops a pillar on each. With no foe on screen, n pillars stride ahead along p.mdir
+  // (step max(60, 2.5 r), squeezed so the last stays within S.range and STRIDE_IN px of the view edge). Always fires.
+  const picked = [], STRIDE_IN = 16, HW = ED.CONST.VIEW_W / 2 - STRIDE_IN, HH = ED.CONST.VIEW_H / 2 - STRIDE_IN;
   function strike(w, p, ws, S, mask) {
     const n = Math.max(1, S.n | 0), r = S.r * S.area;
     picked.length = 0;
@@ -58,11 +59,16 @@
       picked.push(t.id);
       pillar(w, p, ws.id, t.x, t.y, r, S.dmg, S.knock, mask, FALL);
     }
-    return picked.length > 0;
+    if (picked.length) return true;
+    const c = Math.cos(p.mdir), s = Math.sin(p.mdir);
+    const reach = Math.min(S.range, Math.abs(c) > 1e-6 ? HW / Math.abs(c) : Infinity, Math.abs(s) > 1e-6 ? HH / Math.abs(s) : Infinity);
+    const step = Math.min(Math.max(60, 2.5 * r), reach / n);
+    for (let i = 1; i <= n; i++) pillar(w, p, ws.id, p.x + c * step * i, p.y + s * step * i, r, S.dmg, S.knock, mask, FALL);
+    return true;
   }
 
   // ---------------- Smite ----------------
-  // S.n pillars on distinct random foes on screen; custom: r (pillar radius), echo, conse (booleans from levels).
+  // S.n pillars on distinct random foes on screen (none on screen: a stride of pillars ahead, see strike); custom: r (pillar radius), echo, conse (booleans from levels).
   ED.addWeapon({
     id: 'smite', name: 'Smite', icon: 'weapon.mace', sig: 'cleric', mode: 'random', txt: 'Holy pillars on random foes',
     base: { dmg: 20, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 70, range: 400, r: 22 },

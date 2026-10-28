@@ -32,7 +32,7 @@ ED.STAGES.forEach((sd, si) => {
   const tl = sd.timeline;
   ok(tl.length === 16 && tl[0].cap === 300 && tl[12].cap === 700 && tl[15].cap === 700, `${sd.id}: 16 rows, cap ${tl[0].cap} -> ${tl[12].cap}`);
   ok(tl[10].rate >= tl[0].rate * 6 && tl.every((r, m) => m === 0 || m === 15 || r.rate >= tl[m - 1].rate), `${sd.id}: rate ${tl[0].rate} -> ${tl[10].rate} -> ${tl[14].rate}, never drops before 15:00`);
-  ok(tl[0].floor === 0 && tl[3].floor === 0.3 && tl.slice(6).every(r => r.floor === 0.6), `${sd.id}: density floor ${tl.map(r => r.floor).slice(0, 7).join(' ')} of the cap`);
+  ok(tl[0].floor === 0.1 && tl[4].floor === 0.3 && tl[9].floor === 0.55 && tl.slice(10).every(r => r.floor === 0.6), `${sd.id}: density floor ${tl.map(r => r.floor).slice(0, 7).join(' ')} of the cap`);
   const shifts = tl.filter((r, m) => m > 0 && JSON.stringify(r.roster) !== JSON.stringify(tl[m - 1].roster)).length;
   ok(shifts >= 13, `${sd.id}: roster weights shift ${shifts} of 15 minutes`);
   ok(JSON.stringify(sd.bosses.map(b => b.id)) === JSON.stringify(BOSSES[si]) && sd.bosses[2].final && sd.bosses.map(b => b.t).join() === '300,600,900', `${sd.id}: bosses ${sd.bosses.map(b => b.id + '@' + b.t).join(' ')}`);
@@ -155,10 +155,29 @@ for (const st of [0, 1, 2]) {
   const hi = floorRun(8, 1, true);
   ok(Math.abs(hi.k - 1) < 1e-6, `density floor at 8:00 (${hi.need} foes): rate x${hi.k.toFixed(2)} at the floor`);
 }
+{ // spawn spread: the opening wave (density floor at 0:00) surrounds a still hero from every octant; swarm packs are 4-6 at 0:00, 12-16 at 5:00, 20-30 at 10:00
+  const w = new ED.World({ seed: 77, stage: 0, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];
+  p.weapons.length = 0; p.skills.length = 0;
+  for (let i = 0; i < 30; i++) { w.update(C.TICK); w.events.length = 0; }
+  const oct = new Array(8).fill(0);
+  for (const e of w.foes) oct[Math.floor(((Math.atan2(e.y - p.y, e.x - p.x) + U.TAU) % U.TAU) / U.TAU * 8) % 8]++;
+  ok(w.foes.length >= 25 && oct.every(n => n >= 1) && Math.max(...oct) <= w.foes.length * 0.3, `opening wave: ${w.foes.length} foes, per octant ${oct.join(' ')}`);
+  const packs = (min) => {
+    const v = new ED.World({ seed: 78, stage: 0, players: players(['knight']), cheats: { god: true } }), out = [];
+    v.sdef = Object.assign({}, v.sdef, { timeline: v.sdef.timeline.map(r => Object.assign({}, r, { rate: 0, floor: 0, roster: [['bat', 1]] })), events: {}, elites: null, bosses: [] });
+    v.time = min * 60;
+    for (let i = 0; i < 30; i++) { for (const e of v.foes) e.dead = true; v.foes.length = 0; v.sp.acc = 1; v.updateSpawner(0); if (v.foes.length) out.push(v.foes.length); }
+    return out.sort((a, b) => a - b);
+  };
+  for (const [min, lo, hi] of [[0, 4, 6], [5, 12, 16], [10, 20, 30]]) {
+    const s = packs(min), med = s[s.length >> 1];
+    ok(s.length >= 20 && s[s.length - 1] <= hi && med >= lo, `swarm packs at ${min}:00: ${s[0]}-${s[s.length - 1]} (median ${med}, design ${lo}-${hi})`);
+  }
+}
 { // a boss id without a script spawns a stand-in brute boss
   const r = spawnRun(0, 302, (w) => { w.sdef = Object.assign({}, w.sdef, { bosses: [{ t: 300, id: 'nobody' }] }); });
   const e = r.w.boss;
-  ok(e && e.boss && e.elite && e.def.brute && e.maxHp === 2000, `missing boss script: stand-in ${e && e.def.id} (hp ${e && e.maxHp})`);
+  ok(e && e.boss && e.elite && e.def.brute && e.maxHp === 1500, `missing boss script: stand-in ${e && e.def.id} (hp ${e && e.maxHp})`);
 }
 
 // ---------------- 4. recycling ----------------

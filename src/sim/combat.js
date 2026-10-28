@@ -1,4 +1,5 @@
-// Damage pipeline and hit primitives (ARCHITECTURE §6): hitFoe, statuses, pooled projectiles and zones (telegraphs are warn zones), hurtHero, per-tick hit-event aggregation.
+// Damage pipeline and hit primitives (ARCHITECTURE §6): hitFoe, statuses, pooled projectiles and zones (telegraphs are warn zones), hurtHero, per-tick hit-event aggregation, braziers.
+// Braziers break on any hero hit: arc / blast reach, hero projectile contact (no pierce spent, flight continues; bucketed per arena), and the skills / zones that call hitBraziers.
 // Primitives emit their own events ('swing', 'boom', 'chain'); the weapon runtime emits 'shoot'. src objects come from a 64-slot ring (w.src) so nested hits never clobber a caller's src.
 (function (ED) {
   'use strict';
@@ -225,6 +226,35 @@
     this.projs.push(pr);
     return pr;
   };
+  // Brazier buckets for hero projectiles: CSR lists (start, idx) of brazier indices per BCELL px cell; each brazier is filed into every cell its circle + BPAD touches.
+  // Built once per arena (pure from the seed). projBraziers(pr): breaks every intact brazier pr touches (a radius above BPAD falls back to the linear scan); pierce and flight are untouched.
+  const BCELL = 128, BPAD = 24;
+  W.brzGrid = function () {
+    const A = this.arena;
+    if (this.brzA === A) return this.brzG;
+    const B = A.braziers, cw = Math.max(1, Math.ceil(A.size / BCELL)), start = new Int32Array(cw * cw + 1);
+    const span = (b, f) => {
+      const x0 = U.clamp(Math.floor((b.x - b.r - BPAD) / BCELL), 0, cw - 1), x1 = U.clamp(Math.floor((b.x + b.r + BPAD) / BCELL), 0, cw - 1);
+      const y0 = U.clamp(Math.floor((b.y - b.r - BPAD) / BCELL), 0, cw - 1), y1 = U.clamp(Math.floor((b.y + b.r + BPAD) / BCELL), 0, cw - 1);
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) f(cy * cw + cx);
+    };
+    for (let i = 0; i < B.length; i++) span(B[i], (c) => { start[c + 1]++; });
+    for (let c = 0; c < cw * cw; c++) start[c + 1] += start[c];
+    const fill = start.slice(0, cw * cw), idx = new Int32Array(start[cw * cw]);
+    for (let i = 0; i < B.length; i++) span(B[i], (c) => { idx[fill[c]++] = i; });
+    this.brzA = A; this.brzG = { cw, start, idx };
+    return this.brzG;
+  };
+  W.projBraziers = function (pr) {
+    if (pr.r > BPAD) { this.hitBraziers(pr.x, pr.y, pr.r, pr.p); return; }
+    const G = this.brzGrid(), cx = Math.floor(pr.x / BCELL), cy = Math.floor(pr.y / BCELL);
+    if (cx < 0 || cy < 0 || cx >= G.cw || cy >= G.cw) return;
+    const c = cy * G.cw + cx, B = this.arena.braziers;
+    for (let k = G.start[c], e = G.start[c + 1]; k < e; k++) {
+      const b = B[G.idx[k]], rr = pr.r + b.r;
+      if (!b.broken && U.dist2(pr.x, pr.y, b.x, b.y) <= rr * rr) this.breakBrazier(b, pr.p);
+    }
+  };
   // Foe projectile from foe e along a: speed px/s, dmg to a hero on contact, stops at obstacles. Returns the projectile.
   W.foeShoot = function (e, a, speed, look, dmg, r) {
     const pr = this.projPool.pop() || { hits: [] };
@@ -267,6 +297,7 @@
       if (!pr.dead) {
         if (pr.team === 0) {
           if (pr.rehit > 0 && pr.t - pr.hitClr >= pr.rehit) { pr.hits.length = 0; pr.hitClr = pr.t; }
+          this.projBraziers(pr);
           const q = this.foeScan(pr.x, pr.y, pr.r);
           for (let k = 0; k < q.length; k++) {
             const e = q[k]; if (e.dead) continue;
@@ -378,14 +409,14 @@
     const B = this.arena.braziers;
     for (let i = 0; i < B.length; i++) { const b = B[i]; if (!b.broken && U.dist2(x, y, b.x, b.y) <= (r + b.r) * (r + b.r)) this.breakBrazier(b, p); }
   };
-  // Drops: food 8%, magnet 3%, holy bomb 2%, else 1-5 gold (GAME-DESIGN §9).
+  // Drops: food 20%, magnet 3%, holy bomb 2%, else 1-5 gold (GAME-DESIGN §9). b.t = the sim time it broke (relight: progress.js).
   W.breakBrazier = function (b, p) {
     if (b.broken) return;
-    b.broken = true; b.hp = 0;
+    b.broken = true; b.hp = 0; b.t = this.time;
     const r = this.rng.next();
-    if (r < 0.08) this.spawnPickup('food', b.x, b.y, 30);
-    else if (r < 0.11) this.spawnPickup('magnet', b.x, b.y, 1);
-    else if (r < 0.13) this.spawnPickup('bomb', b.x, b.y, 1);
+    if (r < 0.2) this.spawnPickup('food', b.x, b.y, 30);
+    else if (r < 0.23) this.spawnPickup('magnet', b.x, b.y, 1);
+    else if (r < 0.25) this.spawnPickup('bomb', b.x, b.y, 1);
     else this.spawnPickup('gold', b.x, b.y, this.rng.int(1, 5));
     this.emit({ t: 'brazier', id: b.id, x: b.x, y: b.y, pid: p ? p.pid : '' });
   };
