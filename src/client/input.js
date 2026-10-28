@@ -1,5 +1,5 @@
 // Keyboard, mouse and gamepad. One binding table maps every action to two slots, each a KeyboardEvent.code or Mouse0..Mouse4 (always e.code: layouts never matter).
-// Defaults: WASD move (arrows alternate), skill 1 Q / LMB, skill 2 E / RMB, dash Space, pick 1-4 Digit1-4, reroll R, skip X, pause Esc.
+// Defaults: WASD move (arrows alternate), skill 1 Q, skill 2 E, dash Space, pick 1-4 Digit1-4, reroll R, skip X, pause Esc. No mouse button is bound by default (a click does nothing in a run).
 // Aim is the mouse cursor (I.mouse, CSS px). Gamepad (fixed): left stick move, right stick aim, RB skill 1, LB skill 2, A dash, X / Y / B / RT pick 1-4, Start pause.
 // I.mask([actions]) makes every key held right now read as up until released (an overlay that closes must not pass its closing press to the game).
 (function (ED) {
@@ -22,7 +22,7 @@
   ];
   I.DEFAULTS = {
     up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
-    skill1: ['KeyQ', 'Mouse0'], skill2: ['KeyE', 'Mouse2'], dash: ['Space', null],
+    skill1: ['KeyQ', null], skill2: ['KeyE', null], dash: ['Space', null],
     pick1: ['Digit1', 'Numpad1'], pick2: ['Digit2', 'Numpad2'], pick3: ['Digit3', 'Numpad3'], pick4: ['Digit4', 'Numpad4'],
     reroll: ['KeyR', null], skip: ['KeyX', null], pause: ['Escape', null],
   };
@@ -117,7 +117,7 @@
     const c = list.find(x => !isMouse(x)) || list[0];
     return c ? I.keyName(c) : '—';
   };
-  // Every bound key of an action, at most two ('Q / LMB').
+  // Every bound key of an action, at most two ('W / ↑').
   I.hint = (action) => { if (I.device === 'pad' && PAD[action]) return PAD[action]; const l = I.labels(action); return l.length ? l.slice(0, 2).join(' / ') : '—'; };
   // Replaces {action} tokens in a text with the action's current key hint (unknown tokens stay); {aim} names the device that aims.
   I.fill = (text) => String(text).replace(/\{(\w+)\}/g, (m, a) => (a === 'aim' ? (I.device === 'pad' ? 'the right stick' : 'the mouse') : ACTION[a] ? I.hint(a) : m));

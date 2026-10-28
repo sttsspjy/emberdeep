@@ -1,7 +1,7 @@
 // Headless profile / meta check (exit 1 on failure). Usage: node tools/check-save.js
 // 1. Default profile and unlock state. 2. Shop costs, buy, refund. 3. Save code round trip, typo tolerance, rejection messages, append-only lists.
 // 4. normalize clamps junk. 5. applyRun: gold, records, each hero unlock rule, stage unlocks, signature weapon news. 6. ED.Meta API with a mock localStorage.
-// 7. Meta ranks reach ED.Stats and the run's reroll / skip / banish counts.
+// 7. Meta ranks reach ED.Stats and the run's reroll / skip / banish counts. 9. Settings: old LMB / RMB skill binds cleared once, other mouse binds kept.
 'use strict';
 const store = new Map();
 globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
@@ -129,6 +129,17 @@ ok(near(st.might, 0.15) && st.maxHp === base.hp + 20 && st.armor === 1 && near(s
 ok(near(st.growth, 0.05) && near(st.greed, 0.2) && near(st.luck, 0.2) && st.revival === 1, 'shop ranks: growth, greed, fortune, revival');
 ok(h.rerolls === 2 && h.skips === 1 && h.banishes === 3 && eq(h.banned, []), 'run starts with 2 rerolls, 1 skip, 3 banishes');
 ok(h.hp === h.maxHp, 'hero starts at full HP with vigor');
+
+// 9. settings migration
+const SK = 'wickdeep.survivors.settings.v1';
+store.set(SK, JSON.stringify({ master: 40, binds: { skill1: ['KeyQ', 'Mouse0'], skill2: ['KeyE', 'Mouse2'], dash: ['Space', 'Mouse1'], reroll: ['KeyR', 'Mouse3'] } }));
+const s1 = S.loadSettings();
+ok(s1.master === 40 && s1.binds.skill1[1] === null && s1.binds.skill2[1] === null && s1.binds.dash[1] === 'Mouse1' && s1.binds.reroll[1] === 'Mouse3' && s1.bindsV === 1, 'old LMB / RMB skill defaults cleared, other mouse binds kept');
+ok(JSON.parse(store.get(SK)).bindsV === 1 && JSON.parse(store.get(SK)).binds.skill1[1] === null, 'migration is written back');
+store.set(SK, JSON.stringify({ bindsV: 1, binds: { skill1: ['KeyQ', 'Mouse0'] } }));
+ok(S.loadSettings().binds.skill1[1] === 'Mouse0', 'a mouse bind made after the migration stays');
+store.delete(SK);
+ok(S.loadSettings().bindsV === 1 && S.loadSettings().binds === null && !store.has(SK), 'fresh settings: current version, nothing written');
 
 console.log(`check-save: ${fails ? fails + ' failure(s)' : 'all passed'}`);
 process.exitCode = fails ? 1 : 0;

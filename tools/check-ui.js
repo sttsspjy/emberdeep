@@ -262,6 +262,19 @@ async function main() {
     check(await page.evaluate(() => ED.Game.paused), 'still paused');
     await page.locator('#btn-resume').click();
     check(!(await page.evaluate(() => ED.Game.paused)), 'Resume unpauses');
+    // mouse buttons are unbound by default: clicks on the game do nothing; a mouse button bound by the player casts
+    const sk = () => page.evaluate(() => ED.Game.w.heroes[0].skills.map(x => x.cd));
+    await page.evaluate(() => { for (const x of ED.Game.w.heroes[0].skills) x.cd = 0; });
+    await page.mouse.click(+VP[1] / 2 + 200, +VP[2] / 2, { button: 'left' }); await page.mouse.click(+VP[1] / 2 + 200, +VP[2] / 2, { button: 'right' });
+    await wait(200);
+    check((await sk()).every(c => c === 0), 'left / right click on the game casts nothing');
+    check(await page.evaluate(() => ED.Input.label('skill1') === 'Q' && ED.Input.hint('skill1') === 'Q' && ED.Input.hint('skill2') === 'E'), 'skill hints show Q / E only');
+    check(await page.evaluate(() => ED.Input.rebind('skill1', 1, 'Mouse0').ok && ED.Input.hint('skill1') === 'Q / LMB'), 'LMB can still be bound to skill 1');
+    await page.mouse.click(+VP[1] / 2 + 200, +VP[2] / 2, { button: 'left' });
+    await wait(200);
+    { const c = await sk(); check(c[0] > 0 && c[1] === 0, 'bound LMB casts skill 1 (' + c.join(',') + ')'); }
+    await page.evaluate(() => ED.Input.setBinds(ED.App.settings.binds));
+    check(await page.evaluate(() => ED.Input.isDefault()), 'binds back to the defaults');
 
     console.log('co-op HUD: strip, teammates, arrows');
     await page.evaluate(() => {

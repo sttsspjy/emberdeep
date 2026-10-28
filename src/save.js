@@ -45,8 +45,22 @@
   S.load = () => { const L = ls(); if (!L) return null; try { const raw = L.getItem(LS_KEY); return raw ? S.normalize(JSON.parse(raw)) : null; } catch (e) { return null; } };
   S.store = (p) => { const L = ls(); if (!L) return false; try { L.setItem(LS_KEY, JSON.stringify(p)); return true; } catch (e) { return false; } };
   S.erase = () => { const L = ls(); if (L) try { L.removeItem(LS_KEY); } catch (e) { /* storage blocked */ } };
-  S.defaultSettings = () => ({ master: 70, music: 55, sfx: 80, quality: 'high', shake: true, numbers: true, binds: null });
-  S.loadSettings = () => { const d = S.defaultSettings(), L = ls(); if (!L) return d; try { return Object.assign(d, JSON.parse(L.getItem(LS_SETTINGS) || '{}')); } catch (e) { return d; } };
+  // bindsV 1: skill 1 / skill 2 lost their LMB / RMB defaults; older saved binds still holding Mouse0 in skill1[1] or Mouse2 in skill2[1] are cleared once.
+  const BINDS_V = 1;
+  S.defaultSettings = () => ({ master: 70, music: 55, sfx: 80, quality: 'high', shake: true, numbers: true, binds: null, bindsV: BINDS_V });
+  S.loadSettings = () => {
+    const d = S.defaultSettings(), L = ls(); if (!L) return d;
+    try {
+      const raw = L.getItem(LS_SETTINGS), s = JSON.parse(raw || '{}') || {};
+      if (raw && (s.bindsV | 0) < BINDS_V) {
+        const b = s.binds && typeof s.binds === 'object' ? s.binds : null;
+        if (b && Array.isArray(b.skill1) && b.skill1[1] === 'Mouse0') b.skill1[1] = null;
+        if (b && Array.isArray(b.skill2) && b.skill2[1] === 'Mouse2') b.skill2[1] = null;
+        s.bindsV = BINDS_V; S.storeSettings(s);
+      }
+      return Object.assign(d, s);
+    } catch (e) { return d; }
+  };
   S.storeSettings = (s) => { const L = ls(); if (L) try { L.setItem(LS_SETTINGS, JSON.stringify(s)); } catch (e) { /* storage blocked */ } };
 
   // ---------------- unlocks and shop ----------------

@@ -14,15 +14,15 @@ No build step, no backend, no install. It is a static site: open it from any web
 |---|---|---|
 | Move | WASD or arrow keys | Left stick |
 | Aim skills | Mouse | Right stick |
-| Skill 1 (Q) | Q or left mouse | RB |
-| Skill 2 (E) | E or right mouse | LB |
+| Skill 1 (Q) | Q | RB |
+| Skill 2 (E) | E | LB |
 | Dash | Space | A |
 | Pick a level-up card | 1–4 or click | X / Y / B / RT |
 | Reroll / skip cards | R / X | |
 | Banish a card | Banish button, then click the card | |
 | Pause | Esc | Start |
 
-Weapons fire automatically. Facing weapons (Cleave, Twin Daggers, Bone Spear) swing or throw toward the nearest foe in front of you, or the nearest foe anywhere when none is in front. Keys follow the physical key position, so they work on any keyboard layout.
+Mouse buttons do nothing in a run by default; the mouse only aims. Weapons fire automatically. Facing weapons (Cleave, Twin Daggers, Bone Spear) swing or throw toward the nearest foe in front of you, or the nearest foe anywhere when none is in front. Keys follow the physical key position, so they work on any keyboard layout.
 
 Menus work with the keyboard too: arrows or WASD move between buttons, Enter presses, Esc goes back.
 

@@ -34,7 +34,7 @@ Units: world px (hero sprite ≈ 16–24 px tall), seconds. HP numbers are integ
 | Dash (Space) | 0.2 s, 80 px, i-frames for its whole length, 3.5 s cooldown, 1 charge |
 | Invulnerability after a hit | 0.5 s |
 
-- **Controls**: WASD move (e.code), mouse aims skills, Space dash, Q and E hero skills, 1–4 pick a level-up card, Esc pause (solo only).
+- **Controls**: WASD move (e.code), mouse aims skills, Space dash, Q and E hero skills, 1–4 pick a level-up card, Esc pause (solo only). No mouse button is bound by default: a click does nothing in a run.
 - **Weapons fire on their own.** Targeting modes: `nearest`, `facing` (toward the nearest foe within ±100° of the movement direction, else the nearest foe in range, else straight along it; Twin Daggers ±52°; Cleave holds its swing while no foe is in reach; Bramble Trail always lashes along the movement direction), `random` (a random foe on screen), `around` (orbit or aura), `densest` (the densest foe cluster within range).
 - **Hero skills (Q/E)** aim at the mouse cursor, cooldowns 6–18 s, and must look and feel huge: screen-wide effects, hit-stop, shake. Skill cards in the level-up pool upgrade them (shape, not just numbers).
 - **Slots**: 6 weapons, 6 passives. The hero's signature weapon fills slot 1 at start.
