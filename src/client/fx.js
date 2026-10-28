@@ -351,17 +351,17 @@
         B.line(p[i], p[i + 1] - 6, mx, my, 1, rgbaK(0xffffff00, k)); B.line(mx, my, p[i + 2], p[i + 3] - 6, 1, rgbaK(0xffffff00, k));
       }
     }
-    const popA = B.crowd > 250 ? 0.6 : 1; // a crowd's death pops stay translucent so a 1,000 kills/s horde does not wash the screen white
+    const popA = B.crowd > 250 ? 0.4 : 1; // a crowd's death pops stay translucent so a 1,000 kills/s horde does not wash the screen white
     for (const d of pops.a) {
       const age = d.max - d.life;
       SO.flip = d.flip; SO.rot = 0; SO.tint = 0; SO.add = false;
       if (d.anim && A.has(d.anim)) {
         const fi = Math.min(d.n - 1, Math.floor(age * d.fps)), fade = U.clamp(d.life / 0.7, 0, 1);
-        SO.flash = age < 0.08 ? 1 : 0; SO.sx = d.sx; SO.sy = d.sy; SO.alpha = fade;
+        SO.flash = age < 0.08 ? 0.5 : 0; SO.sx = d.sx; SO.sy = d.sy; SO.alpha = fade;
         B.spr(d.anim, fi, d.x, d.y, SO);
       } else {
         const k = U.clamp(age / d.max, 0, 1);
-        SO.flash = 1; SO.sx = d.sx * (1 + 0.45 * k); SO.sy = d.sy * (1 - 0.7 * k); SO.alpha = (1 - k * k) * popA;
+        SO.flash = 0.5; SO.sx = d.sx * (1 + 0.45 * k); // half flash: the sprite's outline stays visible (pixel-true render) SO.sy = d.sy * (1 - 0.7 * k); SO.alpha = (1 - k * k) * popA;
         B.spr(d.id, d.fi, d.x, d.y, SO);
       }
     }
