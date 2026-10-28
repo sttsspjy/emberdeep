@@ -1,6 +1,6 @@
 // Headless profile / meta check (exit 1 on failure). Usage: node tools/check-save.js
 // 1. Default profile and unlock state. 2. Shop costs, buy, refund. 3. Save code round trip, typo tolerance, rejection messages, append-only lists.
-// 4. normalize clamps junk. 5. applyRun: gold, records, each hero unlock rule, stage unlocks, signature weapon news. 6. ED.Meta API with a mock localStorage.
+// 4. normalize clamps junk. 5. applyRun: gold, records, each hero unlock rule, stage unlocks, no weapon news. 6. ED.Meta API with a mock localStorage.
 // 7. Meta ranks reach ED.Stats and the run's reroll / skip / banish counts. 8. seen: back-fill, run record (view rect, boss), merge, save code round trip, old / future codes.
 // 9. Settings: old LMB / RMB skill binds cleared once, other mouse binds kept.
 'use strict';
@@ -81,7 +81,8 @@ ok(eq(S.normalize(null), S.defaultProfile()), 'normalize(null) = default profile
 const a = S.defaultProfile();
 let r = S.applyRun(a, summary({ time: 599, gold: 40 }), 0, 'p1');
 ok(a.gold === 40 && a.lifetime === 40 && a.stats.runs === 1 && r.unlocked.length === 0, 'run gold banked; 9:59 unlocks nothing');
-ok(r.weapons[0] === 'cleave' && r.news.some(x => x.kind === 'weapon' && x.id === 'cleave') && eq(S.metaBundle(a).sigs, ['knight']), 'first knight run puts Cleave in the pool');
+ok(r.weapons.length === 0 && !r.news.some(x => x.kind === 'weapon') && eq(S.metaBundle(a).sigs, []) && a.played.indexOf('knight') >= 0, 'first knight run: played, no weapon news, no signature pool');
+ok(ED.UNLOCKS.sigAfterRun === undefined, 'no sigAfterRun unlock rule');
 ok(r.records.length === 0, 'first run on a stage flags no records');
 r = S.applyRun(a, summary({ time: 600, kills: 70 }), 0, 'p1');
 ok(eq(r.unlocked, ['necro']) && r.news.some(x => x.kind === 'hero' && x.id === 'necro' && x.txt === 'New hero: Necromancer'.replace('Necromancer', ED.HEROES.necro.name)), 'surviving 10:00 unlocks Necro');
@@ -90,8 +91,10 @@ r = S.applyRun(a, summary({ perHero: [{ pid: 'p1', cls: 'ranger', kills: 2999 }]
 ok(r.unlocked.indexOf('shade') < 0, '2999 own kills (5000 party) does not unlock Shade');
 r = S.applyRun(a, summary({ perHero: [{ pid: 'p2', cls: 'pyro', kills: 10 }, { pid: 'p1', cls: 'ranger', kills: 3000 }] }), 0, 'p1');
 ok(eq(r.unlocked, ['shade']) && a.played.indexOf('ranger') >= 0 && a.played.indexOf('pyro') < 0, '3000 own kills unlock Shade; only my hero counts as played');
-r = S.applyRun(a, summary({ level: 40 }), 0, 'p1');
-ok(eq(r.unlocked, ['bell']), 'level 40 unlocks Bell');
+r = S.applyRun(a, summary({ level: 24 }), 0, 'p1');
+ok(r.unlocked.indexOf('bell') < 0, 'level 24 does not unlock Bell');
+r = S.applyRun(a, summary({ level: 25 }), 0, 'p1');
+ok(eq(r.unlocked, ['bell']), 'level 25 unlocks Bell');
 ok(!S.stageUnlocked(a, 1), 'stage 2 locked before a win');
 r = S.applyRun(a, summary({ won: true, time: 905 }), 0, 'p1');
 ok(eq(r.unlocked, ['cleric']) && eq(r.stages, [1]) && S.stageUnlocked(a, 1) && a.best[ED.STAGE_IDS[0]].won && a.stats.wins === 1, 'beating stage 1 unlocks Cleric and stage 2');
@@ -113,14 +116,15 @@ ok(S.load().shop.might === 2, 'Meta.buy persists');
 ok(M.shop()[0].val === 0.1 && M.refundTotal() === 600 && M.refund() === 600 && M.gold() === 700 && S.load().gold === 700, 'Meta.refund returns 600 and persists');
 ok(M.unlocked('knight') && !M.unlocked('shade') && M.stageUnlocked(0) && !M.stageUnlocked(1), 'Meta.unlocked / stageUnlocked');
 const news = M.recordRun(summary({ won: true, time: 900, kills: 3100, level: 41, perHero: [{ pid: 'me', cls: 'pyro', kills: 3100 }] }), 'me');
-ok(eq(news.map(x => x.kind + ':' + x.id).sort(), ['hero:bell', 'hero:cleric', 'hero:necro', 'hero:shade', 'stage:' + ED.STAGE_IDS[1], 'weapon:' + ED.HEROES.pyro.sig].sort()), 'Meta.recordRun returns every new unlock: ' + news.map(x => x.txt).join(' | '));
+ok(eq(news.map(x => x.kind + ':' + x.id).sort(), ['hero:bell', 'hero:cleric', 'hero:necro', 'hero:shade', 'stage:' + ED.STAGE_IDS[1]].sort()), 'Meta.recordRun returns every new unlock: ' + news.map(x => x.txt).join(' | '));
+ok(M.seen('heroes', 'knight') === false && typeof M.seen === 'function', 'Meta.seen reads the bound profile');
 ok(M.last.gold === 40 && S.load().stats.runs === 1 && M.heroes().every(h => h.unlocked) && M.stages()[1].unlocked && M.stages()[0].best.won, 'recordRun saved; heroes() and stages() rows reflect it');
 const c2 = M.code(), restored = M.restore(S.encode(S.defaultProfile()));
 ok(restored === M.get() && M.gold() === 0 && S.load().gold === 0, 'Meta.restore replaces and saves the bound profile');
 ok(M.restore(c2) && M.gold() === 740 && M.unlocked('bell'), 'Meta.code -> restore round trip');
 ok(/checksum|damaged|never/.test(throwsMsg(() => M.restore('WK1-ZZZZZ'))) && M.unlocked('bell'), 'a bad code leaves the bound profile untouched');
 M.use(S.defaultProfile());
-ok(!M.unlocked('bell') && M.heroes().find(h => h.id === 'bell').txt === 'Reach level 40 in one run', 'Meta.use binds another profile');
+ok(!M.unlocked('bell') && M.heroes().find(h => h.id === 'bell').txt === 'Reach level 25 in one run', 'Meta.use binds another profile');
 
 // 7. meta ranks reach the sim
 const shop = { might: 3, vigor: 2, plating: 1, swiftness: 1, magnet: 2, growth: 1, greed: 2, fortune: 4, revival: 1, reroll: 2, skip: 1, banish: 3 };

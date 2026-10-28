@@ -1,5 +1,5 @@
 // Achievements and Encyclopedia screens (client only; DOM in #scr-achieve / #scr-codex, shown through ED.UI.show).
-// ED.Codex.renderAchievements(): one row per ED.UNLOCKS unlock (non-start heroes, non-start stages, signature weapons via sigAfterRun) with progress from ED.App.profile, plus lifetime and per-stage records.
+// ED.Codex.renderAchievements(): one row per ED.UNLOCKS unlock (non-start heroes, non-start stages) with progress from ED.App.profile, plus lifetime and per-stage records.
 // ED.Codex.renderCodex(tab?): tab row (heroes | weapons | passives | foes | bosses | stages), entry list and detail pane, read from the data tables. Only what the profile has met
 // (profile.seen via ED.Save.isSeen; bosses by their foe id) is described: the rest lists as a '???' silhouette whose detail says 'Not discovered yet' (plus the unlock line for
 // locked heroes / stages), and cross-references to unmet entries read '???'.
@@ -24,7 +24,6 @@
   const foeIcon = (id) => (ED.FOES[id] ? lookIcon(ED.FOES[id].look) : '');
   const finalBoss = (sd) => (sd.bosses || []).find(b => b.final) || (sd.bosses || [])[0];
   const stageIcon = (i) => { const b = finalBoss(ED.STAGES[i]); return b ? foeIcon(b.id) : ''; };
-  const passName = (id) => (ED.PASSIVES[id] ? ED.PASSIVES[id].name : id);
   const UNSEEN = 'Not discovered yet';
   const seen = (k, id) => SV.isSeen(App().profile, k, id);
   const MODE = { facing: 'Toward your facing', nearest: 'Nearest foe', around: 'Around you', random: 'Random foes', densest: 'Densest crowd' };
@@ -43,11 +42,6 @@
       const done = SV.stageUnlocked(p, i);
       out.push({ sec: 'Stages', icon: stageIcon(i), name: (i + 1) + '. ' + sd.name, rule: r.txt || '', k: done ? 1 : 0, txt: done ? 'Done' : 'Not yet', done });
     });
-    if (U0.sigAfterRun) for (const cls of ED.HERO_IDS) {
-      const h = ED.HEROES[cls], wd = h && ED.WEAPONS[h.sig]; if (!wd) continue;
-      const done = p.played.indexOf(cls) >= 0;
-      out.push({ sec: 'Signature weapons in every pool', icon: wd.icon, name: wd.name, rule: 'Finish a run as ' + h.name, k: done ? 1 : 0, txt: done ? 'Done' : 'Not yet', done });
-    }
     return out;
   };
   C.renderAchievements = () => {
@@ -111,17 +105,11 @@
     ref(box, d.icon, d.name, d.txt + (d.cd ? ' (' + d.cd + ' s cooldown)' : ''), key);
     lvls(box, (d.levels || []).map((l, i) => ['Lv ' + (i + 2), l.txt]));
   };
-  // Evolution line of weapon def d (base or evolved).
-  const evoLine = (box, d) => {
-    if (d.evolved) {
-      const f = ED.WEAPONS[d.from];
-      if (f) { h3(box, 'Evolved from'); ref(box, f.icon, f.name, 'At level ' + ED.WEAPON_MAX_LVL + (f.pair ? ' with ' + passName(f.pair) : '') + ', at a chest', '', !seen('weapons', f.id)); }
-      return;
-    }
-    const e = ED.WEAPONS[d.evo]; if (!e) return;
-    h3(box, 'Evolution');
-    if (d.pair && ED.PASSIVES[d.pair]) ref(box, ED.PASSIVES[d.pair].icon, 'Needs ' + passName(d.pair), 'Weapon at level ' + ED.WEAPON_MAX_LVL + ', then open a chest');
-    ref(box, e.icon, e.name, e.txt, '', !seen('weapons', e.id));
+  // Forms of root weapon d: name and line once discovered, else ???; how to reach them stays hidden.
+  const formLine = (box, d) => {
+    const F = ED.weaponForms(d.id); if (!F.length) return;
+    h3(box, 'Forms (one per run)');
+    for (const f of F) { const e = ED.WEAPONS[f.id]; ref(box, e.icon, e.name, e.txt, '', !seen('weapons', e.id)); }
   };
 
   const heroDetail = (box, cls) => {
@@ -131,27 +119,20 @@
     if (!open) lockLine(box, p, rule);
     const sig = ED.WEAPONS[h.sig];
     if (sig) {
-      h3(box, 'Signature weapon');
+      h3(box, 'Weapon');
       ref(box, sig.icon, sig.name, sig.txt);
-      const e = ED.WEAPONS[sig.evo];
-      if (e) para(box, 'Evolves into ' + (seen('weapons', e.id) ? e.name : '???') + ' with ' + passName(sig.pair) + '.');
     }
-    h3(box, 'Skills');
+    h3(box, 'Skill');
     skillBlock(box, h.skills[0], UI.keyOf('skill1', 'Q'));
-    skillBlock(box, h.skills[1], UI.keyOf('skill2', 'E'));
   };
   const weaponDetail = (box, id) => {
     const d = ED.WEAPONS[id], hero = d.sig && ED.HEROES[d.sig];
-    const tag = (d.evolved ? 'Evolution' : 'Weapon') + (hero ? ', ' + hero.name + ' signature' : '');
+    const tag = (d.form ? 'Form' : 'Weapon') + (hero ? ', ' + hero.name : '');
     head(box, d.icon, d.name, tag, d.txt);
     if (MODE[d.mode]) chips(box, [['Aims', MODE[d.mode]]]);
-    if (!d.evolved) lvls(box, [['Lv 1', d.txt]].concat((d.levels || []).map((l, i) => ['Lv ' + (i + 2), l.txt])));
-    else lvls(box, (d.levels || []).map((l, i) => ['Lv ' + (i + 2), l.txt]));
-    evoLine(box, d);
-    if (hero && !d.evolved) {
-      const p = App().profile, inPool = ED.UNLOCKS.sigAfterRun && p.played.indexOf(d.sig) >= 0;
-      para(box, hero.name + ' starts with it. ' + (ED.UNLOCKS.sigAfterRun ? (inPool ? 'In every hero\'s pool now.' : 'Joins every hero\'s pool after a finished run as ' + hero.name + '.') : ''), inPool ? 'ok' : '');
-    }
+    if (d.form) { if (d.refine) { h3(box, 'Refine'); lvls(box, d.refine.map((l, i) => ['Rank ' + (i + 1), l.txt])); } return; }
+    for (const pa of d.paths || []) { h3(box, 'Path: ' + pa.name); lvls(box, pa.ranks.map((l, i) => ['Rank ' + (i + 1), l.txt])); }
+    formLine(box, d);
   };
   // '+10% damage' at level n: every number in the line times n.
   const scaled = (txt, n) => txt.replace(/\d+(\.\d+)?/g, (v) => String(Math.round(+v * n * 100) / 100));
@@ -160,9 +141,6 @@
     head(box, d.icon, d.name, 'Passive, max level ' + d.max, d.lines ? '' : d.txt);
     if (d.lines) lvls(box, d.lines.map((t, i) => ['Lv ' + (i + 1), t]));
     else lvls(box, [['Each', d.txt], ['Lv ' + d.max, scaled(d.txt, d.max)]]);
-    const evo = ED.WEAPON_IDS.map(w => ED.WEAPONS[w]).filter(w => w.pair === id && !w.evolved && ED.WEAPONS[w.evo]);
-    const nm = (d) => (seen('weapons', d.id) ? d.name : '???');
-    if (evo.length) { h3(box, 'Evolves'); for (const w of evo) { const e = ED.WEAPONS[w.evo], r = ref(box, e.icon, nm(w) + ' > ' + nm(e), w.sig && ED.HEROES[w.sig] ? ED.HEROES[w.sig].name + ' signature' : ''); if (!seen('weapons', e.id)) r.classList.add('unseen'); } }
   };
 
   // Foe appearances: { id: [{ stage, min }] } from the stage timelines; split children inherit the parent's.
@@ -249,12 +227,13 @@
     { id: 'heroes', name: 'Heroes', kind: 'heroes', detail: heroDetail,
       hidden: (box, c) => unseenDetail(box, UI.heroIcon(c), SV.heroUnlocked(App().profile, c) ? null : ED.UNLOCKS.heroes[c] || {}), list: () => ED.HERO_IDS.filter(c => ED.HEROES[c]).map(c => ({ key: c, icon: UI.heroIcon(c), name: ED.HEROES[c].name, cls: SV.heroUnlocked(App().profile, c) ? '' : 'locked' })) },
     { id: 'weapons', name: 'Weapons', kind: 'weapons', detail: weaponDetail, hidden: (box, id) => unseenDetail(box, ED.WEAPONS[id].icon), list: () => {
-      const W = ED.WEAPON_IDS.map(id => ED.WEAPONS[id]), out = [];
-      const grp = (sec, ws) => { if (!ws.length) return; out.push({ sec }); for (const w of ws) out.push({ key: w.id, icon: w.icon, name: w.name, cls: w.evolved ? 'evo' : '' }); };
-      const withEvo = (ws) => ws.flatMap(w => [w].concat(W.filter(e => e.evolved && e.from === w.id)));
-      grp('General', withEvo(W.filter(w => !w.sig && !w.evolved)));
-      grp('Signature', withEvo(W.filter(w => w.sig && !w.evolved)));
-      const seen = new Set(out.map(o => o.key)); grp('Other evolutions', W.filter(w => w.evolved && !seen.has(w.id)));
+      const out = [];
+      for (const cls of ED.HERO_IDS) {
+        const h = ED.HEROES[cls], d = h && ED.WEAPONS[h.sig]; if (!d) continue;
+        out.push({ sec: h.name });
+        out.push({ key: d.id, icon: d.icon, name: d.name, cls: '' });
+        for (const f of ED.weaponForms(d.id)) { const e = ED.WEAPONS[f.id]; out.push({ key: e.id, icon: e.icon, name: e.name, cls: 'evo' }); }
+      }
       return out;
     } },
     { id: 'passives', name: 'Passives', kind: 'passives', detail: passiveDetail, hidden: (box, id) => unseenDetail(box, ED.PASSIVES[id].icon), list: () => (ED.PASSIVE_IDS || Object.keys(ED.PASSIVES)).filter(id => ED.PASSIVES[id]).map(id => ({ key: id, icon: ED.PASSIVES[id].icon, name: ED.PASSIVES[id].name })) },

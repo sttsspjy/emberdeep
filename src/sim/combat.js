@@ -1,9 +1,10 @@
 // Damage pipeline and hit primitives (ARCHITECTURE §6): hitFoe, statuses, pooled projectiles and zones (telegraphs are warn zones), hurtHero, per-tick hit-event aggregation, braziers.
 // Braziers break on any hero hit: arc / blast reach, hero projectile contact (no pierce spent, flight continues; bucketed per arena), and the skills / zones that call hitBraziers.
+// View clamp (no off-screen wipe): hero-team damage, targeting, projectiles and brazier hits act only inside the attacking hero's view rect (ED.inView, grid.js).
 // Primitives emit their own events ('swing', 'boom', 'chain'); the weapon runtime emits 'shoot'. src objects come from a 64-slot ring (w.src) so nested hits never clobber a caller's src.
 (function (ED) {
   'use strict';
-  const U = ED.U, C = ED.CONST, W = ED.World.prototype, TAU = U.TAU;
+  const U = ED.U, C = ED.CONST, W = ED.World.prototype, TAU = U.TAU, VW = ED.HERO_VIEW;
   const HIT_CAP = 200;   // hit events per tick (largest first)
   const FLASH = 0.06;    // hit flash (s)
   const TELE_MIN = 0.6;  // minimum telegraph length for foe / boss attacks
@@ -14,6 +15,7 @@
     for (let i = 0; i < 64; i++) this.srcRing.push({ p: null, wid: '', crit: false, knock: 0, kx: 0, ky: 0, x: 0, y: 0, kind: '', critC: -1 });
     this.hitRecs = []; this.hitN = 0; this.hitSort = [];
     this.pt = { x: 0, y: 0, a: 0 };   // scratch point returned by target() / densest(): copy it before the next call
+    this.vclamp = null;                // hero whose view limits nearestFoe / densest (set around weapons, skills, hero projectiles and zones)
   };
 
   // Hit source from the ring: { p (hero or null), wid, kind ('weapon'|'proj'|'zone'|'dot'|'skill'|'chain'|...), crit (forced), critC (crit chance override, -1 = hero stat), knock, kx, ky (push direction; 0,0 = away from x, y) }.
@@ -28,6 +30,7 @@
   W.hitFoe = function (e, dmg, src) {
     if (e.dead || !(dmg > 0) || e.invulnT > 0) return 0;
     const p = src && src.p;
+    if (p && !(Math.abs(e.x - p.x) <= VW.hw + e.r && Math.abs(e.y - p.y + VW.oy) <= VW.hh + e.r)) return 0; // invariant: a hero only damages foes overlapping its own view
     let crit = !!(src && src.crit);
     if (!crit && p && (!src || src.kind !== 'dot')) { const cc = src && src.critC >= 0 ? src.critC : p.stats.crit; if (cc > 0 && this.rng.next() < cc) crit = true; }
     let d = dmg * (crit ? (p ? p.stats.critMul : 2) : 1) * (e.takeMul || 1);
@@ -157,37 +160,40 @@
   };
 
   // ---------------- targeting ----------------
+  // Nearest foe to hero p within range inside p's view (skip as nearestFoe), or null.
+  W.heroFoe = function (p, range, skip) { const v = this.vclamp; this.vclamp = p; const e = this.nearestFoe(p.x, p.y, range, skip); this.vclamp = v; return e; };
   // mode 'nearest' -> nearest foe within range (default 400) | null; 'random' -> a random foe inside the hero's view rect | null; 'densest' -> densest cluster point within range | null;
-  // 'facing' -> point range ahead along the movement direction ({x, y, a}); 'around' -> the hero's position ({x, y, a}). Points are the shared scratch w.pt.
+  // 'facing' -> point range ahead along the movement direction ({x, y, a}); 'around' -> the hero's position ({x, y, a}). Points are the shared scratch w.pt. Foes only inside p's view.
   W.target = function (mode, p, range) {
     range = range || 400;
-    if (mode === 'nearest') return this.nearestFoe(p.x, p.y, range);
+    if (mode === 'nearest') return this.heroFoe(p, range);
     if (mode === 'random') {
-      const hw = C.VIEW_W / 2, hh = C.VIEW_H / 2, q = this.foeScan(p.x, p.y, Math.min(range, Math.hypot(hw, hh)));
+      const hw = VW.hw, hh = VW.hh, cy = p.y - VW.oy, q = this.foeScan(p.x, cy, Math.min(range, Math.hypot(hw, hh)));
       let m = 0;
-      for (let k = 0; k < q.length; k++) { const e = q[k]; if (Math.abs(e.x - p.x) <= hw && Math.abs(e.y - p.y) <= hh) m++; }
+      for (let k = 0; k < q.length; k++) { const e = q[k]; if (Math.abs(e.x - p.x) <= hw && Math.abs(e.y - cy) <= hh) m++; }
       let pick = null;
       if (m) {
         let j = this.rng.int(0, m - 1);
-        for (let k = 0; k < q.length; k++) { const e = q[k]; if (Math.abs(e.x - p.x) <= hw && Math.abs(e.y - p.y) <= hh && j-- === 0) { pick = e; break; } }
+        for (let k = 0; k < q.length; k++) { const e = q[k]; if (Math.abs(e.x - p.x) <= hw && Math.abs(e.y - cy) <= hh && j-- === 0) { pick = e; break; } }
       }
       this.foeEnd();
       return pick;
     }
-    if (mode === 'densest') return this.densest(p.x, p.y, range);
+    if (mode === 'densest') { const v = this.vclamp; this.vclamp = p; const pt = this.densest(p.x, p.y, range); this.vclamp = v; return pt; }
     const pt = this.pt;
     if (mode === 'facing') { pt.a = p.mdir; pt.x = p.x + Math.cos(p.mdir) * range; pt.y = p.y + Math.sin(p.mdir) * range; return pt; }
     pt.x = p.x; pt.y = p.y; pt.a = p.mdir;
     return pt;
   };
-  // Centre of the 64 px cell holding the most foes within range of (x, y) (the mean position of those foes), or null when none. Returns the scratch w.pt.
+  // Centre of the 64 px cell holding the most foes within range of (x, y) (the mean position of those foes; foes outside w.vclamp's view ignored), or null when none. Returns the scratch w.pt.
   const DCELL = 64, DN = 32, dcount = new Int32Array(DN * DN);
+  const outV = (V, e) => V && !(Math.abs(e.x - V.x) <= VW.hw + e.r && Math.abs(e.y - V.y + VW.oy) <= VW.hh + e.r);
   W.densest = function (x, y, range) {
-    const q = this.foeScan(x, y, range), r2 = range * range, half = DN / 2;
+    const q = this.foeScan(x, y, range), r2 = range * range, half = DN / 2, V = this.vclamp;
     let best = -1, bc = 0;
     dcount.fill(0);
     for (let k = 0; k < q.length; k++) {
-      const e = q[k]; if (U.dist2(x, y, e.x, e.y) > r2) continue;
+      const e = q[k]; if (U.dist2(x, y, e.x, e.y) > r2 || outV(V, e)) continue;
       const cx = Math.floor((e.x - x) / DCELL) + half, cy = Math.floor((e.y - y) / DCELL) + half;
       if (cx < 0 || cy < 0 || cx >= DN || cy >= DN) continue;
       const c = cy * DN + cx, v = ++dcount[c];
@@ -197,7 +203,7 @@
     if (best >= 0) {
       let sx = 0, sy = 0, m = 0;
       for (let k = 0; k < q.length; k++) {
-        const e = q[k]; if (U.dist2(x, y, e.x, e.y) > r2) continue;
+        const e = q[k]; if (U.dist2(x, y, e.x, e.y) > r2 || outV(V, e)) continue;
         const cx = Math.floor((e.x - x) / DCELL) + half, cy = Math.floor((e.y - y) / DCELL) + half;
         if (cy * DN + cx === best) { sx += e.x; sy += e.y; m++; }
       }
@@ -247,6 +253,7 @@
   };
   W.projBraziers = function (pr) {
     if (pr.r > BPAD) { this.hitBraziers(pr.x, pr.y, pr.r, pr.p); return; }
+    if (pr.p && !ED.inView(pr.p, pr.x, pr.y, pr.r)) return;
     const G = this.brzGrid(), cx = Math.floor(pr.x / BCELL), cy = Math.floor(pr.y / BCELL);
     if (cx < 0 || cy < 0 || cx >= G.cw || cy >= G.cw) return;
     const c = cy * G.cw + cx, B = this.arena.braziers;
@@ -272,6 +279,7 @@
     for (let i = 0; i < n; i++) {
       const pr = list[i];
       if (pr.dead) continue;
+      this.vclamp = pr.team === 0 ? pr.p : null;
       pr.t += dt; pr.life -= dt;
       if (pr.tick) pr.tick(this, pr, dt);
       if (pr.homing > 0 && !pr.back) {
@@ -293,6 +301,7 @@
       }
       pr.x += pr.vx * dt; pr.y += pr.vy * dt; pr.a = Math.atan2(pr.vy, pr.vx);
       if (pr.x < -40 || pr.y < -40 || pr.x > size + 40 || pr.y > size + 40) pr.dead = true;
+      else if (pr.team === 0 && pr.p && !ED.inView(pr.p, pr.x, pr.y, pr.r)) pr.dead = true; // fully outside the owner's view
       if (!pr.dead && pr.solid && ED.Arena.blocked(A, pr.x, pr.y, 1)) pr.dead = true;
       if (!pr.dead) {
         if (pr.team === 0) {
@@ -320,6 +329,7 @@
       if (!pr.dead && pr.life <= 0) pr.dead = true;
       if (pr.dead && pr.onEnd) { const f = pr.onEnd; pr.onEnd = null; f(this, pr); }
     }
+    this.vclamp = null;
   };
 
   // ---------------- zones ----------------
@@ -359,6 +369,7 @@
     for (let i = 0; i < n; i++) {
       const z = list[i];
       if (z.dead) continue;
+      this.vclamp = z.team === 0 ? z.p : null;
       z.t += dt;
       if (z.follow) { const h = this.byPid[z.follow]; if (h) { z.x = h.x; z.y = h.y; } }
       if (z.src) {
@@ -386,6 +397,7 @@
         if (z.onEnd) { const f = z.onEnd; z.onEnd = null; f(this, z); }
       }
     }
+    this.vclamp = null;
   };
 
   // ---------------- heroes take damage ----------------
@@ -405,9 +417,10 @@
   };
 
   // ---------------- braziers ----------------
+  // Breaks every intact brazier the circle (x, y, r) touches; with a hero p, only braziers overlapping p's view.
   W.hitBraziers = function (x, y, r, p) {
     const B = this.arena.braziers;
-    for (let i = 0; i < B.length; i++) { const b = B[i]; if (!b.broken && U.dist2(x, y, b.x, b.y) <= (r + b.r) * (r + b.r)) this.breakBrazier(b, p); }
+    for (let i = 0; i < B.length; i++) { const b = B[i]; if (!b.broken && U.dist2(x, y, b.x, b.y) <= (r + b.r) * (r + b.r) && (!p || ED.inView(p, b.x, b.y, b.r))) this.breakBrazier(b, p); }
   };
   // Drops: food 20%, magnet 3%, holy bomb 2%, else 1-5 gold (GAME-DESIGN §9). b.t = the sim time it broke (relight: progress.js).
   W.breakBrazier = function (b, p) {

@@ -1,6 +1,6 @@
 // App shell: boot, the screen state machine (boot -> title -> hero -> stage -> run -> results) and the frame loop (rAF; the sim steps at a fixed 60 Hz inside ED.Game.update).
-// Bot watch (?bot=1 [&speed=N 1..16, default 4] [&weapon=base id] [&fill=off|on] [&seed=int] [&meta=none|max|profile, default profile]; solo runs only; weapon / fill / meta as in
-// tools/bot.js, so ?seed&weapon&fill&meta replays a bench cell): boot loads tools/bot-brain.js (ED.Bot); a solo run gets ED.Game.bot, the sim runs N steps per real step within
+// Bot watch (?bot=1 [&speed=N 1..16, default 4] [&seed=int] [&meta=none|max|profile, default profile]; solo runs only; meta as in
+// tools/bot.js, so ?seed&meta replays a bench cell): boot loads tools/bot-brain.js (ED.Bot); a solo run gets ED.Game.bot, the sim runs N steps per real step within
 // BOT_MS of work per frame, hit-stop and the offer overlay are skipped, sound effects thin out above x2, BracketLeft / BracketRight halve / double N, the HUD shows view.botTag /
 // view.botPick, and the run is not applied to the profile. Without ?bot the normal path is unchanged.
 (function (ED) {
@@ -12,15 +12,12 @@
   const SEEN_DT = 0.25; // s between Encyclopedia discovery samples of the view (ED.Save.seenView)
   let seenRec = null, seenT = 0; // this run's discoveries (null on bot runs), merged into the profile at run end
 
-  // ?bot params -> { speed, weapon, fill, meta, seed, err, tag, pick, picks, rate } or null.
+  // ?bot params -> { speed, meta, seed, err, tag, pick, picks, rate } or null.
   A.bot = (() => {
     let q; try { q = new URLSearchParams(location.search); } catch (e) { return null; }
     if (!q.has('bot') || q.get('bot') === '0') return null;
-    const sp = parseInt(q.get('speed'), 10), sd = parseInt(q.get('seed'), 10), weapon = q.get('weapon') || '', f = q.get('fill');
-    let fill;
-    if (f === 'on' || f === 'off') fill = f;
-    else fill = weapon ? 'off' : 'on';
-    return { speed: sp >= 1 ? Math.min(16, sp) : 4, weapon, fill, meta: q.get('meta') || 'profile', seed: isFinite(sd) ? sd >>> 0 : undefined, err: '', tag: '', tagK: -1, pick: '', picks: 0, rate: 0 };
+    const sp = parseInt(q.get('speed'), 10), sd = parseInt(q.get('seed'), 10);
+    return { speed: sp >= 1 ? Math.min(16, sp) : 4, meta: q.get('meta') || 'profile', seed: isFinite(sd) ? sd >>> 0 : undefined, err: '', tag: '', tagK: -1, pick: '', picks: 0, rate: 0 };
   })();
   const botSay = (text) => { const el = $('title-msg'); if (el) { el.textContent = text; el.classList.toggle('err', !!A.bot.err); } };
   const botHint = () => (A.bot.err ? 'Bot watch: ' + A.bot.err : 'Bot watch \u00d7' + A.bot.speed + ': pick a hero and stage, the bot plays ([ and ] change speed).');
@@ -42,24 +39,21 @@
   };
 
   // Starts a solo run with the selected hero and stage (seed from the clock: runs differ, the sim stays deterministic per seed).
-  // Bot watch: refuses (title message) without ED.Bot, with an unknown or evolved ?weapon or an unknown ?meta; a forced weapon other than the signature is added at once.
+  // Bot watch: refuses (title message) without ED.Bot or with an unknown ?meta.
   A.startSolo = (opt) => {
     opt = opt || {};
     const B = A.bot;
     if (B) {
       if (!ED.Bot) { botFail(B.err || 'tools/bot-brain.js has not loaded.'); return; }
-      if (B.weapon && (!ED.WEAPONS[B.weapon] || ED.WEAPONS[B.weapon].evolved)) { botFail('unknown or evolved weapon "' + B.weapon + '".'); return; }
       if (B.meta !== 'none' && B.meta !== 'max' && B.meta !== 'profile') { botFail('unknown meta "' + B.meta + '" (none, max or profile).'); return; }
     }
     const cls = opt.cls || A.sel.cls, stage = opt.stage !== undefined ? opt.stage : A.sel.stage;
     const seed = opt.seed !== undefined ? opt.seed : B && B.seed !== undefined ? B.seed : (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
     const w = ED.Game.start({ mode: 'solo', seed, stage, players: [{ pid: 'p1', name: A.profile.name, slot: 0, cls, meta: B && B.meta !== 'profile' ? ED.Bot.metaFor(ED, B.meta) : S.metaBundle(A.profile) }], cheats: opt.cheats });
     if (B) {
-      const p = w.hero('p1'), h = ED.HEROES[p.cls];
-      if (B.weapon && (!h || B.weapon !== h.sig)) w.addWeapon(p, B.weapon);
-      if (B.fill === 'off') ED.Bot.isolate(w, p, [h && h.sig, B.weapon].filter(Boolean));
+      const p = w.hero('p1');
       let bot;
-      try { bot = ED.Bot.create({ pid: 'p1', weapon: B.weapon || null, seed, fill: B.fill }); bot.onStart(w, p); }
+      try { bot = ED.Bot.create({ pid: 'p1', seed }); bot.onStart(w, p); }
       catch (e) { console.error(e); ED.Game.stop(); botFail('ED.Bot.create failed: ' + e.message); return; }
       ED.Game.bot = bot; B.err = ''; B.pick = ''; B.picks = 0; B.rate = B.speed; B.tagK = -1;
     }
@@ -156,8 +150,8 @@
   const onEvent = () => {};
   const botEvent = (ev) => {
     if (ev.t !== 'pick' || ev.pid !== ED.Game.myPid) return;
-    const B = A.bot, d = ED.WEAPONS[ev.id] || ED.PASSIVES[ev.id];
-    B.picks++; B.pick = 'Picked ' + (d ? d.name + (ev.lvl ? ' ' + ev.lvl : '') : ev.kind);
+    const B = A.bot, d = ED.WEAPONS[ev.id] || ED.PASSIVES[ev.id] || ED.SKILLS[ev.id], pa = ev.kind === 'path' && d && d.paths ? d.paths[ev.path] : null;
+    B.picks++; B.pick = 'Picked ' + (pa ? d.name + ': ' + pa.name + ' ' + ev.lvl : d ? d.name + (ev.lvl ? ' ' + ev.lvl : '') : ev.kind);
   };
 
   A.boot = () => {

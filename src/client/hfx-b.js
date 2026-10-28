@@ -61,16 +61,7 @@
     if (z.t < 0.3) { const k = z.t / 0.3; B.circ(z.x, z.y, r * (0.4 + 0.8 * k), ca(WHITE, 0.6 * (1 - k)), 0); }
     motes(B, z, t, 14, WHITE, 2);
   }
-  // Judgment beam: wide gold glow, bright body, white core, a flare at the hero and the tip.
-  function beam(B, z, t) {
-    const f = fade(z, 0.08, 0.12), ex = z.x + Math.cos(z.a) * z.len, ey = z.y - 8 + Math.sin(z.a) * z.len, y0 = z.y - 8, fl = 0.85 + 0.15 * Math.sin(t * 60);
-    B.line(z.x, y0, ex, ey, z.w * 1.8, ca(HOLY, 0.22 * f));
-    B.line(z.x, y0, ex, ey, z.w, ca(GOLD, 0.6 * f * fl));
-    B.line(z.x, y0, ex, ey, z.w * 0.4, ca(WHITE, 0.95 * f));
-    B.circ(z.x, y0, z.w * 0.8, ca(WHITE, 0.8 * f), 0);
-    B.circ(ex, ey, z.w * (0.9 + 0.3 * Math.sin(t * 40)), ca(WHITE, 0.7 * f), 0);
-    B.circ(ex, ey, z.w * 1.6, ca(GOLD, 0.6 * f), 2);
-  }
+
   const clericZone = (B, z, t) => {
     switch (z.k) {
       case 'smite': pillar(B, z, t, false); return true;
@@ -78,11 +69,11 @@
       case 'pglow': glow(B, z, t); return true;
       case 'conse': conse(B, z, t); return true;
       case 'sanct': sanct(B, z, t); return true;
-      case 'judge': beam(B, z, t); return true;
+
       default: return false;
     }
   };
-  reg(['smite', 'wrath', 'sanctuary', 'judgment'], { zone: clericZone });
+  reg(['smite', 'wrath', 'sanctuary'], { zone: clericZone });
 
   // ---------------- shade ----------------
   // Knife with a motion trail; violet: the Shadow Fan / afterimage tint (additive glow).
@@ -116,7 +107,7 @@
   };
   reg(['daggers'], { proj: (B, pr, t) => { knife(B, pr, t, 8, PALE, false); return true; } });
   reg(['shadowfan'], { proj: (B, pr, t) => { knife(B, pr, t, 12, VIOLET, true); return true; } });
-  reg(['fan'], { proj: (B, pr, t) => { knife(B, pr, t, 14, 0xc8b0ff, false); return true; } });
+
   reg(['step'], { zone: shadeZone, proj: (B, pr, t) => { knife(B, pr, t, 10, VIOLET, true); return true; } });
 
   // ---------------- bell ----------------
@@ -152,26 +143,9 @@
       case 'cathb': B.circ(z.x, z.y - 6, 13, ca(GOLD, 0.18 + 0.1 * Math.sin(t * 7 + z.id)), 0); bellSpr(B, 'weapon.greatbell', z.x, z.y, t, z.id, 1.5, 0.45); return true;
       case 'tollw': waveRing(B, z, 3, BRONZE, 0.1); return true;
       case 'cathw': waveRing(B, z, 4, GOLD, 0.12); return true;
-      case 'hurlw': waveRing(B, z, 4, BRONZE, 0.14); return true;
       case 'pealw': peal(B, z, t); return true;
-      case 'hurlb': {
-        const f = fade(z, 0.05, 0.2);
-        B.circ(z.x, z.y, 18, ca(DUSK, 0.25 * f), 0);
-        for (let i = 0; i < 5; i++) { const a = i * TAU / 5 + z.id; B.line(z.x, z.y, z.x + Math.cos(a) * 22, z.y + Math.sin(a) * 11, 1, ca(0x2a1a10, 0.6 * f)); }
-        bellSpr(B, 'weapon.greatbell', z.x, z.y, t, z.id, 1.6, 0.6);
-        return true;
-      }
       default: return false;
     }
   }
-  // Thrown bell: spinning great bell, speed streaks behind, a faint drag swirl.
-  function bellProj(B, pr, t) {
-    const c = Math.cos(pr.a), s = Math.sin(pr.a);
-    B.circ(pr.x, pr.y, 30, ca(BRONZE, 0.1), 0);
-    for (let i = 0; i < 3; i++) { const o = (i - 1) * 5; B.line(pr.x - c * 26 - s * o, pr.y - s * 26 + c * o, pr.x - c * 8 - s * o, pr.y - s * 8 + c * o, 1, ca(PALE, 0.6)); }
-    if (!B.spr('weapon.greatbell', 0, pr.x, pr.y - 6, opt(1, t * 14 + pr.id, 1.5, false))) B.circ(pr.x, pr.y, 7, ca(BRONZE, 1), 0);
-    return true;
-  }
   reg(['toll', 'cathedral', 'peal'], { zone: bellZone });
-  reg(['hurl'], { zone: bellZone, proj: bellProj });
 })(globalThis.ED || (globalThis.ED = {}));

@@ -17,12 +17,11 @@ function setup(n) {
   for (const row of w.sdef.timeline) { row.rate = 0; }
   w.sp.swarmT = w.sp.eliteT = Infinity; w.sdef = Object.assign({}, w.sdef, { bosses: [] });
   const p = w.heroes[0], rng = U.RNG(9), ids = ['bat', 'skeleton', 'slime', 'skelknight', 'bonearcher', 'bulwark', 'bonecaller', 'stalker', 'mirecrab', 'colossus'].filter(id => ED.FOES[id]);
-  for (const id of ['knight', 'pyro', 'necro', 'cleric', 'bell']) { const h = ED.HEROES[id]; if (h) w.addWeapon(p, h.sig); }
-  for (const ws of p.weapons) ws.lvl = ED.weaponMaxLvl(ED.WEAPONS[ws.id]);
+  for (const ws of p.weapons) w.setRanks(p, ws, 9, true);
   w.recalc(p, true);
   const top = () => {
     while (w.foes.length < n) { const a = rng.next() * U.TAU, d = 30 + Math.sqrt(rng.next()) * 520, x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d; if (!ED.Arena.blocked(w.arena, x, y, 8)) w.spawnFoe(ids[rng.int(0, ids.length - 1)], x, y, { hpMul: 400 }); }
-    while (w.projs.length < PROJ) { const a = rng.next() * U.TAU; w.shoot(p, 'longbow', p.x + Math.cos(a) * rng.range(0, 300), p.y + Math.sin(a) * rng.range(0, 300), rng.next() * U.TAU, null, { look: 'arrow', dmg: 5, speed: 120, pierce: 9999, rehit: 0.5, life: 4 }); }
+    while (w.projs.length < PROJ) { const a = rng.next() * U.TAU; w.shoot(p, 'longbow', p.x + Math.cos(a) * rng.range(0, 300), p.y + Math.sin(a) * rng.range(0, 170), rng.next() * U.TAU, null, { look: 'arrow', dmg: 5, speed: 120, pierce: 9999, rehit: 0.5, life: 4 }); }
     let gems = 0; for (const g of w.pickups) if (g.k[0] === 'x') gems++;
     while (gems < GEMS) { const a = rng.next() * U.TAU, d = 120 + rng.next() * 900; w.spawnPickup('xp1', p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, 1); gems++; }
   };

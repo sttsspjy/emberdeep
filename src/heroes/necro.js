@@ -1,15 +1,15 @@
-// Necro: hero data, signature Bone Shard (8 levels) + evolution Bone Storm (both raise the slain for any hero holding them), Q Raise Horde, E Corpse Blast (3 skill levels each), skeleton minions.
+// Necro: hero data, signature Bone Shard (3 paths x 3 ranks) + Form Bone Storm (path 0; both raise the slain for any hero holding them), Q Corpse Blast (3 skill levels), skeleton minions.
 // Minions are zones (look 'minion' or 'boneknight', networked like any zone; z.a = facing, z.w = swing flash 1..0, wid = credited weapon or skill) driven by minTick
 // (grid queries: nearestFoe retarget every 0.3 s, leash 300 px to the owner). Owner lists p.minions / p.minIds (refs checked by id, created on first use). Kill-rise
-// (weapon kill callback) respects the cap (8, Bone Storm 16); Raise Horde may exceed it up to HARD_CAP, the oldest minion falling first.
+// (weapon kill callback) respects the cap (8, Bone Storm 16); Corpse Blast re-rises may exceed it up to HARD_CAP, the oldest minion falling first.
 // Corpses: the last CORPSES kills by a Necro (ring p.corpse of x, y, time, created on first use).
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST, TAU = U.TAU, TICK = C.TICK;
   const CAP = 8, STORM_CAP = 16, HARD_CAP = 24, CORPSES = 64, CORPSE_AGE = 5, LEASH = 300;
 
-  ED.regLook('minion', 'boneknight', 'raise', 'corpse');
-  ED.addHero({ id: 'necro', name: 'Necro', hp: 95, speed: 88, crit: 0.05, sig: 'boneshard', skills: ['raise', 'corpseblast'], icon: 'hero.necro.idle', col: '#b7a6e0', txt: 'Piercing shards. The dead rise.' });
+  ED.regLook('minion', 'boneknight', 'corpse');
+  ED.addHero({ id: 'necro', name: 'Necro', hp: 95, speed: 70, crit: 0.05, sig: 'boneshard', skills: ['corpseblast'], icon: 'hero.necro.idle', col: '#b7a6e0', txt: 'Piercing shards. The dead rise.' });
 
   // ---------------- minions ----------------
   // Live minion count of hero p (any hero may carry Bone Shard: the lists are created on first use).
@@ -80,16 +80,21 @@
   ED.addWeapon({
     id: 'boneshard', name: 'Bone Shard', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'nearest', txt: 'Piercing shards; the slain may rise',
     base: { dmg: 12, cd: 1.0, n: 1, pierce: 2, area: 1, speed: 300, dur: 0, knock: 20, range: 340, rise: 0.06, homing: 0 },
-    levels: [
-      { mods: { n: 1 }, txt: '+1 shard' },
-      { mods: { pierce: 2 }, txt: 'Shards pierce 2 more foes' },
-      { mods: { dmg: 0.25, homing: 3 }, txt: '+25% damage, shards seek foes' },
-      { mods: { n: 1 }, txt: '+1 shard' },
-      { mods: { mshot: true }, txt: 'Minions throw shards too' },
-      { mods: { n: 1, rise: 0.04 }, txt: '+1 shard, more of the slain rise' },
-      { mods: { dmg: 0.25, n: 1 }, txt: '+25% damage, +1 shard' },
+    paths: [
+      { id: 'barrage', name: 'Barrage', form: 'bonestorm', ranks: [
+        { mods: { n: 1 }, txt: '+1 shard' },
+        { mods: { n: 1 }, txt: '+1 shard' },
+        { mods: { dmg: 0.25, n: 1 }, txt: '+25% damage, +1 shard' }] },
+      { id: 'seeker', name: 'Seeker', form: null, ranks: [
+        { mods: { pierce: 2 }, txt: 'Shards pierce 2 more foes' },
+        { mods: { dmg: 0.25, homing: 3 }, txt: '+25% damage, shards seek foes' },
+        { mods: { pierce: 2 }, txt: 'Shards pierce 2 more foes' }] },
+      { id: 'legion', name: 'Legion', form: null, ranks: [
+        { mods: { mshot: true }, txt: 'Minions throw shards too' },
+        { mods: { n: 1, rise: 0.04 }, txt: '+1 shard, more of the slain rise' },
+        { mods: { rise: 0.04 }, txt: 'More of the slain rise' }] },
     ],
-    pair: 'haste', evo: 'bonestorm',
+    hybrids: [],
   }, {
     fire(w, p, ws, S) {
       const t = w.nearestFoe(p.x, p.y, S.range);
@@ -116,9 +121,12 @@
   };
   const STORM = { look: 'bone', pierce: 999, rehit: 0.25, life: 1, tick: orbitTick, st: null };
   ED.addWeapon({
-    id: 'bonestorm', name: 'Bone Storm', icon: 'weapon.soulscythe', look: 'bone', sig: 'necro', mode: 'around', evolved: true, from: 'boneshard', txt: 'Shards orbit, then launch',
+    id: 'bonestorm', name: 'Bone Storm', icon: 'weapon.soulscythe', look: 'bone', sig: 'necro', mode: 'around', evolved: true, form: true, from: 'boneshard', txt: 'Shards orbit, then launch',
     base: { dmg: 22, cd: 0.9, n: 6, pierce: 4, area: 1.2, speed: 340, dur: 0, knock: 30, range: 380, rise: 0.1, orbit: 0.7, mshot: true },
-    levels: [],
+    refine: [
+      { mods: { n: 2 }, txt: '+2 orbiting shards' },
+      { mods: { dmg: 0.25, pierce: 2 }, txt: '+25% damage, pierce 2 more' },
+    ],
   }, {
     fire(w, p, ws, S) {
       const n = Math.max(1, S.n | 0), a0 = w.time * 3;
@@ -135,32 +143,7 @@
     kill: riseKill,
   });
 
-  // ---------------- skills ----------------
-  // Raise Horde: the ground at the cursor (clamped to 240 px from the hero) erupts (N.r, N.dmg, stun 0.5 s) and N.n skeletons rise around it for N.life s.
-  // quake: each skeleton rises in a small bone blast; knight: a Bone Knight rises too.
-  const ERUPT = { knock: 260, look: 'raise', kind: 'skill', stun: 0.5 }, QUAKE = { knock: 160, look: 'bone', kind: 'skill' };
-  ED.addSkill({
-    id: 'raise', name: 'Raise Horde', icon: 'proj.skull', cd: 14, txt: 'Raise skeletons to fight',
-    base: { dmg: 40, r: 90, n: 6, life: 15 },
-    levels: [
-      { mods: { n: 2 }, txt: '+2 skeletons' },
-      { mods: { quake: true }, txt: 'Each skeleton rises in a bone blast' },
-      { mods: { knight: true }, txt: 'Also raises a Bone Knight' },
-    ],
-  }, (w, p, x, y, N) => {
-    const d = Math.hypot(x - p.x, y - p.y);
-    if (d > 240) { x = p.x + (x - p.x) / d * 240; y = p.y + (y - p.y) / d * 240; }
-    w.blast(p, 'raise', x, y, N.r, N.dmg, ERUPT);
-    w.zone({ team: 0, p, wid: 'raise', x, y, r: N.r, dur: 0.6, look: 'raise' });
-    const n = N.n | 0;
-    for (let i = 0; i < n; i++) {
-      const a = i / n * TAU, mx = x + Math.cos(a) * 28, my = y + Math.sin(a) * 28;
-      raise(w, p, mx, my, 'raise', false, N.life);
-      if (N.quake) w.blast(p, 'raise', mx, my, 36, N.dmg * 0.6, QUAKE);
-    }
-    if (N.knight) raise(w, p, x, y, 'raise', true, N.life + 5);
-    return { x: Math.round(x), y: Math.round(y), r: Math.round(N.r), shake: 6, stop: 0.05 };
-  });
+  // ---------------- skill ----------------
   // Corpse Blast: every minion (1.4 r, 1.6x damage) and every fresh corpse (killed by this hero in the last 5 s) within view detonates, plus a nova at the hero (1.2 r).
   // shards: the first 16 blasts each throw 3 bone shards; rerise: detonated minions rise again.
   const SCR = [];
@@ -184,13 +167,13 @@
     // detonate from a snapshot: blasts kill foes, and kill-rise edits p.minions
     const n = liveMinions(p), M = SCR;
     M.length = 0;
-    for (let i = 0; i < n; i++) { const z = p.minions[i]; if (Math.abs(z.x - p.x) <= hw && Math.abs(z.y - p.y) <= hh) { z.dead = true; M.push(z.x, z.y, z.st.big ? 1 : 0, z.wid === 'raise' ? 1 : 0); } }
-    for (let i = 0; i < M.length; i += 4) {
+    for (let i = 0; i < n; i++) { const z = p.minions[i]; if (Math.abs(z.x - p.x) <= hw && Math.abs(z.y - p.y) <= hh) { z.dead = true; M.push(z.x, z.y, z.st.big ? 1 : 0); } }
+    for (let i = 0; i < M.length; i += 3) {
       const zx = M[i], zy = M[i + 1];
       det(w, p, zx, zy, N.r * 1.4, N.dmg * 1.6);
       if (N.shards && k < 16) cshards(w, p, zx, zy, N.dmg * 0.4, k);
       k++;
-      if (N.rerise) raise(w, p, zx, zy, M[i + 3] ? 'raise' : (sigSlot(p) >= 0 ? p.weapons[sigSlot(p)].id : 'boneshard'), !!M[i + 2], M[i + 2] ? 20 : 15);
+      if (N.rerise) raise(w, p, zx, zy, sigSlot(p) >= 0 ? p.weapons[sigSlot(p)].id : 'boneshard', !!M[i + 2], M[i + 2] ? 20 : 15);
     }
     const Cp = corpses(p), now = w.time;
     for (let j = 0; j < CORPSES; j++) {

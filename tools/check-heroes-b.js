@@ -1,10 +1,9 @@
 // Headless check of heroes Cleric, Shade and Bell (exit 1 on failure). Usage: node tools/check-heroes-b.js
-// 1. Signature weapon at every level 1..8 and its evolution: 10 s each in a foe ring, no exceptions, damage > 0 (prints dps per level).
-// 2. Q / E at every skill level 1..4: cast on cooldown at the nearest foe, damage > 0 (prints damage per cast).
-// 3. Mechanics: Sanctuary heals an ally, Judgment sweeps (hits ahead, not behind), Shadow Step blinks and recasts, Fan of Knives counts and waves,
-//    Great Peal stuns the screen and pulls gems, Hurl Bell drags foes, Toll / Cathedral bell bodies.
-// 4. 60 s solo run per hero with level-ups and Q / E spam: no exceptions, same digest twice. 5. Crowd cost at 900 foes (informational).
-// 6. No-target fire: every signature (level 1) and its evolution on its own hero, standing still facing east with no foe alive, breaks a brazier 60 px ahead
+// 1. Signature weapon at 0..9 path ranks (path 0 first) and its path-0 Form refined twice: 10 s each in a foe ring, no exceptions, damage > 0 (prints dps per rank count).
+// 2. Q at every skill level 1..4: cast on cooldown at the nearest foe, damage > 0 (prints damage per cast).
+// 3. Mechanics: Sanctuary heals an ally, Shadow Step blinks and recasts, Great Peal stuns the screen and pulls gems, Toll / Cathedral bell bodies.
+// 4. 60 s solo run per hero with level-ups and Q spam: no exceptions, same digest twice. 5. Crowd cost at 900 foes (informational).
+// 6. No-target fire: every signature (no ranks) and its Form on its own hero, standing still facing east with no foe alive, breaks a brazier 60 px ahead
 //    within the first fire (0.4 s) + its cooldown + 0.9 s travel; a hero projectile crossing a brazier breaks it and keeps its pierce and its flight.
 'use strict';
 const { load } = require('./sim.js');
@@ -40,33 +39,34 @@ function arena(w, p, s, keep, fn) {
   return null;
 }
 
-// 1. weapon levels + evolution
+// 1. path ranks + Form
 for (const cls of HEROES) {
-  const h = ED.HEROES[cls], def = ED.WEAPONS[h.sig], evo = ED.WEAPONS[def.evo];
-  ok(def.levels.length === 7 && def.levels.every(l => l.txt.length <= 40), `${h.sig}: 7 levels, card lines <= 40 chars`);
-  ok(!!evo && evo.evolved && evo.from === h.sig && !!ED.PASSIVES[def.pair], `${h.sig} evolves into ${def.evo} with ${def.pair}`);
+  const h = ED.HEROES[cls], def = ED.WEAPONS[h.sig], form = ED.WEAPONS[def.paths[0].form];
+  ok(def.paths.length === 3 && def.paths.every(pa => pa.ranks.length === 3 && pa.ranks.every(l => l.txt.length <= 40)), `${h.sig}: 3 paths x 3 ranks, card lines <= 40 chars`);
+  ok(!!form && form.form && form.from === h.sig && form.refine.length === 2, `${h.sig}: path 0 unlocks the Form ${form && form.id} (2 refines)`);
   const dps = [];
-  for (let L = 1; L <= 8; L++) {
-    const w = world([cls], 10 + L), p = w.heroes[0];
-    p.weapons[0].lvl = L;
+  for (let R = 0; R <= 9; R++) {
+    const w = world([cls], 10 + R), p = w.heroes[0];
+    w.setRanks(p, p.weapons[0], R, false);
     const err = arena(w, p, 10, 30);
     const d = p.dealt[h.sig] || 0; dps.push(Math.round(d / 10));
-    ok(!err && d > 0, `${h.sig} L${L}: 10 s, dealt ${Math.round(d)}` + (err ? ': ' + err.stack : ''));
+    ok(!err && d > 0 && p.weapons[0].lvl === 1 + R, `${h.sig} ranks ${p.weapons[0].pr.join('')}: 10 s, dealt ${Math.round(d)}` + (err ? ': ' + err.stack : ''));
   }
-  console.log(`     ${h.sig} dps by level: ${dps.join(' ')}`);
+  console.log(`     ${h.sig} dps by rank count 0..9: ${dps.join(' ')}`);
   const w = world([cls], 77), p = w.heroes[0];
-  p.weapons[0].lvl = 8; p.passives.push({ id: def.pair, lvl: 1 }); w.recalc(p);
-  ok(w.weaponReady(p, p.weapons[0]), `${h.sig} L8 + ${def.pair} is evolution-ready`);
-  w.evolve(p, p.weapons[0]);
+  w.setRanks(p, p.weapons[0], 3, false);
+  ok(w.formsReady(p, p.weapons[0]).some(f => f.id === form.id), `${h.sig} path 0 at rank 3: ${form.id} is ready`);
+  w.setRanks(p, p.weapons[0], 6, true);
   const err = arena(w, p, 20, 40);
-  const d = p.dealt[def.evo] || 0;
-  ok(!err && p.weapons[0].id === def.evo && d > 0, `${def.evo}: 20 s, dps ${Math.round(d / 20)}` + (err ? ': ' + err.stack : ''));
+  const d = p.dealt[form.id] || 0;
+  ok(!err && p.weapons[0].id === form.id && p.weapons[0].fl === 2 && d > 0, `${form.id} (ranks 333, refine 2): 20 s, dps ${Math.round(d / 20)}` + (err ? ': ' + err.stack : ''));
 }
 
 // 2. skills at every level
 for (const cls of HEROES) {
   const h = ED.HEROES[cls];
-  for (let si = 0; si < 2; si++) {
+  ok(h.skills.length === 1, `${cls}: one skill (${h.skills[0]})`);
+  for (let si = 0; si < 1; si++) {
     const id = h.skills[si], def = ED.SKILLS[id], line = [];
     ok(def.levels.length === 3 && def.levels.every(l => l.txt.length <= 40), `${id}: 3 levels, card lines <= 40 chars`);
     for (let L = 1; L <= 4; L++) {
@@ -75,7 +75,7 @@ for (const cls of HEROES) {
       let casts = 0;
       const err = arena(w, p, 20, 30, () => {
         const t = w.nearestFoe(p.x, p.y, 400);
-        if (p.skills[si].cd <= 0) { casts++; w.input(p.pid, si ? { e: true, ax: t ? t.x : p.x + 50, ay: t ? t.y : p.y } : { q: true, ax: t ? t.x : p.x + 50, ay: t ? t.y : p.y }); }
+        if (p.skills[si].cd <= 0) { casts++; w.input(p.pid, { q: true, ax: t ? t.x : p.x + 50, ay: t ? t.y : p.y }); }
       });
       const d = p.dealt[id] || 0; line.push(Math.round(d / Math.max(1, casts)));
       ok(!err && d > 0 && casts > 0, `${id} L${L}: ${casts} casts, dealt ${Math.round(d)}` + (err ? ': ' + err.stack : ''));
@@ -85,23 +85,18 @@ for (const cls of HEROES) {
 }
 
 // 3. mechanics
-const cast = (w, p, slot, x, y) => { w.input(p.pid, slot ? { e: true, ax: x, ay: y } : { q: true, ax: x, ay: y }); w.update(C.TICK); w.events.length = 0; };
+const cast = (w, p, slot, x, y) => { w.input(p.pid, { q: true, ax: x, ay: y }); w.update(C.TICK); w.events.length = 0; };
 { // Sanctuary heals an ally inside, not one outside
   const w = world(['cleric', 'knight', 'ranger']), [c, k, r] = w.heroes;
   k.x = c.x + 100; k.y = c.y; r.x = c.x - 300; r.y = c.y; k.hp = 40; r.hp = 40;
   cast(w, c, 0, k.x, k.y); step(w, 2);
   ok(k.hp >= 48 && r.hp === 40, `sanctuary heals the ally inside (${k.hp.toFixed(0)}) and not the one outside (${r.hp.toFixed(0)})`);
 }
-{ // Judgment: hits foes in the swept quarter ahead, not behind
-  const w = world(['cleric']), p = w.heroes[0];
-  p.weapons.length = 0;
-  const ahead = w.spawnFoe('skelknight', p.x + 120, p.y + 40), behind = w.spawnFoe('skelknight', p.x - 120, p.y);
-  cast(w, p, 1, p.x + 200, p.y); step(w, 0.6);
-  ok(ahead.hp < ahead.maxHp && behind.hp === behind.maxHp, `judgment hits ahead (${ahead.hp}/${ahead.maxHp}) and spares behind (${behind.hp}/${behind.maxHp})`);
-  const w2 = world(['cleric']), p2 = w2.heroes[0]; p2.skills[1].lvl = 4; p2.weapons.length = 0;
-  const back = w2.spawnFoe('skelknight', p2.x - 120, p2.y + 10);
-  cast(w2, p2, 1, p2.x + 200, p2.y); step(w2, 1.2);
-  ok(back.hp < back.maxHp, 'judgment L4 beams reach behind');
+{ // E is unbound: an E press casts nothing
+  const w = world(['cleric']), p = w.heroes[0], sk = p.skills[0];
+  w.input(p.pid, { e: true, ax: p.x + 50, ay: p.y }); w.update(C.TICK);
+  ok(sk.cd === 0 && !w.events.some(e => e.t === 'skill'), 'an E press casts nothing');
+  w.events.length = 0;
 }
 { // Shadow Step: blink + recast window
   const w = world(['shade']), p = w.heroes[0], sk = p.skills[0];
@@ -119,16 +114,7 @@ const cast = (w, p, slot, x, y) => { w.input(p.pid, slot ? { e: true, ax: x, ay:
   cast(w3, p3, 0, p3.x + 160, p3.y); step(w3, 3);
   ok(sk3.cd > 3 && sk3.cd < 5, `L4: unused recast window resumes the cooldown (${sk3.cd.toFixed(1)} s)`);
 }
-{ // Fan of Knives counts (distinct knife projectiles over 0.5 s)
-  const count = (L) => {
-    const w = world(['shade']), p = w.heroes[0], seen = new Set(); p.weapons.length = 0; p.skills[1].lvl = L;
-    w.input(p.pid, { e: true, ax: p.x + 50, ay: p.y });
-    for (let i = 0; i < 30; i++) { w.update(C.TICK); w.events.length = 0; for (const pr of w.projs) if (pr.wid === 'fan') seen.add(pr.id); }
-    return seen.size;
-  };
-  const n1 = count(1), n2 = count(2), n3 = count(3);
-  ok(n1 === 24 && n2 === 36 && n3 === 72, `fan knives L1 24 (${n1}), L2 36 (${n2}), L3 two rings 72 (${n3})`);
-}
+
 { // Great Peal: stuns the screen, pulls gems at L4
   const w = world(['bell']), p = w.heroes[0]; p.weapons.length = 0; p.skills[0].lvl = 4;
   ring(w, p.x, p.y, 40, 150, 'skeleton', 50); ring(w, p.x, p.y, 40, 300, 'skeleton', 50);
@@ -139,22 +125,15 @@ const cast = (w, p, slot, x, y) => { w.input(p.pid, slot ? { e: true, ax: x, ay:
   ok(n > 0 && s === n, `great peal stuns every foe within 330 px (${s}/${n})`);
   ok(!g || g.pull === p.pid, 'great peal L4 pulls gems');
 }
-{ // Hurl Bell drags foes toward the landing point
-  const w = world(['bell']), p = w.heroes[0]; p.weapons.length = 0;
-  const f = w.spawnFoe('skeleton', p.x + 60, p.y + 10); f.hp = f.maxHp = 1e6;
-  cast(w, p, 1, p.x + 300, p.y); step(w, 0.5);
-  ok(f.x > p.x + 160, `hurl bell drags a foe from 60 to ${Math.round(f.x - p.x)} px`);
-  step(w, 0.6);
-  ok(f.hp < f.maxHp, 'hurl bell rings where it lands');
-}
 { // Toll / Cathedral bell bodies
-  const w = world(['bell']), p = w.heroes[0];
+  const w = world(['bell']), p = w.heroes[0], ws = p.weapons[0];
   step(w, 0.2);
   ok(w.zones.filter(z => z.k === 'tollb').length === 1, 'toll: one bell orbits');
-  p.weapons[0].lvl = 8; step(w, 0.2);
-  ok(w.zones.filter(z => z.k === 'tollb').length === 2, 'toll L5+: two bells orbit');
-  p.passives.push({ id: 'reach', lvl: 1 }); w.recalc(p); w.evolve(p, p.weapons[0]); step(w, 0.5);
-  ok(w.zones.filter(z => z.k === 'cathb').length === 3 && !w.zones.some(z => z.k === 'tollb'), 'cathedral: three bells, toll bells gone');
+  w.setRanks(p, ws, 1, false); step(w, 0.2);
+  ok(w.zones.filter(z => z.k === 'tollb').length === 2, 'toll Carillon rank 1: two bells orbit');
+  w.setRanks(p, ws, 2, true); step(w, 0.5);
+  const nb = w.weaponS(p, 0).n | 0;
+  ok(ws.id === 'cathedral' && nb >= 3 && w.zones.filter(z => z.k === 'cathb').length === nb && !w.zones.some(z => z.k === 'tollb'), `cathedral: ${nb} bells (3 + Carillon), toll bells gone`);
 }
 
 // 4. 60 s runs with level-ups and Q / E spam, determinism
@@ -164,7 +143,7 @@ function full(cls, seed) {
   try {
     for (let tick = 0; tick < 3600; tick++) {
       const p = w.heroes[0], a = tick / 60 * 0.7;
-      w.input(p.pid, { mx: Math.cos(a), my: Math.sin(a), ax: p.x + Math.cos(a * 3) * 120, ay: p.y + Math.sin(a * 3) * 120, q: tick % 30 === 0, e: tick % 30 === 15, dash: tick % 300 === 90, pick: p.offer ? 1 : 0 });
+      w.input(p.pid, { mx: Math.cos(a), my: Math.sin(a), ax: p.x + Math.cos(a * 3) * 120, ay: p.y + Math.sin(a * 3) * 120, q: tick % 30 === 0, dash: tick % 300 === 90, pick: p.offer ? 1 : 0 });
       w.update(C.TICK); w.events.length = 0;
       if (tick % 60 === 0) { let s = w.kills + '|' + w.level + '|' + p.x.toFixed(2) + ',' + p.y.toFixed(2) + '|' + w.foes.length + '|' + w.projs.length + '|' + w.zones.length; digest = (Math.imul(digest, 31) + U.hashStr(s)) >>> 0; }
     }
@@ -173,14 +152,14 @@ function full(cls, seed) {
 }
 for (const cls of HEROES) {
   const a = full(cls, 41), b = full(cls, 41), p = a.w.heroes[0];
-  ok(!a.err && !b.err, `${cls}: 60 s run, kills ${a.w.kills}, level ${a.w.level}, weapons ${p.weapons.map(x => x.id + x.lvl).join(' ')}` + (a.err ? ': ' + a.err.stack : ''));
+  ok(!a.err && !b.err, `${cls}: 60 s run, kills ${a.w.kills}, level ${a.w.level}, weapon ${p.weapons.map(x => x.id + ' ' + x.pr.join('')).join(' ')}` + (a.err ? ': ' + a.err.stack : ''));
   ok(a.digest === b.digest, `${cls}: same digest twice (${a.digest})`);
 }
 
-// 5. crowd cost: evolved weapon + skills L4 cast on cooldown inside a held 900-foe crowd, 10 s. Informational (shared CPU); fails only above 8 ms/tick average.
+// 5. crowd cost: maxed Form + skill L4 cast on cooldown inside a held 900-foe crowd, 10 s. Informational (shared CPU); fails only above 8 ms/tick average.
 for (const cls of HEROES) {
-  const w = world([cls], 9), p = w.heroes[0], def = ED.WEAPONS[p.weapons[0].id];
-  p.weapons[0].lvl = 8; p.passives.push({ id: def.pair, lvl: 5 }, { id: 'multishot', lvl: 5 }, { id: 'duration', lvl: 5 }); w.recalc(p); w.evolve(p, p.weapons[0]);
+  const w = world([cls], 9), p = w.heroes[0];
+  p.passives.push({ id: 'reach', lvl: 5 }, { id: 'multishot', lvl: 5 }, { id: 'duration', lvl: 5 }); w.setRanks(p, p.weapons[0], 9, true);
   for (const sk of p.skills) sk.lvl = 4;
   const rng = U.RNG(3);
   let tot = 0, worst = 0, n = 0, err = null;
@@ -189,7 +168,7 @@ for (const cls of HEROES) {
       for (let k = 0; w.foes.length < 900 && k < 300; k++) { const a = rng.next() * U.TAU, d = 60 + rng.next() * 380; w.spawnFoe('skeleton', p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, HP); }
       HP.hpMul = 40;
       const t = w.nearestFoe(p.x, p.y, 300), a = tick / 60;
-      w.input(p.pid, { mx: Math.cos(a) * 0.5, my: Math.sin(a) * 0.5, ax: t ? t.x : p.x + 80, ay: t ? t.y : p.y, q: p.skills[0].cd <= 0, e: p.skills[1].cd <= 0 });
+      w.input(p.pid, { mx: Math.cos(a) * 0.5, my: Math.sin(a) * 0.5, ax: t ? t.x : p.x + 80, ay: t ? t.y : p.y, q: p.skills[0].cd <= 0 });
       const t0 = process.hrtime.bigint();
       w.update(C.TICK);
       const ms = Number(process.hrtime.bigint() - t0) / 1e6;
@@ -211,7 +190,7 @@ for (const cls of HEROES) {
   };
   for (const cls of ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell']) {
     const sig = ED.HEROES[cls].sig;
-    for (const wid of [sig, ED.WEAPONS[sig].evo]) {
+    for (const wid of [sig, ED.WEAPONS[sig].paths[0].form]) {
       const { w, p, b } = setup(cls, wid), lim = 0.4 + w.weaponS(p, 0).cd + 0.9;
       let t = 0, shots = 0, err = null;
       try {

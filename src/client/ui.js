@@ -151,10 +151,9 @@
     box.appendChild(head);
     if (open) {
       const kit = document.createElement('div'); kit.className = 'hd-kit';
-      const sig = ED.WEAPONS[h.sig], q = ED.SKILLS[h.skills[0]], e = ED.SKILLS[h.skills[1]];
+      const sig = ED.WEAPONS[h.sig], q = ED.SKILLS[h.skills[0]];
       if (sig) kit.appendChild(kitRow(sig.icon, '', sig.name, sig.txt));
       if (q) kit.appendChild(kitRow(q.icon, keyOf('skill1', 'Q'), q.name, q.txt));
-      if (e) kit.appendChild(kitRow(e.icon, keyOf('skill2', 'E'), e.name, e.txt));
       box.appendChild(kit);
     } else {
       const pr = unlockProgress(A.profile, rule), lk = document.createElement('div'); lk.className = 'lock-box';
@@ -277,32 +276,28 @@
   }
 
   // ---------------- level-up offer ----------------
-  const pairName = (id) => (ED.PASSIVES[id] ? ED.PASSIVES[id].name : id);
-  // Card face: badge, level pips, second line (evolution hint), evolution-ready flag.
+  // A Form shows as ??? until the profile has seen it (Encyclopedia record).
+  const formKnown = UI.formKnown = (id) => !!(ED.Meta && ED.Meta.seen && ED.Meta.seen('weapons', id));
+  // Card face: name, line, badge, rank pips, Form flag. Path: weapon + path name, rank line; Form: name or ???; refine: Form name.
   function cardInfo(me, c) {
-    const o = { badge: '', bcls: '', max: 0, lvl: c.lvl || 0, sub: c.sub || '', evo: !!c.evo, ready: !!c.evo };
-    if (c.kind === 'weapon' || c.kind === 'wlvl') {
-      const d = ED.WEAPONS[c.id]; if (!d) return o;
-      o.max = ED.weaponMaxLvl ? ED.weaponMaxLvl(d) : 8;
-      o.badge = c.kind === 'weapon' ? 'NEW' : 'LV ' + c.lvl; o.bcls = c.kind === 'weapon' ? 'new' : 'lv';
-      if (d.evo && d.pair && !o.sub) {
-        const has = me && me.passives.some(ps => ps.id === d.pair);
-        if (c.lvl >= o.max) { o.ready = !!has; o.sub = has ? 'Evolves at the next chest' : 'Evolves with ' + pairName(d.pair); }
-        else o.sub = 'Evolves with ' + pairName(d.pair) + (has ? ' (owned)' : '');
-        o.evo = true;
-      } else if (d.sig && c.kind === 'weapon' && !o.sub) o.sub = 'Signature weapon';
+    const o = { name: c.name, txt: c.txt, badge: '', bcls: '', max: 0, lvl: c.lvl || 0, ready: false };
+    if (c.kind === 'path') {
+      const d = ED.WEAPONS[c.id];
+      o.name = (d ? d.name + ': ' : '') + c.name; o.max = ED.PATH_MAX || 3;
+      o.badge = 'RANK ' + c.lvl; o.bcls = 'lv';
+    } else if (c.kind === 'form') {
+      const known = formKnown(c.id);
+      o.name = known ? c.name : '???'; o.txt = known ? c.txt : 'An unknown form';
+      o.badge = 'FORM'; o.bcls = 'new'; o.ready = true;
+    } else if (c.kind === 'refine') {
+      const d = ED.WEAPONS[c.id]; o.max = d && d.refine ? d.refine.length : 2;
+      o.badge = 'REFINE ' + c.lvl; o.bcls = 'lv';
     } else if (c.kind === 'passive' || c.kind === 'plvl') {
       const d = ED.PASSIVES[c.id]; o.max = d ? d.max : 5;
       o.badge = c.kind === 'passive' ? 'NEW' : 'LV ' + c.lvl; o.bcls = c.kind === 'passive' ? 'new' : 'lv';
-      if (c.kind === 'passive' && me) for (const ws of me.weapons) {
-        const wd = ED.WEAPONS[ws.id];
-        if (wd && wd.pair === c.id && wd.evo && !wd.evolved && ws.lvl >= (ED.weaponMaxLvl ? ED.weaponMaxLvl(wd) : 8)) { o.ready = true; o.sub = 'Evolves ' + wd.name + '!'; break; }
-      }
-      o.evo = !!o.sub;
     } else if (c.kind === 'skill') {
       const d = ED.SKILLS[c.id]; o.max = d && ED.skillMaxLvl ? ED.skillMaxLvl(d) : 4;
-      const idx = me ? me.skills.findIndex(sk => sk.id === c.id) : -1;
-      o.badge = (idx === 1 ? keyOf('skill2', 'E') : keyOf('skill1', 'Q')) + ' skill LV ' + c.lvl; o.bcls = 'sk';
+      o.badge = keyOf('skill1', 'Q') + ' skill LV ' + c.lvl; o.bcls = 'sk';
     }
     return o;
   }
@@ -310,7 +305,7 @@
   UI.syncOffer = (me, solo) => {
     const ov = $('ov-offer'), offer = me && !me.dead ? me.offer : null;
     if (!offer || !(me.banishes > 0)) UI.banishOn = false;
-    const sig = offer ? offer.map(c => c.kind + c.id + c.lvl).join('|') + '|' + me.rerolls + me.skips + (me.banishes | 0) + (UI.banishOn ? 'b' : '') + (solo ? 's' : 'c') : '';
+    const sig = offer ? offer.map(c => c.kind + c.id + (c.path | 0) + c.lvl).join('|') + '|' + me.rerolls + me.skips + (me.banishes | 0) + (UI.banishOn ? 'b' : '') + (solo ? 's' : 'c') : '';
     if (sig === UI.offerSig) return;
     UI.offerSig = sig;
     ov.hidden = !offer;
@@ -324,9 +319,9 @@
       const banOk = UI.banishOn && c.kind !== 'gold' && c.kind !== 'heal';
       b.className = 'offer-card k-' + c.kind + (f.ready ? ' evo-ready' : '') + (banOk ? ' banish' : '');
       b.insertAdjacentHTML('beforeend', `<span class="key">${keyOf('pick' + (i + 1), String(i + 1))}</span>`);
-      b.appendChild(UI.iconCanvas(c.icon, 64, 'ic'));
-      b.insertAdjacentHTML('beforeend', `<b class="card-name">${esc(c.name)}</b>` + (f.badge ? `<span class="badge ${f.bcls}">${esc(f.badge)}</span>` : '') +
-        `<span class="card-txt">${esc(c.txt)}</span>` + (f.sub ? `<span class="card-sub${f.evo ? ' evo' : ''}">${esc(f.sub)}</span>` : '') + (f.max > 1 ? pips(f.lvl, f.max, false) : ''));
+      b.appendChild(UI.iconCanvas(c.kind === 'form' && f.name === '???' ? 'fx.spark.magic' : c.icon, 64, 'ic'));
+      b.insertAdjacentHTML('beforeend', `<b class="card-name">${esc(f.name)}</b>` + (f.badge ? `<span class="badge ${f.bcls}">${esc(f.badge)}</span>` : '') +
+        `<span class="card-txt">${esc(f.txt)}</span>` + (f.max > 1 ? pips(f.lvl, f.max, false) : ''));
       b.onclick = () => { if (!UI.banishOn) ED.Game.pick(i); else if (banOk) { UI.banishOn = false; ED.Game.banish(i); } };
       box.appendChild(b);
     });
@@ -352,26 +347,22 @@
     let evo = false;
     for (const r of results) {
       const row = document.createElement('div'); row.className = 'chest-row';
-      if (r.kind === 'evo') {
+      if (r.kind === 'offer') {
         evo = true; row.classList.add('evo');
-        const a = ED.WEAPONS[r.from], b = ED.WEAPONS[r.id];
-        if (a) row.appendChild(UI.iconCanvas(a.icon, 48));
-        row.insertAdjacentHTML('beforeend', '<span class="arrow">&gt;</span>');
-        if (b) row.appendChild(UI.iconCanvas(b.icon, 48));
-        row.insertAdjacentHTML('beforeend', `<span>${esc(b ? b.name : r.id)}</span>`);
-      } else if (r.kind === 'wlvl' || r.kind === 'plvl') {
-        const d = r.kind === 'wlvl' ? ED.WEAPONS[r.id] : ED.PASSIVES[r.id], slot = me && (r.kind === 'wlvl' ? me.weapons : me.passives).find(x => x.id === r.id);
+        row.appendChild(UI.iconCanvas(r.icon || 'fx.spark.magic', 48));
+        row.insertAdjacentHTML('beforeend', `<span>${esc(r.txt || 'An extra level-up')}</span>`);
+      } else if (r.kind === 'plvl' || r.kind === 'skill') {
+        const d = r.kind === 'plvl' ? ED.PASSIVES[r.id] : ED.SKILLS[r.id], slot = me && (r.kind === 'plvl' ? me.passives : me.skills).find(x => x.id === r.id);
         if (d) row.appendChild(UI.iconCanvas(d.icon, 48));
-        row.insertAdjacentHTML('beforeend', `<span>${esc(d ? d.name : r.id)}</span>` + (slot ? `<span class="lv">LV ${slot.lvl}</span>` : ''));
+        row.insertAdjacentHTML('beforeend', `<span>${esc(d ? d.name : r.id)}</span>` + `<span class="lv">LV ${slot ? slot.lvl : r.lvl}</span>`);
       } else {
         row.appendChild(UI.iconCanvas('pickup.coin', 48));
-        row.insertAdjacentHTML('beforeend', '<span>+25 gold</span>');
+        row.insertAdjacentHTML('beforeend', `<span>${esc(r.txt || '+25 gold')}</span>`);
       }
       row.style.animationDelay = (list.children.length * 0.12 + 0.15) + 's';
       list.appendChild(row);
     }
-    $('chest-head').textContent = evo ? 'EVOLUTION!' : 'Chest!';
-    if (evo && ED.HUD) ED.HUD.banner = null; // the popup replaces the 'evolved' banner
+    $('chest-head').textContent = evo ? 'Boss chest!' : 'Chest!';
     clearTimeout(chestT); clearTimeout(chestOut);
     el.classList.remove('out'); el.hidden = false;
     el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
@@ -382,6 +373,13 @@
   };
 
   // ---------------- pause ----------------
+  // Weapon line of a build: 'Name  Path 3 · Path 1 · Path 0' (+ '  Refine n' with a Form). ws: { id, pr, fl } or a summary build entry.
+  const buildLine = UI.buildLine = (ws) => {
+    const d = ED.WEAPONS[ws.id], root = ED.WEAPONS[ED.weaponRoot ? ED.weaponRoot(ws.id) : ws.id];
+    if (!d) return '';
+    const P = (root && root.paths) || [], pr = ws.pr || [];
+    return d.name + '  ' + P.map((pa, i) => pa.name + ' ' + (pr[i] | 0)).join(' · ') + (d.form ? '  Refine ' + (ws.fl | 0) : '');
+  };
   function renderPauseBuild() {
     const me = ED.Game.view && ED.Game.view.me, box = $('pause-build');
     box.textContent = '';
@@ -396,7 +394,7 @@
       }
       box.appendChild(r);
     };
-    row(me.weapons, ED.WEAPONS, ED.MAX_WEAPONS || 6);
+    for (const ws of me.weapons) { const l = document.createElement('div'); l.className = 'pb-line'; l.textContent = buildLine(ws); box.appendChild(l); }
     row(me.passives, ED.PASSIVES, ED.MAX_PASSIVES || 6);
   }
 
@@ -408,6 +406,7 @@
     t.className = 'res-title ' + (won ? 'won' : 'lost');
     const me = sum.perHero.find(h => h.pid === ED.Game.myPid) || sum.perHero[0], sd = ED.STAGES[sum.stage];
     $('res-sub').textContent = (sd ? sd.name : '') + (me && ED.HEROES[me.cls] ? '  -  ' + ED.HEROES[me.cls].name : '');
+    $('res-build').textContent = me && me.build ? me.build.map(buildLine).join('   ') : '';
     $('res-stats').innerHTML = `<div><b>${U.fmtTime(sum.time)}</b><span>Time</span></div><div><b>${U.fmtNum(sum.kills)}</b><span>Kills</span></div><div><b>${sum.level}</b><span>Level</span></div><div><b>+${sum.gold}</b><span>Gold</span></div>`;
     const chart = $('res-chart');
     chart.textContent = '';
@@ -436,7 +435,7 @@
     const add = (icon, text) => { const d = document.createElement('div'); d.className = 'unlock'; if (icon) d.appendChild(UI.iconCanvas(icon, 48)); d.insertAdjacentHTML('beforeend', `<span>${esc(text)}</span>`); un.appendChild(d); };
     if (sum.note) add('', sum.note);
     if (gained) {
-      for (const n of gained.news || []) add(n.kind === 'hero' ? heroIcon(n.id) : n.kind === 'weapon' && ED.WEAPONS[n.id] ? ED.WEAPONS[n.id].icon : '', n.txt);
+      for (const n of gained.news || []) add(n.kind === 'hero' ? heroIcon(n.id) : '', n.txt);
       if (gained.records && gained.records.length) add('', 'New record: ' + gained.records.join(', '));
     }
     $('btn-res-again').hidden = UI.lastMode !== 'solo';

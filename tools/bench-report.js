@@ -34,7 +34,6 @@ th{color:var(--ink2);font-weight:600;background:var(--surface)}
 table.sort th{cursor:pointer;user-select:none}table.sort th:hover{color:var(--ink)}
 th[data-dir="1"]::after{content:" ▲"}th[data-dir="-1"]::after{content:" ▼"}
 tbody tr:nth-child(even){background:var(--zebra)}
-tr.base td{font-weight:600}
 .pos{color:var(--good)}.neg{color:var(--bad)}.dim{color:var(--muted)}
 .ci{color:var(--muted);font-size:12px;font-weight:400}
 td.few{opacity:.45}
@@ -57,32 +56,27 @@ dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;margin:0;font
 `;
 
 const BODY = `
-<h1>Weapon balance bench</h1>
+<h1>Hero balance bench</h1>
 <p class="sub" id="headline"></p>
 <div id="banners"></div>
 <div class="bar"><label>Group<select id="grp"></select></label><span class="note" id="grpn"></span><span class="banner" id="sat" hidden>Win % saturated: compare TTK / hurt</span></div>
 
 <section id="howto"><h2>Reading this report</h2><ul class="note">
-<li>Win % is the whole build (signature + forced weapon + passives), not the forced weapon alone. Fill off: the bot takes no other weapons; fill on: it also picks up others.</li>
-<li><b>Relative strength</b> (primary balance metric): the weapon minus the hero's mean over all forced weapons run on the same stage, hero, seed, meta, fill and skill (baseline excluded; the baseline row shows what no second weapon costs).</li>
-<li>Δ vs baseline: the weapon minus the hero's signature-only run on the same tuple. It measures a free second weapon, so it is positive by construction.</li>
-<li>Deltas pair only tuples present in both arms (TTK: both won). CI: 95% percentile bootstrap over tuples, <span id="bootn"></span> seeded resamples (deterministic). ● = CI excludes 0. Faded / hatched = fewer than <span id="minp"></span> pairs.</li>
+<li>Win % is the whole build: the hero's one weapon (paths, Form), passives and skill, as the bot picks them.</li>
+<li><b>Relative strength</b> (primary balance metric): the hero minus the mean of every hero run on the same stage, seed, meta and skill.</li>
+<li>Deltas pair only tuples where both sides have a value (TTK: won runs). CI: 95% percentile bootstrap over tuples, <span id="bootn"></span> seeded resamples (deterministic). ● = CI excludes 0. Faded / hatched = fewer than <span id="minp"></span> pairs.</li>
 <li>Final TTK: kill time minus spawn time of the last boss slot, won runs only. Boss TTK per slot: all runs that killed it. Hurt/min: damage taken / survival time × 60. Lost survival: mean time of lost runs only (timeouts included).</li>
-<li>Dmg share: forced weapon + its evolution over all damage dealt, class skills included (baseline: the signature). Ranking order: win %, Wilson lower bound, final TTK ↑, hurt/min ↑.</li>
+<li>Dmg share: the weapon and its Forms over all damage dealt, the class skill included. Form: runs that took a Form. Ranking order: win %, Wilson lower bound, final TTK ↑, hurt/min ↑.</li>
 </ul></section>
 
-<section id="ranking"><h2>Weapon ranking</h2>
-<p class="note">Aggregated over heroes. Win 95% CI: Wilson. Click a header to sort.</p>
+<section id="ranking"><h2>Hero ranking</h2>
+<p class="note">Aggregated over the group's stages. Win 95% CI: Wilson. Click a header to sort.</p>
 <div class="scroll"><table class="sort" id="rankT"></table></div></section>
 
-<section id="heatmap"><h2>Hero × weapon</h2>
+<section id="heatmap"><h2>Hero × stage</h2>
 <label>Metric<select id="metric"></select></label>
 <div class="legend" id="legend"></div>
 <div class="scroll"><table class="heat" id="heatT"></table></div></section>
-
-<section id="baseline"><h2>Baseline per hero</h2>
-<p class="note">No forced weapon (with fill off: the signature only).</p>
-<div class="scroll"><table class="sort" id="baseT"></table></div></section>
 
 <div class="grid2">
 <section id="deaths"><h2>Death causes</h2><p class="note">Lost runs only; timeout = survived to maxTime without killing the final boss.</p><div class="scroll"><table class="sort" id="deathT"></table></div>
@@ -106,7 +100,6 @@ function client(S) {
   const dur = (s) => { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return (h ? h + 'h ' : '') + m + 'm ' + (s % 60) + 's'; };
   const secs = (x) => nul(x) ? '–' : Math.round(x) + ' s';
   const fix1 = (x) => nul(x) ? '–' : x.toFixed(1);
-  const wname = (k) => k === 'baseline' ? 'Baseline' : (S.weapons[k] || k);
   const MINP = S.meta.minPairs || 8;
   // Paired-delta metrics: formatter and the sign that is good.
   const DM = { win: { f: x => Math.round(x * 100) + ' pt', good: 1, h: 'win' }, ttk: { f: x => Math.round(x) + ' s', good: -1, h: 'final TTK' }, hurt: { f: x => x.toFixed(1), good: -1, h: 'hurt/min' } };
@@ -133,12 +126,11 @@ function client(S) {
     const slotCols = [];
     for (let i = 0; i < g.slots - 1; i++) slotCols.push({ h: 'Boss ' + (i + 1) + ' TTK', v: r => r.slotTTK[i], f: r => secs(r.slotTTK[i]), t: 'mean kill time - spawn time of slot ' + (i + 1) + ', runs that killed it' });
     table($('rankT'), [
-      { h: 'Weapon', v: r => r.name, f: r => esc(r.name) + (r.weapon !== 'baseline' ? ' <span class="dim">' + esc(r.weapon) + '</span>' : '') },
+      { h: 'Hero', v: r => r.name, f: r => esc(r.name) + ' <span class="dim">' + esc(r.wname) + '</span>' },
       { h: 'n', v: r => r.n, f: r => r.n, t: 'runs' },
-      { h: 'Heroes', v: r => r.heroes, f: r => r.heroes },
       { h: 'Win', v: r => r.win, f: r => pct(r.win) },
       { h: '95% CI', v: r => r.lo, f: r => '<span class="ci">' + pct(r.lo) + '–' + pct(r.hi) + '</span>', t: 'Wilson interval; sorts by the lower bound' },
-      dcol('rel', 'win', 'Rel Δ win', 'relative strength: minus the hero mean over forced weapons, same tuple'),
+      dcol('rel', 'win', 'Rel Δ win', 'relative strength: minus the mean of every hero, same stage / seed / meta / skill'),
       dcol('rel', 'ttk', 'Rel Δ final TTK', 'relative strength in final-boss TTK (negative = faster), both won'),
       dcol('rel', 'hurt', 'Rel Δ hurt/min', 'relative damage taken per minute (negative = safer)'),
       { h: 'Final TTK', v: r => r.finalTTK, f: r => secs(r.finalTTK), t: 'final boss kill - spawn, won runs' },
@@ -148,14 +140,11 @@ function client(S) {
       { h: 'Lost', v: r => r.lostN, f: r => r.lostN },
       { h: 'Lost survival', v: r => r.lostTime, f: r => mmss(r.lostTime), t: 'mean survival time of lost runs only' },
       { h: 'Kills/min', v: r => r.killsMin, f: r => r.killsMin.toLocaleString() },
-      dcol('base', 'win', 'Δ win vs base', 'minus the hero baseline (signature only), same tuple: a free second weapon'),
-      dcol('base', 'ttk', 'Δ TTK vs base'),
-      dcol('base', 'hurt', 'Δ hurt vs base'),
       { h: 'Level', v: r => r.level, f: r => fix1(r.level) },
-      { h: 'Dmg share', v: r => r.share, f: r => pct(r.share), t: 'forced weapon + evolution / all damage incl. class skills' },
-      { h: 'Evolved', v: r => r.evoRate, f: r => pct(r.evoRate), t: 'runs where the weapon evolved' },
-      { h: 'Evolve at', v: r => r.evoTime, f: r => mmss(r.evoTime), t: 'mean evolution time of evolved runs' },
-    ], g.weapons, r => r.weapon === 'baseline' ? 'base' : '');
+      { h: 'Dmg share', v: r => r.share, f: r => pct(r.share), t: 'weapon + its Forms / all damage incl. the class skill' },
+      { h: 'Form', v: r => r.formRate, f: r => pct(r.formRate), t: 'runs that took a Form' },
+      { h: 'Form at', v: r => r.formTime, f: r => mmss(r.formTime), t: 'mean time of the Form pick' },
+    ], g.rows);
   }
 
   // Colour: sequential = one blue ramp light->dark; diverging = red (worse) <- grey -> blue (better). Numbers are always printed in the cell.
@@ -174,19 +163,19 @@ function client(S) {
     ['relWin', 'Relative strength: Δ win', 'd', c => c.rel && c.rel.win, null, 'win'],
     ['relTTK', 'Relative: Δ final TTK', 'd', c => c.rel && c.rel.ttk, null, 'ttk'],
     ['relHurt', 'Relative: Δ hurt/min', 'd', c => c.rel && c.rel.hurt, null, 'hurt'],
-    ['baseWin', 'Δ win vs hero baseline', 'd', c => c.base && c.base.win, null, 'win'],
+
     ['finalTTK', 'Final-boss TTK (won runs)', 'r', c => c.finalTTK, secs],
     ['hurtMin', 'Damage taken / min', 'r', c => c.hurtMin, fix1],
     ['lostTime', 'Lost-run survival', 'r', c => c.lostTime, mmss],
     ['share', 'Dmg share', 'p', c => c.share, pct],
-    ['evoRate', 'Evolution rate', 'p', c => c.evoRate, pct],
+    ['formRate', 'Form rate', 'p', c => c.formRate, pct],
   ];
   $('metric').innerHTML = HM.map(m => '<option value="' + m[0] + '">' + esc(m[1]) + '</option>').join('');
   $('metric').value = 'relWin';
 
   function heatmap(g) {
     const M = HM.find(m => m[0] === $('metric').value) || HM[0], [, , kind, get, fmt0, dm] = M;
-    const ws = g.weapons.map(w => w.weapon).sort((a, b) => (b === 'baseline') - (a === 'baseline'));
+    const ws = g.stages;
     const cells = Object.values(g.cells), vals = [];
     for (const c of cells) { const x = get(c); const v = kind === 'd' ? (x && !few(x) ? x.d : null) : x; if (!nul(v)) vals.push(v); }
     const dmax = Math.max(dm === 'win' ? 0.05 : dm === 'ttk' ? 2 : 0.2, ...vals.map(Math.abs));
@@ -196,19 +185,19 @@ function client(S) {
     const lg = kind === 'd' ? 'linear-gradient(90deg,' + rgb(div(-1)) + ',' + rgb(div(0)) + ',' + rgb(div(1)) + ')' : 'linear-gradient(90deg,' + [0, .25, .5, .75, 1].map(t => rgb(seq(t))).join(',') + ')';
     const ends = kind === 'd' ? [sg(-dmax * DM[dm].good, DM[dm].f) + ' (worse)', sg(dmax * DM[dm].good, DM[dm].f) + ' (better)'] : kind === 'p' ? ['0%', '100%'] : [fmt(lo), fmt(hi)];
     $('legend').innerHTML = '<span>' + ends[0] + '</span><span class="ramp" style="background:' + lg + '"></span><span>' + ends[1] + '</span><span class="dim">· cell: value, then n' +
-      (kind === 'd' ? ' pairs · ● CI excludes 0 (outlined) · hatched: n < ' + MINP : ' runs and win %') + ' · baseline first, then ranking order · hover for details</span>';
-    let h = '<thead><tr><th>Hero</th>' + ws.map(w => '<th class="w">' + esc(wname(w)) + '</th>').join('') + '</tr></thead><tbody>';
+      (kind === 'd' ? ' pairs · ● CI excludes 0 (outlined) · hatched: n < ' + MINP : ' runs and win %') + ' · hover for details</span>';
+    let h = '<thead><tr><th>Hero</th>' + ws.map(s => '<th class="w">' + esc(s.name) + '</th>').join('') + '</tr></thead><tbody>';
     for (const hero of g.heroes) {
       const hn = (S.heroes.find(x => x.id === hero) || {}).name || hero;
       h += '<tr><th style="text-align:left">' + esc(hn) + '</th>';
-      for (const w of ws) {
-        const c = g.cells[hero + '|' + w];
-        if (!c) { h += '<td class="c dim" title="' + esc(hn) + ' × ' + esc(wname(w)) + ': not run">·</td>'; continue; }
+      for (const s of ws) {
+        const c = g.cells[hero + '|' + s.i];
+        if (!c) { h += '<td class="c dim" title="' + esc(hn) + ' × ' + esc(s.name) + ': not run">·</td>'; continue; }
         const x = get(c), v = kind === 'd' ? (x ? x.d : null) : x, isFew = kind === 'd' && few(x), sig = kind === 'd' && x && x.sig && !isFew;
         const bg = nul(v) || isFew ? null : colour(v);
-        const tip = hn + ' × ' + wname(w) + '\nruns ' + c.n + '   win ' + pct(c.win) + '   final TTK ' + secs(c.finalTTK) + '   hurt/min ' + fix1(c.hurtMin) +
+        const tip = hn + ' × ' + s.name + '\nruns ' + c.n + '   win ' + pct(c.win) + '   final TTK ' + secs(c.finalTTK) + '   hurt/min ' + fix1(c.hurtMin) +
           '\nrel Δ win ' + dtext(c.rel && c.rel.win, 'win') + '\nrel Δ TTK ' + dtext(c.rel && c.rel.ttk, 'ttk') + '\nrel Δ hurt ' + dtext(c.rel && c.rel.hurt, 'hurt') +
-          (w === 'baseline' ? '' : '\nvs base: Δ win ' + dtext(c.base && c.base.win, 'win') + '\nvs base: Δ TTK ' + dtext(c.base && c.base.ttk, 'ttk')) + '\ndmg share ' + pct(c.share) + '   evolved ' + pct(c.evoRate);
+          '\ndmg share ' + pct(c.share) + '   Form ' + pct(c.formRate);
         const sub = kind === 'd' ? 'n' + (x ? x.n : 0) : 'n' + c.n + ' · ' + (M[0] === 'win' ? secs(c.finalTTK) : pct(c.win));
         h += '<td class="c' + (isFew ? ' few' : '') + (sig ? ' sig' : '') + '" data-tip="' + esc(tip) + '"' + (bg ? ' style="background:' + rgb(bg) + ';color:' + inkOn(bg) + '"' : '') + '><b>' +
           (nul(v) ? '–' : fmt(v)) + (sig ? ' ●' : '') + '</b><i>' + sub + '</i></td>';
@@ -218,25 +207,6 @@ function client(S) {
     $('heatT').innerHTML = h + '</tbody>';
   }
 
-  function baseline(g) {
-    if (!g.baseline.length) { $('baseT').onclick = null; $('baseT').innerHTML = '<tbody><tr><td class="dim">No baseline runs in this group.</td></tr></tbody>'; return; }
-    table($('baseT'), [
-      { h: 'Hero', v: r => r.name, f: r => esc(r.name) },
-      { h: 'n', v: r => r.n, f: r => r.n },
-      { h: 'Win', v: r => r.win, f: r => pct(r.win) },
-      { h: '95% CI', v: r => r.lo, f: r => '<span class="ci">' + pct(r.lo) + '–' + pct(r.hi) + '</span>' },
-      { h: 'Final TTK', v: r => r.finalTTK, f: r => secs(r.finalTTK) },
-      { h: 'Hurt/min', v: r => r.hurtMin, f: r => fix1(r.hurtMin) },
-      { h: 'Lowest HP', v: r => r.hpLow, f: r => pct(r.hpLow), t: 'mean of each run\'s lowest HP fraction' },
-      { h: 'Lost', v: r => r.lostN, f: r => r.lostN },
-      { h: 'Lost survival', v: r => r.lostTime, f: r => mmss(r.lostTime) },
-      { h: 'Kills/min', v: r => r.killsMin, f: r => r.killsMin.toLocaleString() },
-      { h: 'Level', v: r => r.level, f: r => fix1(r.level) },
-      { h: 'Signature share', v: r => r.share, f: r => pct(r.share) },
-      { h: 'Sig. evolved', v: r => r.evoRate, f: r => pct(r.evoRate) },
-      { h: 'Evolve at', v: r => r.evoTime, f: r => mmss(r.evoTime) },
-    ], g.baseline);
-  }
 
   function deaths(g) {
     if (!g.deaths.length) { $('deathT').onclick = null; $('deathT').innerHTML = '<tbody><tr><td class="dim">No lost runs.</td></tr></tbody>'; return; }
@@ -272,8 +242,8 @@ function client(S) {
       ['Code hash', M.hash + (hs.length ? ' · results: ' + hs.map(([h, n]) => h + ' ×' + n).join(', ') : '')], ['Runner', c.runner || 'tools/bot.js'],
       ['Runs', M.runs + (M.errors ? ' (' + M.errors + ' errors)' : '')], ['Wall time', dur(M.wall) + ' over ' + (M.sessions || []).length + ' session(s)'],
       ['Avg wall time per run', nul(M.avgRunMs) ? '–' : (M.avgRunMs / 1000).toFixed(1) + ' s'],
-      ['Stages', c.stages], ['Heroes', c.heroes], ['Weapons', c.weapons + (c.baseline === false ? ' (no baseline)' : ' + baseline')],
-      ['Seeds', c.seeds + ' from ' + c.seed0], ['Meta', c.meta], ['Fill', c.fill], ['Skill', nul(c.skill) ? (M.legacy ? '1 (assumed: results predate skill)' : '–') : c.skill], ['Max time', mmss(c.maxTime)],
+      ['Stages', c.stages], ['Heroes', c.heroes],
+      ['Seeds', c.seeds + ' from ' + c.seed0], ['Meta', c.meta], ['Skill', nul(c.skill) ? (M.legacy ? '1 (assumed: results predate skill)' : '–') : c.skill], ['Max time', mmss(c.maxTime)],
       ['Bootstrap', M.boot + ' resamples over paired tuples, seeded; min pairs ' + MINP],
       ['Processes', (M.sessions || []).map(s => s.jobs + (s.low ? ' (low priority)' : '') + (s.forced ? ' (--force)' : '')).join(', ')]];
     if (M.fake) rows.push(['Mode', 'stub runner results (not real runs)']);
@@ -292,7 +262,7 @@ function client(S) {
     if (!g) return;
     $('grpn').textContent = g.n + ' runs · overall win ' + pct(g.overall.win) + ' · final TTK ' + secs(g.overall.finalTTK) + ' · hurt/min ' + fix1(g.overall.hurtMin);
     $('sat').hidden = !g.saturated;
-    ranking(g); heatmap(g); baseline(g); deaths(g); taken(g); funnel(g);
+    ranking(g); heatmap(g); deaths(g); taken(g); funnel(g);
   }
   $('grp').innerHTML = S.groups.map((g, i) => '<option value="' + i + '">' + esc(g.label) + (g.saturated ? ' (saturated)' : '') + '</option>').join('');
   const first = S.groups.findIndex(g => g.stage < 0);

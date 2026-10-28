@@ -1,18 +1,20 @@
 # Wickdeep — Game Design (canonical rules and numbers)
 
-Co-op survivors-like (solo or up to 4 friends, browser, zero install). Hordes pour into an open arena; weapons fire on their own; the player moves, dodges, dashes and fires two hero skills. A good run turns the screen into a blender: by minute 12 the hero barely needs to move, bosses melt in seconds.
+Co-op survivors-like (solo or up to 4 friends, browser, zero install). Hordes pour into an open arena; the hero's weapon fires on its own; the player moves, dodges, dashes and fires the hero skill. A good run turns the screen into a blender: by minute 12 the hero barely needs to move, bosses melt in seconds.
 
 Units: world px (hero sprite ≈ 16–24 px tall), seconds. HP numbers are integers.
 
 ## 1. Design laws
 
-1. **Upgrades change shape, not numbers.** Every weapon level adds one of: +1 projectile, +pierce, +bounce, +area, +duration, a second emitter, a new pattern. A flat damage step is allowed only on levels that also do something else. Players must see each pick on screen.
+1. **Upgrades change shape, not numbers.** Every path rank adds one of: +1 projectile, +pierce, +bounce, +area, +duration, a second emitter, a new pattern; a Form is a new pattern. A flat damage step is allowed only on ranks that also do something else. Players must see each pick on screen.
 2. **Power multiplies, foes add.** Foe HP grows linearly with time; hero coverage (count × area × pierce × uptime) grows multiplicatively. Late runs out-scale the horde by design.
 3. **Threat is the crowd, not the hit.** Contact damage is small (3–12 per hit at 100 max HP); death comes from getting surrounded, never from one trash hit.
 4. **One line per card.** Level-up cards: name, icon, one line ≤ 40 characters ("+1 arrow, arrows pierce 1 more"). No paragraphs anywhere in a run.
 5. **Big readable text.** Card text ≥ 20 px CSS, HUD numbers ≥ 16 px CSS, plain pixel font (no decorative faces).
 6. **Every death is earned.** Elite and boss attacks are telegraphed ≥ 0.6 s.
 7. **Determinism.** The sim is seeded and pure; never `Math.random` in `src/sim` or `src/data`.
+8. **No off-screen wipe.** A hero's damage and targeting reach only its own view (§3).
+9. **Every class is unique.** One weapon and one skill per hero; passives are generic stats and evolve nothing.
 
 ## 2. Run structure (Survival mode)
 
@@ -31,54 +33,38 @@ Units: world px (hero sprite ≈ 16–24 px tall), seconds. HP numbers are integ
 | Max HP | 100 (per hero: 80–130) |
 | Armor | 0 (flat reduction per hit, minimum 1 damage taken) |
 | Regen | 0 HP/s |
-| Move speed | 90 px/s (per hero: 80–100) |
+| Move speed | per hero: 68–80 px/s |
 | Pickup radius | 36 px |
 | Dash (Space) | 0.2 s, 80 px, i-frames for its whole length, 3.5 s cooldown, 1 charge |
 | Invulnerability after a hit | 0.5 s |
 
-- **Controls**: WASD move (e.code), mouse aims skills, Space dash, Q and E hero skills, 1–4 pick a level-up card, Esc pause (solo only). No mouse button is bound by default: a click does nothing in a run.
-- **Weapons fire on their own.** Targeting modes: `nearest`, `facing` (toward the nearest foe within ±100° of the movement direction, else the nearest foe in range, else straight along it; Twin Daggers ±52°; Bramble Trail always lashes along the movement direction), `random` (a random foe on screen), `around` (orbit or aura), `densest` (the densest foe cluster within range). **No foe in range**: every signature weapon, its evolution and the `facing` general weapons still fire on their normal cooldown and range along the facing direction (the last movement direction, kept while standing still): shots fly straight ahead, Cleave swings ahead, Bone Storm launches ahead, Smite / Wrath pillars land in a line ahead (60 px steps, kept on screen), Toll / Cathedral peal and Whirlwind spins in place. Other general weapons hold until a foe is in range.
-- **Hero skills (Q/E)** aim at the mouse cursor, cooldowns 6–18 s, and must look and feel huge: screen-wide effects, hit-stop, shake. Skill cards in the level-up pool upgrade them (shape, not just numbers).
-- **Slots**: 6 weapons, 6 passives. The hero's signature weapon fills slot 1 at start.
+- **Controls**: WASD move (e.code), mouse aims the skill, Space dash, Q hero skill, 1–4 pick a level-up card, Esc pause (solo only). E and the mouse buttons are unbound by default.
+- **The weapon fires on its own.** Targeting modes: `nearest`, `facing` (toward the nearest foe within ±100° of the movement direction, else the nearest foe in range, else straight along it; Twin Daggers ±52°), `random` (a random foe on screen), `around` (orbit or aura), `densest` (the densest foe cluster within range). **No foe in range**: every hero weapon and Form still fires on its normal cooldown and range along the facing direction (the last movement direction, kept while standing still): shots fly straight ahead, Cleave swings ahead, Bone Storm launches ahead, Smite / Wrath pillars land in a line ahead (60 px steps, kept on screen), Toll / Cathedral peal and Whirlwind spins in place.
+- **No off-screen wipe**: a hero's damage (weapon, skill, minions, zones, burns) lands only on foes overlapping that hero's view rect (640 × 360 px centred on the hero's camera); its targeting picks only foes inside it, its projectiles vanish once fully outside it, and it breaks only braziers inside it.
+- **Hero skill (Q)**: one per hero, aimed at the mouse cursor, cooldown 7–16 s, and must look and feel huge: screen-wide effects, hit-stop, shake. Skill cards upgrade it (3 levels, shape). Damage = base × (1 + skill level damage) × (1 + might) × weapon factor × (1 + 0.05 × (party level − 1)); weapon factor = the hero weapon's damage from path / refine damage ranks and the Form's base, relative to the level-1 weapon.
+- **Slots**: 1 weapon (the hero's own, from the start), 6 passives.
 
 ### Heroes
 
-| Hero | HP | Speed | Signature weapon (auto) | Q | E |
-|---|---|---|---|---|---|
-| Knight | 130 | 85 | **Cleave**: a wide sword arc toward the facing direction | Shield Charge: dash forward through foes, knock all aside | Bulwark: 3 s of 60% damage reduction and a shockwave that pushes the horde back |
-| Ranger | 90 | 100 | **Longbow**: arrows at the nearest foe | Volley: a rain of arrows on a cursor area for 2 s | Snare Trap: drops a trap at the cursor that roots foes in a radius |
-| Pyro | 85 | 92 | **Fire Bolt**: a bolt that bursts into a small fire pool | Meteor: a big impact at the cursor after a 0.5 s fall, burning ground | Flame Ring: an expanding fire ring around the hero |
-| Necro | 95 | 88 | **Bone Shard**: piercing shards; foes its holder kills (any hero) have a 6% chance to rise as skeleton minions (max 8) | Raise Horde: raise 6 skeletons at once | Corpse Blast: detonates every minion and fresh corpse within view |
-| Cleric | 110 | 88 | **Smite**: holy pillars strike random foes on screen | Sanctuary: a zone at the cursor that heals allies 5 HP/s and damages foes, 4 s | Judgment: a beam toward the cursor that sweeps 90° |
-| Shade | 80 | 100 | **Twin Daggers**: fast thrown daggers in the facing direction, high crit | Shadow Step: blink to the cursor and leave a damaging afterimage | Fan of Knives: 24 daggers in a full circle |
-| Bell | 115 | 86 | **Toll**: a bell orbits the hero; each peal sends a shockwave ring that pushes foes back | Great Peal: a huge ring that stuns every foe on screen for 1.2 s | Hurl Bell: throws a bell at the cursor; it drags foes in its path, then rings |
+| Hero | HP | Speed | Weapon (auto) | Q |
+|---|---|---|---|---|
+| Knight | 130 | 68 | **Cleave**: a wide sword arc toward the facing direction | Shield Charge: dash forward through foes, knock all aside |
+| Ranger | 90 | 80 | **Longbow**: arrows at the nearest foe | Volley: a rain of arrows on a cursor area for 2 s |
+| Pyro | 85 | 74 | **Fire Bolt**: a bolt that bursts into a small fire pool | Meteor: a big impact at the cursor after a 0.5 s fall, burning ground |
+| Necro | 95 | 70 | **Bone Shard**: piercing shards; foes its holder kills (any hero) have a 6% chance to rise as skeleton minions (max 8) | Corpse Blast: detonates every minion and fresh corpse within view |
+| Cleric | 110 | 70 | **Smite**: holy pillars strike random foes on screen | Sanctuary: a zone at the cursor that heals allies 5 HP/s and damages foes, 4 s |
+| Shade | 80 | 80 | **Twin Daggers**: fast thrown daggers in the facing direction, high crit | Shadow Step: blink to the cursor and leave a damaging afterimage |
+| Bell | 115 | 69 | **Toll**: a bell orbits the hero; each peal sends a shockwave ring that pushes foes back | Great Peal: a huge ring that stuns every foe on screen for 1.2 s |
 
 ## 4. Weapons
 
-Each weapon has levels 1–8. Level 8 plus its paired passive (any level) makes the weapon **evolution-ready**; the next chest from an elite or boss evolves it into its evolved form (a new pattern, not a number bump).
+One weapon per hero: its own. It never changes hands and no other weapon joins the run.
 
-Signature weapons (one per hero above) can also appear for other heroes after the hero has been played once (unlock).
-
-General weapons (12):
-
-| Weapon | Mode | Pattern | Paired passive | Evolution |
-|---|---|---|---|---|
-| Orbit Lanterns | around | lanterns circle the hero | Duration | Sun Wheel: permanent ring of 8 lanterns, burns |
-| Chain Spark | nearest | lightning arcs foe to foe | Reach | Storm Crown: 3 bolts every 0.5 s, arcs fork twice |
-| Frost Ring | around | expanding ring that slows | Reach | Glacier: ring freezes foes solid for 1.5 s |
-| Bramble Trail | facing | thorns erupt along the path walked | Duration | Thornwood: thorns persist and grab |
-| Glaive | nearest | boomerang out and back, pierces | Velocity | Twin Moons: two glaive pairs spiral out, counter-rotating |
-| Meteor Call | random | delayed impacts at random foes | Multishot | Starfall: constant shower |
-| Bone Spear | facing | long piercing spear line | Might | Impaler: spear pins and drags foes |
-| Blight Pool | around | poison pools dropped under the hero | Duration | Plague Field: pools spread to adjacent foes |
-| Wisp | nearest | homing spirits seek foes | Multishot | Wisp Choir: wisps split on kill |
-| Mortar | densest | lobbed bomb at the densest cluster | Reach | Barrage: 5-shell walking salvo, 5 bomblets each |
-| Censer | around | damaging aura around the hero | Mending | Holy Censer: aura heals 1 HP per 30 foes killed in it |
-| Ricochet | nearest | stones bounce between foes | Velocity | Avalanche: stones split on each bounce |
-
-Signature evolutions (paired passive in brackets): Cleave → Whirlwind, 360° spins [Might]; Longbow → Hail of Arrows, arrows split on hit [Multishot]; Fire Bolt → Inferno, pools merge and spread [Duration]; Bone Shard → Bone Storm, shards orbit then launch, minion cap 16 [Haste]; Smite → Wrath, pillars chain to neighbours [Reach]; Twin Daggers → Shadow Fan, daggers return and crit twice [Velocity]; Toll → Cathedral, three bells orbit and peal in sequence [Reach].
-
-Base weapon damage: 10–25 per hit at level 1, cooldown 0.6–2.5 s. Each level: one shape change; levels 4 and 8 also add +25% damage.
+- **Paths**: each weapon has 3 paths of 3 ranks. Every rank is a visible shape change (law 1); levels 1 and 2 of a path may carry a damage step only beside a shape change.
+- **Forms**: a path at rank 3 unlocks that path's Form card (if it has one); 0–2 hidden **hybrid Forms** per hero need two specific paths at rank 3. A run takes **one Form**: taking it locks every other Form. A Form replaces the weapon's pattern; path ranks keep applying after it (the other paths can still reach rank 3). A Form then has 2 refine ranks.
+- **Hidden**: a Form card shows `???` and "An unknown form" until the profile has owned that Form; no recipe is shown anywhere.
+- **Numbers**: base damage 12–20 per hit, cooldown 0.6–1.6 s; cooldown floor 0.2 s; haste (passives + meta) caps at 50%.
+- **Placeholder trees** (phase 2 replaces them): path 0 → the Form, paths 1–2 without a Form, no hybrids. Cleave → Whirlwind (360° spins); Longbow → Hail of Arrows (arrows split on hit); Fire Bolt → Inferno (pools merge and spread); Bone Shard → Bone Storm (shards orbit then launch, minion cap 16); Smite → Wrath (pillars chain to neighbours); Twin Daggers → Shadow Fan (daggers return and crit twice); Toll → Cathedral (three bells peal in sequence).
 
 ## 5. Passives (12, levels 1–5)
 
@@ -97,14 +83,14 @@ Base weapon damage: 10–25 per hit at level 1, cooldown 0.6–2.5 s. Each level
 | Magnet | +25% pickup radius |
 | Fortune | +10% luck (more 4th cards, better chests, more gold) |
 
-Max 6 passives. Passive cards also show a line naming the weapon they evolve.
+Max 6 passives. Passives are generic stats: they evolve nothing and name no weapon. Haste caps at 50% (§4).
 
 ## 6. Level-ups
 
 - XP to the next level: `5 + 8 × (level − 1)` up to level 20, then `+15` per level.
-- Each level offers 3 cards (4 with Fortune luck), drawn from: new weapon (if a slot is free), weapon level, new passive (if a slot is free), passive level, hero skill upgrade (Q/E, 3 levels each). Gold (+25) or heal (+30 HP) when nothing is left.
-- Reroll, Skip and Banish: counts come from meta upgrades. Banish removes one card's item from the run's pool and replaces that card (Gold and Meal cannot be banished).
-- Card weights: owned weapon level 4 (+2 when weapon slots are full); new weapon 3; owned passive level 3 (+1.5 when passive slots are full); new passive 2 (+1.5 if it pairs an owned weapon); skill 1.5 (+1 when all slots are full). A card that makes a weapon evolution-ready is flagged and weighted up.
+- Each level offers 3 cards (4 with Fortune luck), drawn from: path rank (weapon name, path name, rank line), Form (while none is taken: `???` until discovered), Form refine, new passive (if a slot is free), passive level, hero skill upgrade (Q, 3 levels). Gold (+25) or heal (+30 HP) when nothing is left. No card has a second line.
+- Reroll, Skip and Banish: counts come from meta upgrades. Banish removes one card's item from the run's pool and replaces that card (Gold and Meal cannot be banished); a path card banishes that path, a Form card that Form.
+- Card weights: path rank 4; Form 6; refine 3; passive level 3 (+1.5 when passive slots are full); new passive 2; skill 1.5.
 - **Solo**: the game pauses while picking. **Co-op**: no pause; cards appear in a compact strip at the bottom; pick with 1–4 while moving; 1 s of invulnerability after picking.
 - XP is shared in co-op (one bar, everyone levels together, each player picks their own card).
 
@@ -125,7 +111,7 @@ Max 6 passives. Passive cards also show a line naming the weapon they evolve.
 
 ## 8. Bosses
 
-Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (minute / 5)^2.5 × players factor × stage HP` (1500 / 8485 / 23383 at 5:00 / 10:00 / 15:00). Mid-bosses drop a chest with evolution priority. While a boss lives, normal spawns run at 50% rate.
+Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (minute / 5)^2.5 × players factor × stage HP` (1500 / 8485 / 23383 at 5:00 / 10:00 / 15:00). Bosses drop a chest that grants one extra level-up offer (§9). While a boss lives, normal spawns run at 50% rate.
 
 - **Roster** (5:00 · 10:00 · final 15:00): Ossuary — Bone Warden · The Twins · Hollow King. Glowmire — Sporemother · Demon Cyclops · Drowned King. Abyss — Blue Samurai · Rift Weaver · The Wick-Eater.
 - **Pace**: bosses walk 24–46 px/s; dashes 256–496 px/s; leaps fly 1.19–1.38 s; shots 81–340 px/s.
@@ -139,20 +125,21 @@ Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (m
 - **Food**: heals 30 HP; braziers (20%) and elites (50%, on top of the chest). No passive regen by default.
 - **Magnet** (braziers, 3%): pulls every gem on the map.
 - **Holy Bomb** (braziers, 2%): kills every non-elite foe on screen.
-- **Chest**: from elites and bosses: evolves the first evolution-ready weapon; otherwise 1 roll, a 2nd at 30% + luck, a 3rd at 10% + luck / 2; each roll levels a random owned item (weapons weight 2, passives 1), or pays gold when nothing can level.
+- **Chest**: elite chest: one roll levelling a random owned passive or the skill (never paths or Forms: those are choices), or gold when nothing can level. Boss chest: one extra level-up offer for the hero who opens it.
 
 ## 10. Co-op
 
 - 1–4 players, PeerJS; the host runs the sim.
 - **Downed** at 0 HP: 20 s bleed-out; a teammate standing within 40 px for 2.5 s revives at 40% HP. All heroes down → defeat. Solo death ends the run unless a Revival charge is left (meta).
 - Each client follows its own hero; foes and gems are snapshot only within the client's view plus a margin (interest culling).
+- Each hero's damage lands only inside its own view (§3): a hero far from the fight cannot clear it for the party.
 
 ## 11. Meta progression
 
 - **Gold** carries over, including a lost run's collected gold. A winning run pays about 1,000 / 1,500 / 2,000 gold on stages 1 / 2 / 3 at Greed 0 (shop total ≈ 27,600: full meta in about 20 wins). The Camp shop sells permanent ranks: Might (5), Vigor (5), Plating (3), Mending (5), Swiftness (3), Magnet (3), Growth (+5% XP, 5), Greed (+10% gold, 5), Fortune (5), Revival (2), Reroll (5), Skip (3), Banish (3). Cost: `base × (rank + 1)`, base 200; a refund button resets all.
-- **Unlocks**: start with Knight, Ranger and Pyro. Necro: survive 10 minutes. Cleric: beat stage 1 (also opens stage 2; beating stage 2 opens stage 3). Shade: kill 3000 foes in one run. Bell: reach level 40 in one run. Each hero's signature weapon joins the general pool after the hero's first run.
+- **Unlocks**: start with Knight, Ranger and Pyro. Necro: survive 10 minutes. Cleric: beat stage 1 (also opens stage 2; beating stage 2 opens stage 3). Shade: kill 3000 foes in one run. Bell: reach level 25 in one run.
 - Profile autosaves in localStorage, plus a portable save code.
-- **Encyclopedia** reveals only what the player met: heroes and stages a run started with, weapons (evolutions included) and passives the own hero owned, foes in the own view, bosses fought. Recorded on every client from its own view, merged at run end (win, defeat or quit); bot runs never save. Unmet entries list as a "???" silhouette (detail: "Not discovered yet"; locked heroes and stages keep their unlock rule and progress).
+- **Encyclopedia** reveals only what the player met: heroes and stages a run started with, weapons (Forms included) and passives the own hero owned, foes in the own view, bosses fought. Recorded on every client from its own view, merged at run end (win, defeat or quit); bot runs never save. Unmet entries list as a "???" silhouette (detail: "Not discovered yet"; locked heroes and stages keep their unlock rule and progress).
 
 ## 12. Feel (juice)
 

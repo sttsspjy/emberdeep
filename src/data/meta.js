@@ -1,7 +1,6 @@
 // Meta progression data (GAME-DESIGN §11). Rules are evaluated by src/save.js (ED.Save, ED.Meta).
 // ED.SHOP: permanent Camp ranks in save order (append only): { id, name, icon (atlas anim), max, stat (ED.Stats key), per (value per rank), txt }. Cost of the next rank: SHOP_BASE x (rank + 1).
-// ED.UNLOCKS: heroes: { cls: rule } where rule is { start } | { survive: s } | { beat: stage index } | { kills: n } (one run) | { level: n } (one run), txt = the lock line; stages: { index: rule };
-//   sigAfterRun: a hero's signature weapon joins the general pool after that hero's first finished run.
+// ED.UNLOCKS: heroes: { cls: rule } where rule is { start } | { survive: s } | { beat: stage index } | { kills: n } (one run) | { level: n } (one run), txt = the lock line; stages: { index: rule }.
 (function (ED) {
   'use strict';
   ED.SHOP_BASE = 200;
@@ -27,9 +26,8 @@
       necro: { survive: 600, txt: 'Survive 10 minutes' },
       cleric: { beat: 0, txt: 'Beat stage 1' },
       shade: { kills: 3000, txt: 'Kill 3000 foes in one run' },
-      bell: { level: 40, txt: 'Reach level 40 in one run' },
+      bell: { level: 25, txt: 'Reach level 25 in one run' },
     },
     stages: { 0: { start: true }, 1: { beat: 0, txt: 'Beat stage 1' }, 2: { beat: 1, txt: 'Beat stage 2' } },
-    sigAfterRun: true,
   };
 })(globalThis.ED || (globalThis.ED = {}));

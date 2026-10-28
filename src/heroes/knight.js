@@ -1,11 +1,11 @@
-// Knight: hero data, signature Cleave (8 levels) + evolution Whirlwind, Q Shield Charge, E Bulwark (3 skill levels each).
-// Visual-state zones (networked like any zone, drawn by hfx-a.js): 'charge' follows the hero during a charge (a = heading), 'bulwark' follows it while braced.
+// Knight: hero data, signature Cleave (3 paths x 3 ranks) + Form Whirlwind (path 0), Q Shield Charge (3 skill levels).
+// Visual-state zone (networked like any zone, drawn by hfx-a.js): 'charge' follows the hero during a charge (a = heading).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU;
 
-  ED.regLook('crescent', 'charge', 'bulwark', 'shock', 'slash', 'whirl');
-  ED.addHero({ id: 'knight', name: 'Knight', hp: 130, speed: 85, crit: 0.05, sig: 'cleave', skills: ['charge', 'bulwark'], icon: 'hero.knight.idle', col: '#c9d4e8', txt: 'Sword and shield. Holds the line.' });
+  ED.regLook('crescent', 'charge', 'shock', 'slash', 'whirl');
+  ED.addHero({ id: 'knight', name: 'Knight', hp: 130, speed: 68, crit: 0.05, sig: 'cleave', skills: ['charge'], icon: 'hero.knight.idle', col: '#c9d4e8', txt: 'Sword and shield. Holds the line.' });
 
   // ---------------- Cleave ----------------
   // A sword arc toward the nearest foe in reach within ED.FACING_CONE of the movement direction (with back: of either direction), else toward the nearest foe in reach, else along p.mdir.
@@ -25,16 +25,21 @@
   ED.addWeapon({
     id: 'cleave', name: 'Cleave', icon: 'weapon.longsword', sig: 'knight', mode: 'facing', txt: 'Sword arc toward your facing',
     base: { dmg: 18, cd: 1.3, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 120, range: 56, arc: 2.0, wave: 0 },
-    levels: [
-      { mods: { area: 0.2 }, txt: '+20% swing size' },
-      { mods: { back: true }, txt: 'Also swings behind you' },
-      { mods: { dmg: 0.25, arc: 0.6 }, txt: '+25% damage, wider arc' },
-      { mods: { n: 1 }, txt: '+1 swing' },
-      { mods: { wave: 1 }, txt: 'Swings fling a piercing wave' },
-      { mods: { area: 0.25, knock: 0.5 }, txt: '+25% size, harder knockback' },
-      { mods: { dmg: 0.25, n: 1, wave: 2 }, txt: '+25% damage, +1 swing, 3 waves' },
+    paths: [
+      { id: 'edge', name: 'Broad Edge', form: 'whirlwind', ranks: [
+        { mods: { area: 0.2 }, txt: '+20% swing size' },
+        { mods: { dmg: 0.25, arc: 0.6 }, txt: '+25% damage, wider arc' },
+        { mods: { area: 0.25, knock: 0.5 }, txt: '+25% size, harder knockback' }] },
+      { id: 'flurry', name: 'Flurry', form: null, ranks: [
+        { mods: { back: true }, txt: 'Also swings behind you' },
+        { mods: { n: 1 }, txt: '+1 swing' },
+        { mods: { dmg: 0.25, n: 1 }, txt: '+25% damage, +1 swing' }] },
+      { id: 'crescent', name: 'Crescent', form: null, ranks: [
+        { mods: { wave: 1 }, txt: 'Swings fling a piercing wave' },
+        { mods: { wave: 1 }, txt: '+1 wave' },
+        { mods: { wave: 1, dmg: 0.25 }, txt: '+1 wave, +25% damage' }] },
     ],
-    pair: 'might', evo: 'whirlwind', noAmount: true,
+    hybrids: [], noAmount: true,
   }, {
     fire(w, p, ws, S) {
       const R = S.range * S.area + 24 + ((S.wave | 0) ? 90 : 0);
@@ -62,9 +67,12 @@
     for (let i = 0; i < n; i++) wave(w, p, ws, S, (i + (k % 2) * 0.5) / n * TAU, 0.5);
   };
   ED.addWeapon({
-    id: 'whirlwind', name: 'Whirlwind', icon: 'weapon.alt.double_axe', sig: 'knight', mode: 'around', evolved: true, from: 'cleave', txt: '360 degree spins',
+    id: 'whirlwind', name: 'Whirlwind', icon: 'weapon.alt.double_axe', sig: 'knight', mode: 'around', evolved: true, form: true, from: 'cleave', txt: '360 degree spins',
     base: { dmg: 34, cd: 1.0, n: 3, pierce: 0, area: 1.45, speed: 0, dur: 0, knock: 160, range: 60, arc: TAU, wave: 6 },
-    levels: [], noAmount: true,
+    refine: [
+      { mods: { n: 1 }, txt: '+1 spin' },
+      { mods: { area: 0.25, wave: 2 }, txt: '+25% size, +2 waves' },
+    ], noAmount: true,
   }, {
     fire(w, p, ws, S) {
       spin(w, p, ws, S, 0);
@@ -102,39 +110,9 @@
     w.zone({ team: 0, p, wid: 'charge', x: p.x, y: p.y, r: N.width, a, dur: N.t + 0.08, follow: p.pid, look: 'charge' });
     return { a, shake: 5, stop: 0.04 };
   });
-  // Bulwark: N.dur s of N.dr damage reduction and a shockwave (N.r, knock N.knock, stun 0.4 s); pulse: another shockwave every second; end: a 1.5x blast when it ends.
-  const bulTick = (w, z) => {
-    const s = z.st, p = s.p;
-    if (!s.pulse || !w.alive(p)) return;
-    s.nt -= ED.CONST.TICK;
-    if (s.nt <= 0) { s.nt = 1; BOOM.knock = s.knock * 0.7; BOOM.stun = 0.25; w.blast(p, 'bulwark', p.x, p.y, s.r * 0.85, s.dmg * 0.6, BOOM); shockFx(w, p, 'bulwark', p.x, p.y, s.r * 0.85); }
-  };
-  const bulEnd = (w, z) => {
-    const s = z.st, p = s.p;
-    if (s.end && w.alive(p)) { BOOM.knock = s.knock * 1.3; BOOM.stun = 0.8; w.blast(p, 'bulwark', p.x, p.y, s.r * 1.5, s.dmg * 3, BOOM); shockFx(w, p, 'bulwark', p.x, p.y, s.r * 1.5); }
-  };
-  ED.addSkill({
-    id: 'bulwark', name: 'Bulwark', icon: 'shield.tower', cd: 14, txt: 'Brace and push the horde back',
-    base: { dmg: 30, r: 110, dur: 3, dr: 0.6, knock: 420 },
-    levels: [
-      { mods: { r: 0.4 }, txt: '+40% shockwave size' },
-      { mods: { pulse: true }, txt: 'Pulses a shockwave every second' },
-      { mods: { dr: 0.15, end: true }, txt: 'Ends in a huge blast, +15% guard' },
-    ],
-  }, (w, p, x, y, N) => {
-    p.bulT = N.dur; p.bulDr = Math.min(0.9, N.dr);
-    BOOM.knock = N.knock; BOOM.stun = 0.4;
-    w.blast(p, 'bulwark', p.x, p.y, N.r, N.dmg, BOOM);
-    shockFx(w, p, 'bulwark', p.x, p.y, N.r);
-    w.zone({ team: 0, p, wid: 'bulwark', x: p.x, y: p.y, r: 22, dur: N.dur, follow: p.pid, look: 'bulwark',
-      st: { p, r: N.r, dmg: N.dmg, knock: N.knock, pulse: !!N.pulse, end: !!N.end, nt: 1 }, onTick: bulTick, onEnd: bulEnd });
-    return { shake: 6, stop: 0.06, r: Math.round(N.r) };
-  });
-
   ED.HOOK.knight = {
-    init(w, p) { p.chg = null; p.bulT = 0; p.bulDr = 0; },
+    init(w, p) { p.chg = null; },
     tick(w, p, dt) {
-      if (p.bulT > 0) { p.bulT -= dt; p.dr = p.bulT > 0 ? p.bulDr : 0; }
       const c = p.chg;
       if (!c || !c.on) return;
       const step = Math.min(dt, c.t);
@@ -157,7 +135,7 @@
       if (!c.quake) return;
       BOOM.knock = 340; BOOM.stun = c.stun;
       w.blast(p, 'charge', p.x, p.y, 110, c.dmg * 0.8, BOOM);
-    shockFx(w, p, 'charge', p.x, p.y, 110);
+      shockFx(w, p, 'charge', p.x, p.y, 110);
       SHARD.dmg = c.dmg * 0.5;
       for (let i = 0; i < c.shards; i++) w.shoot(p, 'charge', p.x, p.y - 6, c.a + i / c.shards * TAU, null, SHARD);
     },

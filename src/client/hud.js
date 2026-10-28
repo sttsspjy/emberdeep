@@ -1,6 +1,6 @@
 // In-run HUD on the screen canvas (device px). Sizes are CSS px at 1280x720 scaled by k = dpr x clamp(viewport / 1280x720, 1, 2), so text never drops below its CSS size (numbers >= 16 px).
-// Draws: XP bar across the top with the level, timer, kills / gold, 6 weapon + 6 passive slots with levels (evolved = gold frame, evolution-ready = pulsing),
-// HP bar, Q / E cooldown dials and the dash dial with charge pips, boss bar, teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
+// Draws: XP bar across the top with the level, timer, kills / gold, the weapon slot (level; Form = gold frame) + 6 passive slots with levels,
+// HP bar, Q cooldown dial and the dash dial with charge pips, boss bar, teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
 // low-HP edge glow, banners and the bot-watch tag (view.botTag / view.botPick, bottom-left). No per-frame allocation: strings are cached by value. Font 'Pixel Operator'.
 (function (ED) {
   'use strict';
@@ -44,11 +44,11 @@
   const heroIcon = (cls) => (ED.HEROES[cls] && ED.HEROES[cls].icon) || '';
   const RUN = {}; const runIcon = (cls) => RUN[cls] || (RUN[cls] = ED.Atlas && ED.Atlas.has('hero.' + cls + '.run') ? 'hero.' + cls + '.run' : 'fx.smoke');
   const bossName = (v) => { const def = ED.FOES[ED.FOE_IDS[v >> 1]]; return (def ? def.name : 'Boss') + (v & 1 ? '  ENRAGED' : ''); };
-  const keyLbl = { q: 'Q', e: 'E', dash: 'Space', t: 0 };
+  const keyLbl = { q: 'Q', dash: 'Space', t: 0 };
   const keys = () => {
     if (now - keyLbl.t < 1) return; keyLbl.t = now;
     const I = ED.Input; if (!I || !I.labels) return;
-    keyLbl.q = I.labels('skill1')[0] || 'Q'; keyLbl.e = I.labels('skill2')[0] || 'E'; keyLbl.dash = I.labels('dash')[0] || 'Space';
+    keyLbl.q = I.labels('skill1')[0] || 'Q'; keyLbl.dash = I.labels('dash')[0] || 'Space';
   };
 
   // ---------------- pieces ----------------
@@ -74,26 +74,24 @@
     c.fillStyle = up ? col : '#4a3a2e'; c.fillRect(bx + R(2), by + R(2), kw - R(4), kh - R(4));
     ptxt(key, bx + kw / 2, by + kh / 2 + R(1), up ? '#1a0e06' : '#f0e0c8', 16);
   }
-  // One row of 6 slots; returns nothing. defs: ED.WEAPONS or ED.PASSIVES.
-  function slots(list, defs, x0, y, s, weapons, me) {
-    const gap = R(4);
-    for (let i = 0; i < 6; i++) {
+  // One row of slots (weapons: ED.MAX_WEAPONS, passives: 6); returns nothing. defs: ED.WEAPONS or ED.PASSIVES. A Form has a gold frame.
+  function slots(list, defs, x0, y, s, weapons) {
+    const gap = R(4), n = weapons ? ED.MAX_WEAPONS || 1 : ED.MAX_PASSIVES || 6;
+    for (let i = 0; i < n; i++) {
       const x = x0 + i * (s + gap), it = list[i];
       c.fillStyle = it ? 'rgba(10,7,6,0.78)' : 'rgba(10,7,6,0.45)'; c.fillRect(x, y, s, s);
       const d = it && defs[it.id];
       let edge = 'rgba(232,216,192,0.25)', lw = Math.max(1, R(2));
       if (d) {
         icon(d.icon, x + R(3), y + R(3), s - R(6));
-        const max = weapons ? (ED.weaponMaxLvl ? ED.weaponMaxLvl(d) : 8) : d.max || 5;
+        const max = weapons ? 99 : d.max || 5;
         if (weapons && d.evolved) { edge = '#ffd27a'; lw = R(3); }
-        else if (weapons && d.evo && it.lvl >= max && hasPassive(me, d.pair)) { edge = (now * 4 | 0) % 2 ? '#ffd27a' : '#ff8a3d'; lw = R(3); }
         else edge = weapons ? 'rgba(255,170,110,0.55)' : 'rgba(140,210,240,0.5)';
-        txt(d.evolved ? 'EV' : NUM[Math.min(99, it.lvl)], x + s - R(3), y + s - R(17), it.lvl >= max || d.evolved ? '#ffd27a' : '#fff1d6', 16, 'right');
+        txt(NUM[Math.min(99, it.lvl)], x + s - R(3), y + s - R(17), it.lvl >= max || d.evolved ? '#ffd27a' : '#fff1d6', 16, 'right');
       }
       frame(x, y, s, s, edge, lw);
     }
   }
-  const hasPassive = (me, id) => { for (let i = 0; i < me.passives.length; i++) if (me.passives[i].id === id) return true; return false; };
   // Teammate list (co-op): portrait, name, HP bar or DOWN with the revive bar.
   function team(view, me, x, y) {
     let n = 0;
@@ -173,21 +171,20 @@
     if (!me) { banner(dt); return; }
     // weapon and passive slots (top-left)
     const x0 = R(10), ws = R(42), ps = R(32);
-    slots(me.weapons, ED.WEAPONS, x0, xh + R(8), ws, true, me);
-    slots(me.passives, ED.PASSIVES, x0, xh + R(8) + ws + R(5), ps, false, me);
+    slots(me.weapons, ED.WEAPONS, x0, xh + R(8), ws, true);
+    slots(me.passives, ED.PASSIVES, x0, xh + R(8) + ws + R(5), ps, false);
     if (view.heroes.length > 1) team(view, me, x0, xh + R(8) + ws + ps + R(16));
     // HP bar + skills (bottom centre)
-    const ds = R(62), dd = R(50), gap = R(16), rowW = ds * 2 + dd + gap * 2, kx = Math.round(W / 2 - rowW / 2), ky = Hh - ds - R(16);
+    const ds = R(62), dd = R(50), gap = R(16), rowW = ds + dd + gap, kx = Math.round(W / 2 - rowW / 2), ky = Hh - ds - R(16);
     const hw = Math.max(rowW + R(40), R(360)), hx = Math.round(W / 2 - hw / 2), hy = ky - R(22) - R(26), hpF = me.maxHp ? me.hp / me.maxHp : 0;
     const top = Math.round((Hh - hy) / d) + 10; // CSS px kept clear above the HP bar (co-op card strip)
     if (top !== hudTop) { hudTop = top; document.documentElement.style.setProperty('--hud-bottom', top + 'px'); }
     bar(hx, hy, hw, R(22), hpF, hpF < 0.3 ? ((now * 5 | 0) % 2 ? '#ff4a3a' : '#c02a1a') : '#e8483a', '#ff9a8a');
     const hp = Math.max(0, Math.ceil(me.hp));
     txt(cs('hp', (Math.min(hp, 4095) << 12) | Math.min(me.maxHp | 0, 4095), fmtHp), W / 2, hy + R(3), '#fff1d6', 18, 'center');
-    const q = me.skills[0], e = me.skills[1], C = ED.CONST.DASH;
+    const q = me.skills[0], C = ED.CONST.DASH;
     if (q) dial(0, kx, ky, ds, ED.SKILLS[q.id] ? ED.SKILLS[q.id].icon : 'fx.star.stun', q.cd, q.cdMax, keyLbl.q, '#ffd27a');
-    if (e) dial(1, kx + ds + gap, ky, ds, ED.SKILLS[e.id] ? ED.SKILLS[e.id].icon : 'fx.star.stun', e.cd, e.cdMax, keyLbl.e, '#ffd27a');
-    const dx = kx + ds * 2 + gap * 2, dy = ky + ds - dd;
+    const dx = kx + ds + gap, dy = ky + ds - dd;
     dial(2, dx, dy, dd, runIcon(me.cls), me.dashCd, C.cd, keyLbl.dash, '#6ad7ff');
     // dash charge pips (one per charge; C.charges when the sim grows more)
     const nch = C.charges || 1, pw = R(10);

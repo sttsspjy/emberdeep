@@ -2,8 +2,9 @@
 // Pickup k: 'xp1' | 'xp5' | 'xp25' (val = XP) | 'gold' (val coins) | 'food' (val HP) | 'magnet' | 'bomb' | 'chest' (val 1 elite, 2 boss). Gems merge into the nearest gem above GEM_CAP on the ground.
 // Gems and gold are pulled inside the hero's pickup radius; food, magnet, bomb and chests need a touch. Pulled pickups fly to the hero with an accelerating curve.
 // Braziers break on a hero's touch (weapon hits: combat.js) and relight RELIGHT s after breaking, once no living hero is within RELIGHT_R px.
-// Card: { kind: 'weapon'|'wlvl'|'passive'|'plvl'|'skill'|'gold'|'heal', id, lvl (level after the pick), name, txt (<= 40 chars), sub (second line or ''), icon, evo (true: the pick makes a weapon evolution-ready), val (gold / heal amount) }.
-// Hero fields (initHeroProgress): rerolls, skips, banishes (counts from meta stats), banned (card keys 'w:id' | 'p:id' | 's:id' removed from this run's pool).
+// Card: { kind: 'path'|'form'|'refine'|'passive'|'plvl'|'skill'|'gold'|'heal', id (path: root weapon id; form / refine: form id), path (path index; form: -1 hybrid), lvl (rank / level after the pick),
+//   name (path: path name), txt (<= 40 chars), sub (always ''), icon, val (gold / heal amount) }.
+// Hero fields (initHeroProgress): rerolls, skips, banishes (counts from meta stats), banned (card keys, see cardKey, removed from this run's pool).
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST, W = ED.World.prototype;
@@ -120,70 +121,44 @@
   };
 
   // ---------------- cards ----------------
-  const cardKey = (c) => (c.kind === 'weapon' || c.kind === 'wlvl' ? 'w:' : c.kind === 'passive' || c.kind === 'plvl' ? 'p:' : c.kind === 'skill' ? 's:' : '') + c.id;
+  // Card keys (banish): path 'r:<root>:<i>', form 'f:<form>', refine 'x:<form>', passive 'p:<id>', skill 's:<id>'.
+  const cardKey = (c) => (c.kind === 'path' ? 'r:' + c.id + ':' + c.path : c.kind === 'form' ? 'f:' + c.id : c.kind === 'refine' ? 'x:' + c.id
+    : c.kind === 'passive' || c.kind === 'plvl' ? 'p:' + c.id : c.kind === 'skill' ? 's:' + c.id : c.id);
   W.cardKey = cardKey;
-  const owns = (p, wid) => p.weapons.some(ws => ws.id === wid);
   const ownsP = (p, pid) => p.passives.some(ps => ps.id === pid);
-  const pairName = (d) => (d.pair && ED.PASSIVES[d.pair] ? ED.PASSIVES[d.pair].name : '');
 
-  const weaponCard = (d) => ({ kind: 'weapon', id: d.id, lvl: 1, name: d.name, txt: d.txt || 'New weapon', sub: d.evo && pairName(d) ? 'Evolves with ' + pairName(d) : '', icon: d.icon, evo: false, val: 0 });
-  const wlvlCard = (p, ws) => {
-    const d = ED.WEAPONS[ws.id], lvl = ws.lvl + 1, L = d.levels[ws.lvl - 1];
-    let sub = '', evo = false;
-    if (!d.evolved && d.evo && ED.WEAPONS[d.evo] && lvl >= ED.WEAPON_MAX_LVL) {
-      if (d.pair && ownsP(p, d.pair)) { evo = true; sub = 'Evolution ready: open a chest'; } else if (pairName(d)) sub = 'Evolves with ' + pairName(d);
-    }
-    return { kind: 'wlvl', id: ws.id, lvl, name: d.name, txt: (L && L.txt) || 'Level up', sub, icon: d.icon, evo, val: 0 };
+  // Path card: rank ws.pr[i] + 1 of path i of the slot's root weapon.
+  const pathCard = (ws, i) => {
+    const d = ED.WEAPONS[ws.root], pa = d.paths[i], r = pa.ranks[ws.pr[i]];
+    return { kind: 'path', id: ws.root, path: i, lvl: ws.pr[i] + 1, name: pa.name, txt: (r && r.txt) || 'Path rank', sub: '', icon: d.icon, val: 0 };
   };
-  // Passive card: line per level (def.lines) or def.txt; second line names the weapons it evolves (owned first), or the weapon this pick makes ready.
-  const passiveCard = (p, id, lvl) => {
-    const d = ED.PASSIVES[id], txt = (d.lines && d.lines[lvl - 1]) || d.txt;
-    let sub = '', evo = false;
-    if (lvl === 1) {
-      for (const ws of p.weapons) { const wd = ED.WEAPONS[ws.id]; if (!wd.evolved && wd.evo && wd.pair === id && ws.lvl >= ED.WEAPON_MAX_LVL) { evo = true; sub = 'Ready: ' + wd.name + ' evolves'; break; } }
-    }
-    if (!sub) {
-      const sigs = (p.meta && p.meta.sigs) || [];
-      const all = ED.WEAPON_IDS.filter(w => { const wd = ED.WEAPONS[w]; return wd.pair === id && !wd.evolved && wd.evo && (!wd.sig || wd.sig === p.cls || sigs.indexOf(wd.sig) >= 0); }); // only weapons this hero can be offered
-      const mine = all.filter(w => owns(p, w)), show = (mine.length ? mine : all).slice(0, 2).map(w => ED.WEAPONS[w].name);
-      if (show.length) sub = 'Evolves: ' + show.join(', ');
-    }
-    return { kind: lvl > 1 ? 'plvl' : 'passive', id, lvl, name: d.name, txt, sub, icon: d.icon, evo, val: 0 };
-  };
-  const skillCard = (sk) => { const d = ED.SKILLS[sk.id]; return { kind: 'skill', id: sk.id, lvl: sk.lvl + 1, name: d.name, txt: (d.levels[sk.lvl - 1] && d.levels[sk.lvl - 1].txt) || 'Upgrade', sub: '', icon: d.icon, evo: false, val: 0 }; };
-  W.goldCard = function (p) { return { kind: 'gold', id: 'gold', lvl: 0, name: 'Gold', txt: '+' + Math.round(GOLD_CARD * this.goldMul(p)) + ' gold', sub: '', icon: 'pickup.coin', evo: false, val: Math.round(GOLD_CARD * this.goldMul(p)) }; };
-  const healCard = () => ({ kind: 'heal', id: 'heal', lvl: 0, name: 'Meal', txt: '+' + HEAL_CARD + ' HP', sub: '', icon: 'pickup.heart', evo: false, val: HEAL_CARD });
+  const formCard = (f) => { const d = ED.WEAPONS[f.id]; return { kind: 'form', id: f.id, path: f.path, lvl: 1, name: d.name, txt: d.txt || 'New form', sub: '', icon: d.icon, val: 0 }; };
+  const refineCard = (ws) => { const d = ED.WEAPONS[ws.id], r = d.refine[ws.fl]; return { kind: 'refine', id: ws.id, path: -1, lvl: ws.fl + 1, name: d.name, txt: (r && r.txt) || 'Refine', sub: '', icon: d.icon, val: 0 }; };
+  // Passive card: line per level (def.lines) or def.txt.
+  const passiveCard = (id, lvl) => { const d = ED.PASSIVES[id]; return { kind: lvl > 1 ? 'plvl' : 'passive', id, lvl, name: d.name, txt: (d.lines && d.lines[lvl - 1]) || d.txt, sub: '', icon: d.icon, val: 0 }; };
+  const skillCard = (sk) => { const d = ED.SKILLS[sk.id]; return { kind: 'skill', id: sk.id, lvl: sk.lvl + 1, name: d.name, txt: (d.levels[sk.lvl - 1] && d.levels[sk.lvl - 1].txt) || 'Upgrade', sub: '', icon: d.icon, val: 0 }; };
+  W.goldCard = function (p) { return { kind: 'gold', id: 'gold', lvl: 0, name: 'Gold', txt: '+' + Math.round(GOLD_CARD * this.goldMul(p)) + ' gold', sub: '', icon: 'pickup.coin', val: Math.round(GOLD_CARD * this.goldMul(p)) }; };
+  const healCard = () => ({ kind: 'heal', id: 'heal', lvl: 0, name: 'Meal', txt: '+' + HEAL_CARD + ' HP', sub: '', icon: 'pickup.heart', val: HEAL_CARD });
 
   // Weighted card pool of hero p ([{ w, c }]), without banned keys and keys in `skip` (cards already shown).
-  // Weights: weapon level 4 (+2 with every weapon slot full, +3 when it makes an evolution ready); new weapon 3; passive level 3 (+1.5 with every passive slot full);
-  // new passive 2 (+1.5 when it pairs an owned weapon, +4 when it makes an evolution ready); skill upgrade 1.5 (+1 with every slot full).
+  // Weights: path rank 4; Form 6 (no Form taken yet: pure Forms of paths at rank 3, hybrids with both paths at rank 3); refine 3; new passive 2; passive level 3 (+1.5 with every passive slot full); skill 1.5.
   W.cardPool = function (p, skip) {
-    const pool = [], sigs = (p.meta && p.meta.sigs) || [], ban = p.banned || [];
-    const wFull = p.weapons.length >= ED.MAX_WEAPONS, pFull = p.passives.length >= ED.MAX_PASSIVES;
+    const pool = [], ban = p.banned || [], pFull = p.passives.length >= ED.MAX_PASSIVES;
     const take = (w, c) => { const k = cardKey(c); if (ban.indexOf(k) < 0 && (!skip || skip.indexOf(k) < 0)) pool.push({ w, c }); };
-    if (!wFull) for (const id of ED.WEAPON_IDS) {
-      const d = ED.WEAPONS[id];
-      if (d.evolved || owns(p, id)) continue;
-      if (d.sig && d.sig !== p.cls && sigs.indexOf(d.sig) < 0) continue;
-      if (p.weapons.some(ws => ED.WEAPONS[ws.id].evolved && ED.WEAPONS[ws.id].from === id)) continue;
-      take(3, weaponCard(d));
-    }
     for (const ws of p.weapons) {
-      const d = ED.WEAPONS[ws.id];
-      if (ws.lvl >= ED.weaponMaxLvl(d)) continue;
-      const c = wlvlCard(p, ws);
-      take(4 + (wFull ? 2 : 0) + (c.evo ? 3 : 0), c);
+      const d = ED.WEAPONS[ws.root];
+      if (!d || !d.paths) continue;
+      for (let i = 0; i < d.paths.length; i++) if (ws.pr[i] < Math.min(ED.PATH_MAX, d.paths[i].ranks.length)) take(4, pathCard(ws, i));
+      for (const f of this.formsReady(p, ws)) take(6, formCard(f));
+      const fd = ED.WEAPONS[ws.id];
+      if (ws.evo && fd.refine && ws.fl < fd.refine.length) take(3, refineCard(ws));
     }
-    if (!pFull) for (const id of ED.PASSIVE_IDS) {
-      if (ownsP(p, id)) continue;
-      const c = passiveCard(p, id, 1), pairs = p.weapons.some(ws => { const wd = ED.WEAPONS[ws.id]; return !wd.evolved && wd.evo && wd.pair === id; });
-      take(2 + (pairs ? 1.5 : 0) + (c.evo ? 4 : 0), c);
-    }
-    for (const ps of p.passives) if (ps.lvl < ED.PASSIVES[ps.id].max) take(3 + (pFull ? 1.5 : 0), passiveCard(p, ps.id, ps.lvl + 1));
+    if (!pFull) for (const id of ED.PASSIVE_IDS) if (!ownsP(p, id)) take(2, passiveCard(id, 1));
+    for (const ps of p.passives) if (ps.lvl < ED.PASSIVES[ps.id].max) take(3 + (pFull ? 1.5 : 0), passiveCard(ps.id, ps.lvl + 1));
     for (const sk of p.skills) {
       const d = ED.SKILLS[sk.id];
       if (!d || sk.lvl >= ED.skillMaxLvl(d)) continue;
-      take(1.5 + (wFull && pFull ? 1 : 0), skillCard(sk));
+      take(1.5, skillCard(sk));
     }
     return pool;
   };
@@ -221,12 +196,14 @@
     p.offer = null;
     this.recalc(p, false);
     if (!this.solo()) p.invuln = Math.max(p.invuln, 1);
-    this.emit({ t: 'pick', pid: p.pid, kind: c.kind, id: c.id, lvl: c.lvl });
+    this.emit({ t: 'pick', pid: p.pid, kind: c.kind, id: c.id, lvl: c.lvl, path: c.path === undefined ? -1 : c.path });
     return true;
   };
+  const slotOf = (p, rid) => p.weapons.find(x => x.root === rid);
   W.applyCard = function (p, c) {
-    if (c.kind === 'weapon') this.addWeapon(p, c.id);
-    else if (c.kind === 'wlvl') { const ws = p.weapons.find(x => x.id === c.id); if (ws) ws.lvl = Math.min(ED.weaponMaxLvl(ED.WEAPONS[ws.id]), ws.lvl + 1); }
+    if (c.kind === 'path') { const ws = slotOf(p, c.id); if (ws) this.rankPath(p, ws, c.path); }
+    else if (c.kind === 'form') { const ws = slotOf(p, ED.weaponRoot(c.id)); if (ws && this.formsReady(p, ws).some(f => f.id === c.id)) this.takeForm(p, ws, c.id); }
+    else if (c.kind === 'refine') { const ws = p.weapons.find(x => x.id === c.id); if (ws) this.refineForm(p, ws); }
     else if (c.kind === 'passive') { if (p.passives.length < ED.MAX_PASSIVES && !ownsP(p, c.id)) p.passives.push({ id: c.id, lvl: 1 }); }
     else if (c.kind === 'plvl') { const ps = p.passives.find(x => x.id === c.id); if (ps) ps.lvl = Math.min(ED.PASSIVES[ps.id].max, ps.lvl + 1); }
     else if (c.kind === 'skill') { const sk = p.skills.find(x => x.id === c.id); if (sk) sk.lvl = Math.min(ED.skillMaxLvl(ED.SKILLS[sk.id]), sk.lvl + 1); }
@@ -235,36 +212,30 @@
   };
 
   // ---------------- chests ----------------
-  // Chest opened by p (val 1 elite, 2 boss): evolves the first evolution-ready weapon; otherwise 1 roll + one at 30% + luck + one at 10% + luck / 2, each levelling a random owned
-  // weapon (weight 2) or passive (weight 1) below max (an item maxed by a roll leaves the pool); with nothing to level a roll pays 25 gold x goldMul.
-  // Emits 'chest' { pid, val, results: [{ kind: 'evo'|'wlvl'|'plvl'|'gold', id, from (evo: base weapon id), lvl, name, icon, txt, val (gold) }] } and returns results.
+  // Chest opened by p. Elite (val 1): one roll levelling a random owned passive or skill below max (never paths / Forms: those are choices); nothing to level pays 25 gold x goldMul.
+  // Boss (val 2): one extra level-up offer for p (p.pend++).
+  // Emits 'chest' { pid, val, results: [{ kind: 'plvl'|'skill'|'gold'|'offer', id, lvl, name, icon, txt, val (gold) }] } and returns results.
   W.openChest = function (p, val) {
-    const results = [], ready = p.weapons.find(ws => this.weaponReady(p, ws));
-    if (ready) {
-      const from = ready.id; this.evolve(p, ready);
-      const d = ED.WEAPONS[ready.id];
-      results.push({ kind: 'evo', id: ready.id, from, lvl: ready.lvl, name: d.name, icon: d.icon, txt: (ED.WEAPONS[from].name || from) + ' evolved', val: 0 });
+    const results = [];
+    if ((val | 0) >= 2) {
+      p.pend++;
+      results.push({ kind: 'offer', id: 'offer', lvl: 0, name: 'Level up', icon: 'fx.spark.magic', txt: 'An extra level-up', val: 0 });
     } else {
-      const L = Math.min(1, p.stats.luck), n = 1 + (this.rng.next() < 0.3 + L ? 1 : 0) + (this.rng.next() < 0.1 + L / 2 ? 1 : 0);
       const opts = [];
-      for (const ws of p.weapons) if (ws.lvl < ED.weaponMaxLvl(ED.WEAPONS[ws.id])) opts.push({ w: 2, kind: 'wlvl', id: ws.id });
       for (const ps of p.passives) if (ps.lvl < ED.PASSIVES[ps.id].max) opts.push({ w: 1, kind: 'plvl', id: ps.id });
-      for (let k = 0; k < n; k++) {
-        if (!opts.length) { const g = Math.round(GOLD_CARD * this.goldMul(p)); this.gold += g; results.push({ kind: 'gold', id: 'gold', lvl: 0, name: 'Gold', icon: 'pickup.coin', txt: '+' + g + ' gold', val: g }); continue; }
+      for (const sk of p.skills) { const d = ED.SKILLS[sk.id]; if (d && sk.lvl < ED.skillMaxLvl(d)) opts.push({ w: 1, kind: 'skill', id: sk.id }); }
+      if (!opts.length) { const g = Math.round(GOLD_CARD * this.goldMul(p)); this.gold += g; results.push({ kind: 'gold', id: 'gold', lvl: 0, name: 'Gold', icon: 'pickup.coin', txt: '+' + g + ' gold', val: g }); }
+      else {
         const o = this.rng.weighted(opts, x => x.w);
-        let r;
-        if (o.kind === 'wlvl') {
-          const ws = p.weapons.find(x => x.id === o.id), d = ED.WEAPONS[ws.id], c = wlvlCard(p, ws);
-          ws.lvl++;
-          r = { kind: 'wlvl', id: ws.id, lvl: ws.lvl, name: d.name, icon: d.icon, txt: c.txt, val: 0 };
-          if (ws.lvl >= ED.weaponMaxLvl(d)) opts.splice(opts.indexOf(o), 1);
-        } else {
+        if (o.kind === 'plvl') {
           const ps = p.passives.find(x => x.id === o.id), d = ED.PASSIVES[ps.id];
           ps.lvl++;
-          r = { kind: 'plvl', id: ps.id, lvl: ps.lvl, name: d.name, icon: d.icon, txt: (d.lines && d.lines[ps.lvl - 1]) || d.txt, val: 0 };
-          if (ps.lvl >= d.max) opts.splice(opts.indexOf(o), 1);
+          results.push({ kind: 'plvl', id: ps.id, lvl: ps.lvl, name: d.name, icon: d.icon, txt: (d.lines && d.lines[ps.lvl - 1]) || d.txt, val: 0 });
+        } else {
+          const sk = p.skills.find(x => x.id === o.id), c = skillCard(sk), d = ED.SKILLS[sk.id];
+          sk.lvl++;
+          results.push({ kind: 'skill', id: sk.id, lvl: sk.lvl, name: d.name, icon: d.icon, txt: c.txt, val: 0 });
         }
-        results.push(r);
       }
     }
     this.recalc(p, false);
