@@ -16,12 +16,19 @@ North-star: a co-op browser survivors-like (solo or up to 4 friends, zero instal
 - [x] Achievements and Encyclopedia screens
 - [x] Bot benchmark: win rate, boss kill time and damage taken per stage × hero × weapon (`node tools/bench.js`), bot watch mode (`?bot=1`)
 
+## Hero redesign (after the first full playtest)
+- [x] One weapon per hero: 3 paths, hidden Forms (5 per hero, 2 of them secret hybrids), one Form per run; general weapons removed
+- [x] One skill (Q) per hero that grows with the weapon and your level
+- [x] Each hero plays a different role: brawler, marksman, fire zones, summoner, healer, assassin, crowd control
+- [x] Slower pace; no damage outside your screen; pixel-only drawing
+- [x] Harder: new foe kinds at 5 and 10 minutes, a 12-minute benchmark surge, slower levelling
+- [x] More gold: boss and win gold, later stages pay more, a kill bounty even when you lose
+- [ ] Form icons and a readability pass on every Form's visuals
+- [ ] Your playtest of the redesign
+
 ## Next
-- [ ] Your playtest: feel, balance, readability (all numbers untuned)
-- [ ] Weapon balance pass using the bench report (bot wins ~100% on stages 1–2 at full skill: game may be too easy)
+- [ ] Balance from your playtest (difficulty, Form strength, skill value)
 - [ ] Co-op test over a real internet connection
-- [ ] Canvas2D fallback: late-game frames still over budget
-- [ ] Art gaps: per-stage foe colours, Q/E skill icons, own art for The Twins, Rift Weaver, Wick-Eater
+- [ ] Art gaps: per-stage foe colours, own art for The Twins, Rift Weaver, Wick-Eater
 - [ ] Waves mode (planned): second game mode; rules to be decided with you
-- [x] Merged into main
 - [ ] Publish on GitHub Pages
