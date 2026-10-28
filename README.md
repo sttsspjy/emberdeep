@@ -81,6 +81,8 @@ For local play, serve the folder with any static server, for example `npx serve 
 
 - Code contract: `docs/ARCHITECTURE.md`. Rules and numbers: `docs/GAME-DESIGN.md`.
 - Checks (headless, exit 1 on failure): `node tools/check-sim.js`, `node tools/check-perf.js`, `node tools/check-*.js`, `node tools/art.js --check`, `node tools/browse.js smoke|shots|coop|crowd900|late` (browser checks need Playwright; add `--software` for the Canvas2D path).
+- Weapon balance bench: `node tools/bench.js` runs bot runs over stage × hero × weapon in parallel and writes `bench-out/<time>/report.html` (win %, final-boss kill time, damage taken per minute, strength relative to the hero's other weapons with 95% ranges, damage share, deaths) for a normal (`--skill 1`) and a sloppy (`0.3`) bot. `--quick` for a short look, `--help` for every flag. One run: `node tools/bot.js --stage 0 --hero knight --weapon bonespear`.
+- Watch the bot: open `index.html?bot=1` (optional `&speed=1..16`, `&weapon=<id>`, `&fill=on|off`, `&seed=<n>`, `&meta=none|max|profile`; seed + weapon + fill + meta replay a bench cell), pick a hero and stage; `[` / `]` change speed. Bot runs are not saved to the profile.
 
 ## Credits
 
