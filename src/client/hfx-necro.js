@@ -41,8 +41,8 @@
     const g = U.easeOut(Math.min(1, z.t / 0.18)), f = z.dur > 0 ? z.t / z.dur : 0, fade = f > 0.8 ? Math.max(0, (1 - f) / 0.2) : 1;
     const ph = z.id * 0.618, r = z.r * (0.4 + 0.6 * g) * (1 + 0.03 * Math.sin(t * 3 + ph * 6));
     if (B.zoneLite) { B.zcirc(z.x, z.y, r, rgba(plague ? 0x5a6a30 : 0x4a8a30, 110 * fade), 0); B.zcirc(z.x, z.y, r, rgba(plague ? 0xc8ff4a : 0xa8ff6a, 160 * fade), 1); return true; }
-    B.circ(z.x, z.y, r, rgba(plague ? 0x4f7a1e : 0x3f8f2a, 95 * fade), 0);
-    B.circ(z.x + Math.cos(ph * 7) * r * 0.15, z.y + Math.sin(ph * 7) * r * 0.12, r * 0.62, rgba(plague ? 0x8a4fc0 : 0x7fd34a, 75 * fade), 0);
+    B.circ(z.x, z.y, r, rgba(plague ? 0x4f7a1e : 0x3f8f2a, 60 * fade), 0);
+    B.circ(z.x + Math.cos(ph * 7) * r * 0.15, z.y + Math.sin(ph * 7) * r * 0.12, r * 0.62, rgba(plague ? 0x8a4fc0 : 0x7fd34a, 50 * fade), 0);
     B.circ(z.x, z.y, r, rgba(plague ? 0xc8ff4a : 0xa8ff6a, 160 * fade), 1);
     const nb = plague ? 6 : 4;
     for (let i = 0; i < nb; i++) {
@@ -105,4 +105,19 @@
   ED.SkillFx.corpseblast = ED.WeaponFx.corpseblast = { zone: necroZone, proj: boneProj };
   const ZA = ED.ZoneActor = ED.ZoneActor || {};
   ZA.minion = ZA.boneknight = ZA.bonearcher = ZA.ghoul = minionBody;
+
+  // Necro weapon 'boom' events (ghoul bursts, blight pops) skip fx.js's generic blast, whose cream 0.6-alpha flash disc (up to 90 px; ghoul / blight have no look colour)
+  // stacked into white blots: a ring in the look colour at the true radius, a small core flash, a few sparks. Corpse Blast (skill) keeps the generic blast.
+  const NW = { boneshard: 1, bonestorm: 1, bonelord: 1, plaguefield: 1, lich: 1, ossuary: 1 }, NCOL = { ghoul: 0x7fe34a00, blight: 0xa8e07000 };
+  const F = ED.FX;
+  if (F && F.handle) {
+    const handle = F.handle;
+    F.handle = (ev, ctx) => {
+      if (ev.t !== 'boom' || !NW[ev.wid] || ev.team) return handle(ev, ctx);
+      const col = NCOL[ev.look] || 0xe8dcc800, r = ev.r || 20;
+      F.ring(ev.x, ev.y, r, (col | 0xff) >>> 0, 0.3, r * 0.5, r > 60 ? 2 : 1);
+      F.flash(ev.x, ev.y, Math.min(r * 0.3, 18), col, 0.1, 0.45);
+      F.burst(ev.x, ev.y, Math.min(8, 2 + Math.round(r / 15)), col, Math.min(r, 100) * 2, 0.4, 2, 10);
+    };
+  }
 })(globalThis.ED || (globalThis.ED = {}));

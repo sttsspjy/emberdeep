@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it. Never opens a visible window.
-// Usage: node tools/browse.js [smoke|shots|crowdN|coop|botwatch ...] [--scen=a,b] [--cls=knight,...] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1]
+// Usage: node tools/browse.js [smoke|shots|forms|crowdN|coop|botwatch ...] [--scen=a,b] [--cls=knight,...] [--form=id,...] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1]
 //                             [--software] [--quality=high|low] [--gate] [--ff=480] [--timeout=600]
 //   smoke: for each hero (--cls, default all 7) a solo stage-1 run driven ~--seconds (10) s (circling, Q / E, dash, first card picked); fails on a page or console error,
 //          a stalled sim, no Q or E cast, or a signature weapon that dealt nothing.
@@ -11,6 +11,8 @@
 //   late[a|b|c]: staged late game for the render budget: a hero with its Form, every path at rank 3 and the Form refined (set a: knight whirlwind, b: ranger hail, c: pyro inferno),
 //          six max passives, clock 25:00, the stage boss and 900 last-roster foes held at real HP
 //          (about 1,000 kills/s); measures like crowdN plus own-zone count / coverage. --gate fails when Render.frame p95 > 4 ms on WebGL or > 8 ms on Canvas2D (GAME-DESIGN §13).
+//   forms: one PNG per hero (--cls) x Form (--form=id,... filters): every path at rank 3, the Form refined twice, six max passives, clock 15:00, 400 last-roster foes held at
+//          real HP, no boss, --seconds (4) s of play; into a fresh folder <outdir>/forms-<stamp>-<browser>[-soft] (printed). Fails on a page / console error or a Form not taken.
 //   coop: two pages of one browser context on ?net=local (BroadcastChannel transport): host + guest through the ED.Net lobby API (host, join, ready, start), then the real co-op
 //         run on both peers for --seconds (6) s: the guest's mirror shows 2 heroes and foes, snapshots <= 12 KB.
 //   botwatch: ?bot=1&speed=8&seed=--seed with the real tools/bot-brain.js; a knight solo run on stage 0 watched --seconds (20) s: fails on sim time < 3x real time (notes < 6x),
@@ -23,12 +25,12 @@
 const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
 
 // ---------------- arguments ----------------
-const FLAGS = { scen: 's', cls: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', json: 'b', help: 'b' };
+const FLAGS = { scen: 's', cls: 's', form: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', json: 'b', help: 'b' };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
-const SCEN_RE = /^(smoke|shots|coop|botwatch|crowd\d{1,4}|late[abc]?)$/;
+const SCEN_RE = /^(smoke|shots|coop|botwatch|crowd\d{1,4}|late[abc]?|forms)$/;
 function parseArgs(argv) {
-  const o = { scen: '', cls: HEROES.join(','), browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
+  const o = { scen: '', cls: HEROES.join(','), form: '', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
   const pos = [];
   for (const a of argv) {
     if (!a.startsWith('--')) { pos.push(a); continue; }
@@ -42,7 +44,7 @@ function parseArgs(argv) {
   }
   o.scens = (o.scen ? o.scen.split(',') : []).concat(pos).map(s => s.trim()).filter(Boolean);
   if (!o.scens.length) o.scens = ['smoke'];
-  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, crowdN, late[a|b|c], coop, botwatch)');
+  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, forms, crowdN, late[a|b|c], coop, botwatch)');
   if (!['chromium', 'firefox'].includes(o.browser)) throw new Fail('--browser is chromium or firefox');
   const vp = /^(\d{3,5})x(\d{3,5})$/.exec(o.viewport);
   if (!vp) throw new Fail('--viewport is WxH');
@@ -571,6 +573,47 @@ async function scenLate(sc) {
   return res;
 }
 
+async function scenForms() {
+  const o = S.opt, res = newResult('forms'), secs = o.seconds || 4, only = o.form ? o.form.split(',').map(x => x.trim()) : null;
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+  const dir = S.shotDir = path.join(o.outdir, 'forms-' + stamp + '-' + o.browser + (o.software ? '-soft' : ''));
+  fs.mkdirSync(dir, { recursive: true });
+  res.notes.push('folder ' + dir);
+  const { ctx, page, errors, info } = await openPage();
+  try {
+    res.notes.push(bootNote(info) + (o.software ? ', launched without GPU' : ''));
+    await call(page, 'settings', o.quality);
+    for (const cls of o.classes) {
+      const forms = await page.evaluate((c) => { const E = window.ED; return E.weaponForms(E.HEROES[c].sig).map(f => f.id); }, cls);
+      for (const fid of forms) {
+        if (only && !only.includes(fid)) continue;
+        await call(page, 'start', cls, 0, { god: true });
+        await wait(300);
+        const prep = await page.evaluate((F) => {
+          const E = window.ED, D = E.Debug, w = E.Game.w, p = w.heroes[0], ws = p.weapons[0];
+          for (let i = 0; i < 3; i++) while (w.rankPath(p, ws, i));
+          w.takeForm(p, ws, F);
+          for (let i = 0; i < 2; i++) w.refineForm(p, ws);
+          for (const id of ['might', 'reach', 'duration', 'multishot', 'haste', 'velocity']) D.give(id, 99);
+          D.setTime(900);
+          w.recalc(p, false);
+          return { id: ws.id, pr: ws.pr.join(''), fl: ws.fl, passives: p.passives.length };
+        }, fid);
+        if (prep.id !== fid) fail(res, `${cls}: Form ${fid} not taken (holds ${prep.id})`);
+        await call(page, 'hold', 400, true);
+        await wait(secs * 1000);
+        await shoot(page, res, `${cls}-${fid}`, dir);
+        const looks = await page.evaluate(() => { const v = window.ED.Game.view, n = {}; for (const z of v.zones) if (!z.dead) n[z.k] = (n[z.k] || 0) + 1; for (const q of v.projs) if (!q.dead) n['p:' + q.k] = (n['p:' + q.k] || 0) + 1; return Object.entries(n).map(([k, c]) => k + ' ' + c).join(', '); });
+        res.rows.push(Object.assign({ cls, form: fid, pr: prep.pr, fl: prep.fl, passives: prep.passives, looks }, await dbg(page, 'state')));
+        await call(page, 'stop');
+        await wait(150);
+      }
+    }
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 // Host + guest pages in one context over the BroadcastChannel transport.
 async function scenCoop() {
   const o = S.opt, res = newResult('coop'), secs = o.seconds || 6, errors = [];
@@ -681,10 +724,11 @@ function table(results) {
     for (const w of r.rows) {
       if (r.name === 'smoke') out.push(`  ${w.cls.padEnd(7)} t ${w.time}s foes ${w.foes} kills ${w.kills} lvl ${w.level} hp ${w.hp} Q ${w.q} sig dmg ${w.sigDealt} weapons ${w.weapons.join(',')}`);
       else if (r.name === 'shots') out.push(`  ${w.cls.padEnd(7)} ff ${(w.ffMs / 1000).toFixed(1)} s wall -> t ${w.time}s lvl ${w.level} foes ${w.foes} projs ${w.projs} kills ${w.kills} weapons ${w.weapons.join(',')} passives ${w.passives.join(',')}`);
+      else if (r.name === 'forms') out.push(`  ${w.cls.padEnd(7)} ${w.form.padEnd(14)} paths ${w.pr} refine ${w.fl} foes ${w.foes} kills ${w.kills} | ${w.looks}`);
       else if (r.name === 'coop' || r.name === 'botwatch') out.push('  ' + Object.entries(w).map(([k, v]) => k + ' ' + v).join(', '));
       else out.push(`  ${w.quality}: foes ${w.foes}, frames ${w.frames}, frame ms p50/p95/max ${tri(w.frame)}, work ms ${tri(w.work)}, sim ms/tick ${tri(w.tick)}, render ms ${tri(w.render)}, batch ${w.batch}, post ${w.usePost ? 'on' : 'off'}${w.soft ? ' (software)' : ''}, canvas ${w.canvas.join('x')}`);
     }
-    if (r.name !== 'shots') for (const f of r.shots) out.push('  shot ' + f);
+    if (r.name !== 'shots' && r.name !== 'forms') for (const f of r.shots) out.push('  shot ' + f);
     else out.push(`  ${r.shots.length} shots`);
   }
   return out.join('\n');
@@ -705,7 +749,7 @@ async function main() {
     for (const sc of S.opt.scens) {
       const t0 = Date.now();
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'coop' ? await scenCoop() : sc === 'botwatch' ? await scenBotwatch() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'forms' ? await scenForms() : sc === 'coop' ? await scenCoop() : sc === 'botwatch' ? await scenBotwatch() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
       catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); fail(r, 'harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); }
       r.wallMs = Date.now() - t0;
       if (S.server.missing.size) { r.missing = [...S.server.missing]; fail(r, 'missing files: ' + r.missing.join(', ')); S.server.missing.clear(); }

@@ -22,17 +22,17 @@
     const disc = lite ? B.zcirc : B.circ;
     disc(z.x, z.y, r, ca(HOLY, 0.12 + 0.25 * k), 0);
     disc(z.x, z.y, r * (1.6 - 0.6 * k), ca(WHITE, 0.4 + 0.5 * k), 1);
-    if (!lite) B.rect(z.x - cw / 2, top, cw, head - top, ca(GOLD, 0.18 + 0.3 * k));
-    B.rect(z.x - Math.max(1, cw / 5), top, Math.max(2, cw / 2.5), head - top, ca(WHITE, 0.35 + 0.5 * k));
+    if (!lite) B.rect(z.x - cw / 2, top, cw, head - top, ca(GOLD, 0.12 + 0.2 * k));
+    B.rect(z.x - Math.max(1, cw / 10), top, Math.max(2, cw / 5), head - top, ca(WHITE, 0.3 + 0.45 * k));
     B.rect(z.x - cw / 2 - 1, head - 6, cw + 2, 6, ca(WHITE, 0.9));
     if (big && !lite) for (let i = 0; i < 4; i++) { const a = t * 3 + i * TAU / 4; B.rect(z.x + Math.cos(a) * r * 1.3 * k - 1, z.y + Math.sin(a) * r * 0.65 * k - 1, 2, 2, ca(WHITE, 0.85)); }
   }
-  // Afterglow of a landed pillar: a fading full-height column and a ground burst. B.zoneLite: batched burst, the core column only.
+  // Afterglow of a landed pillar: a fading full-height column and a ground burst (small hot core, thin expanding rings; no wide fill). B.zoneLite: batched burst, the core column only.
   function glow(B, z, t) {
     const k = kOf(z), f = 1 - k, r = z.r, top = z.y - 170 - r, lite = B.zoneLite, disc = lite ? B.zcirc : B.circ;
-    disc(z.x, z.y, r * (1 + 0.6 * k), ca(WHITE, 0.45 * f), 0);
-    if (!lite) B.rect(z.x - r * 0.45 * f, top, r * 0.9 * f, z.y - top, ca(GOLD, 0.5 * f));
-    B.rect(z.x - r * 0.15 * f, top, Math.max(1, r * 0.3 * f), z.y - top, ca(WHITE, 0.9 * f));
+    disc(z.x, z.y, Math.max(2, r * 0.3), ca(WHITE, 0.5 * f), 0);
+    if (!lite) { B.circ(z.x, z.y, r * (0.8 + 0.6 * k), ca(WHITE, 0.6 * f), 1); B.rect(z.x - r * 0.25 * f, top, r * 0.5 * f, z.y - top, ca(GOLD, 0.3 * f)); }
+    B.rect(z.x - r * 0.06 * f, top, Math.max(1, r * 0.12 * f), z.y - top, ca(WHITE, 0.75 * f));
     disc(z.x, z.y, r * (1.2 + 0.8 * k), ca(GOLD, 0.8 * f), 1);
   }
   // Rising motes inside a circle (deterministic from the zone id and t); cross: small holy crosses instead of squares.
@@ -48,7 +48,7 @@
   function ground(B, z, t, cross) {
     const f = fade(z, 0.15, 0.4), pulse = 0.5 + 0.5 * Math.sin(t * 6 + z.id);
     if (B.zoneLite) { B.zcirc(z.x, z.y, z.r, ca(HOLY, 0.16 * f), 0); B.zcirc(z.x, z.y, z.r, ca(GOLD, 0.5 * f), 1); return; } // 2D zone LOD: batched fill + rim
-    B.circ(z.x, z.y, z.r, ca(HOLY, (0.12 + 0.06 * pulse) * f), 0);
+    B.circ(z.x, z.y, z.r, ca(HOLY, (0.07 + 0.04 * pulse) * f), 0);
     B.circ(z.x, z.y, z.r, ca(GOLD, 0.55 * f), 1);
     if (cross) B.circ(z.x, z.y, z.r * (0.5 + 0.1 * pulse), ca(WHITE, 0.25 * f), 1);
     motes(B, z, t, cross ? 4 : 5, WHITE, 1, cross);
@@ -138,4 +138,19 @@
   const HOOK = { zone, top };
   for (const id of ['smite', 'wrath', 'halo', 'jray', 'consecration', 'verdict']) ED.WeaponFx[id] = HOOK;
   ED.SkillFx.sanctuary = HOOK;
+
+  // Cleric 'boom' events (pillar landings) skip fx.js's generic blast, whose 0.6-alpha cream flash disc (up to 90 px) per pillar stacked into white blots over the horde:
+  // a gold ring at the true radius, a small core flash, a few sparks. Sanctuary (skill) keeps the generic blast.
+  const CW = { smite: 1, wrath: 1, halo: 1, jray: 1, consecration: 1, verdict: 1 };
+  const F = ED.FX;
+  if (F && F.handle) {
+    const handle = F.handle;
+    F.handle = (ev, ctx) => {
+      if (ev.t !== 'boom' || !CW[ev.wid] || ev.team) return handle(ev, ctx);
+      const r = ev.r || 20;
+      F.ring(ev.x, ev.y, r, 0xffe08aff, 0.3, r * 0.5, r > 60 ? 2 : 1);
+      F.flash(ev.x, ev.y, Math.min(r * 0.3, 20), 0xfff6dc00, 0.1, 0.5);
+      F.burst(ev.x, ev.y, Math.min(8, 2 + Math.round(r / 15)), 0xffe08a00, Math.min(r, 100) * 2, 0.4, 2, 10);
+    };
+  }
 })(globalThis.ED || (globalThis.ED = {}));
