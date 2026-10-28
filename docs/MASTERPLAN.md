@@ -24,7 +24,7 @@ North-star: a co-op browser survivors-like (solo or up to 4 friends, zero instal
 - [x] Harder: new foe kinds at 5 and 10 minutes, a 12-minute benchmark surge, slower levelling
 - [x] More gold: boss and win gold, later stages pay more, a kill bounty even when you lose
 - [x] Form icons
-- [ ] Readability pass on every Form's visuals
+- [x] Readability pass on every Form's visuals
 - [ ] Your playtest of the redesign
 
 ## Next
