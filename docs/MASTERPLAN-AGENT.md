@@ -47,4 +47,4 @@ Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with th
 - 2026-10-27 foundation committed on feat/survivors.
 - 2026-10-28 all lanes merged; integration fixes; fix round committed (6 commits); all Node checks, art --check, browse smoke/shots/coop/crowd900 (GPU + software), late gates GPU pass; late gates software fail.
 - 2026-10-28 playtest prep (aim fallback, mobility nerf, codex) + bot bench; dual review (Opus + Sonnet) and fix round; all checks pass; merged to main.
-- 2026-10-29 hero redesign: phase 1 (core / horde / render) + phase 2 (7 hero trees) merged on feat/hero-paths; all Node checks, browse smoke/coop/late gates (GPU + software) pass; check-art waits on Form icons.
+- 2026-10-29 hero redesign: phase 1 (core / horde / render) + phase 2 (7 hero trees) + Form icons + readability pass; all checks pass; merged to main.
