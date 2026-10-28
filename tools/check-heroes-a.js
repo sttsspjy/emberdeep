@@ -117,21 +117,21 @@ for (const [cls, id] of [['cleric', 'boneshard'], ['bell', 'bonestorm']]) {
   const S = (p) => ED.Stats.weapon(p, 0), N = (p, i) => ED.Stats.skill(p, i);
   ok(S(k).back && S(k).wave === 3 && S(k).n === 3, 'knight: Cleave 333 swings back, 3 waves, 3 swings');
   ok(S(r).back && S(r).ring === 4 && S(r).ringN === 24 && S(r).n === 4 && S(r).pierce === 3, 'ranger: Longbow 333 fires behind, ring of 24 every 4th, 4 arrows, pierce 3');
-  ok(S(py).embers === 6 && S(py).n === 4 && S(py).pierce === 1, 'pyro: Fire Bolt 333 throws 6 embers, 4 bolts, pierce 1');
+  ok(S(py).shells === 2 && S(py).cluster === 4 && S(py).combust === 3 && S(py).cemb === 3 && S(py).spread === 1 && S(py).flare > 0, 'pyro: Fire Bolt 333 shells 2, bomblets 4, death blasts, embers 3, leaps, flare');
   ok(S(n).mshot && S(n).homing === 3 && S(n).n === 5 && S(n).pierce === 6 && Math.abs(S(n).rise - 0.14) < 1e-9, 'necro: Bone Shard 333 minion shots, homing, 5 shards, pierce 6, rise 14%');
   ok(N(k, 0).shards === 10 && N(k, 0).quake, 'knight: Charge quake + shards');
   ok(N(r, 0).follow && N(r, 0).flank === 2, 'ranger: Volley follow + flank');
-  ok(N(py, 0).shards === 10 && N(py, 0).extra === 2, 'pyro: Meteor shards + extra');
+  ok(N(py, 0).echo === 1 && N(py, 0).extra === 2, 'pyro: Meteor echo + extra');
   ok(N(n, 0).shards && N(n, 0).rerise, 'necro: Corpse Blast shards + rerise');
   // Skill damage: base x levels x might x weapon factor x (1 + 0.05 (party level - 1)).
   const q = new ED.World({ seed: 1, stage: 0, players: [{ pid: 'p1', cls: 'pyro' }] }), h = q.heroes[0], base = ED.SKILLS.meteor.base.dmg;
   const n1 = q.skillN(h, 0).dmg;
   q.level = 11; const n11 = q.skillN(h, 0).dmg;
-  q.rankPath(h, h.weapons[0], 2); q.recalc(h, false); const nw = q.skillN(h, 0).dmg; // embers rank 1: +25% weapon damage
-  ok(Math.abs(n1 - base) < 1e-9 && Math.abs(n11 / n1 - 1.5) < 1e-9 && Math.abs(nw / n11 - 1.25) < 1e-9 && Math.abs(ED.Stats.weaponMul(h) - 1.25) < 1e-9,
-    `skill damage scales: level 1 ${n1}, party level 11 x${(n11 / n1).toFixed(2)}, +25% weapon dmg x${(nw / n11).toFixed(2)}`);
+  for (let i = 0; i < 3; i++) q.rankPath(h, h.weapons[0], 0); q.recalc(h, false); const nw = q.skillN(h, 0).dmg; // Blaze rank 3: +20% weapon damage
+  ok(Math.abs(n1 - base) < 1e-9 && Math.abs(n11 / n1 - 1.5) < 1e-9 && Math.abs(nw / n11 - 1.2) < 1e-9 && Math.abs(ED.Stats.weaponMul(h) - 1.2) < 1e-9,
+    `skill damage scales: level 1 ${n1}, party level 11 x${(n11 / n1).toFixed(2)}, +20% weapon dmg x${(nw / n11).toFixed(2)}`);
   q.setRanks(h, h.weapons[0], 9, true);
-  ok(Math.abs(ED.Stats.weaponMul(h) - ED.Stats.weapon(h, 0).dmg / ED.WEAPONS.firebolt.base.dmg) < 1e-9 && ED.Stats.weaponMul(h) > 26 / 16, 'Form base counts in the weapon factor (' + ED.Stats.weaponMul(h).toFixed(2) + ')');
+  ok(Math.abs(ED.Stats.weaponMul(h) - ED.Stats.weapon(h, 0).dmg / ED.WEAPONS.firebolt.base.dmg) < 1e-9 && ED.Stats.weaponMul(h) > ED.WEAPONS.inferno.base.dmg / ED.WEAPONS.firebolt.base.dmg, 'Form base counts in the weapon factor (' + ED.Stats.weaponMul(h).toFixed(2) + ')');
   // Corpse Blast detonates minions in view.
   const nn = n; nn.x = nn.y = 1600; w.time = 300;
   for (let i = 0; i < 6; i++) ED.Necro.raise(w, nn, 1600 + i * 10, 1620, 'boneshard', false, 15);
