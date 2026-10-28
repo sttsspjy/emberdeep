@@ -307,7 +307,7 @@
 
   // ---------------- Bramble Trail / Thornwood ----------------
   // Thorn patches are damage zones (S.dmg per 0.5 s tick, first tick at once). Walking drops a patch every S.gap x area px (S.rows wide); fire() lashes a line of S.n patches
-  // along the facing direction (S.back: also behind), erupting 0.04 s apart. Thornwood: patches persist and grab (stun per tick), and fire() erupts a ring of patches around the hero.
+  // along the facing direction (S.back: also behind; with or without foes near), erupting 0.04 s apart. Thornwood: patches persist and grab (stun per tick), and fire() erupts a ring of patches around the hero.
   const patch = (w, p, ws, S, x, y) => {
     if (ED.Arena.blocked(w.arena, x, y, 2)) return;
     const st = ws.st, o = zo();
@@ -323,7 +323,6 @@
   };
   const bramble = {
     fire(w, p, ws, S) {
-      if (!w.nearestFoe(p.x, p.y, 220)) return false;
       const st = ws.st;
       st.qi = 0; st.qn = Math.max(1, S.n | 0); st.qt = 0; st.qa = p.mdir; st.qx = p.x; st.qy = p.y;
       return true;

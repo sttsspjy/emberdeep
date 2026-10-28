@@ -17,7 +17,7 @@ Units: world px (hero sprite ≈ 16–24 px tall), seconds. HP numbers are integ
 ## 2. Run structure (Survival mode)
 
 - **Length**: 15:00. Bosses at 5:00 and 10:00; the final boss at 15:00. Killing the final boss wins the run. At 17:00, if it is still alive, the final boss enrages (×3 damage and speed).
-- **Arena**: bounded 3200 × 3200 world px per stage, solid edge walls, 20–40 scattered obstacles (pillars, ruins; circle colliders, radius 12–40) that make chokepoints, 12–20 destructible braziers that drop pickups.
+- **Arena**: bounded 3200 × 3200 world px per stage, solid edge walls, 20–40 scattered obstacles (pillars, ruins; circle colliders, radius 12–40) that make chokepoints, 12–20 destructible braziers that drop pickups; any hero hit breaks one (swings, blasts, rings, pillars, and projectiles, which fly on without spending pierce), as does walking into it.
 - **View**: about 640 × 360 world px (integer-scaled to the canvas). Each client follows its own hero.
 - **Stages**: 3 stages (themes from the old biomes), each with its own foe roster, palette, two mid-bosses and a final boss. Stage 1 is open; beating stage N unlocks N+1. Stage choice happens before the run.
 - **Victory screen**: time, kills, level, damage per weapon (bar chart), gold earned.
@@ -35,7 +35,7 @@ Units: world px (hero sprite ≈ 16–24 px tall), seconds. HP numbers are integ
 | Invulnerability after a hit | 0.5 s |
 
 - **Controls**: WASD move (e.code), mouse aims skills, Space dash, Q and E hero skills, 1–4 pick a level-up card, Esc pause (solo only). No mouse button is bound by default: a click does nothing in a run.
-- **Weapons fire on their own.** Targeting modes: `nearest`, `facing` (toward the nearest foe within ±100° of the movement direction, else the nearest foe in range, else straight along it; Twin Daggers ±52°; Cleave holds its swing while no foe is in reach; Bramble Trail always lashes along the movement direction), `random` (a random foe on screen), `around` (orbit or aura), `densest` (the densest foe cluster within range).
+- **Weapons fire on their own.** Targeting modes: `nearest`, `facing` (toward the nearest foe within ±100° of the movement direction, else the nearest foe in range, else straight along it; Twin Daggers ±52°; Bramble Trail always lashes along the movement direction), `random` (a random foe on screen), `around` (orbit or aura), `densest` (the densest foe cluster within range). **No foe in range**: every signature weapon, its evolution and the `facing` general weapons still fire on their normal cooldown and range along the facing direction (the last movement direction, kept while standing still): shots fly straight ahead, Cleave swings ahead, Bone Storm launches ahead, Smite / Wrath pillars land in a line ahead (60 px steps, kept on screen), Toll / Cathedral peal and Whirlwind spins in place. Other general weapons hold until a foe is in range.
 - **Hero skills (Q/E)** aim at the mouse cursor, cooldowns 6–18 s, and must look and feel huge: screen-wide effects, hit-stop, shake. Skill cards in the level-up pool upgrade them (shape, not just numbers).
 - **Slots**: 6 weapons, 6 passives. The hero's signature weapon fills slot 1 at start.
 

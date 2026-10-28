@@ -25,7 +25,7 @@
   };
 
   // ---------------- Fire Bolt ----------------
-  // S.n bolts (0.18 rad fan) at the nearest foe. Each hit: a burst (22 px x area, half damage, burn) and a fire pool (18 px x area, 0.6 x dmg per second, S.dur s);
+  // S.n bolts (0.18 rad fan) at the nearest foe, else along p.mdir. Each hit: a burst (22 px x area, half damage, burn) and a fire pool (18 px x area, 0.6 x dmg per second, S.dur s);
   // embers: the burst throws that many embers (40% damage, burn).
   const BURN = [0, 0], BURST = { look: 'fire', burn: BURN, knock: 60 };
   const EMBER = { look: 'ember', speed: 210, dmg: 0, pierce: 0, r: 4, life: 0.35, knock: 30, onHit: null };
@@ -42,8 +42,8 @@
   };
   const BOLT = { look: 'fireball', onHit: burst, st: null };
   const bolts = (w, p, ws, S, spread) => {
-    const t = w.nearestFoe(p.x, p.y, S.range); if (!t) return false;
-    const a = Math.atan2(t.y - p.y, t.x - p.x), n = Math.max(1, S.n | 0);
+    const t = w.nearestFoe(p.x, p.y, S.range);
+    const a = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.mdir, n = Math.max(1, S.n | 0);
     BOLT.st = ws;
     for (let i = 0; i < n; i++) w.shoot(p, ws.id, p.x, p.y - 6, a + (i - (n - 1) / 2) * spread, S, BOLT);
     return true;
@@ -63,7 +63,7 @@
     pair: 'duration', evo: 'inferno',
   }, { fire: (w, p, ws, S) => bolts(w, p, ws, S, 0.18) });
 
-  // Inferno: bolts burst as Fire Bolt; a new pool touching a live pool merges into it (grows to INF_R at most, timer refreshed); each pool spreads once,
+  // Inferno: bolts (nearest foe, else p.mdir) burst as Fire Bolt; a new pool touching a live pool merges into it (grows to INF_R at most, timer refreshed); each pool spreads once,
   // after 1 s, a 0.75x pool toward the nearest foe outside it (two generations).
   const infTick = (w, z) => {
     const s = z.st;
@@ -96,8 +96,8 @@
     levels: [],
   }, {
     fire(w, p, ws, S) {
-      const t = w.nearestFoe(p.x, p.y, S.range); if (!t) return false;
-      const a = Math.atan2(t.y - p.y, t.x - p.x), n = Math.max(1, S.n | 0);
+      const t = w.nearestFoe(p.x, p.y, S.range);
+      const a = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.mdir, n = Math.max(1, S.n | 0);
       IBOLT.st = ws;
       for (let i = 0; i < n; i++) w.shoot(p, ws.id, p.x, p.y - 6, a + (i - (n - 1) / 2) * 0.22, S, IBOLT);
       return true;

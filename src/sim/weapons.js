@@ -1,6 +1,7 @@
 // Weapon runtime and registry (ARCHITECTURE §6). ED.addWeapon(def, impl) registers ED.WEAPONS[id] / ED.WIMPL[id]; ED.WEAPON_IDS is registration order (wire / card order, append only).
 // Slots: p.weapons = [{ id, lvl, evo, cd, st (impl state), S (effective numbers, cached until stats / level / id change) }], max 6. Each tick per living hero and slot:
 // impl.tick?(w, p, ws, S, dt); ws.cd -= dt; at <= 0 impl.fire(w, p, ws, S) -> true resets cd = S.cd and emits { t: 'shoot', pid, wid }, false retries in 0.1 s.
+// No-target rule (GAME-DESIGN §3): signatures and facing-mode weapons fire on cooldown with no foe in range, along p.mdir (the last movement direction).
 // Evolution: level 8 + the def.pair passive owned = ready; the next chest swaps id to def.evo (slot and level 8 kept, st reset, impl.init re-run).
 (function (ED) {
   'use strict';
@@ -39,13 +40,12 @@
   // Effective numbers of slot i (cached).
   W.weaponS = function (p, i) { const ws = p.weapons[i]; return ws.S && ws.Sv === p.statsV && ws.Sl === ws.lvl && ws.Sid === ws.id ? ws.S : ED.Stats.weapon(p, i); };
 
-  // Aim helper for fire(): angle from the hero toward the weapon's target (mode as w.target), or null when there is none.
+  // Aim helper for fire(): 'facing' -> facingAim (p.mdir without a foe), 'around' -> p.mdir, else the angle toward the weapon's target (mode as w.target), or null when there is none.
   W.aimAngle = function (p, mode, range) {
-    const t = this.target(mode, p, range);
-    if (!t) return null;
     if (mode === 'facing') return this.facingAim(p, p.mdir, range);
     if (mode === 'around') return p.mdir;
-    return Math.atan2(t.y - p.y, t.x - p.x);
+    const t = this.target(mode, p, range);
+    return t ? Math.atan2(t.y - p.y, t.x - p.x) : null;
   };
 
   // Facing aim (GAME-DESIGN §3): coneFoe -> angle toward the nearest foe within range and cone rad (default ED.FACING_CONE) of a0, else null;

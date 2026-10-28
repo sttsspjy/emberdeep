@@ -26,9 +26,8 @@
   // Facing volleys bend toward the nearest foe within AIM_CONE rad of their direction, else toward the nearest foe in range (w.facingAim).
   const AIM_CONE = 0.9;
   // S.n daggers along the facing direction, bent toward a foe inside the 0.9 rad aim cone, else the nearest foe (staggered 5 px, spread 0.06 rad);
-  // back: as many opposite the front volley, bent toward a foe inside the rear aim cone. Fires only when a foe is within range.
+  // back: as many opposite the front volley, bent toward a foe inside the rear aim cone. With no foe in range the volley flies along p.mdir.
   function volley(w, p, ws, S) {
-    if (!w.nearestFoe(p.x, p.y, S.range)) return false;
     const n = Math.max(1, S.n | 0), b = BOUNCE[Math.min(5, S.bounce | 0)], opt = OPT;
     opt.st = b; opt.onHit = b.b > 0 ? ricochet : null;
     const af = w.facingAim(p, p.mdir, S.range, AIM_CONE);
@@ -55,7 +54,7 @@
     pair: 'velocity', evo: 'shadowfan',
   }, { fire: volley });
 
-  // Shadow Fan: S.n boomerang daggers in a fan toward the facing aim (w.facingAim) and a mirrored fan behind; they pierce everything and always crit on the way back.
+  // Shadow Fan: S.n boomerang daggers in a fan toward the facing aim (w.facingAim, p.mdir without a foe) and a mirrored fan behind; they pierce everything and always crit on the way back.
   function backCrit(w, pr) { if (pr.back) pr.critC = 1; }
   const FAN_OPT = { look: 'sknife', pierce: 999, ret: true, tick: backCrit };
   ED.addWeapon({
@@ -64,7 +63,6 @@
     levels: [],
   }, {
     fire(w, p, ws, S) {
-      if (!w.nearestFoe(p.x, p.y, S.range * 0.6)) return false;
       const n = Math.max(1, S.n | 0), spread = Math.min(0.28, 1.6 / n);
       const af = w.facingAim(p, p.mdir, S.range);
       for (let side = 0; side < 2; side++) {
