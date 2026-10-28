@@ -24,8 +24,8 @@
   };
   Object.assign(W.prototype, ED.Grid);
 
-  // XP to go from level L to L + 1 (GAME-DESIGN §6).
-  W.xpFor = (L) => (L <= 20 ? 5 + 8 * (L - 1) : 157 + 15 * (L - 20));
+  // XP to go from level L to L + 1 (GAME-DESIGN §6): 10 + 50 x (L - 1) + 1.5 x (L - 1)^2 (cumulative 2,198 to level 10, 11,908 to 20, 32,168 to 30).
+  W.xpFor = (L) => Math.round(10 + 50 * (L - 1) + 1.5 * (L - 1) * (L - 1));
 
   W.prototype.nextId = function () { return this.nid++; };
   W.prototype.minute = function () { return Math.floor(this.time / 60); };
@@ -192,9 +192,16 @@
     if (this.finalDown) { this.end(true); return; }
     if (!this.living.length && !this.cheats.god) this.end(false);
   };
+  // Gold paid straight to the party (final boss, victory): v x the stage gold multiplier x the heroes' mean gold multiplier (progress.js goldMul), rounded.
+  W.prototype.payGold = function (v) {
+    let m = 0; for (const p of this.heroes) m += this.goldMul(p);
+    this.gold += Math.round(v * (this.sdef.gold || 1) * m / Math.max(1, this.heroes.length));
+  };
+  // Ends the run once; a win pays ED.CONST.GOLD.win (payGold) before the summary.
   W.prototype.end = function (won) {
     if (this.state !== 'play') return;
     this.state = won ? 'won' : 'lost';
+    if (won) this.payGold(C.GOLD.win);
     this.emit({ t: 'end', won, summary: this.summary() });
   };
   W.prototype.summary = function () {

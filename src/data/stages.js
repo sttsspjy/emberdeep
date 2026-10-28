@@ -1,15 +1,17 @@
-// Stages. ED.STAGES[i] = { id, name, theme, arena, foe, timeline, events, elites, bosses }; index i is the stage number (0 = stage 1).
+// Stages. ED.STAGES[i] = { id, name, theme, arena, foe, gold, timeline, events, elites, bench, bosses }; index i is the stage number (0 = stage 1).
 // theme: { floor: [[tile anim, weight]], deco: [anim ids] (non-colliding scatter), features: [obstacle feature] (src/sim/arena.js), brazier (anim),
 //   pal: { bg, wall, accent, light } } (bg: void outside the arena, wall: obstacle fill, accent/light: post grade).
 //   feature: { f: 'row' (colonnade) | 'arc' (broken wall with one gap) | 'cluster' (tight clump) | 'single', w (pick weight), look ('' = plain rock disc), r: [min, max], n: [min, max], gap: [min, max] (px between surfaces), spread (cluster radius) }.
 // arena: { size, obstacles: [min, max] (colliders), braziers: [min, max], clear (no obstacle within this radius of the centre) }.
-// foe: { hp, dmg } stage multipliers on foe and boss HP and on contact / shot damage.
+// foe: { hp, dmg } stage multipliers on foe and boss HP and on contact / shot damage. gold: multiplier on elite, boss and victory gold (GAME-DESIGN §9).
+// Roster tiers: each stage's 0:00-5:00, 5:00-10:00 and 10:00-15:00 rosters differ (early kinds fade to weight 0, two new kinds per stage at 5:00 and 10:00).
 // timeline[m] (minute m; the last entry holds for the rest of the run): { rate (spawns/s solo), cap (alive cap solo), floor (density floor, fraction of the alive cap), roster: [[foeId, weight]] }.
-// events.swarm: { first, every, ring: [ids], stampede: [ids], n: [at first, at 12:00] } a closing ring or a stampede line of swarmers; elites: { first, every }; bosses: [{ t (s), id, final }].
+// events.swarm: { first, every, ring: [ids], stampede: [ids] (used when in the current roster), n: [at first, at 12:00] } a closing ring or a stampede line of swarmers; elites: { first, every };
+// bench: { t (s), elite (s between elites) } the benchmark phase (HP-heavy roster, density floor 0.7, a 'surge' warning); bosses: [{ t (s), id, final }].
 (function (ED) {
   'use strict';
   const capAt = (m) => Math.round(300 + Math.min(m, 12) * (400 / 12)); // GAME-DESIGN §7: 300 at 0:00 to 700 at 12:00
-  const floorAt = (m) => Math.min(0.6, (2 + m) / 20); // GAME-DESIGN §7: density floor = alive cap x min(0.6, 0.1 + 0.05 x minute)
+  const floorAt = (m) => (m >= 12 ? 0.7 : Math.min(0.6, (3 + m) / 20)); // GAME-DESIGN §7: density floor = alive cap x min(0.6, 0.15 + 0.05 x minute), 0.7 from 12:00
   // Weight of keyframes [[minute, weight], ...] at minute m: 0 before the first key, linear between keys, the last value after the last key.
   const keyAt = (keys, m) => {
     if (m < keys[0][0]) return 0;
@@ -26,6 +28,9 @@
     }
     return out;
   };
+  // Spawn rate per minute (solo spawns/s; GAME-DESIGN §7), shared by the stages (stage 3 x1.05); BENCH: the 12:00-15:00 benchmark phase.
+  const RATE = [2.5, 3.5, 4.8, 6, 7.2, 8, 10.5, 12.5, 14.5, 16.5, 16.5, 19, 21, 23, 25, 22];
+  const BENCH = { t: 720, elite: 30 };
   const ROW = (look, r, n, gap, w) => ({ f: 'row', w, look, r, n, gap });
   const ARC = (look, r, n, gap, w) => ({ f: 'arc', w, look, r, n, gap });
   const CLUSTER = (look, r, n, spread, w) => ({ f: 'cluster', w, look, r, n, spread });
@@ -43,23 +48,25 @@
         pal: { bg: '#0b0908', wall: '#2a2320', accent: '#ff8a3d', light: '#ffcf8a' },
       },
       arena: { size: 3200, obstacles: [30, 40], braziers: [40, 55], clear: 220 },
-      foe: { hp: 1, dmg: 1 },
+      foe: { hp: 1, dmg: 1 }, gold: 1,
       timeline: timeline(
-        [2, 3, 4, 5, 6.5, 8, 11, 13, 15.5, 17.5, 17.5, 22, 25, 28, 32, 24],
+        RATE,
         {
-          bat: [[0, 2], [3, 4], [7, 5], [11, 7], [14, 8]],
-          skeleton: [[0, 9], [4, 6], [9, 4], [14, 4]],
-          slime: [[1, 2], [3, 3], [8, 4], [14, 4]],
-          drowned: [[3, 1], [6, 3], [10, 4], [14, 5]],
-          priest: [[2, 1], [5, 2], [10, 3], [14, 3]],
-          imp: [[3, 1], [6, 2], [11, 3]],
-          icewolf: [[4, 1], [7, 2], [12, 3]],
-          frostwisp: [[5, 1], [8, 2], [12, 3]],
-          skelknight: [[5, 0.6], [8, 1.2], [12, 2]],
+          bat: [[0, 2], [3, 4], [7, 5], [11, 6]],
+          skeleton: [[0, 9], [3, 7], [5, 3], [7, 0]],
+          slime: [[1, 2], [3, 3], [5, 2], [7, 0]],
+          priest: [[1, 1], [3, 2], [8, 2], [10, 0]],
+          imp: [[2, 1], [4, 2], [6, 1], [8, 0]],
+          drowned: [[4, 1], [6, 4], [10, 4], [12, 3]],
+          icewolf: [[5, 2], [7, 3], [10, 2], [11, 0]],
+          frostwisp: [[6, 1], [8, 3], [10, 1], [11, 0]],
+          bulwark: [[5, 2], [7, 3], [11, 3], [13, 4]],
+          skelknight: [[5, 0.6], [8, 1], [10, 2], [12, 3]],
+          bonecaller: [[10, 1], [11, 2]],
         },
-        { 2: { slime: 4 }, 4: { priest: 3 }, 6: { icewolf: 5 }, 8: { imp: 4 }, 9: { frostwisp: 5 }, 11: { skelknight: 3 }, 13: { icewolf: 4, imp: 3 } }),
-      events: { swarm: { first: 90, every: 90, ring: ['bat'], stampede: ['bat', 'skeleton'], n: [40, 80] } },
-      elites: { first: 120, every: 60 },
+        { 2: { slime: 3 }, 4: { imp: 2 }, 6: { bulwark: 3 }, 8: { frostwisp: 3 }, 11: { bonecaller: 2 }, 13: { skelknight: 2 } }),
+      events: { swarm: { first: 90, every: 90, ring: ['bat'], stampede: ['bat', 'skeleton', 'drowned'], n: [40, 80] } },
+      elites: { first: 120, every: 60 }, bench: BENCH,
       bosses: [{ t: 300, id: 'warden' }, { t: 600, id: 'twins' }, { t: 900, id: 'hollow', final: true }],
     },
     {
@@ -73,23 +80,25 @@
         pal: { bg: '#07090b', wall: '#1d2a2a', accent: '#7fe39a', light: '#c9ffd9' },
       },
       arena: { size: 3200, obstacles: [30, 40], braziers: [40, 55], clear: 220 },
-      foe: { hp: 0.85, dmg: 1 },
+      foe: { hp: 0.85, dmg: 1 }, gold: 1.5,
       timeline: timeline(
-        [2, 3, 4, 5, 6.5, 7.5, 10, 12, 14, 16, 16, 20, 23, 26, 29, 22],
+        RATE,
         {
-          glowlet: [[0, 2], [3, 5], [8, 6], [14, 8]],
-          myconid: [[0, 9], [5, 6], [10, 4], [14, 4]],
-          glowslime: [[1, 2], [4, 3], [9, 4], [14, 4]],
-          cavespider: [[2, 1], [5, 3], [10, 4], [14, 4]],
-          spitter: [[3, 1], [6, 2], [10, 3], [14, 3]],
-          sporepuff: [[3, 1], [7, 3], [12, 3]],
-          reaver: [[4, 1], [8, 3], [13, 4]],
-          drone: [[5, 1], [8, 2], [12, 3]],
-          shroomhulk: [[5, 0.6], [8, 1.2], [12, 2]],
+          glowlet: [[0, 2], [3, 5], [8, 6]],
+          myconid: [[0, 9], [3, 7], [5, 3], [7, 0]],
+          glowslime: [[1, 2], [3, 3], [5, 2], [7, 0]],
+          spitter: [[1, 1], [3, 2], [8, 2], [10, 0]],
+          sporepuff: [[2, 1], [4, 2], [6, 1], [8, 0], [10, 0], [11, 2]],
+          reaver: [[4, 1], [6, 3], [10, 4], [13, 4]],
+          cavespider: [[5, 2], [7, 3], [10, 2], [11, 0]],
+          drone: [[6, 1], [8, 3], [10, 1], [11, 0]],
+          bloater: [[5, 2], [7, 3], [11, 2]],
+          shroomhulk: [[5, 0.6], [8, 1], [10, 2], [12, 3]],
+          mirecrab: [[10, 0.6], [11, 1], [13, 1.5]],
         },
-        { 2: { cavespider: 2 }, 4: { spitter: 3 }, 6: { sporepuff: 5 }, 7: { reaver: 4 }, 9: { drone: 5 }, 11: { shroomhulk: 3 }, 13: { cavespider: 5, spitter: 2 } }),
-      events: { swarm: { first: 90, every: 90, ring: ['glowlet'], stampede: ['glowlet', 'myconid'], n: [40, 80] } },
-      elites: { first: 120, every: 60 },
+        { 2: { glowslime: 3 }, 4: { spitter: 2 }, 6: { bloater: 3 }, 8: { drone: 3 }, 11: { mirecrab: 1 }, 13: { shroomhulk: 2 } }),
+      events: { swarm: { first: 90, every: 90, ring: ['glowlet'], stampede: ['glowlet', 'myconid', 'reaver'], n: [40, 80] } },
+      elites: { first: 120, every: 60 }, bench: BENCH,
       bosses: [{ t: 300, id: 'spore' }, { t: 600, id: 'cyclops' }, { t: 900, id: 'king', final: true }],
     },
     {
@@ -103,23 +112,25 @@
         pal: { bg: '#08060c', wall: '#241c33', accent: '#c58aff', light: '#ffc6f0' },
       },
       arena: { size: 3200, obstacles: [30, 40], braziers: [40, 55], clear: 220 },
-      foe: { hp: 0.9, dmg: 1 },
+      foe: { hp: 0.9, dmg: 1 }, gold: 2,
       timeline: timeline(
-        [2.1, 3.2, 4.2, 5.3, 6.8, 7.9, 10.5, 12.6, 14.7, 16.8, 16.8, 21, 24, 27, 30, 23],
+        RATE.map(r => Math.round(r * 1.05 * 10) / 10),
         {
-          starspawn: [[0, 2], [3, 5], [8, 6], [14, 8]],
-          shade: [[0, 9], [5, 6], [10, 5], [14, 5]],
-          jelly: [[1, 2], [4, 3], [9, 4], [14, 4]],
-          voidwraith: [[2, 1], [5, 2], [10, 3], [14, 3]],
-          eel: [[3, 1], [6, 3], [11, 4], [14, 4]],
-          gloom: [[3, 1], [7, 3], [12, 3]],
-          voideye: [[4, 1], [8, 3], [12, 3]],
-          riftcaller: [[6, 0.6], [9, 1.5], [13, 2]],
-          horror: [[5, 0.6], [8, 1.2], [12, 2]],
+          starspawn: [[0, 2], [3, 5], [8, 6]],
+          shade: [[0, 9], [3, 7], [5, 3], [7, 0]],
+          jelly: [[1, 2], [3, 3], [5, 2], [7, 0]],
+          voidwraith: [[1, 1], [3, 2], [8, 2], [10, 0]],
+          gloom: [[2, 1], [4, 2], [6, 1], [8, 0], [10, 0], [11, 3]],
+          eel: [[4, 1], [6, 3], [10, 2], [11, 0]],
+          voideye: [[6, 1], [8, 3], [10, 1], [11, 0]],
+          stalker: [[5, 2], [7, 3], [11, 3]],
+          horror: [[5, 0.6], [8, 1], [10, 2], [12, 3]],
+          riftcaller: [[9, 0.5], [10, 2]],
+          colossus: [[10, 0.6], [11, 1], [13, 1.5]],
         },
-        { 2: { voidwraith: 3 }, 4: { eel: 3 }, 6: { gloom: 5 }, 8: { voideye: 5 }, 9: { riftcaller: 3 }, 11: { horror: 3 }, 13: { eel: 4, gloom: 4 } }),
-      events: { swarm: { first: 90, every: 90, ring: ['starspawn'], stampede: ['starspawn', 'shade'], n: [40, 80] } },
-      elites: { first: 120, every: 60 },
+        { 2: { jelly: 3 }, 4: { voidwraith: 2 }, 6: { stalker: 3 }, 8: { voideye: 3 }, 11: { colossus: 1 }, 13: { horror: 2 } }),
+      events: { swarm: { first: 90, every: 90, ring: ['starspawn'], stampede: ['starspawn', 'shade', 'stalker'], n: [40, 80] } },
+      elites: { first: 120, every: 60 }, bench: BENCH,
       bosses: [{ t: 300, id: 'samurai' }, { t: 600, id: 'weaver' }, { t: 900, id: 'wickeater', final: true }],
     },
   ];

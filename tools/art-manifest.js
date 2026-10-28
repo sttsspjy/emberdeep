@@ -22,7 +22,7 @@
 // weapon.<id>            held/thrown weapon sprites (longsword warhammer glaive longbow crossbow twinbows firestaff emberwand inferno daggers knives scythes mace dawnhammer lantern bonewand soulscythe plaguestaff bronzebell greatbell handbells); anchors.grip/tip/dir
 // weapon.alt.<name>      big_hammer waraxe double_axe anime_sword katana duel_sword machete saw_sword throwing_axe rusty_sword cleaver
 // shield.<wood|green|gold|round|kite|buckler|tower>   16x16 shields (DawnLike); proj.shield = the thrown kite shield (centre pivot)
-// foe.<id>.<state>[.dir] 46 foes (state walk always; idle/atk/cast/death where the source has them), direction rule above
+// foe.<id>.<state>[.dir] 53 foes (state walk always; idle/atk/cast/death where the source has them), direction rule above; tier foes (bulwark bonecaller bloater bloatling mirecrab stalker colossus) are ramp recolours
 // boss.<id>.<state>      bonewarden: idle walk attack(8f) shield hit death | sporemother: idle walk attack charge hit | drownedking: idle walk attack1 attack2 attack3 hit death
 //                        hollowking: idle walk attack hit death, crown overlay boss.hollowking.crown | cyclops: idle walk attack hit death | samurai: idle walk charge attack hit death
 //                        (all face right; anchors centre/top/eye shared across each boss's states)
@@ -239,12 +239,12 @@ OXW('weapon.alt.cleaver', 'weapon_cleaver', [4, 16]);
 ['wood', 'green', 'gold', 'round', 'kite', 'buckler', 'tower'].forEach((n, i) => add('shield.' + n, 'actors', 'dl_shield', [[i * 16, 0, 16, 16]], { pivot: 'centre', fps: 0 }));
 
 // --------------------------------------------------------------------------- foes
-// 0x72 bodies (two-way): idle 4f + run 4f; `loop` bodies have a single 4f cycle.
-const foeOx = (id, body, one) => {
-  const o = { set: 'foe.' + id, eye: 'auto' };
+// 0x72 bodies (two-way): idle 4f + run 4f; `one` bodies have a single 4f cycle. x: extra entry options (ramp recolour).
+const foeOx = (id, body, one, x) => {
+  const o = Object.assign({ set: 'foe.' + id, eye: 'auto' }, x);
   if (one) {
     add('foe.' + id + '.walk', 'actors', 'ox', oxn(one, 4), Object.assign({ fps: 6.67, loop: true }, o));
-    add('foe.' + id + '.idle', 'actors', null, null, Object.assign({ use: 'foe.' + id + '.walk', fps: 6.67, loop: true }, o));
+    add('foe.' + id + '.idle', 'actors', null, null, { use: 'foe.' + id + '.walk', fps: 6.67, loop: true, set: o.set, eye: o.eye });
   } else {
     add('foe.' + id + '.idle', 'actors', 'ox', oxn(body + '_idle_anim', 4), Object.assign({ fps: 6.67, loop: true }, o));
     add('foe.' + id + '.walk', 'actors', 'ox', oxn(body + '_run_anim', 4), Object.assign({ fps: 10, loop: true }, o));
@@ -313,16 +313,25 @@ const foePuSlime = (id, first) => {
 foePuSlime('slimelet', true); foePuSlime('glowlet'); foePuSlime('jellet');
 
 // DawnLike two-frame foes (frame 0 from ...0.png, frame 1 from ...1.png, same rect). Slow idle at 400 ms plus a procedural bob at runtime.
-const foeDl = (id, sheet, x, y) => {
-  const r = [x, y, 16, 16], base = { set: 'foe.' + id, eye: 'auto' };
+const foeDl = (id, sheet, x, y, o) => {
+  const r = [x, y, 16, 16], base = Object.assign({ set: 'foe.' + id, eye: 'auto' }, o);
   add('foe.' + id + '.walk', 'actors', null, null, Object.assign({ frames: [[sheet + '0', r], [sheet + '1', r]], fps: 2.5, loop: true }, base));
-  add('foe.' + id + '.idle', 'actors', null, null, Object.assign({ use: 'foe.' + id + '.walk', fps: 2.5, loop: true }, base));
+  add('foe.' + id + '.idle', 'actors', null, null, { use: 'foe.' + id + '.walk', fps: 2.5, loop: true, set: base.set, eye: base.eye });
 };
 foeDl('sporepuff', 'dl_sl', 48, 0);
 foeDl('flameturret', 'dl_el', 16, 128);
 foeDl('starspawn', 'dl_el', 0, 160);
 foeDl('eel', 'dl_aq', 0, 32); foeDl('siren', 'dl_aq', 0, 48); foeDl('crab', 'dl_aq', 80, 0); foeDl('jelly', 'dl_aq', 96, 0); foeDl('tidecaller', 'dl_aq', 32, 48);
 foeDl('voidwraith', 'dl_un', 0, 80); foeDl('gloom', 'dl_un', 32, 80);
+// Tier foes (GAME-DESIGN §7): luminance ramps (outline kept) over existing bodies.
+const RAMP = (ramp) => ({ ramp, skip: ['#222222'] });
+foeOx('bulwark', 'masked_orc', null, RAMP(['#2a2430', '#5a5260', '#9a8f86', '#d8cbb4', '#fff6e0']));
+foeOx('bonecaller', 'orc_shaman', null, RAMP(['#1e1430', '#4a2a6a', '#8a5ab8', '#d0b0ff', '#f6eaff']));
+foeOx('bloater', null, 'swampy_anim', RAMP(['#10261c', '#1f5a3a', '#3fa060', '#8fe39a', '#e0ffd0']));
+foeOx('bloatling', null, 'muddy_anim', RAMP(['#14261e', '#2a5a48', '#4aa080', '#9fe8c8', '#eafff4']));
+foeDl('mirecrab', 'dl_aq', 80, 0, RAMP(['#1a2414', '#2f4a24', '#5a7a34', '#9ab84a', '#e0f0a0']));
+foeOx('stalker', 'chort', null, RAMP(['#140c24', '#3a2060', '#7040b0', '#c58aff', '#ffe0ff']));
+foeOx('colossus', 'ogre', null, RAMP(['#0c1020', '#1c2a50', '#34508a', '#6a9ad0', '#d0e8ff']));
 
 // --------------------------------------------------------------------------- bosses (page bosses)
 // LuizMelo bosses have no outline in the source, so a 1 px #222222 outline is stamped at bake.

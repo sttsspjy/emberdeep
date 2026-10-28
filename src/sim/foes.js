@@ -28,7 +28,7 @@
     e.dmg = this.contactDmg() * def.dmg; e.spd = def.spd; e.kbx = 0; e.kby = 0; e.face = 1; e.flash = 0; e.st = 0; e.stT = 0;
     e.elite = false; e.boss = !!def.boss; e.final = false; e.enraged = false;
     e.slowT = 0; e.slowK = 0; e.burnT = 0; e.burnDps = 0; e.burnOwner = null; e.burnTick = 0.5; e.stunT = 0; e.freezeT = 0;
-    e.hitT = 0; e.vars = null; e.tgt = null; e.cd = 0; e.age = 0; e.invulnT = 0; e.takeMul = 1; e.scale = def.scale || 1; e.hev = 0; e.hevT = -1;
+    e.hitT = 0; e.vars = null; e.tgt = null; e.cd = 0; e.age = 0; e.invulnT = 0; e.takeMul = def.take || 1; e.scale = def.scale || 1; e.hev = 0; e.hevT = -1;
     e.rushT = 0; e.rx = 0; e.ry = 0; e.acd = 0.6 + (e.id % 7) * 0.2; e.aa = 0; e.tz = null; e.tzId = 0; e.dead = false;
     if (opts && opts.rush) { e.rushT = opts.rush[2] || 6; e.rx = opts.rush[0]; e.ry = opts.rush[1]; }
     if (opts && opts.elite) this.promoteElite(e);
@@ -120,7 +120,7 @@
     }
   };
 
-  // Foe e dies: kill credit, 'die' event, drops (gem by def.xp; elites a chest, gold, a large gem and food at 50%; bosses via onBossKilled), splitter children, the killer's weapon kill callbacks, then its hero kill hook.
+  // Foe e dies: kill credit, 'die' event, drops (gem by def.xp; elites a chest, 1-5 gold x stage gold, a large gem and food at 50%; bosses via onBossKilled), splitter children, the killer's weapon kill callbacks, then its hero kill hook.
   W.killFoe = function (e, src) {
     if (e.dead) return;
     e.dead = true; e.hp = 0; e.hpQ = 0;
@@ -129,7 +129,7 @@
     if (p) p.kills++;
     this.emit({ t: 'die', id: e.id, k: e.k, x: Math.round(e.x), y: Math.round(e.y), elite: e.elite, boss: e.boss });
     if (e.boss) this.onBossKilled(e, p);
-    else if (e.elite) { this.spawnPickup('chest', e.x, e.y, 1); this.spawnPickup('gold', e.x + 8, e.y, this.rng.int(1, 5)); this.dropGem(e.x - 8, e.y, 25); if (this.rng.chance(0.5)) this.spawnPickup('food', e.x, e.y + 10, 30); }
+    else if (e.elite) { this.spawnPickup('chest', e.x, e.y, 1); this.spawnPickup('gold', e.x + 8, e.y, Math.round(this.rng.int(1, 5) * (this.sdef.gold || 1))); this.dropGem(e.x - 8, e.y, 25); if (this.rng.chance(0.5)) this.spawnPickup('food', e.x, e.y + 10, 30); }
     else this.dropGem(e.x, e.y, e.def.xp || 1);
     const sp = e.def.split;
     if (sp && !e.boss) {

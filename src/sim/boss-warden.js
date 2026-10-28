@@ -9,12 +9,12 @@
     swing: { r: 96, arc: 2.0, wind: 0.65, mul: 1.1 }, // wide swing
     cut: { r: 112, arc: 1.3, wind: 0.6, mul: 1.0 }, // fast narrow cut
     sweep: { r: 128, arc: 4.4, wind: 0.85, mul: 1.2 }, // only behind him is safe
-    slam: { r: 100, off: 26, wind: 0.9, mul: 1.5, n: 14, speed: 125, smul: 0.6 }, // circle centred `off` px ahead; phase 2+: a shard ring of n from the impact
-    lunge: { len: 240, w: 46, wind: 0.7, speed: 620, mul: 1.2 }, // warn line, then a dash along it (a hero he passes takes the hit)
-    step: { t: 0.16, d: 48 }, // glide toward the target before each swing (s, stop distance)
+    slam: { r: 100, off: 26, wind: 0.9, mul: 1.5, n: 14, speed: 106, smul: 0.6 }, // circle centred `off` px ahead; phase 2+: a shard ring of n from the impact
+    lunge: { len: 240, w: 46, wind: 0.7, speed: 496, mul: 1.2 }, // warn line, then a dash along it (a hero he passes takes the hit)
+    step: { t: 0.2, d: 48 }, // glide toward the target before each swing (s, stop distance)
     gap: 0.14, // pause between swings
     stuck: 1.4, punish: 1.5, // the punish window after the slam
-    wave: { n: 7, spread: 0.2, speed: 190, wind: 0.8, mul: 0.8, r: 70 }, // phase 2: a fan of bone shards after a cone warning
+    wave: { n: 7, spread: 0.2, speed: 162, wind: 0.8, mul: 0.8, r: 70 }, // phase 2: a fan of bone shards after a cone warning
     swords: { gap: 2.6, wind: 1.1, w: 30, len: 380, mul: 0.9, first: 1.2 }, // phase 3: s between drops, wind-up, line width and length
   };
   // Swing strings by phase; every one ends in the slam.
