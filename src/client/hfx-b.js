@@ -13,68 +13,6 @@
   const fade = (z, fi, fo) => Math.min(1, z.t / fi, (z.dur - z.t) / fo);
   const reg = (ids, o) => { for (const id of ids) { ED.WeaponFx[id] = o; ED.SkillFx[id] = o; } };
 
-  // ---------------- cleric ----------------
-  // Falling pillar: target ring closing in, a light column whose bright head drops onto the target, brighter as it lands.
-  // B.zoneLite (2D zone LOD): batched target disc and ring, the core column only.
-  function pillar(B, z, t, big) {
-    const k = kOf(z), r = z.r, top = z.y - 150 - r, head = top + (z.y - top) * k, cw = r * (0.35 + 0.45 * k) * (big ? 1.3 : 1), lite = B.zoneLite;
-    const disc = lite ? B.zcirc : B.circ;
-    disc(z.x, z.y, r, ca(HOLY, 0.12 + 0.25 * k), 0);
-    disc(z.x, z.y, r * (1.6 - 0.6 * k), ca(WHITE, 0.4 + 0.5 * k), 1.5);
-    if (!lite) B.rect(z.x - cw / 2, top, cw, head - top, ca(GOLD, 0.18 + 0.3 * k));
-    B.rect(z.x - cw / 5, top, cw / 2.5, head - top, ca(WHITE, 0.35 + 0.5 * k));
-    B.rect(z.x - cw / 2 - 1, head - 6, cw + 2, 8, ca(WHITE, 0.9));
-    if (big && !lite) for (let i = 0; i < 4; i++) { const a = t * 3 + i * TAU / 4; B.line(z.x, z.y, z.x + Math.cos(a) * r * 1.4 * k, z.y + Math.sin(a) * r * 0.7 * k, 1, ca(WHITE, 0.7)); }
-  }
-  // Afterglow of a landed pillar: a fading full-height column and a ground burst. B.zoneLite: batched burst, the core column only.
-  function glow(B, z, t) {
-    const k = kOf(z), f = 1 - k, r = z.r, top = z.y - 170 - r, lite = B.zoneLite, disc = lite ? B.zcirc : B.circ;
-    disc(z.x, z.y, r * (1 + 0.6 * k), ca(WHITE, 0.55 * f), 0);
-    if (!lite) B.rect(z.x - r * 0.45 * f, top, r * 0.9 * f, z.y - top, ca(GOLD, 0.55 * f));
-    B.rect(z.x - r * 0.15 * f, top, r * 0.3 * f, z.y - top, ca(WHITE, 0.9 * f));
-    disc(z.x, z.y, r * (1.2 + 0.8 * k), ca(GOLD, 0.8 * f), 2);
-  }
-  // Rising motes inside a circle (deterministic from the zone id and t).
-  function motes(B, z, t, n, col, size) {
-    for (let i = 0; i < n; i++) {
-      const h = U.hash3(z.id, i, 7), ph = (h & 1023) / 1024, a = ((h >>> 10) & 1023) / 1024 * TAU, d = Math.sqrt(((h >>> 20) & 1023) / 1024) * z.r;
-      const c = (t * 0.8 + ph) % 1, x = z.x + Math.cos(a) * d, y = z.y + Math.sin(a) * d * 0.8 - c * 26;
-      B.rect(x, y, size, size + 1, ca(col, 0.9 * (1 - c)));
-    }
-  }
-  function conse(B, z, t) {
-    const f = fade(z, 0.15, 0.4), pulse = 0.5 + 0.5 * Math.sin(t * 6 + z.id);
-    if (B.zoneLite) { B.zcirc(z.x, z.y, z.r, ca(HOLY, 0.18 * f), 0); B.zcirc(z.x, z.y, z.r, ca(GOLD, 0.55 * f), 1); return; } // 2D zone LOD: batched fill + rim
-    B.circ(z.x, z.y, z.r, ca(HOLY, (0.14 + 0.06 * pulse) * f), 0);
-    B.circ(z.x, z.y, z.r, ca(GOLD, 0.55 * f), 1);
-    motes(B, z, t, 5, WHITE, 1);
-  }
-  function sanct(B, z, t) {
-    const f = fade(z, 0.2, 0.35), pulse = 0.5 + 0.5 * Math.sin(t * 5), r = z.r;
-    B.circ(z.x, z.y, r, ca(HOLY, 0.16 * f), 0);
-    if (!B.zoneLite) B.circ(z.x, z.y, r * (0.55 + 0.1 * pulse), ca(WHITE, 0.08 * f), 0);
-    B.circ(z.x, z.y, r, ca(GOLD, (0.7 + 0.3 * pulse) * f), 3);
-    B.circ(z.x, z.y, r - 6, ca(WHITE, 0.45 * f), 1);
-    for (let i = 0; i < 10; i++) { const a = t * 0.9 + i * TAU / 10, x = z.x + Math.cos(a) * (r - 13), y = z.y + Math.sin(a) * (r - 13); B.rect(x - 2, y - 2, 4, 4, ca(WHITE, 0.85 * f)); }
-    for (let i = 0; i < 6; i++) { const a = -t * 1.4 + i * TAU / 6; B.line(z.x + Math.cos(a) * r * 0.3, z.y + Math.sin(a) * r * 0.3, z.x + Math.cos(a) * r * 0.62, z.y + Math.sin(a) * r * 0.62, 1, ca(GOLD, 0.5 * f)); }
-    B.rect(z.x - 2, z.y - 16, 4, 22, ca(WHITE, 0.8 * f)); B.rect(z.x - 8, z.y - 10, 16, 4, ca(WHITE, 0.8 * f));
-    if (z.t < 0.3) { const k = z.t / 0.3; B.circ(z.x, z.y, r * (0.4 + 0.8 * k), ca(WHITE, 0.6 * (1 - k)), 0); }
-    motes(B, z, t, 14, WHITE, 2);
-  }
-
-  const clericZone = (B, z, t) => {
-    switch (z.k) {
-      case 'smite': pillar(B, z, t, false); return true;
-      case 'wrath': pillar(B, z, t, true); return true;
-      case 'pglow': glow(B, z, t); return true;
-      case 'conse': conse(B, z, t); return true;
-      case 'sanct': sanct(B, z, t); return true;
-
-      default: return false;
-    }
-  };
-  reg(['smite', 'wrath', 'sanctuary'], { zone: clericZone });
-
   // ---------------- shade ----------------
   // Knife with a motion trail; violet: the Shadow Fan / afterimage tint (additive glow).
   function knife(B, pr, t, len, col, add) {
