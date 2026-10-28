@@ -233,7 +233,7 @@
       case 'evolve': {
         const p = heroOf(ev.pid);
         if (p) { F.ring(p.x, p.y - 10, 110, 0xffd27aff, 0.7, 6, 4); F.ring(p.x, p.y - 10, 70, 0xffffffff, 0.45, 4, 2); F.burst(p.x, p.y - 10, 40, 0xffd27a00, 150, 0.8, 3, 20); F.sprite('fx.spark.magic', p.x, p.y - 4, 2.5, 0, 0xffe08a); }
-        if (mine) { F.screen(0xfff1d600, 0.8, 0.4); F.hitStop(0.08); F.addShake(4, 0); F.banner(up((ED.WEAPONS[ev.wid] && ED.WEAPONS[ev.wid].name) || 'Weapon') + '!', 0xffd27a, 2.6, { big: true, sub: 'EVOLVED', subCol: 0xfff1d6, k: 3, band: true }); }
+        if (mine) { F.screen(0xfff1d600, 0.8, 0.4); F.hitStop(0.08); F.addShake(4, 0); F.banner(up((ED.WEAPONS[ev.wid] && ED.WEAPONS[ev.wid].name) || 'Weapon') + '!', 0xffd27a, 2.6, { big: true, sub: 'NEW FORM', subCol: 0xfff1d6, k: 3, band: true }); }
         break;
       }
       case 'chest': {
@@ -242,8 +242,9 @@
         let i = 0;
         for (const r of ev.results || []) {
           if (r.kind === 'evo') continue;
-          const d = r.kind === 'gold' ? null : r.kind === 'wlvl' ? ED.WEAPONS[r.id] : ED.PASSIVES[r.id];
-          floatText(r.kind === 'gold' ? '+25 GOLD' : up(d ? d.name : r.id) + ' UP', p.x, p.y - 34 - i * 11, r.kind === 'gold' ? 0xffd24a : 0xbfefff, 1.6 + i * 0.25);
+          const d = r.kind === 'skill' ? ED.SKILLS[r.id] : r.kind === 'plvl' ? ED.PASSIVES[r.id] : null;
+          const txt = r.kind === 'gold' ? '+' + (r.val | 0) + ' GOLD' : r.kind === 'offer' ? 'EXTRA PICK' : up(d ? d.name : r.id) + ' UP';
+          floatText(txt, p.x, p.y - 34 - i * 11, r.kind === 'gold' ? 0xffd24a : 0xbfefff, 1.6 + i * 0.25);
           i++;
         }
         break;
@@ -251,6 +252,7 @@
       case 'warn': {
         if (ev.kind === 'boss') { F.banner(up(foeName(ev.id)) + ' APPROACHES', 0xff7a6a, 3, { k: 2 }); F.screen(0xff302000, 0.25, 0.6); }
         else if (ev.kind === 'elite') { const d = ED.FOES[ED.FOE_IDS[ev.k]]; F.banner('ELITE ' + up(d ? d.name : 'foe'), 0xffc94a, 2.2, { k: 2 }); if (ev.id) track(ev.id, 6, 0xffc94aff); }
+        else if (ev.kind === 'surge') { F.banner('THE HORDE SURGES', 0xff5a4a, 3, { k: 2 }); F.screen(0xff302000, 0.25, 0.6); }
         else F.banner(ev.ring ? 'SURROUNDED!' : 'SWARM!', 0xffa04a, 1.8, { k: 2 });
         break;
       }
@@ -349,17 +351,17 @@
         B.line(p[i], p[i + 1] - 6, mx, my, 1, rgbaK(0xffffff00, k)); B.line(mx, my, p[i + 2], p[i + 3] - 6, 1, rgbaK(0xffffff00, k));
       }
     }
-    const popA = B.crowd > 250 ? 0.6 : 1; // a crowd's death pops stay translucent so a 1,000 kills/s horde does not wash the screen white
+    const popA = B.crowd > 250 ? 0.4 : 1; // a crowd's death pops stay translucent so a 1,000 kills/s horde does not wash the screen white
     for (const d of pops.a) {
       const age = d.max - d.life;
       SO.flip = d.flip; SO.rot = 0; SO.tint = 0; SO.add = false;
       if (d.anim && A.has(d.anim)) {
         const fi = Math.min(d.n - 1, Math.floor(age * d.fps)), fade = U.clamp(d.life / 0.7, 0, 1);
-        SO.flash = age < 0.08 ? 1 : 0; SO.sx = d.sx; SO.sy = d.sy; SO.alpha = fade;
+        SO.flash = age < 0.08 ? 0.5 : 0; SO.sx = d.sx; SO.sy = d.sy; SO.alpha = fade;
         B.spr(d.anim, fi, d.x, d.y, SO);
       } else {
         const k = U.clamp(age / d.max, 0, 1);
-        SO.flash = 1; SO.sx = d.sx * (1 + 0.45 * k); SO.sy = d.sy * (1 - 0.7 * k); SO.alpha = (1 - k * k) * popA;
+        SO.flash = 0.5; SO.sx = d.sx * (1 + 0.45 * k); // half flash: the sprite's outline stays visible (pixel-true render) SO.sy = d.sy * (1 - 0.7 * k); SO.alpha = (1 - k * k) * popA;
         B.spr(d.id, d.fi, d.x, d.y, SO);
       }
     }

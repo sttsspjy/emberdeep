@@ -138,17 +138,17 @@
       },
       update(w, e, dt, t) {
         const s = e.vars.s;
-        if (!s.done && t >= s.at) { s.done = true; for (let i = 0; i < s.n; i++) shot(w, e, s.a + (i - (s.n - 1) / 2) * 0.3, 380, 'trident', 1.1, 6, { life: 1.9 }); }
+        if (!s.done && t >= s.at) { s.done = true; for (let i = 0; i < s.n; i++) shot(w, e, s.a + (i - (s.n - 1) / 2) * 0.3, 323, 'trident', 1.1, 6, { life: 1.9 }); }
         return t >= s.at + 0.35;
       },
     },
     // Leap slam onto the target's spot, a ring of water orbs on landing.
     leap: {
-      w: 2, wind: 0.95, ok: (w, e) => e.vars.phase < 3,
-      start(w, e) { leapStart(w, e, e.vars.s, 72, 0.95, 1.6); },
+      w: 2, wind: 1.19, ok: (w, e) => e.vars.phase < 3,
+      start(w, e) { leapStart(w, e, e.vars.s, 72, 1.19, 1.6); },
       update(w, e, dt, t) {
         const s = e.vars.s;
-        if (leapTo(e, s, t)) ring(w, e, 12, 120, 'waterorb', w.rng.next() * TAU, 0.6, 5);
+        if (leapTo(e, s, t)) ring(w, e, 12, 102, 'waterorb', w.rng.next() * TAU, 0.6, 5);
         return t >= s.fl + 0.5;
       },
     },
@@ -161,7 +161,7 @@
         if (!s.z && t >= s.at) s.z = hz(w, e, { look: 'whirlpool', r: POOL.r, dur: POOL.dur }, { mul: POOL.mul, upd: poolUpd, test: coreTest, str: POOL.str });
         const tw = s.at + 0.4 + s.i * POOL.gap;
         if (s.z && s.i < 2 && t >= tw && !s.w) { s.w = true; tele(w, e, e.x, e.y, e.r + 18, 0.6, 0, { followSrc: true }); }
-        if (s.w && t >= tw + 0.6) { s.w = false; s.i++; ring(w, e, 10, 95, 'waterorb', w.rng.next() * TAU, 0.6, 5); }
+        if (s.w && t >= tw + 0.6) { s.w = false; s.i++; ring(w, e, 10, 81, 'waterorb', w.rng.next() * TAU, 0.6, 5); }
         return t >= s.at + POOL.dur;
       },
     },

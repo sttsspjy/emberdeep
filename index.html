@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Wickdeep</title>
-<meta name="description" content="Wickdeep: a co-op survivors-like in your browser. Hordes pour in, your weapons fire on their own, you move, dash and unleash two hero skills. Solo or with up to 3 friends.">
+<meta name="description" content="Wickdeep: a co-op survivors-like in your browser. Hordes pour in, your weapons fire on their own, you move, dash and unleash your hero skill. Solo or with up to 3 friends.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cpath d=%22M16 2c6 7 10 11 10 18a10 10 0 0 1-20 0c0-5 3-8 5-11 0 4 2 6 4 6-2-5 0-9 1-13z%22 fill=%22%23ff8a3d%22/%3E%3C/svg%3E">
 <link rel="stylesheet" href="src/art/fonts.css">
 <link rel="stylesheet" href="style.css">
@@ -110,6 +110,7 @@
   <section id="scr-results" class="screen" hidden>
     <h2 id="res-title" class="res-title">Victory</h2>
     <p class="hint" id="res-sub"></p>
+    <p class="hint" id="res-build"></p>
     <div class="res-stats" id="res-stats"></div>
     <div class="res-chart plate" id="res-chart"></div>
     <div class="res-party" id="res-party"></div>
@@ -192,8 +193,6 @@
 <script src="src/sim/boss-samurai.js" defer></script>
 <script src="src/sim/boss-weaver.js" defer></script>
 <script src="src/sim/boss-wickeater.js" defer></script>
-<script src="src/weapons/general-a.js" defer></script>
-<script src="src/weapons/general-b.js" defer></script>
 <script src="src/heroes/knight.js" defer></script>
 <script src="src/heroes/ranger.js" defer></script>
 <script src="src/heroes/pyro.js" defer></script>
@@ -216,10 +215,13 @@
 <script src="src/client/post.js" defer></script>
 <script src="src/client/actors.js" defer></script>
 <script src="src/client/fx.js" defer></script>
-<script src="src/client/wfx-a.js" defer></script>
-<script src="src/client/wfx-b.js" defer></script>
-<script src="src/client/hfx-a.js" defer></script>
-<script src="src/client/hfx-b.js" defer></script>
+<script src="src/client/hfx-knight.js" defer></script>
+<script src="src/client/hfx-ranger.js" defer></script>
+<script src="src/client/hfx-pyro.js" defer></script>
+<script src="src/client/hfx-necro.js" defer></script>
+<script src="src/client/hfx-cleric.js" defer></script>
+<script src="src/client/hfx-shade.js" defer></script>
+<script src="src/client/hfx-bell.js" defer></script>
 <script src="src/client/bfx-a.js" defer></script>
 <script src="src/client/bfx-b.js" defer></script>
 <script src="src/client/bfx-c.js" defer></script>

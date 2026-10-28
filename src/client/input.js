@@ -1,6 +1,6 @@
 // Keyboard, mouse and gamepad. One binding table maps every action to two slots, each a KeyboardEvent.code or Mouse0..Mouse4 (always e.code: layouts never matter).
-// Defaults: WASD move (arrows alternate), skill 1 Q, skill 2 E, dash Space, pick 1-4 Digit1-4, reroll R, skip X, pause Esc. No mouse button is bound by default (a click does nothing in a run).
-// Aim is the mouse cursor (I.mouse, CSS px). Gamepad (fixed): left stick move, right stick aim, RB skill 1, LB skill 2, A dash, X / Y / B / RT pick 1-4, Start pause.
+// Defaults: WASD move (arrows alternate), skill Q, dash Space, pick 1-4 Digit1-4, reroll R, skip X, pause Esc. No mouse button is bound by default (a click does nothing in a run).
+// Aim is the mouse cursor (I.mouse, CSS px). Gamepad (fixed): left stick move, right stick aim, RB or LB skill, A dash, X / Y / B / RT pick 1-4, Start pause.
 // I.mask([actions]) makes every key held right now read as up until released (an overlay that closes must not pass its closing press to the game).
 (function (ED) {
   'use strict';
@@ -15,14 +15,14 @@
   I.ACTIONS = [
     { id: 'up', label: 'Move up', group: 'Movement' }, { id: 'down', label: 'Move down', group: 'Movement' },
     { id: 'left', label: 'Move left', group: 'Movement' }, { id: 'right', label: 'Move right', group: 'Movement' },
-    { id: 'skill1', label: 'Skill Q', group: 'Combat' }, { id: 'skill2', label: 'Skill E', group: 'Combat' }, { id: 'dash', label: 'Dash', group: 'Combat' },
+    { id: 'skill1', label: 'Skill Q', group: 'Combat' }, { id: 'dash', label: 'Dash', group: 'Combat' },
     { id: 'pick1', label: 'Card 1', group: 'Cards' }, { id: 'pick2', label: 'Card 2', group: 'Cards' }, { id: 'pick3', label: 'Card 3', group: 'Cards' }, { id: 'pick4', label: 'Card 4', group: 'Cards' },
     { id: 'reroll', label: 'Reroll cards', group: 'Cards' }, { id: 'skip', label: 'Skip cards', group: 'Cards' },
     { id: 'pause', label: 'Pause', group: 'Interface' },
   ];
   I.DEFAULTS = {
     up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
-    skill1: ['KeyQ', null], skill2: ['KeyE', null], dash: ['Space', null],
+    skill1: ['KeyQ', null], dash: ['Space', null],
     pick1: ['Digit1', 'Numpad1'], pick2: ['Digit2', 'Numpad2'], pick3: ['Digit3', 'Numpad3'], pick4: ['Digit4', 'Numpad4'],
     reroll: ['KeyR', null], skip: ['KeyX', null], pause: ['Escape', null],
   };
@@ -109,7 +109,7 @@
   const isMouse = (c) => /^Mouse/.test(c);
   I.labels = (action) => (codes[action] || []).map(I.keyName);
   // Gamepad button names (fixed layout, see I.poll): what HUD keycaps, prompts and signs show while I.device is 'pad'.
-  const PAD = { skill1: 'RB', skill2: 'LB', dash: 'A', pick1: 'X', pick2: 'Y', pick3: 'B', pick4: 'RT', pause: 'Start' };
+  const PAD = { skill1: 'RB', dash: 'A', pick1: 'X', pick2: 'Y', pick3: 'B', pick4: 'RT', pause: 'Start' };
   // Primary label for HUD hints: the first keyboard binding, else the first mouse button; the pad button names on a pad.
   I.label = (action) => {
     if (I.device === 'pad' && PAD[action]) return PAD[action];
@@ -199,7 +199,7 @@
     if (down('down')) out.my += 1;
     if (down('left')) out.mx -= 1;
     if (down('right')) out.mx += 1;
-    out.q = hit('skill1'); out.e = hit('skill2'); out.dash = hit('dash');
+    out.q = hit('skill1'); out.e = false; out.dash = hit('dash');
     out.pick = hit('pick1') ? 1 : hit('pick2') ? 2 : hit('pick3') ? 3 : hit('pick4') ? 4 : 0;
     out.reroll = hit('reroll'); out.skip = hit('skip');
     out.esc = hit('pause') || hitCode('Escape');
@@ -220,7 +220,7 @@
       let touch = rm > 0.5 || Math.hypot(ax, ay) > 0.5;
       for (let i = 0; i < gp.buttons.length && !touch; i++) if (bp(i)) touch = true;
       if (touch) I.device = 'pad';
-      out.q = out.q || bp(5); out.e = out.e || bp(4); out.dash = out.dash || bp(0);
+      out.q = out.q || bp(5) || bp(4); out.dash = out.dash || bp(0);
       if (!out.pick) out.pick = bp(2) ? 1 : bp(3) ? 2 : bp(1) ? 3 : bp(7) ? 4 : 0;
       out.esc = out.esc || bp(9);
       out.confirm = out.confirm || bp(0);

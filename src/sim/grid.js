@@ -6,6 +6,10 @@
   'use strict';
   const CELL = 32, INV = 1 / CELL, BIG = 24, PAD = 24;
   const G = ED.Grid = { CELL, BIG, PAD };
+  // Hero view rect (GAME-DESIGN §3): VIEW_W x VIEW_H world px centred on (p.x, p.y - oy) (the camera centre, render.js).
+  const VW = ED.HERO_VIEW = { hw: ED.CONST.VIEW_W / 2, hh: ED.CONST.VIEW_H / 2, oy: 10 };
+  // True when the circle (x, y, r) overlaps hero p's view rect.
+  ED.inView = (p, x, y, r) => Math.abs(x - p.x) <= VW.hw + r && Math.abs(y - p.y + VW.oy) <= VW.hh + r;
 
   const fit = (g, n) => {
     if (g.cap >= n) return;
@@ -70,14 +74,16 @@
     for (; k < m; k++) if (!es[k].dead) { out.push(es[k]); added = true; }
     return added;
   };
-  // Nearest live foe to (x, y) within maxD (centre distance), skipping foes for which skip(e) is true; null when none. Searches outward (96 px, doubling).
+  // Nearest live foe to (x, y) within maxD (centre distance), skipping foes for which skip(e) is true and, while w.vclamp holds a hero, foes outside its view; null when none.
+  // Searches outward (96 px, doubling).
   G.nearestFoe = function (x, y, maxD, skip) {
     let r = Math.min(maxD, 96);
+    const V = this.vclamp;
     for (;;) {
       const q = this.foeScan(x, y, r);
       let best = null, bd = r * r;
       for (let k = 0; k < q.length; k++) {
-        const e = q[k]; if (skip && skip(e)) continue;
+        const e = q[k]; if ((skip && skip(e)) || (V && !(Math.abs(e.x - V.x) <= VW.hw + e.r && Math.abs(e.y - V.y + VW.oy) <= VW.hh + e.r))) continue;
         const dx = e.x - x, dy = e.y - y, d = dx * dx + dy * dy;
         if (d < bd) { bd = d; best = e; }
       }

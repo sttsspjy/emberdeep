@@ -10,6 +10,7 @@
   const reset = () => { O.flip = false; O.flash = 0; O.alpha = 1; O.rot = 0; O.sx = 1; O.sy = 1; O.tint = 0; O.add = false; O.variant = ''; return O; };
   const WIND_T = 0.6; // nominal telegraph length (s): lean grows over it, the shiver starts at 60%
   const FLASH_T = 0.06, FLASH_GAP = 0.25, FLASH_GAP_CROWD = 0.6; // shown hit flash: at most FLASH_T s once per gap (longer above 250 foes on screen), so constant damage never holds a sprite white
+  const FOE_FLASH = 0.5; // foe flash strength: WebGL mixes half-way to white (outline and shading stay, no white blocks in a crowd); Canvas2D draws its white sheet (flash >= 0.5)
   const RED = '#ff3a2a', GOLD = '#ffc94a', ICE = '#9fdcff';
   const SLOT_COL = Ac.SLOT_COL = ['#ffd27a', '#6ad7ff', '#7fe39a', '#ff8ad8']; // co-op player colours by slot (hud.js keeps the same list)
   const hexN = (h) => parseInt(h.slice(1), 16);
@@ -163,7 +164,7 @@
     const fl = flashOn(s, e, lite ? FLASH_GAP_CROWD : FLASH_GAP);
     if (e.flash > 0) {
       const k = U.clamp(e.flash / FLASH_T, 0, 1);
-      if (fl) o.flash = 1;
+      if (fl) o.flash = FOE_FLASH;
       if (def.kb > 0) { ox -= q1(Math.cos(tgtA) * 2 * k * base); oy -= q1(Math.sin(tgtA) * k * base); o.sx *= 1 + 0.2 * k; o.sy *= 1 - 0.16 * k; }
       else { o.sx *= 1 + 0.08 * k; o.sy *= 1 - 0.06 * k; }
     }

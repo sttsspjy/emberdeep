@@ -7,14 +7,14 @@
   const { tele, line, approach, runner } = B.lib;
   const { T, hz, spot, adds } = B.libB;
   ED.regLook('rift', 'riftgate', 'strand', 'voidbolt');
-  ED.addFoe('weaver', { name: 'Rift Weaver', look: 'foe.riftcaller', ai: 'boss', boss: true, hp: 0, spd: 50, dmg: 2, r: 20, xp: 25, kb: 0, noElite: true, scale: 3.2 });
+  ED.addFoe('weaver', { name: 'Rift Weaver', look: 'foe.riftcaller', ai: 'boss', boss: true, hp: 0, spd: 40, dmg: 2, r: 20, xp: 25, kb: 0, noElite: true, scale: 3.2 });
 
   // Gates: count per phase, ring radius around the target, warn s, portal life s, first bolt s after opening, s between bolts per phase, bolt speed / radius / x boss damage, gate radius.
-  const GATE = { n: [2, 3, 4], ring: 150, warn: 0.9, life: 3.2, first: 0.6, every: [0.9, 0.8, 0.6], speed: 150, br: 6, mul: 0.8, r: 18 };
+  const GATE = { n: [2, 3, 4], ring: 150, warn: 0.9, life: 3.2, first: 0.6, every: [0.9, 0.8, 0.6], speed: 128, br: 6, mul: 0.8, r: 18 };
   // Weave: threads per phase, length, width, warn s, x boss damage; P2+ a second weave after again s, threads stay hold s as strands (width sw, x boss damage per touch).
   const WEAVE = { n: [3, 3, 4], len: 520, w: 24, warn: 0.9, mul: 1.6, again: 0.55, hold: 2.6, sw: 10, smul: 0.6 };
   // Blink: landing circle radius / warn s / x boss damage, distance from the target, bolt ring size / speed / x boss damage.
-  const BLINK = { r: 60, warn: 0.75, mul: 1.6, dist: [170, 230], n: 12, speed: 140, bmul: 0.8 };
+  const BLINK = { r: 60, warn: 0.75, mul: 1.6, dist: [170, 230], n: 12, speed: 119, bmul: 0.8 };
   const ADDS = ['voideye', 'gloom'];
   B.WEAVER = { GATE, WEAVE, BLINK, ADDS };
 

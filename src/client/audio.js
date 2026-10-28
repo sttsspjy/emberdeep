@@ -163,6 +163,7 @@
     [0, 0.45, 0.8, 1.05, 1.25].forEach((x, i) => { s.T('sine', 120, 46, 0.4, 0.6 + i * 0.1, x); s.N('lowpass', 800, 100, 0.12, 0.4 + i * 0.06, 0.7, x); });
     s.B(98, 1.2, 0.5, 1.3); s.B(147, 1.2, 0.4, 1.3); s.B(49, 1.2, 0.35, 1.3);
   });
+  def('warn.surge', { d: 2.2, n: 1, g: 0.8, cap: 1, gap: 3, pr: 3, rv: 0.4 }, (s) => { [0, 0.5, 1].forEach((x) => { s.B(73, 0.7, 0.6, x); s.N('lowpass', 300, 900, 0.5, 0.5, 1, x); }); s.B(55, 1.4, 0.5, 0.8); });
   def('tele', { d: 0.5, n: 2, g: 0.45, cap: 3, gap: 0.12, pr: 3 }, (s) => { s.N('bandpass', 400, 2400, 0.3, 0.6, 3, 0, 0.25); s.T('sine', 880, 1320, 0.25, 0.25, 0, 0.25); s.T('square', 1760, 1700, 0.03, 0.2, 0.28); s.N('highpass', 4000, 3000, 0.05, 0.3, 0.8, 0.28); });
   def('ui.click', { d: 0.06, n: 2, g: 0.22, cap: 2, gap: 0.03, pr: 3, o: 0 }, (s) => { s.T('triangle', rnd(880, 940), 700, 0.04, 0.6); s.N('highpass', 4000, 3000, 0.015, 0.3, 0.8); });
   def('ui.hover', { d: 0.05, n: 1, g: 0.09, cap: 1, gap: 0.05, pr: 3, o: 0 }, (s) => { s.T('sine', 1400, 1300, 0.03, 0.5); });
@@ -246,30 +247,20 @@
     s.N('bandpass', 260, 2400, 0.36, 1, 1.1); s.T('sawtooth', 70, 190, 0.32, 0.3); s.T('sine', 120, 48, 0.16, 1);
     [[1450, 0.03], [1700, 0.11], [1250, 0.19]].forEach(([f, x]) => s.T('square', f, f * 0.7, 0.05, 0.15, x)); s.N('highpass', 3800, 2000, 0.07, 0.3, 0.7, 0.02);
   });
-  skill('bulwark', 0.8, (s) => { s.T('square', 520, 500, 0.12, 0.25); s.F(260, 2.76, 2.5, 0.8, 0.5); s.N('bandpass', 2200, 900, 0.06, 0.7, 2); s.T('sine', 70, 35, 0.6, 1, 0, 0.06); s.N('lowpass', 900, 60, 0.6, 0.8, 1, 0.02, 0.05); s.N('bandpass', 2000, 300, 0.5, 0.5, 1, 0.02, 0.05); });
   skill('volley', 2.1, (s) => {
     s.T('triangle', 430, 190, 0.2, 0.4); s.N('bandpass', 700, 300, 0.07, 0.5, 2); s.N('highpass', 2200, 6500, 0.28, 0.6, 0.6); s.T('sine', 150, 70, 0.1, 0.4);
     for (let i = 0; i < 5; i++) s.N('bandpass', 2600 + i * 400, 1200, 0.1, 0.18, 3, 0.015 * i);
     s.N('highpass', 3000, 5000, 1.5, 0.25, 0.7, 0.25, 0.3); for (let i = 0; i < 14; i++) s.T('sine', rnd(190, 250), 85, 0.06, rnd(0.15, 0.3), rnd(0.35, 2));
   }, { g: 1 });
-  skill('snare', 0.45, (s) => { s.T('square', 2400, 1200, 0.03, 0.3); s.N('highpass', 3000, 1600, 0.05, 0.9, 0.8); s.T('sine', 1180, 1100, 0.25, 0.2, 0.01); s.T('sine', 130, 60, 0.12, 0.7); s.T('sawtooth', 220, 160, 0.25, 0.06, 0.05); }, { g: 1.1 });
   skill('meteor', 0.6, (s) => { s.T('sine', 2400, 300, 0.5, 0.4, 0, 0.02); s.N('bandpass', 4000, 300, 0.5, 0.6, 1.4, 0, 0.05); s.N('lowpass', 300, 900, 0.3, 0.5, 1, 0.1, 0.2); }, { rv: 0.2 });
-  skill('flamering', 0.8, (s) => { s.N('bandpass', 200, 2400, 0.45, 1, 1, 0, 0.05); s.N('lowpass', 2400, 200, 0.6, 0.8, 0.9, 0.05, 0.05); s.T('sine', 80, 40, 0.4, 0.8); for (let i = 0; i < 8; i++) s.N('highpass', rnd(3000, 6000), 2500, 0.012, 0.4, 0.8, rnd(0.05, 0.6)); });
-  skill('raise', 1.5, (s) => {
-    s.T('sawtooth', 55, 50, 1.1, 0.25, 0, 0.4); s.T('sawtooth', 82, 80, 1, 0.18, 0.1, 0.4); [220, 262, 330].forEach((f, i) => s.T('sine', f, f, 0.9, 0.2, 0.1 + i * 0.05, 0.4));
-    for (let i = 0; i < 8; i++) clack(s, 0.3 + rnd(0, 0.8), rnd(0.2, 0.4)); s.N('lowpass', 200, 400, 1, 0.5, 1, 0, 0.3);
-  });
   skill('corpseblast', 0.8, (s) => { s.T('sine', 160, 35, 0.5, 1); s.N('lowpass', 2000, 80, 0.6, 0.9, 0.8); for (let i = 0; i < 8; i++) s.N('bandpass', rnd(600, 2000), 400, 0.03, 0.5, 2, rnd(0, 0.2)); s.N('bandpass', 600, 200, 0.3, 0.5, 4, 0.02); });
   skill('sanctuary', 1.4, (s) => { [523, 659, 784, 1046].forEach((f, i) => s.T('sine', f, f * 1.002, 1, 0.25, i * 0.06, 0.15)); s.F(1046, 2, 1, 1, 0.2); s.N('highpass', 6000, 8000, 1, 0.15, 0.8, 0.1, 0.3); s.T('sine', 131, 131, 1, 0.3, 0, 0.2); });
-  skill('judgment', 1.0, (s) => { s.B(196, 0.8, 0.6); s.B(294, 0.8, 0.45, 0.05); s.T('sawtooth', 400, 1600, 0.5, 0.15, 0, 0.1); s.N('bandpass', 1000, 5000, 0.5, 0.5, 2, 0, 0.1); s.T('sine', 1568, 1568, 0.7, 0.2, 0.2); s.T('sine', 65, 49, 0.8, 0.6); });
   skill('step', 0.6, (s) => { s.N('highpass', 6000, 1000, 0.08, 0.8, 0.7, 0, 0.12); s.T('sine', 1800, 300, 0.12, 0.3, 0, 0.1); s.N('bandpass', 700, 300, 0.3, 0.4, 1.2, 0.2); s.T('sine', 110, 60, 0.2, 0.6, 0.22); });
-  skill('fan', 0.5, (s) => { for (let i = 0; i < 12; i++) s.N('highpass', rnd(3000, 5000), 7000, 0.05, 0.5, 0.7, i * 0.01 + rnd(0, 0.01)); s.N('bandpass', 500, 3000, 0.25, 0.6, 1, 0, 0.03); s.T('square', 2200, 1500, 0.015, 0.2); s.T('sine', 140, 60, 0.15, 0.5); }, { g: 1.1 });
   skill('peal', 2.8, (s) => {
     const f = 196; s.N('bandpass', 1500, 500, 0.08, 0.6, 2); s.F(f, 1.4, 1.8, 1.8, 0.5);
     [[0.5, 0.35, 2.6], [1, 0.3, 2.3], [1.19, 0.15, 1.5], [2, 0.12, 1.2], [2.4, 0.1, 0.9], [1.012, 0.15, 2]].forEach(([r, v, d]) => s.T('sine', f * r, f * r * 0.995, d, v));
     s.T('sine', 82, 40, 0.5, 0.8); s.N('lowpass', 600, 90, 0.4, 0.6);
   }, { rv: 0.5 });
-  skill('hurl', 0.6, (s) => { s.N('bandpass', 300, 2600, 0.28, 0.9, 1.2); s.T('sine', 160, 80, 0.2, 0.5); for (let i = 0; i < 5; i++) s.N('bandpass', rnd(3200, 4800), 2400, 0.02, 0.3, 4, 0.02 + i * 0.05); });
   skill('q', 0.6, (s) => { s.N('bandpass', 300, 3000, 0.3, 0.9, 1.1, 0, 0.05); s.T('sawtooth', 120, 360, 0.3, 0.2); s.T('sine', 90, 40, 0.3, 0.8, 0.1); });
   skill('e', 0.7, (s) => { s.T('sine', 70, 35, 0.5, 1); s.N('bandpass', 2400, 300, 0.45, 0.6, 1, 0, 0.03); s.F(330, 1.41, 1.5, 0.6, 0.3); });
 
@@ -410,8 +401,7 @@
     else c = C['w.' + famOf(wid, d)];
     return (WC[wid] = c || C['w.proj']);
   };
-  const SKEY = [['charge', 'charge'], ['bulwark', 'bulwark'], ['shield', 'bulwark'], ['volley', 'volley'], ['rain', 'volley'], ['snare', 'snare'], ['trap', 'snare'], ['meteor', 'meteor'], ['ring', 'flamering'],
-    ['raise', 'raise'], ['corpse', 'corpseblast'], ['sanctu', 'sanctuary'], ['judg', 'judgment'], ['step', 'step'], ['blink', 'step'], ['fan', 'fan'], ['knives', 'fan'], ['peal', 'peal'], ['hurl', 'hurl']];
+  const SKEY = [['charge', 'charge'], ['volley', 'volley'], ['rain', 'volley'], ['meteor', 'meteor'], ['corpse', 'corpseblast'], ['sanctu', 'sanctuary'], ['step', 'step'], ['blink', 'step'], ['peal', 'peal']];
   const SC = {};
   const scue = A.scue = (id, slot) => {
     let c = SC[id];
@@ -477,7 +467,7 @@
       case 'heal': if (mine && ev.v >= 8) { pp = 0; agg(C.heal, 0.8, 2); } break;
       case 'level': pp = 0; agg(C.level, 1, 3); A.duck(0.5, 0.9); break;
       case 'offer': if (mine) { pp = 0; agg(ev.reroll ? C.reroll : C.offer, 1, 3); } break;
-      case 'pick': if (mine) { pp = 0; const k = ev.kind; agg(C[k === 'weapon' ? 'pick.weapon' : k === 'wlvl' || k === 'plvl' ? 'pick.up' : k === 'passive' ? 'pick.passive' : k === 'skill' ? 'pick.skill' : 'pick.misc'], k === 'skip' ? 0.5 : 1, 3); } break;
+      case 'pick': if (mine) { pp = 0; const k = ev.kind; agg(C[k === 'form' ? 'pick.weapon' : k === 'path' || k === 'refine' || k === 'plvl' ? 'pick.up' : k === 'passive' ? 'pick.passive' : k === 'skill' ? 'pick.skill' : 'pick.misc'], k === 'skip' ? 0.5 : 1, 3); } break;
       case 'evolve': aggHero(C.evolve, ev.pid, mine, mine ? 1 : 1.6); if (mine) A.duck(0.35, 2); break;
       case 'hurt': if (mine) { pp = 0; agg(C.hurt, Math.min(1.3, 0.7 + (ev.dmg || 5) / 25), 3); } else agg(C.hurt, 0.25 * posGain(ev.x, ev.y), 0); break;
       case 'down': aggHero(C.down, ev.pid, mine, mine ? 1 : 2); break;

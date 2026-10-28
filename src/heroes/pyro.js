@@ -1,14 +1,17 @@
-// Pyro: hero data, signature Fire Bolt (8 levels) + evolution Inferno, Q Meteor, E Flame Ring (3 skill levels each).
-// Fire pools are zones (look 'firepool'); at most POOL_MAX live pools per hero (ws.st.pools ring, refs checked by id).
+// Pyro: hero data, signature Fire Bolt (3 paths x 3 ranks: Blaze, Mortar, Combustion), Forms Inferno / Firestorm / Wildfire (pure) and Pyre / Napalm (hybrid), Q Meteor (3 skill levels).
+// Role: area denial. Instant hits are weak; fire pools, burns and death blasts carry the damage. Every damage source credits the slot's current id (ws.id).
+// Ground fire (pools 'firepool', pyres 'pyre', fire lines 'napalm') lives in ws.st.pools (ring of live zones, refs checked by id), at most POOL_MAX + S.pools per hero; a new one past the cap ends the oldest.
+// Shared by the root and every Form (impl.tick / impl.kill): Mortar shells (S.shells, Forms with def.shellForm lob their own), death blasts of burning foes (S.combust) and fire leaps (S.spread).
 (function (ED) {
   'use strict';
-  const U = ED.U, TAU = U.TAU, TICK = ED.CONST.TICK;
-  const POOL_MAX = 14, INF_MAX = 22, INF_R = 95;
+  const U = ED.U, TAU = U.TAU;
+  const POOL_MAX = 12, INF_R = 95, DQ_MAX = 40, RANGE = 210, SHELL_RANGE = 220;
 
-  ED.regLook('firepool', 'ember', 'meteor', 'crater', 'flamering', 'scorch');
-  ED.addHero({ id: 'pyro', name: 'Pyro', hp: 85, speed: 92, crit: 0.05, sig: 'firebolt', skills: ['meteor', 'flamering'], icon: 'hero.pyro.idle', col: '#ff8a3d', txt: 'Bolts that burst into flame.' });
+  ED.regLook('firepool', 'ember', 'meteor', 'crater', 'shell', 'bomblet', 'pyre', 'napalm', 'seed', 'echo');
+  ED.addHero({ id: 'pyro', name: 'Pyro', hp: 85, speed: 74, crit: 0.05, sig: 'firebolt', skills: ['meteor'], icon: 'hero.pyro.idle', col: '#ff8a3d', txt: 'Paints the ground with fire.' });
 
-  // Live pool list of a weapon slot: ws.st.pools = [zone], ws.st.ids = [id]; returns the live count after dropping dead entries.
+  // ---------------- ground fire ----------------
+  // Live ground-fire list of a slot: ws.st.pools = [zone], ws.st.ids = [id]; returns the live count after dropping dead entries.
   const livePools = (ws) => {
     const P = ws.st.pools || (ws.st.pools = []), I = ws.st.ids || (ws.st.ids = []);
     let n = 0;
@@ -16,173 +19,365 @@
     P.length = I.length = n;
     return n;
   };
-  const POOL = { team: 0, p: null, wid: '', x: 0, y: 0, r: 0, dur: 0, dps: 0, tick: 0.5, burn: null, look: 'firepool', st: null, onTick: null };
-  const pool = (w, p, ws, x, y, r, dur, dps, st, onTick) => {
-    POOL.p = p; POOL.wid = ws.id; POOL.x = x; POOL.y = y; POOL.r = r; POOL.dur = dur; POOL.dps = dps; POOL.burn = null; POOL.st = st || null; POOL.onTick = onTick || null;
-    const z = w.zone(POOL);
-    ws.st.pools.push(z); ws.st.ids.push(z.id);
+  // Live numbers of hero p's weapon (null without one).
+  const liveS = (w, p) => (p && p.weapons[0] ? w.weaponS(p, 0) : null);
+  // Pool burn of a slot: ws.st.pb = [dps, dur] shared by its pools (foes inside keep burning 1 s after leaving).
+  const pburn = (ws, S) => { const b = ws.st.pb || (ws.st.pb = [0, 1]); b[0] = S.dmg * 0.15; return b; };
+  // Flare (S.flare): ground fire ends in a blast (circle: 1.2 r; line: three blasts along it) for S.dmg x S.flare.
+  const FLARE = { look: 'fire', burn: null, knock: 50 };
+  const flareEnd = (w, z) => {
+    const S = liveS(w, z.p); if (!S || !(S.flare > 0) || !z.p.weapons[0]) return;
+    FLARE.burn = pburn(z.p.weapons[0], S);
+    if (z.len > 0) { const c = Math.cos(z.a), s = Math.sin(z.a); for (let i = 0; i < 3; i++) { const d = z.len * (i + 0.5) / 3; w.blast(z.p, z.wid, z.x + c * d, z.y + s * d, z.w * 1.2, S.dmg * S.flare, FLARE); } }
+    else w.blast(z.p, z.wid, z.x, z.y, z.r * 1.2, S.dmg * S.flare, FLARE);
+  };
+  // Adds ground-fire zone `opt` (filled by the caller) for slot ws; past the cap the oldest ends now (its flare still fires). Returns the zone.
+  const ground = (w, ws, S, opt) => {
+    const n = livePools(ws), P = ws.st.pools;
+    if (n >= POOL_MAX + (S.pools | 0)) { const o = P[0]; o.dur = Math.min(o.dur, o.t); }
+    opt.burn = pburn(ws, S);
+    if (!opt.onEnd) opt.onEnd = S.flare > 0 ? flareEnd : null;
+    const z = w.zone(opt);
+    P.push(z); ws.st.ids.push(z.id);
     return z;
   };
+  const POOL = { team: 0, p: null, wid: '', x: 0, y: 0, r: 0, dur: 0, dps: 0, tick: 0.5, burn: null, look: 'firepool', st: null, onTick: null, onEnd: null };
+  // Fire pool of radius r, dps for S.dur s.
+  const pool = (w, p, ws, S, x, y, r, dps, st, onTick) => {
+    POOL.p = p; POOL.wid = ws.id; POOL.x = x; POOL.y = y; POOL.r = r; POOL.dur = S.dur; POOL.dps = dps; POOL.st = st || null; POOL.onTick = onTick || null; POOL.onEnd = null; POOL.look = 'firepool';
+    return ground(w, ws, S, POOL);
+  };
+
+  // ---------------- shells (Mortar) ----------------
+  // A shell is a hero warn zone that lands after `flight` s; z.st = its damage; render: z.a = angle from the landing spot back to the launch point, z.w = launch distance.
+  const ZS = { team: 0, warn: true, p: null, wid: '', x: 0, y: 0, r: 0, dur: 0, dmg: 0, look: 'shell', a: 0, w: 0, st: 0, onEnd: null };
+  const lob = (w, p, wid, fx, fy, x, y, r, flight, dmg, look, onEnd) => {
+    ZS.p = p; ZS.wid = wid; ZS.x = x; ZS.y = y; ZS.r = r; ZS.dur = flight; ZS.look = look; ZS.st = dmg; ZS.onEnd = onEnd;
+    ZS.a = Math.atan2(fy - y, fx - x); ZS.w = Math.hypot(fx - x, fy - y);
+    return w.zone(ZS);
+  };
+  const SHB = { look: 'fire', burn: null, knock: 100 }, BMB = { look: 'fire', burn: null, knock: 40, noEv: true };
+  // Bomblet: a small blast (no event: the client draws the landing) that sets foes burning.
+  const bombEnd = (w, z) => { const S = liveS(w, z.p); if (!S) return; BMB.burn = burnOf(S, 0.3, 2); w.blast(z.p, z.wid, z.x, z.y, z.r, z.st, BMB); };
+  // S.cluster bomblets scattered around (x, y) at half damage, 0.45 x radius.
+  const bomblets = (w, p, wid, S, x, y, r, dmg) => {
+    const nb = S.cluster | 0;
+    for (let i = 0; i < nb; i++) {
+      const a = i / nb * TAU + w.rng.next() * 0.8, d = r * (0.8 + 0.6 * w.rng.next());
+      lob(w, p, wid, x, y, x + Math.cos(a) * d, y + Math.sin(a) * d, r * 0.45, 0.22 + i * 0.05, dmg * 0.5, 'bomblet', bombEnd);
+    }
+  };
+  // Shell landing: blast (S.dmg-scaled z.st, knockback, burn), a fire pool, bomblets.
+  const shellEnd = (w, z) => {
+    const p = z.p, ws = p && p.weapons[0], S = liveS(w, p); if (!S) return;
+    SHB.burn = burnOf(S, 0.3, 2);
+    w.blast(p, z.wid, z.x, z.y, z.r, z.st, SHB);
+    pool(w, p, ws, S, z.x, z.y, z.r * 0.7, S.dmg * 0.45);
+    bomblets(w, p, z.wid, S, z.x, z.y, z.r, z.st);
+  };
+  // Mortar emitter (root, Inferno, Wildfire, Pyre): every 2 x S.cd, S.shells shells (1.25 x dmg), the first on the densest cluster within SHELL_RANGE, the rest on random foes in view.
+  const mortarTick = (w, p, ws, S, dt) => {
+    const s = ws.st;
+    s.mt = (s.mt === undefined ? 1 : s.mt) - dt;
+    if (s.mt > 0) return;
+    const t = w.target('densest', p, SHELL_RANGE);
+    if (!t) { s.mt = 0.3; return; }
+    s.mt = S.cd * 2;
+    const tx = t.x, ty = t.y, n = S.shells | 0, r = 34 * S.area;
+    for (let i = 0; i < n; i++) {
+      let x = tx, y = ty;
+      if (i > 0) { const e = w.target('random', p, SHELL_RANGE); if (e) { x = e.x; y = e.y; } else { const a = w.rng.next() * TAU; x += Math.cos(a) * 50; y += Math.sin(a) * 50; } }
+      lob(w, p, ws.id, p.x, p.y - 10, x, y, r, 0.7 + i * 0.12, S.dmg * 1.25, 'shell', shellEnd);
+    }
+  };
+
+  // ---------------- combustion ----------------
+  const BURNS = [0, 0];
+  // Shared burn pair [S.dmg x k, dur] (applied at once by the caller).
+  const burnOf = (S, k, dur) => { BURNS[0] = S.dmg * k; BURNS[1] = dur; return BURNS; };
+  // Death blasts: a foe its holder kills while burning queues a blast 0.12 s later at its spot (radius 26 x area, +12% per generation; S.dmg x 0.7 x S.bmul; burn), if the budget allows:
+  // S.combust blasts per second (bucket ws.st.db, holds 1 s). S.cemb embers fly out of each. Kills during a blast queue generation g + 1 up to 1 + S.cgen. Queue ws.st.dq, at most DQ_MAX.
+  let GEN = 0; // generation of the blast now resolving (kills during it queue GEN + 1)
+  const DET = { look: 'fire', burn: null, knock: 0 };
+  const LEAP = { look: 'ember', speed: 170, dmg: 0, pierce: 0, r: 4, life: 0.4, knock: 20, onHit: null };
+  const EMB = { look: 'ember', speed: 190, dmg: 0, pierce: 1, r: 4, life: 0.4, knock: 0, onHit: null };
+  const emberHit = (w, pr, e) => { if (!e.dead) w.burn(e, pr.dmg * 0.8, 2.5, pr.p); };
+  LEAP.onHit = EMB.onHit = emberHit;
+  const queueDet = (ws, x, y, g) => {
+    const s = ws.st, Q = s.dq || (s.dq = []);
+    s.dn = s.dn | 0;
+    if (s.dn >= DQ_MAX) return;
+    const o = Q[s.dn] || (Q[s.dn] = { x: 0, y: 0, t: 0, g: 0 });
+    o.x = x; o.y = y; o.t = 0.12; o.g = g; s.dn++;
+  };
+  const detonate = (w, p, ws, S, x, y, g) => {
+    DET.burn = burnOf(S, 0.3, 2);
+    const was = GEN; GEN = g;
+    w.blast(p, ws.id, x, y, 26 * S.area * (1 + 0.12 * g), S.dmg * 0.7 * (S.bmul || 1), DET);
+    GEN = was;
+    const m = S.cemb | 0;
+    if (m > 0) { EMB.dmg = S.dmg * 0.35; const a0 = w.rng.next() * TAU; for (let i = 0; i < m; i++) w.shoot(p, ws.id, x, y, a0 + i / m * TAU, null, EMB); }
+  };
+  const detTick = (w, p, ws, S, dt) => {
+    const s = ws.st, Q = s.dq; if (!Q) return;
+    for (let i = 0; i < s.dn;) {
+      const o = Q[i];
+      o.t -= dt;
+      if (o.t > 0) { i++; continue; }
+      const x = o.x, y = o.y, g = o.g, last = Q[--s.dn];
+      Q[s.dn] = o; Q[i] = last; // swap-remove (records kept for reuse)
+      detonate(w, p, ws, S, x, y, g);
+    }
+  };
+  // Fire leaps (S.spread): every 0.5 s, up to 4 + 4 x S.spread foes burning from this hero throw an ember at the nearest unburnt foe within 48 px.
+  let LP = null;
+  const skipLit = (f) => f.burnT > 0 || f === LP;
+  const leapTick = (w, p, ws, S, dt) => {
+    const s = ws.st;
+    s.lt = (s.lt || 0) - dt;
+    if (s.lt > 0) return;
+    s.lt = 0.5;
+    let m = 4 + 4 * (S.spread | 0);
+    LEAP.dmg = S.dmg * 0.3;
+    for (let i = 0; i < w.foes.length && m > 0; i++) {
+      const e = w.foes[i];
+      if (e.dead || !(e.burnT > 0) || e.burnOwner !== p || !ED.inView(p, e.x, e.y, 0)) continue;
+      LP = e;
+      const f = w.nearestFoe(e.x, e.y, 48, skipLit);
+      if (!f) continue;
+      m--;
+      w.shoot(p, ws.id, e.x, e.y, Math.atan2(f.y - e.y, f.x - e.x), null, LEAP).hits.push(e.id);
+    }
+    LP = null;
+  };
+  const common = {
+    tick(w, p, ws, S, dt) {
+      if (S.shells > 0 && !ED.WEAPONS[ws.id].shellForm) mortarTick(w, p, ws, S, dt);
+      if (S.combust > 0) { const s = ws.st; s.db = Math.min(S.combust, (s.db || 0) + S.combust * dt); detTick(w, p, ws, S, dt); }
+      if (S.spread > 0) leapTick(w, p, ws, S, dt);
+    },
+    kill(w, p, ws, S, e) {
+      const s = ws.st;
+      if (S.combust > 0 && e.burnT > 0 && GEN <= (S.cgen | 0) && s.db >= 1) { s.db--; queueDet(ws, e.x, e.y, GEN + 1); }
+    },
+  };
+  const impl = (fire) => ({ fire, tick: common.tick, kill: common.kill });
 
   // ---------------- Fire Bolt ----------------
-  // S.n bolts (0.18 rad fan) at the nearest foe, else along p.mdir. Each hit: a burst (22 px x area, half damage, burn) and a fire pool (18 px x area, 0.6 x dmg per second, S.dur s);
-  // embers: the burst throws that many embers (40% damage, burn).
-  const BURN = [0, 0], BURST = { look: 'fire', burn: BURN, knock: 60 };
-  const EMBER = { look: 'ember', speed: 210, dmg: 0, pierce: 0, r: 4, life: 0.35, knock: 30, onHit: null };
-  const emberHit = (w, pr, e) => { if (!e.dead) w.burn(e, pr.dmg * 0.5, 2, pr.p); };
-  EMBER.onHit = emberHit;
-  const burst = (w, pr, e) => {
+  // S.n bolts (0.25 rad fan) at the nearest foe within S.range, else along p.mdir. A bolt bursts at the first foe it hits, or where it lands: a blast (20 px x area, half damage, burn)
+  // and a fire pool (22 px x area, 0.45 x dmg per second, S.dur s). Later hits of a piercing bolt only blast.
+  const BURST = { look: 'fire', burn: null, knock: 40 };
+  const burst = (w, pr, x, y, pooled) => {
     const ws = pr.st, S = ws && ws.S; if (!S) return;
-    const p = pr.p, x = e.x, y = e.y;
-    BURN[0] = S.dmg * 0.3; BURN[1] = 2.5;
-    w.blast(p, pr.wid, x, y, 22 * S.area, pr.dmg * 0.5, BURST);
-    if (livePools(ws) < POOL_MAX) pool(w, p, ws, x, y, 18 * S.area, S.dur, S.dmg * 0.6);
-    const m = S.embers | 0;
-    if (m > 0) { EMBER.dmg = pr.dmg * 0.4; const a0 = w.rng.next() * TAU; for (let i = 0; i < m; i++) w.shoot(p, pr.wid, x, y, a0 + i / m * TAU, null, EMBER); }
+    BURST.burn = burnOf(S, 0.3, 2);
+    w.blast(pr.p, pr.wid, x, y, 20 * S.area, S.dmg * 0.5, BURST);
+    if (pooled) pool(w, pr.p, ws, S, x, y, 22 * S.area, S.dmg * 0.45);
   };
-  const BOLT = { look: 'fireball', onHit: burst, st: null };
-  const bolts = (w, p, ws, S, spread) => {
-    const t = w.nearestFoe(p.x, p.y, S.range);
+  const boltHit = (w, pr, e) => { burst(w, pr, e.x, e.y, !pr.lit); pr.lit = true; };
+  const boltEnd = (w, pr) => { if (!pr.lit) burst(w, pr, pr.x, pr.y, true); };
+  const BOLT = { look: 'fireball', onHit: boltHit, onEnd: boltEnd, st: null };
+  // Fires S.n projectiles `opt` (st = ws) in a fan of `spread` rad at the nearest foe, else along p.mdir. Each projectile gets lit = false.
+  const fan = (w, p, ws, S, opt, spread) => {
+    const t = w.heroFoe(p, S.range);
     const a = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.mdir, n = Math.max(1, S.n | 0);
-    BOLT.st = ws;
-    for (let i = 0; i < n; i++) w.shoot(p, ws.id, p.x, p.y - 6, a + (i - (n - 1) / 2) * spread, S, BOLT);
+    opt.st = ws;
+    for (let i = 0; i < n; i++) w.shoot(p, ws.id, p.x, p.y - 6, a + (i - (n - 1) / 2) * spread, S, opt).lit = false;
     return true;
   };
   ED.addWeapon({
-    id: 'firebolt', name: 'Fire Bolt', icon: 'weapon.firestaff', look: 'fireball', sig: 'pyro', mode: 'nearest', txt: 'Bolt that bursts into fire',
-    base: { dmg: 16, cd: 1.1, n: 1, pierce: 0, area: 1, speed: 260, dur: 2, knock: 30, range: 340, embers: 0 },
-    levels: [
-      { mods: { n: 1 }, txt: '+1 bolt' },
-      { mods: { area: 0.3 }, txt: 'Bigger bursts and fire pools' },
-      { mods: { dmg: 0.25, pierce: 1 }, txt: '+25% damage, bolts pierce 1' },
-      { mods: { n: 1 }, txt: '+1 bolt' },
-      { mods: { dur: 0.6 }, txt: 'Fire pools last 60% longer' },
-      { mods: { embers: 4 }, txt: 'Bursts throw 4 embers' },
-      { mods: { dmg: 0.25, n: 1 }, txt: '+25% damage, +1 bolt' },
+    id: 'firebolt', name: 'Fire Bolt', icon: 'weapon.firestaff', look: 'fireball', sig: 'pyro', mode: 'nearest', txt: 'Bolt that leaves a fire pool',
+    base: { dmg: 12, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 230, dur: 2.5, knock: 20, range: RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    paths: [
+      { id: 'blaze', name: 'Blaze', form: 'inferno', ranks: [
+        { mods: { area: 0.3 }, txt: 'Fire bursts and pools 30% wider' },
+        { mods: { dur: 0.6, pools: 4 }, txt: 'Fire pools last 60% longer' },
+        { mods: { flare: 0.8, dmg: 0.2 }, txt: 'Pools flare as they die, +20% damage' }] },
+      { id: 'mortar', name: 'Mortar', form: 'firestorm', ranks: [
+        { mods: { shells: 1 }, txt: 'Lobs a shell at the thickest crowd' },
+        { mods: { shells: 1 }, txt: '+1 shell' },
+        { mods: { cluster: 4 }, txt: 'Shells scatter 4 burning bomblets' }] },
+      { id: 'combust', name: 'Combustion', form: 'wildfire', ranks: [
+        { mods: { combust: 3 }, txt: 'Burning foes explode when they die' },
+        { mods: { cemb: 3 }, txt: 'Death blasts fling 3 burning embers' },
+        { mods: { spread: 1, dmg: 0.1 }, txt: 'Fire leaps between foes, +10% damage' }] },
     ],
-    pair: 'duration', evo: 'inferno',
-  }, { fire: (w, p, ws, S) => bolts(w, p, ws, S, 0.18) });
+    hybrids: [{ need: [0, 2], form: 'pyre' }, { need: [0, 1], form: 'napalm' }],
+  }, impl((w, p, ws, S) => fan(w, p, ws, S, BOLT, 0.25)));
 
-  // Inferno: bolts (nearest foe, else p.mdir) burst as Fire Bolt; a new pool touching a live pool merges into it (grows to INF_R at most, timer refreshed); each pool spreads once,
-  // after 1 s, a 0.75x pool toward the nearest foe outside it (two generations).
+  // ---------------- Inferno (Blaze) ----------------
+  // Bolts burst as Fire Bolt; a new pool touching a live pool merges into it (grows to INF_R at most, timer refreshed); each pool spreads once, after 1 s,
+  // a 0.75 x pool toward the nearest foe outside it (two generations).
   const infTick = (w, z) => {
-    const s = z.st;
-    if (s.spread || s.gen >= 2 || z.t < 1 || !s.ws.S) return;
+    const s = z.st, ws = s.ws, S = ws.S;
+    if (s.spread || s.gen >= 2 || z.t < 1 || !S || ws.id !== z.wid) return;
     s.spread = true;
     const e = w.nearestFoe(z.x, z.y, z.r + 90, (f) => U.dist2(f.x, f.y, z.x, z.y) < z.r * z.r);
-    if (!e || livePools(s.ws) >= INF_MAX) return;
+    if (!e) return;
     const a = Math.atan2(e.y - z.y, e.x - z.x), r = Math.max(14, z.r * 0.75);
-    pool(w, s.p, s.ws, z.x + Math.cos(a) * (z.r + r * 0.6), z.y + Math.sin(a) * (z.r + r * 0.6), r, s.ws.S.dur, z.dps, { p: s.p, ws: s.ws, gen: s.gen + 1, spread: false }, infTick);
+    pool(w, s.p, ws, S, z.x + Math.cos(a) * (z.r + r * 0.6), z.y + Math.sin(a) * (z.r + r * 0.6), r, z.dps, { p: s.p, ws, gen: s.gen + 1, spread: false }, infTick);
   };
-  const infBurst = (w, pr, e) => {
+  const infHit = (w, pr, e) => {
     const ws = pr.st, S = ws && ws.S; if (!S) return;
-    const p = pr.p, x = e.x, y = e.y, r = 22 * S.area;
-    BURN[0] = S.dmg * 0.35; BURN[1] = 3;
-    w.blast(p, pr.wid, x, y, r * 1.2, pr.dmg * 0.5, BURST);
+    const p = pr.p, x = e.x, y = e.y, r = 24 * S.area;
+    BURST.burn = burnOf(S, 0.35, 2.5);
+    w.blast(p, pr.wid, x, y, r, S.dmg * 0.5, BURST);
+    if (pr.lit) return;
+    pr.lit = true;
     const n = livePools(ws), P = ws.st.pools;
     let hit = null;
-    for (let i = 0; i < n; i++) { const z = P[i]; if (U.dist2(x, y, z.x, z.y) <= (z.r + r * 0.8) ** 2) { hit = z; break; } }
+    for (let i = 0; i < n; i++) { const z = P[i]; if (z.len === 0 && U.dist2(x, y, z.x, z.y) <= (z.r + r * 0.8) ** 2) { hit = z; break; } }
     if (hit) {
-      const nr = Math.min(INF_R, Math.sqrt(hit.r * hit.r + r * r * 0.35));
-      hit.x += (x - hit.x) * 0.15; hit.y += (y - hit.y) * 0.15; hit.r = nr; hit.dur = hit.t + S.dur;
-    } else if (n < INF_MAX) pool(w, p, ws, x, y, r, S.dur, S.dmg * 0.7, { p, ws, gen: 0, spread: false }, infTick);
-    const m = S.embers | 0;
-    if (m > 0) { EMBER.dmg = pr.dmg * 0.4; const a0 = w.rng.next() * TAU; for (let i = 0; i < m; i++) w.shoot(p, pr.wid, x, y, a0 + i / m * TAU, null, EMBER); }
+      hit.x += (x - hit.x) * 0.15; hit.y += (y - hit.y) * 0.15; hit.r = Math.min(INF_R * Math.sqrt(S.area / 1.5), Math.sqrt(hit.r * hit.r + r * r * 0.35)); hit.dur = hit.t + S.dur;
+    } else pool(w, p, ws, S, x, y, r, S.dmg * 0.5, { p, ws, gen: 0, spread: false }, infTick);
   };
-  const IBOLT = { look: 'fireball', onHit: infBurst, st: null };
+  const infEnd = (w, pr) => { if (!pr.lit) { const ws = pr.st, S = ws && ws.S; if (S) { pr.lit = true; pool(w, pr.p, ws, S, pr.x, pr.y, 24 * S.area, S.dmg * 0.5, { p: pr.p, ws, gen: 0, spread: false }, infTick); } } };
+  const IBOLT = { look: 'fireball', onHit: infHit, onEnd: infEnd, st: null };
   ED.addWeapon({
-    id: 'inferno', name: 'Inferno', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'nearest', evolved: true, from: 'firebolt', txt: 'Pools merge and spread',
-    base: { dmg: 26, cd: 0.9, n: 4, pierce: 1, area: 1.5, speed: 290, dur: 3.5, knock: 40, range: 380, embers: 4 },
-    levels: [],
-  }, {
-    fire(w, p, ws, S) {
-      const t = w.nearestFoe(p.x, p.y, S.range);
-      const a = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.mdir, n = Math.max(1, S.n | 0);
-      IBOLT.st = ws;
-      for (let i = 0; i < n; i++) w.shoot(p, ws.id, p.x, p.y - 6, a + (i - (n - 1) / 2) * 0.22, S, IBOLT);
-      return true;
-    },
-  });
+    id: 'inferno', name: 'Inferno', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'nearest', evolved: true, form: true, from: 'firebolt', txt: 'Pools merge and spread',
+    base: { dmg: 16, cd: 1.0, n: 3, pierce: 1, area: 1.5, speed: 250, dur: 3.5, knock: 30, range: RANGE, pools: 8, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    refine: [
+      { mods: { n: 1 }, txt: '+1 bolt' },
+      { mods: { area: 0.25, dur: 0.3 }, txt: '+25% pool size, last 30% longer' },
+    ],
+  }, impl((w, p, ws, S) => fan(w, p, ws, S, IBOLT, 0.18)));
 
-  // ---------------- skills ----------------
-  // Meteor: a 0.5 s fall onto the cursor (team 0 warn zone), then N.dmg in N.r with burn and knockback, and a burning crater (0.8 r, 0.25 x dmg per second, 3 s).
-  // shards: the impact flings that many fireballs; extra: that many smaller meteors land around it, 0.15 s apart.
-  const SHARD = { look: 'fireball', speed: 240, dmg: 0, pierce: 2, r: 6, life: 0.6, knock: 80, onHit: emberHit };
+  // ---------------- Firestorm (Mortar) ----------------
+  // A walking salvo: S.n + S.shells shells land in a line across the densest cluster within SHELL_RANGE along the line of fire (26 px x area apart, 0.08 s apart);
+  // each blasts, leaves a fire pool and scatters S.cluster bomblets. No foe: the salvo walks ahead along p.mdir.
+  ED.addWeapon({
+    id: 'firestorm', name: 'Firestorm', icon: 'weapon.inferno', look: 'shell', sig: 'pyro', mode: 'densest', evolved: true, form: true, from: 'firebolt', shellForm: true, txt: 'A walking salvo of shells',
+    base: { dmg: 24, cd: 1.6, n: 3, pierce: 0, area: 1.2, speed: 0, dur: 2.5, knock: 100, range: SHELL_RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    refine: [
+      { mods: { n: 2 }, txt: '+2 shells per salvo' },
+      { mods: { area: 0.25, cluster: 2 }, txt: 'Blasts 25% wider, +2 bomblets' },
+    ],
+  }, impl((w, p, ws, S) => {
+    const t = w.target('densest', p, S.range);
+    let tx, ty;
+    if (t) { tx = t.x; ty = t.y; } else { tx = p.x + Math.cos(p.mdir) * 120; ty = p.y + Math.sin(p.mdir) * 120; }
+    const a = Math.atan2(ty - p.y, tx - p.x), c = Math.cos(a), s = Math.sin(a), n = Math.max(1, (S.n | 0) + (S.shells | 0)), step = 26 * S.area, r = 34 * S.area;
+    for (let i = 0; i < n; i++) {
+      const o = (i - (n - 1) / 2) * step;
+      lob(w, p, ws.id, p.x, p.y - 10, tx + c * o, ty + s * o, r, 0.55 + i * 0.08, S.dmg, 'shell', shellEnd);
+    }
+    return true;
+  }));
+
+  // ---------------- Wildfire (Combustion) ----------------
+  // S.n homing seeds at the nearest foe (else along p.mdir); a seed hit blasts (20 px x area, 0.75 x dmg), sets a heavy burn (0.6 x dmg per second, 3 s) and splits into 3 sparks
+  // (a 1.2 rad fan along its heading, 0.4 x dmg, burn). Death blasts: budget 5 / s (+ path), 1.4x damage, chains four generations deep.
+  const SPARK = { look: 'ember', speed: 200, dmg: 0, pierce: 1, r: 5, life: 0.45, knock: 20, onHit: emberHit };
+  const SEEDB = { look: 'fire', burn: null, knock: 30 };
+  const seedHit = (w, pr, e) => {
+    const ws = pr.st, S = ws && ws.S; if (!S) return;
+    SEEDB.burn = burnOf(S, 0.6, 3);
+    w.blast(pr.p, pr.wid, e.x, e.y, 20 * S.area, S.dmg * 0.75, SEEDB);
+    SPARK.dmg = S.dmg * 0.4;
+    for (let i = 0; i < 3; i++) w.shoot(pr.p, pr.wid, e.x, e.y, pr.a + (i - 1) * 0.6, null, SPARK).hits.push(e.id);
+  };
+  const SEED = { look: 'seed', homing: 4, onHit: seedHit, st: null };
+  ED.addWeapon({
+    id: 'wildfire', name: 'Wildfire', icon: 'weapon.inferno', look: 'seed', sig: 'pyro', mode: 'nearest', evolved: true, form: true, from: 'firebolt', txt: 'Fire that jumps from foe to foe',
+    base: { dmg: 16, cd: 1.0, n: 3, pierce: 0, area: 1.2, speed: 240, dur: 2.5, knock: 20, range: RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 5, cemb: 2, spread: 0, cgen: 3, bmul: 1.4 },
+    refine: [
+      { mods: { n: 1, cemb: 1 }, txt: '+1 seed, +1 ember per blast' },
+      { mods: { area: 0.3, spread: 1 }, txt: 'Blasts 30% wider, fire leaps more' },
+    ],
+  }, impl((w, p, ws, S) => fan(w, p, ws, S, SEED, 0.3)));
+
+  // ---------------- Pyre (Blaze + Combustion) ----------------
+  // Bolts plant pyres (26 px x area, smoulder 0.15 x dmg per second) that erupt after 1.2 s: a blast (1.4 x radius, dmg x (1 + S.flare / 2), burn) that leaves a 0.7 x fire pool.
+  const ERUPT = { look: 'fire', burn: null, knock: 120 };
+  const pyreEnd = (w, z) => {
+    const p = z.p, ws = p && p.weapons[0], S = liveS(w, p); if (!S) return;
+    ERUPT.burn = burnOf(S, 0.4, 3);
+    w.blast(p, z.wid, z.x, z.y, z.r * 1.4, S.dmg * 1.0 * (1 + (S.flare || 0) / 2), ERUPT);
+    pool(w, p, ws, S, z.x, z.y, z.r * 0.7, S.dmg * 0.45);
+  };
+  const PYRE = { team: 0, p: null, wid: '', x: 0, y: 0, r: 0, dur: 1.2, dps: 0, tick: 0.5, burn: null, look: 'pyre', onEnd: pyreEnd };
+  const plant = (w, pr, x, y) => {
+    const ws = pr.st, S = ws && ws.S; if (!S || pr.lit) return;
+    pr.lit = true;
+    PYRE.p = pr.p; PYRE.wid = pr.wid; PYRE.x = x; PYRE.y = y; PYRE.r = 26 * S.area; PYRE.dps = S.dmg * 0.15; PYRE.onEnd = pyreEnd;
+    ground(w, ws, S, PYRE);
+  };
+  const PBOLT = { look: 'fireball', onHit: (w, pr, e) => plant(w, pr, e.x, e.y), onEnd: (w, pr) => plant(w, pr, pr.x, pr.y), st: null };
+  ED.addWeapon({
+    id: 'pyre', name: 'Pyre', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'nearest', evolved: true, form: true, from: 'firebolt', txt: 'Fire that gathers, then erupts',
+    base: { dmg: 14, cd: 1.1, n: 2, pierce: 0, area: 1.3, speed: 230, dur: 2.5, knock: 20, range: RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    refine: [
+      { mods: { n: 1 }, txt: '+1 bolt' },
+      { mods: { area: 0.3, cemb: 2 }, txt: 'Eruptions 30% wider, +2 embers' },
+    ],
+  }, impl((w, p, ws, S) => fan(w, p, ws, S, PBOLT, 0.45)));
+
+  // ---------------- Napalm (Blaze + Mortar) ----------------
+  // S.n + S.shells canisters lob onto the densest cluster and random foes within SHELL_RANGE (no foe: ahead along p.mdir); each splashes (26 px x area, 0.6 x dmg) and leaves a fire line
+  // (90 px x area long, 16 px x area wide, across the throw, 0.45 x dmg per second, 1.3 x S.dur s); S.cluster bomblets.
+  const LINE = { team: 0, p: null, wid: '', x: 0, y: 0, r: 0, a: 0, len: 0, w: 0, dur: 0, dps: 0, tick: 0.5, burn: null, look: 'napalm', onEnd: null };
+  const SPL = { look: 'fire', burn: null, knock: 60 };
+  const canEnd = (w, z) => {
+    const p = z.p, ws = p && p.weapons[0], S = liveS(w, p); if (!S) return;
+    SPL.burn = burnOf(S, 0.3, 2);
+    w.blast(p, z.wid, z.x, z.y, 26 * S.area, z.st, SPL);
+    const a = z.a + Math.PI / 2, len = 90 * S.area;
+    LINE.p = p; LINE.wid = z.wid; LINE.a = a; LINE.len = len; LINE.w = 16 * S.area; LINE.x = z.x - Math.cos(a) * len / 2; LINE.y = z.y - Math.sin(a) * len / 2;
+    LINE.dur = S.dur * 1.3; LINE.dps = S.dmg * 0.45; LINE.onEnd = null;
+    ground(w, ws, S, LINE);
+    bomblets(w, p, z.wid, S, z.x, z.y, 26 * S.area, z.st);
+  };
+  ED.addWeapon({
+    id: 'napalm', name: 'Napalm', icon: 'weapon.inferno', look: 'shell', sig: 'pyro', mode: 'densest', evolved: true, form: true, from: 'firebolt', shellForm: true, txt: 'Shells that leave walls of fire',
+    base: { dmg: 16, cd: 1.4, n: 2, pierce: 0, area: 1.2, speed: 0, dur: 3, knock: 60, range: SHELL_RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    refine: [
+      { mods: { n: 1 }, txt: '+1 canister' },
+      { mods: { area: 0.25, dur: 0.3 }, txt: 'Fire walls 25% longer, last longer' },
+    ],
+  }, impl((w, p, ws, S) => {
+    const t = w.target('densest', p, S.range);
+    let tx, ty;
+    if (t) { tx = t.x; ty = t.y; } else { tx = p.x + Math.cos(p.mdir) * 120; ty = p.y + Math.sin(p.mdir) * 120; }
+    const n = Math.max(1, (S.n | 0) + (S.shells | 0));
+    for (let i = 0; i < n; i++) {
+      let x = tx, y = ty;
+      if (i > 0) { const e = w.target('random', p, S.range); if (e) { x = e.x; y = e.y; } else { const a = p.mdir + (i % 2 ? 1 : -1) * 0.5 * Math.ceil(i / 2); x = p.x + Math.cos(a) * 120; y = p.y + Math.sin(a) * 120; } }
+      lob(w, p, ws.id, p.x, p.y - 10, x, y, 26 * S.area, 0.6 + i * 0.1, S.dmg * 0.6, 'shell', canEnd);
+    }
+    return true;
+  }));
+
+  // ---------------- skill ----------------
+  // Meteor: a 0.6 s fall onto the cursor (team 0 warn zone, z.st = { dmg, echo }), then an impact: the whole radius takes 0.12 x dmg, knockback 320 and a short burn; the core (0.4 r) takes 0.88 x more;
+  // a burning crater stays on the core (0.15 x dmg per second, 3 s x duration). echo: the core erupts again 1 s later (0.5 x dmg, 1.2 x r, look 'echo');
+  // extra: that many 0.6 x meteors (0.7 r) land around it, 0.15 s apart.
+  const RIM = { look: 'meteor', burn: [0, 2], knock: 320 }, CORE = { look: 'meteor', noEv: true, knock: 0 };
+  const CRATER = { team: 0, p: null, wid: 'meteor', x: 0, y: 0, r: 0, dur: 3, dps: 0, tick: 0.5, burn: null, look: 'crater' };
+  const impact = (w, p, x, y, r, dmg) => {
+    RIM.burn[0] = dmg * 0.05;
+    w.blast(p, 'meteor', x, y, r, dmg * 0.12, RIM);
+    w.blast(p, 'meteor', x, y, r * 0.4, dmg * 0.88, CORE);
+  };
+  const echoEnd = (w, z) => impact(w, z.p, z.x, z.y, z.r, z.st.dmg * 0.5);
   const metEnd = (w, z) => {
-    const s = z.st;
-    w.zone({ team: 0, p: s.p, wid: 'meteor', x: z.x, y: z.y, r: z.r * 0.8, dur: 3 * (1 + s.p.stats.duration), dps: s.dmg * 0.25, tick: 0.5, burn: [s.dmg * 0.08, 2], look: 'crater' });
-    const m = s.shards | 0;
-    SHARD.dmg = s.dmg * 0.3;
-    for (let i = 0; i < m; i++) w.shoot(s.p, 'meteor', z.x, z.y, (i + 0.5) / m * TAU, null, SHARD);
+    const s = z.st, p = z.p;
+    impact(w, p, z.x, z.y, z.r, s.dmg);
+    CRATER.p = p; CRATER.x = z.x; CRATER.y = z.y; CRATER.r = z.r * 0.4; CRATER.dur = 3 * (1 + p.stats.duration); CRATER.dps = s.dmg * 0.15;
+    w.zone(CRATER);
+    if (s.echo) w.zone({ team: 0, warn: true, p, wid: 'meteor', x: z.x, y: z.y, r: z.r * 1.2, dur: 1, look: 'echo', st: s, onEnd: echoEnd });
   };
-  const meteor = (w, p, x, y, r, dmg, fall, shards) => w.zone({ team: 0, warn: true, p, wid: 'meteor', x, y, r, dur: fall, dmg, burn: [dmg * 0.12, 3], knock: 320, look: 'meteor',
-    st: { p, dmg, shards }, onEnd: metEnd });
+  const meteor = (w, p, x, y, r, dmg, fall, echo) => w.zone({ team: 0, warn: true, p, wid: 'meteor', x, y, r, dur: fall, look: 'meteor', st: { dmg, echo }, onEnd: metEnd });
   ED.addSkill({
-    id: 'meteor', name: 'Meteor', icon: 'proj.fireball', cd: 10, txt: 'A meteor falls on the cursor',
-    base: { dmg: 110, r: 90, fall: 0.5, shards: 0, extra: 0 },
+    id: 'meteor', name: 'Meteor', icon: 'proj.fireball', cd: 11, txt: 'A meteor falls on the cursor',
+    base: { dmg: 75, r: 55, fall: 0.6, echo: 0, extra: 0 },
     levels: [
-      { mods: { r: 0.3 }, txt: '+30% impact size' },
-      { mods: { shards: 10 }, txt: 'Impact flings 10 fireballs' },
-      { mods: { extra: 2 }, txt: '+2 meteors around it' },
+      { mods: { r: 0.4 }, txt: '+40% impact size' },
+      { mods: { echo: 1 }, txt: 'The crater erupts again 1 s later' },
+      { mods: { extra: 2 }, txt: '+2 meteors land around it' },
     ],
   }, (w, p, x, y, N) => {
-    meteor(w, p, x, y, N.r, N.dmg, N.fall, N.shards);
+    meteor(w, p, x, y, N.r, N.dmg, N.fall, N.echo | 0);
     const m = N.extra | 0, a0 = Math.atan2(y - p.y, x - p.x);
-    for (let i = 0; i < m; i++) { const a = a0 + Math.PI / 2 + i / m * TAU; meteor(w, p, x + Math.cos(a) * N.r * 1.25, y + Math.sin(a) * N.r * 1.25, N.r * 0.7, N.dmg * 0.6, N.fall + 0.15 * (i + 1), N.shards >> 1); }
-    return { r: Math.round(N.r), shake: 4, stop: 0.03 };
-  });
-  // Flame Ring: a ring expanding from the hero to N.r over N.t s (follows the hero); each foe it crosses takes N.dmg, burn and an outward shove.
-  // twice: a second ring 0.35 s later; scorch: the ring leaves burning ground in a band at its full radius for 3 s.
-  const RING = { burn: null };
-  const ringTick = (w, z) => {
-    const s = z.st, t = z.t - s.delay;
-    if (t < 0) { z.r = 0; return; }
-    const k = Math.min(1, t / s.T), rr = 14 + (s.R - 14) * (1 - (1 - k) * (1 - k)), r0 = s.prev;
-    z.r = rr; s.prev = rr;
-    const q = w.foeScan(z.x, z.y, rr);
-    for (let i = 0; i < q.length; i++) {
-      const e = q[i]; if (e.dead) continue;
-      const d = Math.sqrt(U.dist2(z.x, z.y, e.x, e.y)), m = d - e.r;
-      if (m > rr || m <= r0 - 2 * e.r) continue;
-      const src = w.src(s.p, 'flamering', 'skill', 260); src.x = z.x; src.y = z.y;
-      w.hitFoe(e, s.dmg, src);
-      if (!e.dead) w.burn(e, s.dmg * 0.15, 3, s.p);
-    }
-    w.foeEnd();
-    if (k >= 1 && s.scorch && !s.done) {
-      s.done = true;
-      w.zone({ team: 0, p: s.p, wid: 'flamering', x: z.x, y: z.y, r: s.R, dur: 3 * (1 + s.p.stats.duration), look: 'scorch', st: { p: s.p, dps: s.dmg * 0.35, tt: 0, R: s.R }, onTick: scorchTick });
-    }
-  };
-  // Scorch: every 0.5 s, foes within the band [R - 26, R + 6] take dps x 0.5 and burn.
-  const scorchTick = (w, z) => {
-    const s = z.st;
-    if ((s.tt -= TICK) > 0) return;
-    s.tt += 0.5;
-    const q = w.foeScan(z.x, z.y, s.R + 6), lo = (s.R - 26) * (s.R - 26);
-    for (let i = 0; i < q.length; i++) {
-      const e = q[i]; if (e.dead) continue;
-      const d2 = U.dist2(z.x, z.y, e.x, e.y);
-      if (d2 < lo || d2 > (s.R + 6 + e.r) ** 2) continue;
-      const src = w.src(s.p, 'flamering', 'zone', 0); src.x = z.x; src.y = z.y;
-      w.hitFoe(e, s.dps * 0.5, src);
-      if (!e.dead) w.burn(e, s.dps * 0.3, 2, s.p);
-    }
-    w.foeEnd();
-  };
-  const ring = (w, p, N, delay) => w.zone({ team: 0, p, wid: 'flamering', x: p.x, y: p.y, r: 0, dur: N.t + delay + 0.05, follow: p.pid, look: 'flamering',
-    st: { p, R: N.r, T: N.t, dmg: N.dmg, delay, prev: 0, scorch: !!N.scorch, done: false }, onTick: ringTick });
-  ED.addSkill({
-    id: 'flamering', name: 'Flame Ring', icon: 'fx.flame', cd: 8, txt: 'A ring of fire around you',
-    base: { dmg: 50, r: 150, t: 0.5 },
-    levels: [
-      { mods: { r: 0.3 }, txt: '+30% ring size' },
-      { mods: { twice: true }, txt: 'A second ring follows' },
-      { mods: { scorch: true }, txt: 'Leaves a ring of burning ground' },
-    ],
-  }, (w, p, x, y, N) => {
-    ring(w, p, N, 0);
-    if (N.twice) ring(w, p, N, 0.35);
+    for (let i = 0; i < m; i++) { const a = a0 + Math.PI / 2 + i / m * TAU; meteor(w, p, x + Math.cos(a) * N.r * 1.3, y + Math.sin(a) * N.r * 1.3, N.r * 0.7, N.dmg * 0.6, N.fall + 0.15 * (i + 1), 0); }
     return { r: Math.round(N.r), shake: 5, stop: 0.04 };
   });
 })(globalThis.ED || (globalThis.ED = {}));

@@ -9,15 +9,15 @@
   const { line, cone, tele, aim, dist, mv } = L;
   const TW = B.TWINS = {
     revive: 8, reviveHp: 0.5, rage: { pause: 0.55, dmg: 1.25 }, combo: [[8, 10], [6, 7.5]],
-    thrust: { len: 300, wind: 0.7, wind2: 0.6, speed: 460, dur: 0.6, rest: 0.35, mul: 1.2 }, // second thrust (phase 2) warns wind2 s
+    thrust: { len: 300, wind: 0.7, wind2: 0.6, speed: 368, dur: 0.6, rest: 0.35, mul: 1.2 }, // second thrust (phase 2) warns wind2 s
     sweep: { r: 108, arc: 2.4, wind: 0.65, mul: 1.2, near: 150 },
     reel: { r: 220, wind: 1.0, step: 170, dur: 0.7 }, // pull speed px/s
     bind: { r: 46, wind: 0.8, dur: 1.5, slow: 0.88, mul: 0.5 },
-    slam: { r: 135, arc: 2.0, wind: 0.75, mul: 1.4, n: [10, 14], speed: 150, smul: 0.6, near: 170 },
-    leap: { fl: 1.1, r: 85, mul: 1.3, n: 8, speed: 160, smul: 0.6 },
+    slam: { r: 135, arc: 2.0, wind: 0.75, mul: 1.4, n: [10, 14], speed: 128, smul: 0.6, near: 170 },
+    leap: { fl: 1.38, r: 85, mul: 1.3, n: 8, speed: 136, smul: 0.6 },
     quake: { n: 6, step: 42, r: 30, wind: 0.7, inc: 0.08, mul: 1.0, fan: 0.4 },
   };
-  ED.addFoe('twinhammer', { name: 'Twin Hammer', look: 'foe.skelknight', ai: 'boss', boss: true, hp: 0, spd: 48, dmg: 2, r: 18, xp: 25, kb: 0, noElite: true });
+  ED.addFoe('twinhammer', { name: 'Twin Hammer', look: 'foe.skelknight', ai: 'boss', boss: true, hp: 0, spd: 38, dmg: 2, r: 18, xp: 25, kb: 0, noElite: true });
 
   // Pair P = { L, Lid, H, Hid (bodies), half (max HP each), dmg (base damage), comboT, combo, phase, rev (revive zone), revId }.
   const up = (P, k) => { const f = P[k]; return f && !f.dead && f.id === P[k + 'id'] ? f : null; };

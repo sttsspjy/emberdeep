@@ -1,17 +1,17 @@
 // Bot policy (UMD, no DOM): a "competent survivors player" that drives one hero through w.input frames. Node: require('./bot-brain.js'); browser: ED.Bot after the game scripts.
-// Usage: const bot = Bot.create({ pid, weapon (forced weapon id | null), seed, skill (0..1, default 1), fill ('off' | 'on', semantics in tools/bot.js) }); bot.onStart(w, p);
+// Usage: const bot = Bot.create({ pid, seed, skill (0..1, default 1) }); bot.onStart(w, p);
 //   every sim tick: w.input(pid, bot.think(w, p)) (the frame object is reused: copy it to keep it). Bot.metaFor(ED, 'none' | 'max') -> a meta bundle shaped like Save.metaBundle.
 // Pure reader: linear scans of w.foes / w.projs / w.zones / w.pickups (never the foe grid, whose lazy rebuild is sim state); own seeded RNG; ED read lazily from globalThis on each call.
 // Movement (re-plan every PLAN thinks, sooner on a new threat): 16 directions + stay, each scored over samples at H s ahead: contact danger (foes closing at their speed, dashers along
 // their dash), foe shots (closest approach on the predicted path), hostile zones (warned shapes at their resolve time; live hazards while inside, moved by their observed drift and
 // sub-stepped when they sweep), walls and edges; minus attraction (pickup target, boss at weapon reach, hysteresis, crowd, back toward the arena centre).
-// Stance: a short-reach main weapon (forced, else the signature; REACH) while healthy keeps the nearest foe at 0.75 x its reach (narrower contact band, pull to the crowd edge), else
-// the bot keeps away from the crowd centroid; bosses are held inside the shorter reach of signature / forced weapon, or at 190 px when both are ranged.
-// Dash / escape skills fire when the best plan still gets hit soon (i-frames modelled). skill < 1 (a casual player): slower re-plans, shots / zones seen only after a reaction delay,
+// Stance: a short-reach weapon (REACH, by the slot's current id) while healthy keeps the nearest foe at 0.75 x its reach (narrower contact band, pull to the crowd edge), else
+// the bot keeps away from the crowd centroid; bosses are held inside that reach, or at 190 px when the weapon is ranged.
+// The Q skill fires by a per-skill rule; an escape skill (Charge, Shadow Step) also fires when the best plan still gets hit soon (i-frames modelled). E is never pressed.
+// skill < 1 (a casual player): slower re-plans, shots / zones seen only after a reaction delay,
 // a share of shots and telegraphs never seen (per-id seeded hash), later and unreliable dashes, wandering heading noise; below 0.5 also 8 directions and shot paths read short
 // (velocity x 2 skill: none at 0).
-// Cards: levels of the signature and the forced weapon (lower level first, ties to the forced one) > their pair passives (the forced one's first) > other weapon levels / skills /
-// passives by a fixed preference; reroll / banish weak offers.
+// Cards: a Form always > refine > path ranks (the path closest to rank 3 first: one path to 3, then a second) > passives by a fixed preference > skill; reroll / banish weak offers.
 (function (root) {
   'use strict';
   const NDIR = 16, NC = NDIR + 1, PLAN = 3;
@@ -22,9 +22,8 @@
   const PASSIVE_PREF = { might: 300, multishot: 290, haste: 285, reach: 265, plating: 250, vigor: 235, duration: 225, mending: 205, swiftness: 190, velocity: 180, magnet: 150, fortune: 110 };
   // Hit reach (px from the hero centre to the edge of a foe of radius r) of short-reach weapons from their live numbers (ED.World.weaponS); weapons absent here are ranged.
   // Frost rings test the foe centre; auras, arcs, pools and orbiting bodies the foe's edge (orbits: outer edge of the body ring).
-  const orb = (S) => S.rad * S.area * 1.2, aura = (S) => 44 * S.area, pool = (S) => 30 * S.area, bell = (S) => S.orbit * Math.sqrt(S.area) + S.r * S.area * 0.5, arc = (S) => S.range * S.area;
-  const frost = (S, r) => Math.max(0, S.rad * S.area - r);
-  const REACH = { censer: aura, holycenser: aura, lanterns: orb, sunwheel: (S) => orb(S) * 1.4, twinmoons: orb, frostring: frost, glacier: frost, blight: pool, plague: pool, toll: bell, cathedral: bell, cleave: arc, whirlwind: arc };
+  const bell = (S) => S.orbit * Math.sqrt(S.area) + S.r * S.area * 0.5, arc = (S) => S.range * S.area;
+  const REACH = { toll: bell, cathedral: bell, cleave: arc, whirlwind: arc };
   const FOE_TYP = 10; // typical foe radius for the crowd stance
   // Contact band (danger() reads it): gaps below CG px are scored; CK weighs contact at the far horizons (H >= 0.55 s). Ranged stance 30 / 1; short-reach stance narrower.
   let CG = 30, CK = 1;
@@ -60,13 +59,13 @@
 
   function Brain(cfg) {
     cfg = cfg || {};
-    this.pid = cfg.pid || 'p1'; this.weapon = cfg.weapon || null; this.seed = (cfg.seed >>> 0) || 1;
-    // skill 0..1 (default 1; every knob below is neutral at 1). fill: true = new weapon cards are welcome (default without a forced weapon).
+    this.pid = cfg.pid || 'p1'; this.seed = (cfg.seed >>> 0) || 1;
+    // skill 0..1 (default 1; every knob below is neutral at 1).
     const sk = cfg.skill === undefined ? 1 : Math.max(0, Math.min(1, +cfg.skill || 0)), u = 1 - sk;
     this.skill = sk; this.planN = PLAN + Math.round(u * 12); this.react = u * 0.45; this.dashAt = 0.55 + u * 0.9;
     this.miss = u * 0.3; this.dashP = 0.35 + 0.65 * sk; this.noise = u * 0.6; this.dstep = sk < 0.5 ? 2 : 1; this.vk = Math.min(1, 2 * sk); // missed threat share, dash chance per re-plan, heading noise, direction step, shot velocity read
     this.jit = 0; this.jitT = 0; this.mix = Math.imul(this.seed, 0x9e3779b1) >>> 0;
-    this.fill = cfg.fill === 'on' || cfg.fill === true ? true : cfg.fill === 'off' || cfg.fill === false ? false : !this.weapon;
+
     this.rs = (this.seed ^ 0x5eed1234) >>> 0 || 1; // LCG state
     this.n = 0; this.plan = 0; this.dir = -1; this.mx = 0; this.my = 0; this.aimX = 0; this.aimY = 0;
     this.tgt = null; this.tgtId = 0; this.tgtT = 0; this.tgtK = 0;
@@ -90,7 +89,7 @@
     const urgent = this.newThreat(w, p);
     if (this.n >= this.plan || (urgent && this.skill >= 1)) { this.plan = this.n + this.planN; this.replan(ED, w, p); }
     f.mx = this.mx; f.my = this.my;
-    if (!f.q && !f.e) { f.ax = this.aimX; f.ay = this.aimY; }
+    if (!f.q) { f.ax = this.aimX; f.ay = this.aimY; }
     return f;
   };
 
@@ -107,17 +106,16 @@
     return hit;
   };
 
-  // Main weapon (forced, else the signature) reach from its live numbers: sets this.reach (0 = ranged) and this.close (short reach and healthy: on above 65% HP, off below 55%).
-  // Boss stance from the shorter-reach of signature / forced weapon (a ranged weapon still hits up close, a short one only there): bossFn / bossS (null: both ranged), bossOn.
+  // Weapon reach from its live numbers: sets this.reach (0 = ranged) and this.close (short reach and healthy: on above 65% HP, off below 55%).
+  // Boss stance from the same weapon: bossFn / bossS (null: ranged), bossOn.
   Brain.prototype.stance = function (ED, w, p, hpF) {
-    const sig = (ED.HEROES[p.cls] || {}).sig, main = this.weapon || sig;
     let r = 0, br = Infinity;
     this.bossFn = null;
     for (let i = 0; i < p.weapons.length; i++) {
-      const id = p.weapons[i].id, d = ED.WEAPONS[id] || {}, base = d.evolved ? d.from : id, fn = REACH[id];
-      if ((base !== main && base !== sig) || !fn) continue;
+      const fn = REACH[p.weapons[i].id];
+      if (!fn) continue;
       const S = w.weaponS(p, i);
-      if (base === main) r = fn(S, FOE_TYP);
+      r = Math.max(r, fn(S, FOE_TYP));
       const b = fn(S, 40); if (b < br) { br = b; this.bossFn = fn; this.bossS = S; }
     }
     this.reach = r;
@@ -415,74 +413,46 @@
   const dashInto = (range) => (b, w, p, ctx) => (ctx.near > 0.2 || ctx.hpF < 0.4 ? false : dense(b, p, range, 4));
   const SKILL = {
     charge: dashInto(150),
-    bulwark: (b, w, p, ctx) => (countIn(p.x, p.y, 110) >= 8 || (ctx.hpF < 0.6 && countIn(p.x, p.y, 90) >= 3) || ctx.near > 0.5 || bossNear(b, p, 130) ? aimAt(b, p.x, p.y) : false),
     volley: atBossOrDense(260, 3),
-    snare: atDense(200, 5),
     meteor: atBossOrDense(300, 3),
-    flamering: selfCrowd(150, 6),
-    raise: atDense(240, 2),
     corpseblast: (b, w, p, ctx) => (countIn(p.x, p.y, 70) >= 5 || ctx.near > 0.5 || countIn(p.x, p.y, 300) >= 25 ? aimAt(b, p.x, p.y) : false),
     sanctuary: (b, w, p, ctx) => (ctx.hpF < 0.8 || countIn(p.x, p.y, 90) >= 6 ? aimAt(b, p.x + b.mx * 30, p.y + b.my * 30) : false),
-    judgment: atBossOrDense(240, 4),
     step: dashInto(130),
-    fan: selfCrowd(200, 8),
     peal: (b, w, p, ctx) => (countIn(p.x, p.y, 160) >= 15 || ctx.near > 0.5 || (ctx.hpF < 0.5 && countIn(p.x, p.y, 120) >= 4) ? aimAt(b, p.x, p.y) : false),
-    hurl: atBossOrDense(300, 3),
   };
   const ESCAPE = { charge: 1, step: 1 };
   const FALLBACK = atDense(250, 3);
 
+  // Q skill (slot 0) by its rule.
   Brain.prototype.skills = function (ED, w, p, hpF, near) {
     if (this.castGap > 0 || !FN) return;
     SCTX.hpF = hpF; SCTX.near = near;
-    for (let i = 0; i < p.skills.length && i < 2; i++) {
-      const sk = p.skills[i]; if (sk.cd > 0) continue;
-      const rule = SKILL[sk.id] || FALLBACK;
-      if (rule(this, w, p, SCTX)) { if (i === 0) this.f.q = true; else this.f.e = true; this.castGap = 6; return; }
-    }
+    const sk = p.skills[0]; if (!sk || sk.cd > 0) return;
+    const rule = SKILL[sk.id] || FALLBACK;
+    if (rule(this, w, p, SCTX)) { this.f.q = true; this.castGap = 6; }
   };
-  // Mobility skill along the best escape direction (dash on cooldown). True when cast.
+  // Mobility Q skill along the best escape direction (dash on cooldown). True when cast.
   Brain.prototype.escapeSkill = function (ED, w, p, best) {
     if (this.castGap > 0 || best >= NDIR) return false;
-    for (let i = 0; i < p.skills.length && i < 2; i++) {
-      const sk = p.skills[i]; if (sk.cd > 0 || !ESCAPE[sk.id]) continue;
-      this.f.ax = p.x + DX[best] * 200; this.f.ay = p.y + DY[best] * 200;
-      if (i === 0) this.f.q = true; else this.f.e = true;
-      this.castGap = 6;
-      return true;
-    }
-    return false;
+    const sk = p.skills[0]; if (!sk || sk.cd > 0 || !ESCAPE[sk.id]) return false;
+    this.f.ax = p.x + DX[best] * 200; this.f.ay = p.y + DY[best] * 200;
+    this.f.q = true; this.castGap = 6;
+    return true;
   };
 
   // ---------- cards ----------
-  // Level of p's weapon of family base (evolved: past max; not held: -1).
-  const famLvl = (ED, p, base) => {
-    for (const ws of p.weapons) { const d = ED.WEAPONS[ws.id] || {}; if (ws.id === base) return ws.lvl; if (d.from === base) return ED.WEAPON_MAX_LVL + 1; }
-    return -1;
-  };
-  // Of the pair {mine, other} (levels lm, lo): 0 when mine goes first (lower level; ties to the forced side), else 1.
-  const second = (lm, lo, forcedSide) => (lm > lo || (lm === lo && !forcedSide) ? 1 : 0);
   Brain.prototype.cardScore = function (ED, w, p, c) {
-    const sig = (ED.HEROES[p.cls] || {}).sig, hpF = p.hp / Math.max(1, p.maxHp), W = this.weapon && this.weapon !== sig ? this.weapon : null;
-    const wd = (id) => ED.WEAPONS[id] || {};
-    if (c.kind === 'weapon') return this.fill ? 420 : 5;
-    if (c.kind === 'wlvl') {
-      const b = wd(c.id).evolved ? wd(c.id).from : c.id;
-      if (b !== sig && b !== W) return 380 + (c.evo ? 300 : 0);
-      if (!W) return 1000;
-      const fs = b === W, lm = c.lvl - 1, lo = famLvl(ED, p, fs ? sig : W);
-      return 1000 - 10 * second(lm, lo, fs);
+    const hpF = p.hp / Math.max(1, p.maxHp);
+    if (c.kind === 'form') return 2000;
+    if (c.kind === 'refine') return 1200;
+    if (c.kind === 'path') {
+      // c.lvl - 1 = the path's current rank: the path closest to rank 3 goes first (one path to 3, then a second); ties to the path with a Form, then the lower index.
+      const d = ED.WEAPONS[c.id] || {}, pa = (d.paths || [])[c.path] || {};
+      return 1000 + 30 * (c.lvl - 1) + (pa.form ? 5 : 0) - c.path;
     }
     if (c.kind === 'passive' || c.kind === 'plvl') {
       const id = c.id, isNew = c.kind === 'passive';
       let s = (PASSIVE_PREF[id] || 150) * (isNew ? 1 : 0.9);
-      if (isNew) {
-        const need = (base) => { if (!base || wd(base).pair !== id) return false; const l = famLvl(ED, p, base); return l >= 1 && l <= ED.WEAPON_MAX_LVL; }; // pair of a held, unevolved main weapon
-        if (need(W)) s = 900;
-        else if (need(sig)) s = 890;
-        else if (p.weapons.some(ws => { const d = wd(ws.id); return !d.evolved && d.pair === id; })) s += 150;
-        if (c.evo) s += 200;
-      }
       if (hpF < 0.5 && (id === 'vigor' || id === 'plating' || id === 'mending')) s += 120;
       return s;
     }
@@ -504,17 +474,12 @@
     this.f.pick = bi + 1;
   };
 
-  // Setup helper for fill 'off' (the caller's one mutation, right after world creation, like the forced addWeapon): bans every weapon card except ids in keep from p's card pool.
-  const isolate = (w, p, keep) => {
-    const ED = root.ED;
-    for (const id of ED.WEAPON_IDS) { const k = 'w:' + id; if (keep.indexOf(id) < 0 && !ED.WEAPONS[id].evolved && p.banned.indexOf(k) < 0) p.banned.push(k); }
-  };
-  // Meta bundle for kind 'max' (every ED.SHOP rank at max, every hero's signature in the pool) or anything else (an empty profile).
+  // Meta bundle for kind 'max' (every ED.SHOP rank at max) or anything else (an empty profile).
   const metaFor = (ED, kind) => {
     if (kind !== 'max') return { shop: {}, sigs: [] };
     const shop = {}; for (const s of ED.SHOP) shop[s.id] = s.max;
-    return { shop, sigs: ED.HERO_IDS.slice() };
+    return { shop, sigs: [] };
   };
-  const Bot = { create: (cfg) => new Brain(cfg), isolate, metaFor };
+  const Bot = { create: (cfg) => new Brain(cfg), metaFor };
   if (typeof module !== 'undefined' && module.exports) module.exports = Bot; else (root.ED || (root.ED = {})).Bot = Bot;
 })(globalThis);

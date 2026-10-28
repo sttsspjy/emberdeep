@@ -14,10 +14,12 @@
   const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ', PREFIX = 'WK1', CODE_VERSION = 1;
   const STAT_KEYS = ['runs', 'wins', 'kills', 'bestLevel', 'bestKills', 'bestTime']; // save code order: append only
   const SEEN_KEYS = ['heroes', 'weapons', 'passives', 'foes', 'stages']; // save code order: append only
-  // Weapon order of the seen bitset: append only. ED.WEAPON_IDS is registration order (general files load before hero files), so a new general weapon would shift it.
+  // Weapon order of the seen bitset: append only (ED.WEAPON_IDS is load order). The first 24 ids are removed general weapons, kept as dead bits.
   const SEEN_WEAPONS = ['lanterns', 'sunwheel', 'chainspark', 'stormcrown', 'frostring', 'glacier', 'bramble', 'thornwood', 'glaive', 'twinmoons', 'meteorcall', 'starfall', 'bonespear', 'impaler',
     'blight', 'plague', 'wisp', 'choir', 'mortar', 'barrage', 'censer', 'holycenser', 'ricochet', 'avalanche', 'cleave', 'whirlwind', 'longbow', 'hail', 'firebolt', 'inferno', 'boneshard', 'bonestorm',
-    'smite', 'wrath', 'daggers', 'shadowfan', 'toll', 'cathedral'];
+    'smite', 'wrath', 'daggers', 'shadowfan', 'toll', 'cathedral',
+    'colossus', 'gale', 'earthsplitter', 'tempest', 'ballista', 'seeker', 'galeshot', 'rebound', 'firestorm', 'wildfire', 'pyre', 'napalm', 'bonelord', 'plaguefield',
+    'lich', 'ossuary', 'halo', 'jray', 'consecration', 'verdict', 'thousand', 'assassinate', 'lotus', 'reaper', 'glaciertoll', 'carillon', 'undertow', 'windchime'];
   const S = ED.Save = { KEY: LS_KEY, CODE_VERSION, STAT_KEYS, SEEN_KEYS, SEEN_WEAPONS };
   const ls = () => (typeof localStorage !== 'undefined' ? localStorage : null);
   const heroOrder = () => ED.HERO_IDS || Object.keys(ED.UNLOCKS.heroes);
@@ -92,8 +94,8 @@
   S.refundTotal = (p) => { let t = 0; for (const s of ED.SHOP) for (let r = 0; r < S.rank(p, s.id); r++) t += ED.SHOP_BASE * (r + 1); return t; };
   // Resets every rank and returns all gold spent on them. Returns the amount refunded.
   S.refundAll = (p) => { const t = S.refundTotal(p); p.gold += t; p.shop = {}; return t; };
-  // What a run needs from the profile (World players[].meta): shop ranks and the heroes whose signature weapon joined the general pool.
-  S.metaBundle = (p) => ({ shop: Object.assign({}, p.shop), sigs: ED.UNLOCKS.sigAfterRun ? p.played.slice() : [] });
+  // What a run needs from the profile (World players[].meta): shop ranks (sigs: always empty, kept for older peers).
+  S.metaBundle = (p) => ({ shop: Object.assign({}, p.shop), sigs: [] });
   // Progress of profile p toward hero cls's unlock rule: { done, prog (0..1), cur, need } (one-run records for survive / kills / level).
   S.heroProgress = (p, cls) => {
     const r = ED.UNLOCKS.heroes[cls] || {}, st = p.stats;
@@ -107,8 +109,8 @@
   };
 
   // Applies a finished run to profile p: gold, lifetime stats, stage records, played heroes, beaten stages and every unlock now earned.
-  // sum = World.summary(); stage = stage index (default sum.stage); pid = this player's hero. Returns { gold, unlocked: [cls], stages: [index], weapons: [signature wid],
-  // records: ['time'|'kills'|'level'] (stage bests beaten; none on the stage's first run), news: [{ kind: 'hero'|'stage'|'weapon', id, name, txt }] }.
+  // sum = World.summary(); stage = stage index (default sum.stage); pid = this player's hero. Returns { gold, unlocked: [cls], stages: [index], weapons: [] (unused),
+  // records: ['time'|'kills'|'level'] (stage bests beaten; none on the stage's first run), news: [{ kind: 'hero'|'stage', id, name, txt }] }.
   S.applyRun = (p, sum, stage, pid) => {
     if (stage === undefined || stage === null) stage = sum.stage | 0;
     const me = sum.perHero.find(h => h.pid === pid) || sum.perHero[0] || { cls: '', kills: 0 };
@@ -124,11 +126,7 @@
       const o = b || { time: 0, kills: 0, level: 0, won: false };
       p.best[sid] = { time: Math.max(o.time, time), kills: Math.max(o.kills, sum.kills | 0), level: Math.max(o.level, level), won: o.won || !!sum.won };
     }
-    if (me.cls && ED.UNLOCKS.heroes[me.cls] && p.played.indexOf(me.cls) < 0) {
-      p.played.push(me.cls);
-      const h = ED.HEROES && ED.HEROES[me.cls], wd = h && ED.WEAPONS && ED.WEAPONS[h.sig];
-      if (ED.UNLOCKS.sigAfterRun && wd) { out.weapons.push(wd.id); out.news.push({ kind: 'weapon', id: wd.id, name: wd.name, txt: wd.name + ' joins the weapon pool' }); }
-    }
+    if (me.cls && ED.UNLOCKS.heroes[me.cls] && p.played.indexOf(me.cls) < 0) p.played.push(me.cls);
     if (sum.won && p.beat.indexOf(stage) < 0) {
       p.beat.push(stage);
       for (const i in ED.UNLOCKS.stages) if (ED.UNLOCKS.stages[i].beat === stage && ED.STAGES[+i]) { out.stages.push(+i); out.news.push({ kind: 'stage', id: ED.STAGE_IDS[+i], name: ED.STAGES[+i].name, txt: 'New stage: ' + ED.STAGES[+i].name }); }
@@ -291,7 +289,7 @@
   M.refund = () => { const t = S.refundAll(M.get()); M.save(); return t; };
   M.unlocked = (cls) => S.heroUnlocked(M.get(), cls);
   M.stageUnlocked = (i) => S.stageUnlocked(M.get(), i);
-  // Hero rows in save order: { id, unlocked, played (signature weapon in the pool), txt (lock rule, '' for start heroes), prog (0..1), cur, need }.
+  // Hero rows in save order: { id, unlocked, played (a finished run), txt (lock rule, '' for start heroes), prog (0..1), cur, need }.
   M.heroes = () => {
     const p = M.get();
     return heroOrder().filter(c => ED.UNLOCKS.heroes[c]).map(c => { const g = S.heroProgress(p, c), r = ED.UNLOCKS.heroes[c]; return { id: c, unlocked: S.heroUnlocked(p, c), played: p.played.indexOf(c) >= 0, txt: r.txt || '', prog: g.prog, cur: g.cur, need: g.need }; });
@@ -302,7 +300,9 @@
     return ED.STAGES.map((sd, i) => { const r = ED.UNLOCKS.stages[i] || {}; return { i, id: ED.STAGE_IDS[i], name: sd.name, unlocked: S.stageUnlocked(p, i), txt: r.txt || '', beat: p.beat.indexOf(i) >= 0, best: p.best[ED.STAGE_IDS[i]] || null }; });
   };
   M.bundle = () => S.metaBundle(M.get());
-  // Records a finished run (World.summary(); pid = this player's hero) and saves. Returns the new unlocks [{ kind: 'hero'|'stage'|'weapon', id, name, txt }]; the full result is in ED.Meta.last.
+  // Encyclopedia reveal of id in seen list k ('heroes'|'weapons'|'passives'|'foes'|'stages') for the bound profile.
+  M.seen = (k, id) => S.isSeen(M.get(), k, id);
+  // Records a finished run (World.summary(); pid = this player's hero) and saves. Returns the new unlocks [{ kind: 'hero'|'stage', id, name, txt }]; the full result is in ED.Meta.last.
   M.recordRun = (sum, pid) => { M.last = S.applyRun(M.get(), sum, sum.stage, pid); M.save(); return M.last.news; };
   M.code = () => S.encode(M.get());
   // Replaces the bound profile with a decoded save code and saves it. Throws an Error with a readable message on a bad code.

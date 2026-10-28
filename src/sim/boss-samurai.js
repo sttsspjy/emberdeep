@@ -9,9 +9,9 @@
   ED.regLook('swordwave', 'iaido');
 
   // Dash: lane width, length = distance to the target + over, clamped to [min, max], x boss damage, seconds to cross.
-  const DASH = { w: 30, over: 60, min: 140, max: 280, mul: 1.5, cross: 0.16 };
+  const DASH = { w: 30, over: 60, min: 140, max: 280, mul: 1.5, cross: 0.2 };
   // Waves: crescent speed, radius, x boss damage, fan step (rad). Iaido: lane width, length (min, max), x boss damage.
-  const WAVE = { speed: 210, r: 10, mul: 1.0, step: 0.28 };
+  const WAVE = { speed: 179, r: 10, mul: 1.0, step: 0.28 };
   const IAIDO = { w: 18, min: 260, max: 520, mul: 2.0 };
   const LEAD = 0.35; // dash and iaido lanes aim where the target will be after LEAD s of its current movement (the lane shows the cut exactly)
   ED.Bosses.SAMURAI = { DASH, WAVE, IAIDO, LEAD };
