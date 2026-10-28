@@ -1,15 +1,14 @@
-// Headless weapon-balance bench: runs a bot runner (runOne of tools/bot.js) over a stage x hero x weapon x seed x meta x fill x skill matrix in parallel and writes a report.
-// Usage: node tools/bench.js [--stages 0,1,2|all] [--heroes all|knight,...] [--weapons general|all|none|id,...] [--seeds N] [--seed0 S] [--meta none|max|none,max]
-//                            [--fill off|on|off,on] [--skill 1,0.3] [--maxTime S] [--jobs N] [--low] [--out DIR] [--no-baseline] [--quick] [--runner MODULE] [--tables pooled|all]
+// Headless hero-balance bench: runs a bot runner (runOne of tools/bot.js) over a stage x hero x seed x meta x skill matrix in parallel and writes a report (one row per hero: its weapon).
+// Usage: node tools/bench.js [--stages 0,1,2|all] [--heroes all|knight,...] [--seeds N] [--seed0 S] [--meta none|max|none,max]
+//                            [--skill 1,0.3] [--maxTime S] [--jobs N] [--low] [--out DIR] [--quick] [--runner MODULE] [--tables pooled|all]
 //        node tools/bench.js --resume DIR [any flag above overrides the stored cfg] [--force]   (skips jobs already in DIR/results.jsonl)
 //        node tools/bench.js --report DIR [--tables pooled|all]                                (rebuilds summary.json + report.html from DIR/results.jsonl)
-//   --weapons general: every non-signature, non-evolved weapon; all: plus other heroes' signatures; none: baseline only. A hero's own signature is never a cell.
-//   --fill off: the bot keeps only the signature + forced weapon; on: it also picks up other weapons. --skill: bot reflex tiers 0..1 (1 competent, 0.3 sloppy).
-//   The baseline cell (weapon null) runs per stage x hero unless --no-baseline. --quick: --seeds 2 --stages 0. Defaults: all stages, all heroes, general, 8 seeds from 1,
-//   meta none, fill off, skill 1,0.3, maxTime 1080, jobs = logical cores - 1. --low: children at low OS priority and default jobs halved (for using the PC meanwhile).
+//   --skill: bot reflex tiers 0..1 (1 competent, 0.3 sloppy). --quick: --seeds 2 --stages 0. Defaults: all stages, all heroes, 8 seeds from 1,
+//   meta none, skill 1,0.3, maxTime 1080, jobs = logical cores - 1. --low: children at low OS priority and default jobs halved (for using the PC meanwhile).
 //   --runner: module path exporting runOne(cfg) (default ./bot.js; ./bench-fake.js is a fast deterministic stub). --resume refuses a maxTime other than the stored one or a
-//   changed code hash unless --force. --tables all: a stdout table per group (default: only the groups pooled over stages, per meta x fill x skill).
-// Mechanism: job key = stage|hero|weapon|seed|meta|fill|skill|maxTime; job order: seed outermost, then stage, hero, weapon, meta, fill, skill (deterministic, every cell gets seed 1 first).
+//   changed code hash unless --force. --tables all: a stdout table per group (default: only the groups pooled over stages, per meta x skill).
+// Mechanism: job key = stage|hero|seed|meta|skill|maxTime; job order: seed outermost, then stage, hero, meta, skill (deterministic, every cell gets seed 1 first).
+//   Relative strength: a hero minus the mean of every hero run on the same stage, seed, meta and skill (paired tuples, seeded bootstrap CI).
 //   --jobs child processes each run runOne sequentially per job message. Each result, stamped with the child's code hash, is appended to results.jsonl as it arrives (crash-safe);
 //   errors go to errors.jsonl (dropped once their key has a result); meta.json holds cfg, code hash, git HEAD (-dirty when the tree has changes) and sessions. Code hash: sha1 of
 //   tools/bot-brain.js, tools/bot.js, the runner and every tools/sim.js FILE. At the end: summary.json, report.html (tools/bench-report.js; self-contained, file://) and stdout tables.
@@ -23,8 +22,8 @@ const BOOT_N = 2000, MIN_PAIRS = 8, SATURATED = 0.95;
 
 // ---------------- arguments ----------------
 function parseArgs(argv) {
-  const VAL = new Set(['stages', 'heroes', 'weapons', 'seeds', 'seed0', 'meta', 'fill', 'skill', 'jobs', 'maxTime', 'out', 'resume', 'report', 'runner', 'tables']);
-  const BOOL = new Set(['no-baseline', 'quick', 'low', 'force', 'help']);
+  const VAL = new Set(['stages', 'heroes', 'seeds', 'seed0', 'meta', 'skill', 'jobs', 'maxTime', 'out', 'resume', 'report', 'runner', 'tables']);
+  const BOOL = new Set(['quick', 'low', 'force', 'help']);
   const o = {};
   for (let i = 0; i < argv.length; i++) {
     const m = /^--([\w-]+)(?:=(.*))?$/.exec(argv[i]);
@@ -39,19 +38,18 @@ function parseArgs(argv) {
   if (o.tables !== undefined && o.tables !== 'pooled' && o.tables !== 'all') throw new Error('--tables is pooled or all');
   return o;
 }
-const DEFAULTS = { stages: 'all', heroes: 'all', weapons: 'general', seeds: 8, seed0: 1, meta: 'none', fill: 'off', skill: '1,0.3', maxTime: 1080, baseline: true, runner: 'tools/bot.js' };
+const DEFAULTS = { stages: 'all', heroes: 'all', seeds: 8, seed0: 1, meta: 'none', skill: '1,0.3', maxTime: 1080, runner: 'tools/bot.js' };
 function cfgFrom(flags, base) {
   // a stored cfg without skill / runner predates them: those benches ran skill 1 on tools/bot.js
   const c = Object.assign({}, DEFAULTS, base ? { skill: '1', runner: DEFAULTS.runner } : {}, base || {});
   if (flags.quick) { c.seeds = 2; c.stages = '0'; }
-  for (const k of ['stages', 'heroes', 'weapons', 'meta', 'fill', 'skill']) if (flags[k] !== undefined) c[k] = flags[k];
+  for (const k of ['stages', 'heroes', 'meta', 'skill']) if (flags[k] !== undefined) c[k] = flags[k];
   for (const k of ['seeds', 'seed0', 'maxTime']) if (flags[k] !== undefined) {
     const v = Number(flags[k]);
     if (!Number.isInteger(v) || v < (k === 'seed0' ? 0 : 1)) throw new Error('--' + k + ' needs an integer');
     c[k] = v;
   }
   if (flags.runner !== undefined) c.runner = path.relative(REPO, resolveRunner(flags.runner)).replace(/\\/g, '/');
-  if (flags['no-baseline']) c.baseline = false;
   return c;
 }
 const list = (s) => String(s).split(',').map(x => x.trim()).filter(Boolean);
@@ -70,31 +68,19 @@ function buildJobs(c, ED) {
   });
   const heroes = c.heroes === 'all' ? ED.HERO_IDS.slice() : list(c.heroes);
   for (const h of heroes) if (!ED.HEROES[h]) throw new Error('unknown hero ' + h + ' (' + ED.HERO_IDS.join(', ') + ')');
-  const base = ED.WEAPON_IDS.filter(id => !ED.WEAPONS[id].evolved);
-  let weapons;
-  if (c.weapons === 'general') weapons = base.filter(id => ED.WEAPONS[id].sig === null);
-  else if (c.weapons === 'all') weapons = base;
-  else if (c.weapons === 'none') weapons = [];
-  else {
-    weapons = list(c.weapons);
-    for (const w of weapons) if (!ED.WEAPONS[w] || ED.WEAPONS[w].evolved) throw new Error('unknown or evolved weapon ' + w);
-  }
   const metas = list(c.meta);
   for (const m of metas) if (m !== 'none' && m !== 'max') throw new Error('--meta is none, max or none,max');
-  const fills = list(c.fill);
-  for (const f of fills) if (f !== 'off' && f !== 'on') throw new Error('--fill is off, on or off,on');
   const skills = list(c.skill).map(Number);
   if (!skills.length || skills.some(s => !(s >= 0 && s <= 1))) throw new Error('--skill is a list of numbers in 0..1');
   const jobs = [];
-  for (let s = c.seed0; s < c.seed0 + c.seeds; s++) for (const st of stages) for (const h of heroes) {
-    const ws = (c.baseline ? [null] : []).concat(weapons.filter(w => w !== ED.HEROES[h].sig));
-    for (const w of ws) for (const m of metas) for (const f of fills) for (const sk of skills) jobs.push({ stage: st, cls: h, weapon: w, seed: s, meta: m, fill: f, skill: sk, maxTime: c.maxTime });
+  for (let s = c.seed0; s < c.seed0 + c.seeds; s++) for (const st of stages) for (const h of heroes) for (const m of metas) for (const sk of skills) {
+    jobs.push({ stage: st, cls: h, seed: s, meta: m, skill: sk, maxTime: c.maxTime });
   }
   return jobs;
 }
-const keyOf = (r) => [r.stage, r.cls, r.weapon === null || r.weapon === undefined ? '-' : r.weapon, r.seed, r.meta, r.fill, r.skill, r.maxTime].join('|');
-// Pairing tuple: a cell's runs pair with other weapons' runs on the same stage, hero, seed, meta, fill and skill.
-const tupleOf = (r) => [r.stage, r.cls, r.seed, r.meta, r.fill, r.skill].join('|');
+const keyOf = (r) => [r.stage, r.cls, r.seed, r.meta, r.skill, r.maxTime].join('|');
+// Pairing tuple: a hero's runs pair with the other heroes' runs on the same stage, seed, meta and skill.
+const tupleOf = (r) => [r.stage, r.seed, r.meta, r.skill].join('|');
 
 // ---------------- files ----------------
 function readJsonl(file) {
@@ -204,7 +190,7 @@ function main() {
   });
 }
 
-const ECHO = ['stage', 'cls', 'weapon', 'seed', 'meta', 'fill', 'skill', 'maxTime'];
+const ECHO = ['stage', 'cls', 'seed', 'meta', 'skill', 'maxTime'];
 function runPool(dir, runner, todo, nj, low, meta, sess, onDone) {
   const resFile = path.join(dir, 'results.jsonl'), errFile = path.join(dir, 'errors.jsonl');
   const t0 = Date.now(), total = todo.length, tty = process.stdout.isTTY, nl = tty ? '\n' : '';
@@ -338,92 +324,89 @@ function derive(r, ED) {
   const last = slots[slots.length - 1];
   return (r._d = { slots, final: r.won && last ? last.ttk : null, hurtMin: r.time > 0 ? hurt / r.time * 60 : null, killsMin: r.time > 0 ? (r.kills || 0) / r.time * 60 : null });
 }
-// Fraction of all damage dealt (weapons and class skills) by weapon id and its evolution.
+// Fraction of all damage dealt (weapon and class skill) by root weapon id and its Forms.
 function share(r, id, ED) {
   if (!id || !r.dealt) return null;
   let tot = 0;
   for (const v of Object.values(r.dealt)) tot += v || 0;
   if (!(tot > 0)) return null;
-  const evo = ED.WEAPONS[id] && ED.WEAPONS[id].evo;
-  return ((r.dealt[id] || 0) + (evo && r.dealt[evo] || 0)) / tot;
+  let d = r.dealt[id] || 0;
+  for (const f of ED.weaponForms(id)) d += r.dealt[f.id] || 0;
+  return d / tot;
 }
-const subject = (r, ED) => r.weapon || ED.HEROES[r.cls].sig;   // the weapon a cell measures: forced weapon, or the signature for the baseline
-const wkey = (r) => r.weapon || 'baseline';
+const subject = (r, ED) => ED.HEROES[r.cls].sig;   // the weapon a run measures: the hero's signature (root id; Forms fold in)
 
 function stats(runs, ED, nSlots) {
   const n = runs.length, wins = runs.filter(r => r.won).length, [lo, hi] = wilson(wins, n), D = runs.map(r => derive(r, ED));
   const shares = runs.map(r => share(r, subject(r, ED), ED)).filter(num);
-  const evoT = runs.map(r => r.evolved && r.evolved[subject(r, ED)]).filter(num);
+  const formT = runs.map(r => r.evolved && r.evolved[subject(r, ED)]).filter(num);
   const lost = runs.filter(r => !r.won), pick = (f) => D.map(f).filter(num);
   const slotTTK = [];
   for (let i = 0; i < nSlots; i++) slotTTK.push(r1(mean(pick(d => d.slots[i] && d.slots[i].ttk))));
   return { n, wins, win: r3(n ? wins / n : null), lo: r3(lo), hi: r3(hi), finalTTK: r1(mean(pick(d => d.final))), slotTTK,
     hurtMin: r2(mean(pick(d => d.hurtMin))), hpLow: r3(mean(runs.map(r => r.hpLow).filter(num))), lostN: lost.length, lostTime: r1(mean(lost.map(r => r.time).filter(num))),
     killsMin: Math.round(mean(pick(d => d.killsMin)) || 0), level: r1(mean(runs.map(r => r.level).filter(num))),
-    share: r3(mean(shares)), evoRate: r3(n ? evoT.length / n : null), evoTime: r1(mean(evoT)) };
+    share: r3(mean(shares)), formRate: r3(n ? formT.length / n : null), formTime: r1(mean(formT)) };
 }
 
-// Paired deltas of weapon k over the tuples in tup (tuple -> Map(wkey -> run)), for win, final TTK and hurt/min:
-// base = k - baseline at the same tuple; rel = k - mean of the forced weapons (baseline excluded) at the same tuple. A metric pairs only where both sides have a value.
+// Paired deltas of hero k over the tuples in tup (tuple -> Map(cls -> run)), for win, final TTK and hurt/min:
+// rel = k - mean of every hero (k included) at the same tuple, where at least 2 heroes have a value. A metric pairs only where both sides have a value.
 const PM = { win: { f: (r) => r.won ? 1 : 0, round: r3 }, ttk: { f: (r, ED) => derive(r, ED).final, round: r1 }, hurt: { f: (r, ED) => derive(r, ED).hurtMin, round: r2 } };
 function paired(tup, k, ED, seedKey) {
-  const out = { base: {}, rel: {} };
+  const out = { rel: {} };
   for (const [m, P] of Object.entries(PM)) {
-    const xb = [], xr = [];
-    for (const [, ws] of tup) {
-      const r = ws.get(k);
+    const xr = [];
+    for (const [, hs] of tup) {
+      const r = hs.get(k);
       if (!r) continue;
       const v = P.f(r, ED);
       if (!num(v)) continue;
-      const b = k !== 'baseline' && ws.get('baseline'), bv = b ? P.f(b, ED) : null;
-      if (num(bv)) xb.push(v - bv);
-      const others = [];
-      for (const [w, o] of ws) if (w !== 'baseline') { const ov = P.f(o, ED); if (num(ov)) others.push(ov); }
-      if (others.length >= (k === 'baseline' ? 1 : 2)) xr.push(v - mean(others));
+      const all = [];
+      for (const [, o] of hs) { const ov = P.f(o, ED); if (num(ov)) all.push(ov); }
+      if (all.length >= 2) xr.push(v - mean(all));
     }
-    out.base[m] = k === 'baseline' ? null : boot(xb, seedKey + '|base|' + m, P.round);
     out.rel[m] = boot(xr, seedKey + '|rel|' + m, P.round);
   }
   return out;
 }
 
-// One report group: runs of one meta x fill x skill x maxTime on one stage (stage >= 0) or pooled over stages (stage -1).
+// One report group: runs of one meta x skill x maxTime on one stage (stage >= 0) or pooled over stages (stage -1).
+// g.rows: one per hero (stats + rel); g.cells['cls|stage']: per hero x stage (rel paired over that stage's tuples).
 function aggregate(runs, stage, sel, ED, mixedMax) {
   const st = stage >= 0 ? ED.STAGES[stage] : null, stIds = [...new Set(runs.map(r => r.stage))].sort((a, b) => a - b);
   const nSlots = Math.max(...stIds.map(s => ED.STAGES[s].bosses.length));
-  const label = (st ? st.name : 'All stages') + ' · meta ' + sel.meta + ' · fill ' + sel.fill + ' · skill ' + sel.skill + (mixedMax ? ' · max ' + Report.mmss(sel.maxTime) : '');
-  const g = Object.assign({ key: [stage, sel.meta, sel.fill, sel.skill, sel.maxTime].join('|'), stage, stageId: st ? st.id : 'all', label }, sel, { n: runs.length, slots: nSlots });
+  const label = (st ? st.name : 'All stages') + ' · meta ' + sel.meta + ' · skill ' + sel.skill + (mixedMax ? ' · max ' + Report.mmss(sel.maxTime) : '');
+  const g = Object.assign({ key: [stage, sel.meta, sel.skill, sel.maxTime].join('|'), stage, stageId: st ? st.id : 'all', label }, sel, { n: runs.length, slots: nSlots });
   g.overall = stats(runs, ED, nSlots);
   g.saturated = g.overall.win >= SATURATED;
-  const byW = new Map(), byCell = new Map(), tup = new Map();
+  const byH = new Map(), byCell = new Map(), tup = new Map();
   for (const r of runs) {
-    const k = wkey(r), t = tupleOf(r);
-    if (!byW.has(k)) byW.set(k, []);
-    byW.get(k).push(r);
-    const ck = r.cls + '|' + k;
+    const t = tupleOf(r);
+    if (!byH.has(r.cls)) byH.set(r.cls, []);
+    byH.get(r.cls).push(r);
+    const ck = r.cls + '|' + r.stage;
     if (!byCell.has(ck)) byCell.set(ck, []);
     byCell.get(ck).push(r);
     if (!tup.has(t)) tup.set(t, new Map());
-    tup.get(t).set(k, r);
+    tup.get(t).set(r.cls, r);
   }
   const tuples = [...tup].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));   // sorted: bootstrap input order is independent of the results file order
-  const heroTuples = new Map();
-  for (const e of tuples) { const h = e[1].values().next().value.cls; if (!heroTuples.has(h)) heroTuples.set(h, []); heroTuples.get(h).push(e); }
-  g.weapons = [];
-  for (const [k, rs] of byW) {
-    const s = Object.assign({ weapon: k, name: k === 'baseline' ? 'Baseline' : ED.WEAPONS[k].name, heroes: new Set(rs.map(r => r.cls)).size }, stats(rs, ED, nSlots), paired(tuples, k, ED, g.key + '|' + k));
-    g.weapons.push(s);
+  const stageTuples = new Map();
+  for (const e of tuples) { const s = e[1].values().next().value.stage; if (!stageTuples.has(s)) stageTuples.set(s, []); stageTuples.get(s).push(e); }
+  g.rows = [];
+  for (const [k, rs] of byH) {
+    const sig = ED.HEROES[k].sig;
+    g.rows.push(Object.assign({ cls: k, name: ED.HEROES[k].name, weapon: sig, wname: ED.WEAPONS[sig].name }, stats(rs, ED, nSlots), paired(tuples, k, ED, g.key + '|' + k)));
   }
   const asc = (a, b) => (num(a) ? (num(b) ? a - b : -1) : num(b) ? 1 : 0);
-  g.weapons.sort((a, b) => (b.win - a.win) || (b.lo - a.lo) || asc(a.finalTTK, b.finalTTK) || asc(a.hurtMin, b.hurtMin) || a.weapon.localeCompare(b.weapon));
+  g.rows.sort((a, b) => (b.win - a.win) || (b.lo - a.lo) || asc(a.finalTTK, b.finalTTK) || asc(a.hurtMin, b.hurtMin) || a.cls.localeCompare(b.cls));
   g.cells = {};
   for (const [ck, rs] of [...byCell].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))) {
-    const [cls, k] = ck.split('|'), s = stats(rs, ED, nSlots), p = paired(heroTuples.get(cls) || [], k, ED, g.key + '|' + ck);
-    g.cells[ck] = { n: s.n, win: s.win, finalTTK: s.finalTTK, hurtMin: s.hurtMin, lostTime: s.lostTime, share: s.share, evoRate: s.evoRate, base: p.base, rel: p.rel };
+    const [cls, sn] = ck.split('|'), s = stats(rs, ED, nSlots), p = paired(stageTuples.get(+sn) || [], cls, ED, g.key + '|' + ck);
+    g.cells[ck] = { n: s.n, win: s.win, finalTTK: s.finalTTK, hurtMin: s.hurtMin, lostTime: s.lostTime, share: s.share, formRate: s.formRate, rel: p.rel };
   }
   g.heroes = ED.HERO_IDS.filter(h => runs.some(r => r.cls === h));
-  const base = byW.get('baseline') || [];
-  g.baseline = g.heroes.map(h => Object.assign({ cls: h, name: ED.HEROES[h].name }, stats(base.filter(r => r.cls === h), ED, nSlots))).filter(s => s.n);
+  g.stages = stIds.map(s => ({ i: s, id: ED.STAGES[s].id, name: ED.STAGES[s].name }));
   const deaths = new Map();
   for (const r of runs) if (!r.won) { const d = r.death || 'timeout'; deaths.set(d, (deaths.get(d) || 0) + 1); }
   const lost = runs.length - g.overall.wins;
@@ -458,11 +441,10 @@ function summarize(dir, ED, errs) {
   const errors = errs || readErrors(dir);
   const uniq = (f, cmp) => [...new Set(runs.map(f))].sort(cmp);
   const metas = uniq(r => r.meta, (a, b) => (a === 'none' ? -1 : b === 'none' ? 1 : a.localeCompare(b)));
-  const fills = uniq(r => r.fill, (a, b) => (a === 'off' ? -1 : b === 'off' ? 1 : String(a).localeCompare(String(b))));
   const skills = uniq(r => r.skill, (a, b) => b - a), maxes = uniq(r => r.maxTime, (a, b) => a - b), stages = uniq(r => r.stage, (a, b) => a - b);
   const groups = [];
-  for (const m of metas) for (const f of fills) for (const sk of skills) for (const mt of maxes) {
-    const sel = { meta: m, fill: f, skill: sk, maxTime: mt }, rs0 = runs.filter(r => r.meta === m && r.fill === f && r.skill === sk && r.maxTime === mt);
+  for (const m of metas) for (const sk of skills) for (const mt of maxes) {
+    const sel = { meta: m, skill: sk, maxTime: mt }, rs0 = runs.filter(r => r.meta === m && r.skill === sk && r.maxTime === mt);
     for (const s of stages) { const rs = rs0.filter(r => r.stage === s); if (rs.length) groups.push(aggregate(rs, s, sel, ED, maxes.length > 1)); }
     if (rs0.length && new Set(rs0.map(r => r.stage)).size > 1) groups.push(aggregate(rs0, -1, sel, ED, maxes.length > 1));
   }
@@ -510,19 +492,19 @@ function tableGroups(S, mode) {
 }
 function printTables(S, mode) {
   const ip = (x) => String(Math.round(x * 100)), is = (x) => String(Math.round(x)), i1 = (x) => x.toFixed(1);
-  const cols = [['weapon', 12], ['n', 4], ['win', 5], ['95% CI', 9], ['finTTK', 6], ['hurt/m', 6], ['lostT', 5], ['rel dWin pt', 15], ['rel dTTK s', 15], ['rel dHurt/m', 17], ['dWin vs base', 15], ['dmg', 4], ['evo', 4]];
+  const cols = [['hero', 10], ['n', 4], ['win', 5], ['95% CI', 9], ['finTTK', 6], ['hurt/m', 6], ['lostT', 5], ['rel dWin pt', 15], ['rel dTTK s', 15], ['rel dHurt/m', 17], ['dmg', 4], ['form', 4]];
   if (S.meta.mixed) console.log('\nMIXED CODE: results from ' + Object.keys(S.meta.hashes).length + ' code hashes (' + Object.entries(S.meta.hashes).map(([h, n]) => h + ' x' + n).join(', ') + ')');
   if (S.meta.legacy) console.log('\n' + S.meta.legacy + ' results predate skill / code hash: loaded as skill 1, hash unknown');
   for (const g of tableGroups(S, mode)) {
     console.log('\n' + g.label + '  (' + g.n + ' runs, win ' + pct(g.overall.win) + ')' + (g.saturated ? '  -- win % saturated: compare TTK / hurt' : ''));
     console.log(cols.map(([h, w], i) => i ? h.padStart(w) : h.padEnd(w)).join(' '));
-    for (const s of g.weapons) {
-      const v = [s.weapon, s.n, pct(s.win), pct(s.lo) + '-' + pct(s.hi), num(s.finalTTK) ? Math.round(s.finalTTK) + 's' : '-', num(s.hurtMin) ? s.hurtMin.toFixed(1) : '-', mmss(s.lostTime),
-        dfmt(s.rel.win, ip), dfmt(s.rel.ttk, is), dfmt(s.rel.hurt, i1), dfmt(s.base.win, ip), pct(s.share), pct(s.evoRate)];
+    for (const s of g.rows) {
+      const v = [s.cls, s.n, pct(s.win), pct(s.lo) + '-' + pct(s.hi), num(s.finalTTK) ? Math.round(s.finalTTK) + 's' : '-', num(s.hurtMin) ? s.hurtMin.toFixed(1) : '-', mmss(s.lostTime),
+        dfmt(s.rel.win, ip), dfmt(s.rel.ttk, is), dfmt(s.rel.hurt, i1), pct(s.share), pct(s.formRate)];
       console.log(v.map((x, i) => i ? String(x).padStart(cols[i][1]) : String(x).padEnd(cols[i][1])).join(' '));
     }
   }
-  console.log('\nrel = minus the hero\'s mean over forced weapons, base = minus the hero\'s baseline; paired on stage/hero/seed/meta/fill/skill, 95% bootstrap CI, * = CI excludes 0, ~ = fewer than ' + MIN_PAIRS + ' pairs.');
+  console.log('\nrel = minus the mean of every hero on the same stage/seed/meta/skill (paired), 95% bootstrap CI, * = CI excludes 0, ~ = fewer than ' + MIN_PAIRS + ' pairs. form = runs that took a Form.');
 }
 
 // ---------------- entry ----------------
