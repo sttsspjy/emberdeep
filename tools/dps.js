@@ -32,7 +32,7 @@ const aim = (w, p) => { const e = w.nearestFoe(p.x, p.y, 300); p.in.ax = e ? e.x
 const LEVEL = { b: 1, p: 8, a: 15, f: 15, h: 15, F: 30, H: 30 };
 const run = (cls, name, ranks, form, mode) => {
   const w = world(cls), p = w.heroes[0];
-  w.level = LEVEL[name[0]] || 1;
+  w.level = LEVEL[name[0]] || 1; w.addXp = () => {}; // fixed build and level: no level-ups during the scenario
   if (!apply(w, p, ranks, form)) return null;
   const rng = U.RNG(3);
   let boss = null;
@@ -48,7 +48,7 @@ const run = (cls, name, ranks, form, mode) => {
     }
   };
   const k0 = w.kills;
-  for (let t = 0; t < T; t += ED.CONST.TICK) { top(); p.in.mx = 0; p.in.my = 0; aim(w, p); w.update(ED.CONST.TICK); while (p.offer) w.pickCard(p, 0); }
+  for (let t = 0; t < T; t += ED.CONST.TICK) { top(); p.in.mx = 0; p.in.my = 0; aim(w, p); w.update(ED.CONST.TICK); }
   return { dps: dealt(p, sq(cls), false) / T, q: dealt(p, sq(cls), true) / T, kps: (w.kills - k0) / T };
 };
 
