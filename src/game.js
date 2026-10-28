@@ -357,7 +357,8 @@
     const v = this.view, M = this.mir;
     this.finish({
       won: M ? M.state === 'won' : false, time: v.time, kills: v.kills, level: v.level, gold: v.gold, stage: v.stage, note: msg || '',
-      perHero: (M ? M.heroes : []).map(h => ({ pid: h.pid, cls: h.cls, name: h.name, kills: h.kills | 0, dealt: {}, weapons: h.weapons.map(ws => ws.id) })),
+      perHero: (M ? M.heroes : []).map(h => ({ pid: h.pid, cls: h.cls, name: h.name, kills: h.kills | 0, dealt: {}, weapons: h.weapons.map(ws => ws.id),
+        build: h.weapons.map(ws => ({ id: ws.id, pr: (ws.pr || [0, 0, 0]).slice(), fl: ws.fl | 0 })) })),
     });
   };
   // Net numbers for a HUD or checks: { mode, rtt (client: s, input sent -> acked state shown), snapBytes, ... }.

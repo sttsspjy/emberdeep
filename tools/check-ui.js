@@ -137,7 +137,7 @@ async function main() {
     check(await vis(page, 'scr-codex'), 'Encyclopedia opens');
     const cxNames = () => page.evaluate(() => [...document.querySelectorAll('#cx-list .cx-item')].map(b => (b.classList.contains('unseen') ? '-' : '+') + b.textContent));
     { const n = await cxNames(); check(n[0] === '+Knight' && n.slice(1).every(x => x === '-???') && n.length === 7, 'heroes: only Knight named, the rest "???" (' + n.join(',') + ')'); }
-    check(/Evolves into \?\?\? with/.test(await page.locator('#cx-detail').innerText()), 'Knight: unmet evolution reads ???');
+    { const t = await page.locator('#cx-detail').innerText(); check(/Shield Charge/.test(t) && !/Bulwark|Evolves/.test(t), 'Knight: one skill, no Form recipe'); }
     await page.locator('.cx-item[data-key="ranger"]').click();
     { const t = await page.locator('#cx-detail').innerText(); check(/Not discovered yet/.test(t) && !/Volley|Ranger/.test(t), 'unmet open hero: only "Not discovered yet"'); }
     await page.locator('.cx-item[data-key="necro"]').click();
@@ -170,7 +170,7 @@ async function main() {
     check(/Locked: Survive 10 minutes/.test(await page.locator('#cx-detail').innerText()) && /Lv 4/.test(await page.locator('#cx-detail').innerText()), 'locked hero shows unlock line and skill levels');
     check(await minFont(page, '#scr-codex span, #scr-codex b, #scr-codex button') >= 20, 'encyclopedia text >= 20 px');
     await shot(page, 'codex-hero');
-    const tabs = { weapons: /Evolution/, passives: /Evolves/, foes: /Appears in/, bosses: /Attacks/, stages: /Bosses/ };
+    const tabs = { weapons: /Path: /, passives: /Lv \d/, foes: /Appears in/, bosses: /Attacks/, stages: /Bosses/ };
     for (const t in tabs) {
       await page.locator('#cx-tabs [data-tab="' + t + '"]').click();
       const n = await page.locator('.cx-item').count(), txt = await page.locator('#cx-detail').innerText();
@@ -256,28 +256,26 @@ async function main() {
     await page.keyboard.press('Digit1');
     await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(!(await vis(page, 'ov-offer')), 'key 1 picks a card');
-    // build a full kit, one evolution-ready weapon and a boss
+    // build a kit: every path at rank 3, the Form taken and refined, 5 passives, and a boss
     await page.evaluate(() => {
       const w = ED.Game.w, p = w.heroes[0];
-      for (const id of ED.WEAPON_IDS) { if (p.weapons.length >= 6) break; const d = ED.WEAPONS[id]; if (!d.evolved && (!d.sig || d.sig === 'knight') && !p.weapons.some(x => x.id === id)) w.addWeapon(p, id); }
-      p.weapons.forEach((ws, i) => { ws.lvl = Math.min(8, 1 + i * 2); });
-      p.weapons[0].lvl = 8;
+      w.setRanks(p, p.weapons[0], 9, true);
       for (const id of ['might', 'haste', 'reach', 'vigor', 'magnet']) if (p.passives.length < 6 && !p.passives.some(x => x.id === id)) p.passives.push({ id, lvl: 2 });
-      w.recalc(p, true); p.hp = Math.round(p.maxHp * 0.22); p.skills[1].cd = 6;
+      w.recalc(p, true); p.hp = Math.round(p.maxHp * 0.22); p.skills[0].cd = 6;
       w.spawnBoss({ t: 300, id: 'warden' });
     });
     await wait(800);
     await shot(page, 'hud');
     check(await page.evaluate(() => ED.HUD.k >= (ED.Render.dpr || 1)), 'HUD scale keeps text at or above its CSS size');
-    await page.evaluate(() => { const w = ED.Game.w; w.openChest(w.heroes[0]); });
+    await page.evaluate(() => { const w = ED.Game.w; w.openChest(w.heroes[0], 1); });
     await wait(500);
     check(await vis(page, 'ov-chest'), 'chest popup shown');
-    check(/EVOLUTION/.test(await page.locator('#ov-chest').innerText()), 'chest popup announces the evolution');
+    check(/Chest!/.test(await page.locator('#ov-chest').innerText()) && /LV \d/.test(await page.locator('#ov-chest').innerText()), 'elite chest levels a passive or the skill');
     await shot(page, 'chest');
     await page.keyboard.press('Escape');
     await wait(150);
     check(await vis(page, 'ov-pause'), 'Esc pauses');
-    check(await page.locator('#pause-build .pslot canvas').count() >= 6, 'pause shows the build');
+    check(await page.locator('#pause-build .pslot canvas').count() >= 5 && /Whirlwind .*Broad Edge 3/.test(await page.locator('#pause-build .pb-line').innerText()), 'pause shows the build (Form, path ranks, passives)');
     await shot(page, 'pause');
     await page.locator('#btn-pause-settings').click();
     check(await vis(page, 'ov-settings') && !(await vis(page, 'ov-pause')), 'settings from pause');
@@ -293,11 +291,11 @@ async function main() {
     await page.mouse.click(+VP[1] / 2 + 200, +VP[2] / 2, { button: 'left' }); await page.mouse.click(+VP[1] / 2 + 200, +VP[2] / 2, { button: 'right' });
     await wait(200);
     check((await sk()).every(c => c === 0), 'left / right click on the game casts nothing');
-    check(await page.evaluate(() => ED.Input.label('skill1') === 'Q' && ED.Input.hint('skill1') === 'Q' && ED.Input.hint('skill2') === 'E'), 'skill hints show Q / E only');
+    check(await page.evaluate(() => ED.Input.label('skill1') === 'Q' && ED.Input.hint('skill1') === 'Q' && !ED.Input.ACTIONS.some(a => a.id === 'skill2')), 'skill hint shows Q only, no E action');
     check(await page.evaluate(() => ED.Input.rebind('skill1', 1, 'Mouse0').ok && ED.Input.hint('skill1') === 'Q / LMB'), 'LMB can still be bound to skill 1');
     await page.mouse.click(+VP[1] / 2 + 200, +VP[2] / 2, { button: 'left' });
     await wait(200);
-    { const c = await sk(); check(c[0] > 0 && c[1] === 0, 'bound LMB casts skill 1 (' + c.join(',') + ')'); }
+    { const c = await sk(); check(c.length === 1 && c[0] > 0, 'bound LMB casts the skill (' + c.join(',') + ')'); }
     await page.evaluate(() => ED.Input.setBinds(ED.App.settings.binds));
     check(await page.evaluate(() => ED.Input.isDefault()), 'binds back to the defaults');
 
@@ -305,7 +303,7 @@ async function main() {
     await page.evaluate(() => ED.App.quitRun());
     {
       const sn = await page.evaluate(() => ED.App.profile.seen);
-      check(sn.heroes.join() === 'knight' && sn.stages.join() === 'ossuary' && sn.weapons.length >= 6 && sn.passives.length >= 5 && sn.foes.indexOf('warden') >= 0, 'quit run records hero, stage, own weapons / passives and the boss (' + sn.weapons.length + ' weapons, ' + sn.foes.join(',') + ')');
+      check(sn.heroes.join() === 'knight' && sn.stages.join() === 'ossuary' && sn.weapons.indexOf('cleave') >= 0 && sn.weapons.indexOf('whirlwind') >= 0 && sn.passives.length >= 5 && sn.foes.indexOf('warden') >= 0, 'quit run records hero, stage, own weapons / passives and the boss (' + sn.weapons.length + ' weapons, ' + sn.foes.join(',') + ')');
       check(await page.evaluate(() => JSON.parse(localStorage.getItem(ED.Save.KEY)).seen.foes.indexOf('warden') >= 0), 'seen autosaved at run end');
     }
     await page.evaluate(() => {

@@ -1,6 +1,6 @@
 # Wickdeep
 
-A co-op survivors-like that runs in the browser. Hordes pour into an open arena; your weapons fire on their own while you move, dodge, dash and fire two hero skills. Survive 15 minutes, beat the final boss, and spend the gold at Camp between runs.
+A co-op survivors-like that runs in the browser. Hordes pour into an open arena; your hero's weapon fires on its own while you move, dodge, dash and fire your hero skill. Survive 15 minutes, beat the final boss, and spend the gold at Camp between runs.
 
 No build step, no backend, no install. It is a static site: open it from any web host and play.
 
@@ -14,26 +14,26 @@ No build step, no backend, no install. It is a static site: open it from any web
 |---|---|---|
 | Move | WASD or arrow keys | Left stick |
 | Aim skills | Mouse | Right stick |
-| Skill 1 (Q) | Q | RB |
-| Skill 2 (E) | E | LB |
+| Hero skill | Q | RB or LB |
 | Dash | Space | A |
 | Pick a level-up card | 1–4 or click | X / Y / B / RT |
 | Reroll / skip cards | R / X | |
 | Banish a card | Banish button, then click the card | |
 | Pause | Esc | Start |
 
-Mouse buttons do nothing in a run by default; the mouse only aims. Weapons fire automatically. Facing weapons (Cleave, Twin Daggers, Bone Spear) swing or throw toward the nearest foe in front of you, or the nearest foe anywhere when none is in front. Keys follow the physical key position, so they work on any keyboard layout.
+Mouse buttons do nothing in a run by default; the mouse only aims the skill. Your weapon fires automatically and only at foes on your screen. Facing weapons (Cleave, Twin Daggers) swing or throw toward the nearest foe in front of you, or the nearest foe anywhere when none is in front. Keys follow the physical key position, so they work on any keyboard layout.
 
 Menus work with the keyboard too: arrows or WASD move between buttons, Enter presses, Esc goes back.
 
 ## A run
 
 1. Pick a hero, then a stage.
-2. Collect the gems foes drop. Each level offers 3–4 cards: a new weapon, a weapon level, a passive or a skill level. Solo play pauses while you choose.
-3. A weapon at level 8 evolves when you also own its paired passive: open the next chest to evolve it. Elites drop chests.
-4. Bosses arrive at 5:00 and 10:00; the final boss at 15:00. Beat it to win.
-5. Break braziers for gold, food, a magnet or a holy bomb. A brazier relights a minute after it breaks once you are away from it; elites often drop food.
-6. The results screen shows how much damage each weapon and skill dealt.
+2. Collect the gems foes drop. Each level offers 3–4 cards: a rank on one of your weapon's three paths, a passive (up to 6) or a skill level. Every rank changes how the weapon looks and fires. Solo play pauses while you choose.
+3. Ranking paths can reveal a **Form**: a new shape of your weapon. Unknown Forms show as ???. You can take only one Form per run; after that it can be refined twice.
+4. Elites drop a chest that levels a passive or your skill. A boss chest gives an extra level-up.
+5. Bosses arrive at 5:00 and 10:00; the final boss at 15:00. Beat it to win.
+6. Break braziers for gold, food, a magnet or a holy bomb. A brazier relights a minute after it breaks once you are away from it; elites often drop food.
+7. The results screen shows your build and how much damage your weapon and skill dealt.
 
 ## Stages and bosses
 
@@ -55,13 +55,13 @@ The host's browser runs the game, so the host needs the steadiest connection. Co
 
 ## Heroes
 
-Knight, Ranger and Pyro are open from the start. Necro: survive 10 minutes. Cleric: beat stage 1. Shade: kill 3000 foes in one run. Bellwarden: reach level 40 in one run. Stages 2 and 3 open when you beat the stage before.
+Each hero has one weapon of their own (three paths, hidden Forms) and one skill on Q. Knight, Ranger and Pyro are open from the start. Necro: survive 10 minutes. Cleric: beat stage 1. Shade: kill 3000 foes in one run. Bellwarden: reach level 25 in one run. Stages 2 and 3 open when you beat the stage before.
 
 ## Camp and saving
 
 Gold buys permanent ranks at Camp (damage, health, armor, regen, speed, pickup radius, XP, gold, luck, revivals, rerolls, skips, banishes). Refund all gives every coin back.
 
-**Achievements** (main menu) lists every unlock with your progress toward it, plus your records: runs, wins, lifetime kills, best time, kills and level, and each stage's best run. **Encyclopedia** (main menu) describes every hero, weapon (with its levels and evolution recipe), passive, foe, boss and stage you have met: heroes and stages you started a run with, weapons and passives you owned, foes you saw and bosses you fought. The rest shows as a dark "???" until you find it; locked heroes and stages still show how to unlock them.
+**Achievements** (main menu) lists every unlock with your progress toward it, plus your records: runs, wins, lifetime kills, best time, kills and level, and each stage's best run. **Encyclopedia** (main menu) describes every hero, weapon (with its paths and the Forms you found), passive, foe, boss and stage you have met: heroes and stages you started a run with, weapons, Forms and passives you owned, foes you saw and bosses you fought. The rest shows as a dark "???" until you find it; locked heroes and stages still show how to unlock them.
 
 Progress saves in the browser automatically. Camp → **Show my code** gives a save code you can paste into **Load code** on another browser or device. The code carries your Encyclopedia discoveries too; an older code still loads.
 

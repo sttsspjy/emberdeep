@@ -200,7 +200,8 @@
   W.prototype.summary = function () {
     return {
       won: this.state === 'won', time: this.time, kills: this.kills, level: this.level, gold: this.gold, stage: this.stage,
-      perHero: this.heroes.map(p => ({ pid: p.pid, cls: p.cls, name: p.name, kills: p.kills, dealt: Object.assign({}, p.dealt), weapons: p.weapons.map(ws => ws.id) })),
+      perHero: this.heroes.map(p => ({ pid: p.pid, cls: p.cls, name: p.name, kills: p.kills, dealt: Object.assign({}, p.dealt), weapons: p.weapons.map(ws => ws.id),
+        build: p.weapons.map(ws => ({ id: ws.id, pr: ws.pr.slice(), fl: ws.fl })) })),
     };
   };
 })(globalThis.ED || (globalThis.ED = {}));

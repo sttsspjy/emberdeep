@@ -78,14 +78,6 @@
       B.cone(z.x + c * 4, z.y - 8 + s * 4, z.r + 6, z.a, 1.6, rgba(0xffffff, 200 * k), 1.5);
       return true;
     }
-    if (z.k === 'bulwark') { // golden dome over the hero, pulsing
-      const k = life(z, 0.1, 0.4), pulse = 0.5 + 0.5 * Math.sin(t * 10);
-      kick(z, 2);
-      B.circ(z.x, z.y - 8, z.r, rgba(0xffd77a, (30 + 20 * pulse) * k), 0);
-      B.circ(z.x, z.y - 8, z.r + pulse * 2, rgba(0xffe9a8, 210 * k), 2);
-      B.spr('fx.shield.gold', A().frameAt('fx.shield.gold', t), z.x, z.y - 8, o(0.8 * k, 1.4, 0, true));
-      return true;
-    }
     if (z.k === 'shock') return shock(B, z, 0xd8e6ff, 7);
     return false;
   };
@@ -99,7 +91,6 @@
   ED.WeaponFx.whirlwind = { proj: crescent };
   // render.js looks zones up as WeaponFx[wid] || SkillFx[wid] and projectiles as WeaponFx[wid]: skills that also shoot share one entry in both tables.
   ED.SkillFx.charge = ED.WeaponFx.charge = { zone: knightZone, proj: shieldProj };
-  ED.SkillFx.bulwark = { zone: knightZone };
 
   // ---------------- ranger ----------------
   const rangerZone = (B, z, t) => {
@@ -116,26 +107,10 @@
       }
       return true;
     }
-    if (z.k === 'snare') { // snaps shut (scale 1.3 -> 1), rope web: rings and radial strands, teeth on the rim
-      const k = life(z, 0.08, 0.3), snap = z.t < 0.15 ? 1.3 - 2 * z.t : 1, r = z.r * snap, wob = Math.sin(t * 6) * 1.5;
-      kick(z, 2);
-      B.circ(z.x, z.y, r, rgba(0x6a5a3a, 40 * k), 0);
-      B.circ(z.x, z.y, r, rgba(0xe8e0c8, 220 * k), 2);
-      B.circ(z.x, z.y, r * 0.62 + wob, rgba(0xe8e0c8, 150 * k), 1);
-      B.circ(z.x, z.y, r * 0.3, rgba(0xe8e0c8, 150 * k), 1);
-      for (let i = 0; i < 10; i++) {
-        const a = i / 10 * TAU + 0.1, c = Math.cos(a), s = Math.sin(a);
-        B.line(z.x, z.y, z.x + c * r, z.y + s * r, 1, rgba(0xe8e0c8, 140 * k));
-        B.line(z.x + c * r, z.y + s * r, z.x + Math.cos(a + 0.12) * (r - 7), z.y + Math.sin(a + 0.12) * (r - 7), 2, rgba(0xc8c8d0, 220 * k));
-      }
-      B.spr('proj.web', 0, z.x, z.y, o(0.9 * k, 1.5));
-      return true;
-    }
     if (z.k === 'shock') return shock(B, z, 0xf0e6d0, 6);
     return false;
   };
   ED.SkillFx.volley = { zone: rangerZone };
-  ED.SkillFx.snare = { zone: rangerZone };
 
   // ---------------- pyro ----------------
   const fireTrail = (B, pr, t, sc) => {
@@ -161,33 +136,11 @@
       if (ED.FX && ED.FX.part && Math.random() < 0.7) ED.FX.part(z.x + fx + (Math.random() - 0.5) * 10, z.y - 10 - fy, (Math.random() - 0.5) * 20, -40, 0.35, 0xffb04aff, 3);
       return true;
     }
-    if (z.k === 'flamering') { // ring of flames at the current radius with a hot additive band
-      if (z.r < 2) return true;
-      const k = life(z, 0.05, 0.12), n = U.clamp(Math.round(TAU * z.r / 11), 10, 72);
-      kick(z, 4);
-      B.circ(z.x, z.y, z.r, rgba(0xff6a1a, 150 * k), 7);
-      B.circ(z.x, z.y, z.r, rgba(0xffe0a0, 200 * k), 2);
-      for (let i = 0; i < n; i++) {
-        const a = i / n * TAU + z.id;
-        B.spr('fx.flame', A().frameAt('fx.flame', t + i * 0.21), z.x + Math.cos(a) * z.r, z.y + Math.sin(a) * z.r + 4, o(k, 1.3, 0, true));
-      }
-      return true;
-    }
-    if (z.k === 'scorch') { // burning band at the ring's full radius
-      const k = life(z, 0.2, 0.6), n = U.clamp(Math.round(TAU * z.r / (B.zoneLite ? 48 : 16)), B.zoneLite ? 4 : 10, 48);
-      B.circ(z.x, z.y, z.r - 10, rgba(0x4a1a08, 110 * k), 18);
-      for (let i = 0; i < n; i++) {
-        const a = i / n * TAU + H(z.id, i, 0) * 0.3, d = z.r - 10 + (H(z.id, i, 1) - 0.5) * 16;
-        B.spr('fx.flame', A().frameAt('fx.flame', t + i * 0.17), z.x + Math.cos(a) * d, z.y + Math.sin(a) * d + 4, o(k, 0.9, 0, true));
-      }
-      return true;
-    }
     return false;
   };
   ED.WeaponFx.firebolt = { proj: pyroProj, zone: pyroZone };
   ED.WeaponFx.inferno = { proj: pyroProj, zone: pyroZone };
   ED.SkillFx.meteor = ED.WeaponFx.meteor = { zone: pyroZone, proj: pyroProj };
-  ED.SkillFx.flamering = { zone: pyroZone };
 
   // ---------------- necro ----------------
   const boneProj = (B, pr, t) => {
@@ -200,18 +153,6 @@
       const k = life(z, 0.2, 0.5);
       B.circ(z.x, z.y, z.r + 2, rgba(0x8a5ad8, 60 * k), 0);
       B.circ(z.x, z.y, z.r + 2, rgba(0xc8a6ff, 170 * k), 1);
-      return true;
-    }
-    if (z.k === 'raise') { // ground erupts: purple ring and bone spikes thrusting up
-      const k = U.clamp(z.t / z.dur, 0, 1), up = Math.sin(Math.min(1, k * 2.5) * PI / 2) * (1 - k);
-      kick(z, 5);
-      B.circ(z.x, z.y, z.r, rgba(0x6a3aa8, 70 * (1 - k)), 0);
-      B.circ(z.x, z.y, z.r * (0.6 + 0.4 * U.easeOut(k)), rgba(0xc8a6ff, 230 * (1 - k)), 3);
-      const n = U.clamp(Math.round(z.r / 5), 8, 28);
-      for (let i = 0; i < n; i++) {
-        const a = H(z.id, i, 0) * TAU, d = Math.sqrt(H(z.id, i, 1)) * z.r;
-        B.spr('proj.bone', 0, z.x + Math.cos(a) * d, z.y + Math.sin(a) * d - 8 * up, o(1 - k, 1.6 * up + 0.2, -PI / 2 + (H(z.id, i, 2) - 0.5) * 0.6));
-      }
       return true;
     }
     if (z.k === 'corpse') { // purple detonation with a skull flash
@@ -240,7 +181,6 @@
   };
   ED.WeaponFx.boneshard = { proj: boneProj, zone: necroZone };
   ED.WeaponFx.bonestorm = { proj: boneProj, zone: necroZone };
-  ED.SkillFx.raise = { zone: necroZone };
   ED.SkillFx.corpseblast = ED.WeaponFx.corpseblast = { zone: necroZone, proj: boneProj };
   const ZA = ED.ZoneActor = ED.ZoneActor || {};
   ZA.minion = minionBody; ZA.boneknight = minionBody;

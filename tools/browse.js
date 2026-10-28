@@ -8,8 +8,8 @@
 //   crowdN: a knight run (god cheat) held at N live foes; after 2 s of warm-up measures --seconds (6) s, p50 / p95 / max: frame time (rAF interval; the browser runs uncapped,
 //          no vsync, when a crowd scenario is requested), main-thread work (all rAF callbacks of a frame), sim ms per 60 Hz tick and Render.frame ms.
 //          --software launches without the GPU (software GL: the Canvas2D fallback path). --gate fails crowd900 when GPU-path frame p95 > 8 ms (ARCHITECTURE §11; report-only by default).
-//   late[a|b|c]: staged late game for the render budget: the knight with six evolved weapons (set a: whirlwind sunwheel stormcrown starfall plague barrage, b: hail choir thornwood
-//          impaler avalanche glacier, c: inferno bonestorm wrath shadowfan cathedral twinmoons), max passives, clock 25:00, the stage boss and 900 last-roster foes held at real HP
+//   late[a|b|c]: staged late game for the render budget: a hero with its Form, every path at rank 3 and the Form refined (set a: knight whirlwind, b: ranger hail, c: pyro inferno),
+//          six max passives, clock 25:00, the stage boss and 900 last-roster foes held at real HP
 //          (about 1,000 kills/s); measures like crowdN plus own-zone count / coverage. --gate fails when Render.frame p95 > 4 ms on WebGL or > 8 ms on Canvas2D (GAME-DESIGN §13).
 //   coop: two pages of one browser context on ?net=local (BroadcastChannel transport): host + guest through the ED.Net lobby API (host, join, ready, start), then the real co-op
 //         run on both peers for --seconds (6) s: the guest's mirror shows 2 heroes and foes, snapshots <= 12 KB.
@@ -140,15 +140,25 @@ function pageBoot(cfg) {
       if (E.FX && E.FX.clear) E.FX.clear();
       return D.state();
     };
-    // Gives weapon or passive id to the local hero at level lvl (default max). A new weapon with all 6 slots full replaces the last slot.
+    // Gives weapon or passive id to the local hero. Weapon: a root replaces the hero's weapon if needed and spends lvl - 1 path ranks (path 0 first; default all 9);
+    // a Form ranks the paths it needs, takes it and refines it fully. Passive: level lvl (default max).
     D.give = (id, lvl) => {
       const w = run(); if (!w) return null;
       const p = meOf(w);
       if (E.WEAPONS[id]) {
-        let ws = p.weapons.find(x => x.id === id);
-        if (!ws) { if (p.weapons.length >= E.MAX_WEAPONS) p.weapons.pop(); ws = w.addWeapon(p, id); }
+        const rid = E.weaponRoot(id), d = E.WEAPONS[id];
+        let ws = p.weapons.find(x => x.root === rid);
+        if (!ws) { p.weapons.length = 0; ws = w.addWeapon(p, rid); }
         if (!ws) return null;
-        ws.lvl = Math.max(1, Math.min(E.weaponMaxLvl(E.WEAPONS[id]), lvl || 99));
+        if (d.form) {
+          const f = E.weaponForms(rid).find(x => x.id === id);
+          if (f && !ws.evo) { for (const i of f.need) while (w.rankPath(p, ws, i)); w.takeForm(p, ws, id); }
+          while (w.refineForm(p, ws));
+        } else {
+          const want = Math.max(0, Math.min(9, (lvl || 99) - 1));
+          let have = ws.pr[0] + ws.pr[1] + ws.pr[2];
+          for (let i = 0; i < 3 && have < want; i++) while (have < want && w.rankPath(p, ws, i)) have++;
+        }
       } else if (E.PASSIVES[id]) {
         let ps = p.passives.find(x => x.id === id);
         if (!ps) { if (p.passives.length >= E.MAX_PASSIVES) p.passives.pop(); ps = { id, lvl: 1 }; p.passives.push(ps); }
@@ -157,15 +167,15 @@ function pageBoot(cfg) {
       w.recalc(p, false);
       return D.state();
     };
-    // Evolves weapon wid (default: the first slot whose weapon has an evolution): sets level 8, adds the paired passive, swaps to the evolved id. Returns the new id or null.
-    D.evolve = (wid) => {
+    // Takes Form fid (default: the hero weapon's first Form) on the local hero: ranks the paths it needs and swaps to it. Returns the weapon id now held or null.
+    D.evolve = (fid) => {
       const w = run(); if (!w) return null;
-      const p = meOf(w), ws = p.weapons.find(x => (wid ? x.id === wid : true) && E.WEAPONS[x.id].evo && E.WEAPONS[E.WEAPONS[x.id].evo]);
+      const p = meOf(w), ws = p.weapons[0];
       if (!ws) return null;
-      const def = E.WEAPONS[ws.id];
-      ws.lvl = E.WEAPON_MAX_LVL;
-      if (def.pair && E.PASSIVES[def.pair] && !p.passives.some(x => x.id === def.pair)) D.give(def.pair, 1);
-      w.evolve(p, ws); w.recalc(p, false);
+      const f = E.weaponForms(ws.root).find(x => !fid || x.id === fid);
+      if (!f) return null;
+      if (!ws.evo) { for (const i of f.need) while (w.rankPath(p, ws, i)); w.takeForm(p, ws, f.id); }
+      w.recalc(p, false);
       return ws.id;
     };
     // Spawns boss id (default: the stage's first boss) about 150 px from the local hero (on screen) with HP for the current minute (at least minute 5). Returns the boss foe id.
@@ -193,7 +203,7 @@ function pageBoot(cfg) {
     };
     // Adds the XP for n level-ups (offers appear on the next ticks).
     D.levelUp = (n) => { const w = run(); if (!w) return null; for (let i = 0; i < (n || 1); i++) w.addXp(w.xpNext - w.xp + 1e-6); return w.level; };
-    // Opens a chest for the local hero now (evolves a ready weapon first). Returns the chest results.
+    // Opens an elite chest for the local hero now. Returns the chest results.
     D.chest = () => {
       const w = run(); if (!w) return null;
       const p = meOf(w), n = w.events.length;
@@ -229,7 +239,7 @@ function pageBoot(cfg) {
             let best = null, bd = 1e12; for (const f of E.Game.view.foes) { if (f.dead) continue; const d = (f.x - me.x) ** 2 + (f.y - me.y) ** 2; if (d < bd) { bd = d; best = f; } }
             if (best) { const l = Math.sqrt(bd) || 1; o.mx = (best.x - me.x) / l; o.my = (best.y - me.y) / l; }
           }
-          o.q = Math.random() < 0.02; o.e = Math.random() < 0.015; o.dash = Math.random() < 0.01;
+          o.q = Math.random() < 0.02; o.dash = Math.random() < 0.01;
           o.pick = BR.autoPick && me && me.offer ? 1 : 0;
           return o;
         };
@@ -259,7 +269,7 @@ function pageBoot(cfg) {
   BR.state = () => {
     const E = ED(), w = E.Game.w, me = E.Game.view && E.Game.view.me, h = me && E.HEROES[me.cls];
     return { app: E.App.state, time: w ? +w.time.toFixed(1) : 0, foes: w ? w.foes.length : 0, kills: w ? w.kills : 0, level: w ? w.level : 0, hp: me ? Math.round(me.hp) : 0,
-      weapons: me ? me.weapons.map(x => x.id + x.lvl) : [], q: BR.mine.skill0 || 0, e: BR.mine.skill1 || 0, sigDealt: me && h ? Math.round(me.dealt[h.sig] || 0) : 0, hits: BR.ev.hit || 0 };
+      weapons: me ? me.weapons.map(x => x.id + x.lvl) : [], q: BR.mine.skill0 || 0, sigDealt: me && h ? Math.round(me.dealt[h.sig] || 0) : 0, hits: BR.ev.hit || 0 };
   };
   BR.stop = () => { BR.drive = false; BR.crowd = 0; clearInterval(BR.holdT); const E = ED(); if (E.App.state === 'run') E.App.quitRun(); };
   BR.debug = (name, args) => { const D = ED().Debug; return D && D[name] ? D[name](...(args || [])) : null; };
@@ -411,7 +421,7 @@ async function scenSmoke() {
       res.rows.push(Object.assign({ cls }, st));
       if (st.app !== 'run' && st.app !== 'results') fail(res, cls + ': app state ' + st.app);
       if (!(st.time > secs * 0.5)) fail(res, cls + ': sim time ' + st.time + ' s after ' + secs + ' s');
-      if (secs >= 8 && (!st.q || !st.e)) fail(res, `${cls}: Q cast ${st.q}, E cast ${st.e}`);
+      if (secs >= 8 && !st.q) fail(res, `${cls}: Q cast ${st.q}`);
       if (secs >= 8 && !(st.sigDealt > 0)) fail(res, cls + ': signature weapon dealt no damage');
       await shoot(page, res, cls);
       await call(page, 'stop');
@@ -473,10 +483,8 @@ async function scenShots() {
       await shot(`${String(k++).padStart(2, '0')}-levelup`);
       await page.evaluate(() => { window.__BR.autoPick = true; });
       await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 3000 }).catch(() => {});
-      // chest: evolve-ready signature weapon, then a chest
-      const sig = await page.evaluate(() => { const E = window.ED, me = E.Game.view.me; return E.HEROES[me.cls].sig; });
-      const def = await page.evaluate((id) => { const d = window.ED.WEAPONS[id]; return d ? { evo: d.evo || '', pair: d.pair || '' } : null; }, sig);
-      if (def && def.evo) { await dbg(page, 'give', sig, 8); if (def.pair) await dbg(page, 'give', def.pair, 1); }
+      // chest: an elite chest (levels a passive or the skill)
+      await dbg(page, 'give', 'might', 1);
       const chest = await dbg(page, 'chest');
       await wait(450);
       need(Array.isArray(chest) && chest.length > 0, 'chest gave nothing');
@@ -526,26 +534,27 @@ async function scenCrowd(sc) {
   return res;
 }
 
-const LATE = { a: ['whirlwind', 'sunwheel', 'stormcrown', 'starfall', 'plague', 'barrage'], b: ['hail', 'choir', 'thornwood', 'impaler', 'avalanche', 'glacier'], c: ['inferno', 'bonestorm', 'wrath', 'shadowfan', 'cathedral', 'twinmoons'] };
+const LATE = { a: ['knight', 'whirlwind'], b: ['ranger', 'hail'], c: ['pyro', 'inferno'] };
 async function scenLate(sc) {
   const o = S.opt, set = sc.slice(4) || 'a', res = newResult(sc), secs = o.seconds || 6;
   const { ctx, page, errors, info } = await openPage();
   try {
     res.notes.push(bootNote(info) + (o.software ? ', launched without GPU' : ''));
     await call(page, 'settings', o.quality);
-    await call(page, 'start', 'knight', 0, { god: true });
+    await call(page, 'start', LATE[set][0], 0, { god: true });
     await wait(500);
-    const prep = await page.evaluate((W) => {
-      const E = window.ED, D = E.Debug, p = E.Game.w.heroes[0];
-      p.weapons.length = 0;
-      for (const id of W) D.give(id, 8);
+    const prep = await page.evaluate((F) => {
+      const E = window.ED, D = E.Debug, w = E.Game.w, p = w.heroes[0];
+      D.give(F, 1);
+      const ws = p.weapons[0];
+      if (ws) { for (let i = 0; i < 3; i++) while (w.rankPath(p, ws, i)); }
       for (const id of ['might', 'reach', 'duration', 'multishot', 'haste', 'velocity']) D.give(id, 99);
       D.setTime(1500);
       const boss = D.spawnBoss();
-      return { weapons: p.weapons.map(x => x.id + x.lvl), boss };
-    }, LATE[set]);
-    res.notes.push('staged: weapons ' + prep.weapons.join(',') + (prep.boss ? ', boss' : ', no boss'));
-    if (prep.weapons.length < 6) fail(res, 'staging gave only ' + prep.weapons.length + ' of 6 weapons');
+      return { weapons: p.weapons.map(x => x.id + ':' + x.pr.join('') + 'r' + x.fl), form: !!(ws && ws.id === F), passives: p.passives.length, boss };
+    }, LATE[set][1]);
+    res.notes.push('staged: ' + LATE[set][0] + ' ' + prep.weapons.join(',') + ', ' + prep.passives + ' passives' + (prep.boss ? ', boss' : ', no boss'));
+    if (!prep.form || prep.passives < 6) fail(res, 'staging gave form ' + prep.form + ', ' + prep.passives + ' of 6 passives');
     await call(page, 'hold', 900, true);
     await wait(2500);
     const m = await call(page, 'measure', secs * 1000);
@@ -670,7 +679,7 @@ function table(results) {
     for (const n of r.notes) out.push('  ' + n);
     for (const e of r.errors) out.push(`  ${e.kind}: ${e.text}`);
     for (const w of r.rows) {
-      if (r.name === 'smoke') out.push(`  ${w.cls.padEnd(7)} t ${w.time}s foes ${w.foes} kills ${w.kills} lvl ${w.level} hp ${w.hp} Q ${w.q} E ${w.e} sig dmg ${w.sigDealt} weapons ${w.weapons.join(',')}`);
+      if (r.name === 'smoke') out.push(`  ${w.cls.padEnd(7)} t ${w.time}s foes ${w.foes} kills ${w.kills} lvl ${w.level} hp ${w.hp} Q ${w.q} sig dmg ${w.sigDealt} weapons ${w.weapons.join(',')}`);
       else if (r.name === 'shots') out.push(`  ${w.cls.padEnd(7)} ff ${(w.ffMs / 1000).toFixed(1)} s wall -> t ${w.time}s lvl ${w.level} foes ${w.foes} projs ${w.projs} kills ${w.kills} weapons ${w.weapons.join(',')} passives ${w.passives.join(',')}`);
       else if (r.name === 'coop' || r.name === 'botwatch') out.push('  ' + Object.entries(w).map(([k, v]) => k + ' ' + v).join(', '));
       else out.push(`  ${w.quality}: foes ${w.foes}, frames ${w.frames}, frame ms p50/p95/max ${tri(w.frame)}, work ms ${tri(w.work)}, sim ms/tick ${tri(w.tick)}, render ms ${tri(w.render)}, batch ${w.batch}, post ${w.usePost ? 'on' : 'off'}${w.soft ? ' (software)' : ''}, canvas ${w.canvas.join('x')}`);
