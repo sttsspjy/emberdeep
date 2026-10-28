@@ -275,7 +275,7 @@ async function main() {
     await page.keyboard.press('Escape');
     await wait(150);
     check(await vis(page, 'ov-pause'), 'Esc pauses');
-    check(await page.locator('#pause-build .pslot canvas').count() >= 5 && /Whirlwind .*Broad Edge 3/.test(await page.locator('#pause-build .pb-line').innerText()), 'pause shows the build (Form, path ranks, passives)');
+    check(await page.locator('#pause-build .pslot canvas').count() >= 5 && /Colossus Blade .*Greatblade 3/.test(await page.locator('#pause-build .pb-line').innerText()), 'pause shows the build (Form, path ranks, passives)');
     await shot(page, 'pause');
     await page.locator('#btn-pause-settings').click();
     check(await vis(page, 'ov-settings') && !(await vis(page, 'ov-pause')), 'settings from pause');
@@ -303,7 +303,7 @@ async function main() {
     await page.evaluate(() => ED.App.quitRun());
     {
       const sn = await page.evaluate(() => ED.App.profile.seen);
-      check(sn.heroes.join() === 'knight' && sn.stages.join() === 'ossuary' && sn.weapons.indexOf('cleave') >= 0 && sn.weapons.indexOf('whirlwind') >= 0 && sn.passives.length >= 5 && sn.foes.indexOf('warden') >= 0, 'quit run records hero, stage, own weapons / passives and the boss (' + sn.weapons.length + ' weapons, ' + sn.foes.join(',') + ')');
+      check(sn.heroes.join() === 'knight' && sn.stages.join() === 'ossuary' && sn.weapons.indexOf('cleave') >= 0 && sn.weapons.indexOf('colossus') >= 0 && sn.passives.length >= 5 && sn.foes.indexOf('warden') >= 0, 'quit run records hero, stage, own weapons / passives and the boss (' + sn.weapons.length + ' weapons, ' + sn.foes.join(',') + ')');
       check(await page.evaluate(() => JSON.parse(localStorage.getItem(ED.Save.KEY)).seen.foes.indexOf('warden') >= 0), 'seen autosaved at run end');
     }
     await page.evaluate(() => {
