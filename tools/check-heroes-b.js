@@ -112,7 +112,7 @@ const cast = (w, p, slot, x, y) => { w.input(p.pid, { q: true, ax: x, ay: y }); 
   ok(p2.x - x1 > 150 && sk2.cd > 6, `L4: recast blinks again, full cooldown after (${sk2.cd.toFixed(1)} s)`);
   const w3 = world(['shade']), p3 = w3.heroes[0], sk3 = p3.skills[0]; sk3.lvl = 4;
   cast(w3, p3, 0, p3.x + 160, p3.y); step(w3, 3);
-  ok(sk3.cd > 3 && sk3.cd < 5, `L4: unused recast window resumes the cooldown (${sk3.cd.toFixed(1)} s)`);
+  ok(Math.abs(sk3.cd - (sk3.cdMax - 3)) < 0.1, `L4: unused recast window resumes the cooldown (${sk3.cd.toFixed(1)} s of ${sk3.cdMax} s)`);
 }
 
 { // Great Peal: stuns the screen, pulls gems at L4

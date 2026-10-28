@@ -75,41 +75,6 @@
   };
   reg(['smite', 'wrath', 'sanctuary'], { zone: clericZone });
 
-  // ---------------- shade ----------------
-  // Knife with a motion trail; violet: the Shadow Fan / afterimage tint (additive glow).
-  function knife(B, pr, t, len, col, add) {
-    const c = Math.cos(pr.a), s = Math.sin(pr.a);
-    B.line(pr.x - c * len, pr.y - s * len, pr.x, pr.y, 2, ca(col, 0.45));
-    if (!B.spr('proj.knife', 0, pr.x, pr.y, opt(1, pr.a, 1, false))) B.circ(pr.x, pr.y, 2, ca(PALE, 1), 0);
-    if (add) B.spr('proj.knife', 0, pr.x, pr.y, opt(0.6, pr.a, 1.3, true));
-  }
-  function afterimage(B, z, t) {
-    const k = kOf(z), flick = 0.45 + 0.15 * Math.sin(t * 40 + z.id), flip = Math.cos(z.a) > 0;
-    B.circ(z.x, z.y - 4, z.r, ca(DUSK, 0.12 + 0.3 * k), 0);
-    B.circ(z.x, z.y - 4, z.r, ca(VIOLET, 0.5 + 0.5 * k), 1.5);
-    B.circ(z.x, z.y - 4, z.r * (1 - k), ca(0xc8b0ff, 0.8), 1);
-    if (!B.spr('hero.shade.idle', 0, z.x, z.y, opt(flick, 0, 1, false, flip))) B.circ(z.x, z.y - 8, 7, ca(VIOLET, flick), 0);
-    B.spr('hero.shade.idle', 0, z.x + 2, z.y, opt(0.35, 0, 1, true, flip));
-    for (let i = 0; i < 6; i++) { const h = U.hash3(z.id, i, 3), a = (h & 1023) / 1024 * TAU, c = (t * 1.5 + (h >>> 12 & 255) / 256) % 1; B.rect(z.x + Math.cos(a) * 10 * c, z.y - 10 - c * 18, 2, 2, ca(VIOLET, 1 - c)); }
-  }
-  function stepcut(B, z, t) {
-    const k = kOf(z), f = 1 - k, ex = z.x + Math.cos(z.a) * z.len, ey = z.y - 6 + Math.sin(z.a) * z.len;
-    B.line(z.x, z.y - 6, ex, ey, z.w * f, ca(DUSK, 0.5 * f));
-    B.line(z.x, z.y - 6, ex, ey, Math.max(1, z.w * 0.3 * f), ca(VIOLET, 0.9 * f));
-    B.line(z.x, z.y - 6, ex, ey, 1, ca(0xffffff, f));
-    const nx = -Math.sin(z.a), ny = Math.cos(z.a);
-    for (let i = 1; i < 6; i++) { const m = i / 6, x = z.x + (ex - z.x) * m, y = z.y - 6 + (ey - z.y + 6) * m, s = (i % 2 ? 1 : -1) * z.w * 0.7 * f; B.line(x - nx * s, y - ny * s, x + nx * s, y + ny * s, 1, ca(0xc8b0ff, 0.8 * f)); }
-  }
-  const shadeZone = (B, z, t) => {
-    if (z.k === 'afterimg') { afterimage(B, z, t); return true; }
-    if (z.k === 'stepcut') { stepcut(B, z, t); return true; }
-    return false;
-  };
-  reg(['daggers'], { proj: (B, pr, t) => { knife(B, pr, t, 8, PALE, false); return true; } });
-  reg(['shadowfan'], { proj: (B, pr, t) => { knife(B, pr, t, 12, VIOLET, true); return true; } });
-
-  reg(['step'], { zone: shadeZone, proj: (B, pr, t) => { knife(B, pr, t, 10, VIOLET, true); return true; } });
-
   // ---------------- bell ----------------
   // Swinging bell sprite hanging from (x, y - h); s = scale.
   function bellSpr(B, id, x, y, t, ph, s, swing) {
