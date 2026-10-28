@@ -87,13 +87,14 @@
   // Effective numbers of hero skill `idx` into sk.N (reused): { cd, dmg, r, dur, n, ...custom } with reach on r, duration on dur, no haste on cd;
   // dmg = base x (1 + sum lvl dmg) x (1 + might) x weaponMul x (1 + 0.05 x (party level - 1)). plv: party level (default 1).
   St.skill = (p, idx, plv) => {
+    const wm = St.weaponMul(p); // before sumLevels: weaponMul may recompute weapon numbers, which reuse the SUM scratch
     const sk = p.skills[idx], def = ED.SKILLS[sk.id], b = def.base || {}, st = p.stats, sum = sumLevels(def, sk.lvl, SUM), L = plv || 1;
     const N = sk.N || (sk.N = {});
     clear(N);
     for (const k in b) N[k] = b[k];
     for (const k in sum) N[k] = typeof sum[k] === 'number' && typeof b[k] === 'number' ? b[k] + sum[k] : sum[k];
     N.cd = Math.max(1, (def.cd || 10) * (1 + (sum.cd || 0)));
-    if (b.dmg !== undefined) N.dmg = b.dmg * (1 + (sum.dmg || 0)) * (1 + st.might) * St.weaponMul(p) * (1 + 0.05 * (L - 1));
+    if (b.dmg !== undefined) N.dmg = b.dmg * (1 + (sum.dmg || 0)) * (1 + st.might) * wm * (1 + 0.05 * (L - 1));
     if (b.r !== undefined) N.r = b.r * (1 + (sum.r || 0)) * (1 + st.reach);
     if (b.dur !== undefined) N.dur = b.dur * (1 + (sum.dur || 0)) * (1 + st.duration);
     N.crit = st.crit; N.critMul = st.critMul;
