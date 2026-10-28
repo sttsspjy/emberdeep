@@ -65,33 +65,6 @@
     return true;
   }
 
-  // ---------------- knight ----------------
-  const knightZone = (B, z, t) => {
-    if (z.k === 'charge') { // speed streaks behind the hero, shield glow ahead
-      const c = Math.cos(z.a), s = Math.sin(z.a), k = life(z, 0.05, 0.1);
-      kick(z, 3);
-      for (let i = -3; i <= 3; i++) {
-        const off = i * z.r * 0.28, len = 40 + 30 * H(z.id, i + 9, Math.floor(t * 30)), bx = z.x - s * off - c * 8, by = z.y - 8 + c * off - s * 8;
-        B.line(bx, by, bx - c * len, by - s * len, i ? 1 : 2, rgba(0xd8e6ff, (i ? 120 : 200) * k));
-      }
-      B.cone(z.x + c * 4, z.y - 8 + s * 4, z.r + 6, z.a, 1.6, rgba(0xfff1d6, 70 * k), 0);
-      B.cone(z.x + c * 4, z.y - 8 + s * 4, z.r + 6, z.a, 1.6, rgba(0xffffff, 200 * k), 1.5);
-      return true;
-    }
-    if (z.k === 'shock') return shock(B, z, 0xd8e6ff, 7);
-    return false;
-  };
-  const crescent = (B, pr, t) => { // sword wave: additive slash sprite along its heading plus a bright edge
-    B.spr('fx.slash.arc', 2, pr.x, pr.y, o(0.95, 1.3, pr.a, true));
-    B.cone(pr.x - Math.cos(pr.a) * 10, pr.y - Math.sin(pr.a) * 10, 16, pr.a, 1.9, 0xfff1d6c0, 1.5);
-    return true;
-  };
-  const shieldProj = (B, pr, t) => { B.spr('proj.shield', 0, pr.x, pr.y, o(1, 1, (t * 18 + pr.id) % TAU)); return true; };
-  ED.WeaponFx.cleave = { proj: crescent };
-  ED.WeaponFx.whirlwind = { proj: crescent };
-  // render.js looks zones up as WeaponFx[wid] || SkillFx[wid] and projectiles as WeaponFx[wid]: skills that also shoot share one entry in both tables.
-  ED.SkillFx.charge = ED.WeaponFx.charge = { zone: knightZone, proj: shieldProj };
-
   // ---------------- ranger ----------------
   const rangerZone = (B, z, t) => {
     if (z.k === 'arrows') { // arrow rain: arrows drop in 0.35 s cycles at hashed spots, dust where they land
