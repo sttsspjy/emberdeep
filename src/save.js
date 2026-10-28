@@ -17,7 +17,9 @@
   // Weapon order of the seen bitset: append only (ED.WEAPON_IDS is load order). The first 24 ids are removed general weapons, kept as dead bits.
   const SEEN_WEAPONS = ['lanterns', 'sunwheel', 'chainspark', 'stormcrown', 'frostring', 'glacier', 'bramble', 'thornwood', 'glaive', 'twinmoons', 'meteorcall', 'starfall', 'bonespear', 'impaler',
     'blight', 'plague', 'wisp', 'choir', 'mortar', 'barrage', 'censer', 'holycenser', 'ricochet', 'avalanche', 'cleave', 'whirlwind', 'longbow', 'hail', 'firebolt', 'inferno', 'boneshard', 'bonestorm',
-    'smite', 'wrath', 'daggers', 'shadowfan', 'toll', 'cathedral'];
+    'smite', 'wrath', 'daggers', 'shadowfan', 'toll', 'cathedral',
+    'colossus', 'gale', 'earthsplitter', 'tempest', 'ballista', 'seeker', 'galeshot', 'rebound', 'firestorm', 'wildfire', 'pyre', 'napalm', 'bonelord', 'plaguefield',
+    'lich', 'ossuary', 'halo', 'jray', 'consecration', 'verdict', 'thousand', 'assassinate', 'lotus', 'reaper', 'glaciertoll', 'carillon', 'undertow', 'windchime'];
   const S = ED.Save = { KEY: LS_KEY, CODE_VERSION, STAT_KEYS, SEEN_KEYS, SEEN_WEAPONS };
   const ls = () => (typeof localStorage !== 'undefined' ? localStorage : null);
   const heroOrder = () => ED.HERO_IDS || Object.keys(ED.UNLOCKS.heroes);

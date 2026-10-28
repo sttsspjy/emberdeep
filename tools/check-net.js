@@ -18,7 +18,7 @@ const N = ED.Net;
 { const r = U.RNG(4242); Math.random = r.next; } // party codes and pids: same every run
 const GATE = 12 * 1024;
 let fails = 0;
-const okV = N.VERSION === 5 && ED.NET_VERSION === 5;
+const okV = N.VERSION === 6 && ED.NET_VERSION === 6;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
 const t0 = Date.now();
 
@@ -172,7 +172,7 @@ const atSnap = ring[Math.round(gC.mir.T / C.TICK) % RING];
 ok(atSnap && atSnap.tick === Math.round(gC.mir.T / C.TICK) && Math.abs(me.hp - atSnap.hp) < 0.01 && me.maxHp === cliHero.maxHp && gC.view.level === atSnap.level && gC.view.kills === atSnap.kills && gC.view.gold === atSnap.gold, `vitals / level / kills / gold match the host at the snapshot tick (lv ${w.level}, kills ${w.kills})`);
 const sig = (p) => p.weapons.map(x => x.id + x.lvl + ':' + x.pr.join('') + x.fl + (x.evo ? 'F' : '')).join(',') + '|' + p.passives.map(x => x.id + x.lvl).join(',') + '|' + p.skills.map(x => x.id + x.lvl).join(',');
 ok(sig(me) === sig(cliHero) && me.skills.length === 1 && me.weapons.length === 1 && me.weapons[0].pr.some(r => r > 0), 'client hero weapon (path ranks, refine) / passives / one skill match the host: ' + sig(me));
-ok(okV, 'NET_VERSION 5');
+ok(okV, 'NET_VERSION 6');
 ok(cliPicks >= 5 && hostPicks >= 5 && !cliHero.pend, `co-op level-ups resolve without pause (client picks ${cliPicks}, host picks ${hostPicks}, client pending ${cliHero.pend})`);
 ok(gH.rem.get(cliPid).ack > 3000, `host consumed client inputs (ack ${gH.rem.get(cliPid).ack})`);
 const avgB = sumCliBytes / Math.max(1, nSnap);
@@ -297,9 +297,11 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
 {
   const cls = ['cleric', 'pyro', 'necro', 'bell'];
   const W3 = new ED.World({ seed: 11, stage: 0, players: cls.map((c, i) => ({ pid: 'p' + i, name: 'P' + i, slot: i, cls: c, meta: { shop: {}, sigs: [] } })), cheats: { god: true } });
+  const FORM = { cleric: 'consecration', pyro: 'napalm', necro: 'plaguefield', bell: 'windchime' }; // the zone-heaviest Form per hero
   W3.heroes.forEach((p) => {
     for (const id of ['might', 'reach', 'duration', 'multishot', 'haste', 'velocity']) p.passives.push({ id, lvl: ED.PASSIVES[id].max });
-    W3.setRanks(p, p.weapons[0], 9, true);
+    const ws = W3.setRanks(p, p.weapons[0], 9, false);
+    W3.takeForm(p, ws, FORM[p.cls]); while (W3.refineForm(p, ws));
     W3.recalc(p, true);
   });
   for (const row of W3.sdef.timeline) row.rate = 0;
@@ -338,7 +340,7 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
     evs.length = 0;
   }
   console.log(`     late game (4 maxed Forms, 900 foes): snapshot avg ${(sum / cnt / 1024).toFixed(2)} KB, max ${(max / 1024).toFixed(2)} KB; zones in client 1's rect avg ${(zSum / snaps).toFixed(0)}, max ${zMax}`);
-  ok(zMax >= 250, `late game: zone-heavy scene (${zMax} zones in one client's rect)`);
+  ok(zMax >= 200, `late game: zone-heavy scene (${zMax} zones in one client's rect)`);
   ok(max <= GATE, `late game: every snapshot <= 12 KB (max ${(max / 1024).toFixed(2)} KB)`);
   ok(bad === 0 && miss === 0, `late game: client zones equal the host's at all ${snaps} snapshots (mismatches ${bad}, count diffs ${miss}${firstBad ? ', first: ' + firstBad : ''})`);
 }

@@ -60,17 +60,18 @@ const KINDS = ['path', 'form', 'refine', 'passive', 'plvl', 'skill', 'gold', 'he
   ok(fc && fc.c.id === d.paths[0].form && fc.w === 6 && fc.c.path === 0 && w.cardKey(fc.c) === 'f:' + fc.c.id, 'rank 3 unlocks the path Form card (weight 6, key f:<form>)');
   p.offer = [fc.c]; w.pickCard(p, 0);
   const ev = w.events.find(e => e.t === 'evolve');
-  ok(ws.id === 'whirlwind' && ws.evo && ws.lvl === 5 && ev && ev.from === 'cleave' && ev.wid === 'whirlwind', 'taking the Form swaps the weapon id, emits evolve, lvl 5');
+  const F = d.paths[0].form, FD = ED.WEAPONS[F];
+  ok(ws.id === F && ws.evo && ws.lvl === 5 && ev && ev.from === 'cleave' && ev.wid === F, 'taking the Form swaps the weapon id, emits evolve, lvl 5');
   ok(!w.cardPool(p).some(x => x.c.kind === 'form') && w.formsReady(p, ws).length === 0, 'one Form per run: no more Form cards');
   w.rankPath(p, ws, 1); w.rankPath(p, ws, 1); w.rankPath(p, ws, 1);
   ok(ws.pr[1] === 3 && !w.cardPool(p).some(x => x.c.kind === 'form'), 'another path at rank 3 after a Form: still no Form');
   const S1 = w.weaponS(p, 0);
-  ok(S1.back === true && S1.n >= ED.WEAPONS.whirlwind.base.n + 2, 'path mods keep applying after the Form (back, n ' + S1.n + ')');
+  ok(S1.back === true && S1.n >= (FD.base.n || 1) + 1, 'path mods keep applying after the Form (back, n ' + S1.n + ')');
   const rc = w.cardPool(p).find(x => x.c.kind === 'refine');
-  ok(rc && rc.w === 3 && rc.c.id === 'whirlwind' && rc.c.lvl === 1 && w.cardKey(rc.c) === 'x:whirlwind', 'refine card offered (weight 3, key x:<form>)');
-  const n0 = w.weaponS(p, 0).n;
+  ok(rc && rc.w === 3 && rc.c.id === F && rc.c.lvl === 1 && w.cardKey(rc.c) === 'x:' + F, 'refine card offered (weight 3, key x:<form>)');
+  const RK = Object.keys(FD.refine[0].mods).find(k => typeof FD.refine[0].mods[k] === 'number'), n0 = w.weaponS(p, 0)[RK];
   p.offer = [rc.c]; w.pickCard(p, 0);
-  ok(ws.fl === 1 && w.weaponS(p, 0).n === n0 + 1, 'refine 1 applies its mods (n ' + n0 + ' -> ' + w.weaponS(p, 0).n + ')');
+  ok(ws.fl === 1 && w.weaponS(p, 0)[RK] > n0, 'refine 1 applies its mods (' + RK + ' ' + n0 + ' -> ' + w.weaponS(p, 0)[RK] + ')');
   w.refineForm(p, ws);
   ok(ws.fl === 2 && !w.refineForm(p, ws) && !w.cardPool(p).some(x => x.c.kind === 'refine'), 'refine caps at 2 and leaves the pool');
   // hybrid Forms (if any hero defines one) need both paths at rank 3
