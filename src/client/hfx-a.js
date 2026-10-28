@@ -1,4 +1,4 @@
-// Client draw hooks for heroes knight, ranger, pyro, necro: ED.WeaponFx / ED.SkillFx entries (dispatch on the zone look z.k) and ED.ZoneActor bodies for minions (y-sorted by render.js).
+// Client draw hooks for heroes knight, ranger, pyro: ED.WeaponFx / ED.SkillFx entries (dispatch on the zone look z.k). Necro lives in hfx-necro.js.
 // Everything derives from render-visible fields (zones: x, y, r, a, w, t, dur, k, id; projectiles: x, y, a, k, id) and view time; per-zone variation comes from U.hash3(z.id, i, ...).
 // The first frame a big effect is seen adds screen shake (seen-id ring).
 (function (ED) {
@@ -141,47 +141,4 @@
   ED.WeaponFx.firebolt = { proj: pyroProj, zone: pyroZone };
   ED.WeaponFx.inferno = { proj: pyroProj, zone: pyroZone };
   ED.SkillFx.meteor = ED.WeaponFx.meteor = { zone: pyroZone, proj: pyroProj };
-
-  // ---------------- necro ----------------
-  const boneProj = (B, pr, t) => {
-    B.spr('proj.bone', 0, pr.x, pr.y, o(1, 1.2, pr.a));
-    if ((pr.id + Math.floor(t * 60)) % 4 === 0 && ED.FX && ED.FX.part) ED.FX.part(pr.x, pr.y, 0, -8, 0.25, 0xb7a6e0ff, 2);
-    return true;
-  };
-  const necroZone = (B, z, t) => {
-    if (z.k === 'minion' || z.k === 'boneknight') { // ground layer: ally ring under the feet (the body is a ZoneActor)
-      const k = life(z, 0.2, 0.5);
-      B.circ(z.x, z.y, z.r + 2, rgba(0x8a5ad8, 60 * k), 0);
-      B.circ(z.x, z.y, z.r + 2, rgba(0xc8a6ff, 170 * k), 1);
-      return true;
-    }
-    if (z.k === 'corpse') { // purple detonation with a skull flash
-      const k = U.clamp(z.t / z.dur, 0, 1);
-      kick(z, 2.5);
-      B.circ(z.x, z.y, z.r * (0.4 + 0.6 * U.easeOut(k)), rgba(0x8a5ad8, 120 * (1 - k)), 0);
-      B.circ(z.x, z.y, z.r * (0.4 + 0.6 * U.easeOut(k)), rgba(0xe0c8ff, 230 * (1 - k)), 2);
-      B.spr('fx.blast.blue', at('fx.blast.blue', k), z.x, z.y - 4, o(1 - k * 0.5, U.clamp(z.r / 18, 1, 2.5), 0, true));
-      if (k < 0.4) B.spr('fx.sigil.skull', 0, z.x, z.y - 12 - k * 20, o(1 - k * 2, 2.5));
-      return true;
-    }
-    return false;
-  };
-  // Minion body (y-sorted actor): rises out of the ground, walks toward its facing, flashes a slash while z.w > 0, fades before it crumbles.
-  const minionBody = (B, z, t) => {
-    const big = z.k === 'boneknight', id = big ? 'foe.skelknight.walk' : 'foe.minion.walk', rise = Math.min(1, z.t / 0.3), fade = Math.min(1, (z.dur - z.t) / 0.5);
-    const flip = Math.cos(z.a) < 0, hy = z.y - (big ? 14 : 8);
-    B.circ(z.x, hy, z.r + 3, rgba(0x7a4ad0, 120 * fade * rise), 0); // purple halo behind the bones marks an ally
-    O.flip = flip; O.flash = 0; O.alpha = 0.95 * fade; O.rot = 0; O.sx = 1; O.sy = rise; O.tint = 0x9a7aff; O.add = false;
-    if (!B.spr(id, A().frameAt(id, t + z.id * 0.31), z.x, z.y, O)) B.circ(z.x, z.y - z.r, z.r, rgba(0xd8d0f0, 255 * fade), 0);
-    // ghost glow over the bones so allies read apart from skeleton foes
-    O.alpha = 0.35 * fade; O.add = true;
-    B.spr(id, A().frameAt(id, t + z.id * 0.31), z.x, z.y, O);
-    if (rise < 1 && Math.random() < 0.5) spark(z.x, z.y, 0x9a8a70ff, 1, 30);
-    if (z.w > 0) B.cone(z.x, z.y - 6, z.r + (big ? 26 : 14), z.a, big ? 3.2 : 2.2, rgba(0xe0c8ff, 150 * z.w), 0);
-  };
-  ED.WeaponFx.boneshard = { proj: boneProj, zone: necroZone };
-  ED.WeaponFx.bonestorm = { proj: boneProj, zone: necroZone };
-  ED.SkillFx.corpseblast = ED.WeaponFx.corpseblast = { zone: necroZone, proj: boneProj };
-  const ZA = ED.ZoneActor = ED.ZoneActor || {};
-  ZA.minion = minionBody; ZA.boneknight = minionBody;
 })(globalThis.ED || (globalThis.ED = {}));
