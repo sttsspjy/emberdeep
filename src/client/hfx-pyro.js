@@ -53,8 +53,8 @@
   function pyre(B, z, t) {
     const k = U.clamp(z.t / z.dur, 0, 1), r = z.r, pulse = 0.5 + 0.5 * Math.sin(t * (10 + 20 * k));
     if (B.zoneLite) { B.zcirc(z.x, z.y, r, rgba(0x8a2a0c, 90 + 80 * k), 0); B.zcirc(z.x, z.y, r * (1.4 - 0.4 * k), rgba(0xffd070, 200), 1); return true; }
-    B.circ(z.x, z.y, r, rgba(0x3a1006, 140), 0);
-    B.circ(z.x, z.y, r * (0.3 + 0.5 * k), rgba(0xff8a2a, 60 + 90 * k * pulse), 0);
+    B.circ(z.x, z.y, r, rgba(0x3a1006, 90), 0);
+    B.circ(z.x, z.y, r * (0.3 + 0.5 * k), rgba(0xff8a2a, 50 + 70 * k * pulse), 0);
     B.circ(z.x, z.y, r * 0.25 * k, rgba(0xfff0c0, 200 * k), 0);
     B.circ(z.x, z.y, r * (1.4 - 0.4 * k), rgba(0xffd070, 120 + 120 * k), 1);
     const n = U.clamp(Math.round(r / 5 * (0.4 + k)), 3, 14);
@@ -153,4 +153,22 @@
   };
   for (const id of ['firebolt', 'inferno', 'firestorm', 'wildfire', 'pyre', 'napalm', 'meteor']) ED.WeaponFx[id] = HOOK;
   ED.SkillFx.meteor = HOOK;
+
+  // ---------------- explosions ----------------
+  // Pyro 'boom' events skip fx.js's generic blast (explosion sprite up to 4x and a filled flash disc up to 90 px, which buried the horde under stacked blasts):
+  // the ring at the true radius, a small core flash, the explosion sprite at whole scale 1 (Meteor 2), sparks; blasts over 200 px keep a light screen flash.
+  const PW = { firebolt: 1, inferno: 1, firestorm: 1, wildfire: 1, pyre: 1, napalm: 1, meteor: 1 };
+  const F = ED.FX;
+  if (F && F.handle) {
+    const handle = F.handle;
+    F.handle = (ev, ctx) => {
+      if (ev.t !== 'boom' || !PW[ev.wid] || ev.team) return handle(ev, ctx);
+      const col = ev.look === 'meteor' ? 0xff6a2a00 : 0xff8a3d00, r = ev.r || 20;
+      F.ring(ev.x, ev.y, r, (col | 0xff) >>> 0, r > 200 ? 0.5 : 0.3, r * 0.4, r > 60 ? 2 : 1);
+      F.flash(ev.x, ev.y, Math.min(r * 0.3, 24), col, 0.1, 0.45);
+      if (r >= 24) F.sprite('fx.explosion', ev.x, ev.y, ev.wid === 'meteor' ? 2 : 1, 0, 0, 0.85);
+      F.burst(ev.x, ev.y, Math.min(12, 3 + Math.round(r / 12)), col, Math.min(r, 120) * 2.2, 0.45, 2, 10);
+      if (r > 200) { F.screen(col, 0.2, 0.25); if (ctx && ev.pid === ctx.me) F.addShake(5, 0); }
+    };
+  }
 })(globalThis.ED || (globalThis.ED = {}));

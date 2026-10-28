@@ -17,7 +17,7 @@
     const sway = Math.sin(t * 6 + ph) > 0 ? 1 : 0;
     if (!B.spr(id, 0, q(x) + sway, q(y - lift), opt(1, s, tint))) B.circ(q(x), q(y - 4), 5 * s, ca(BRONZE, 1), 0);
   }
-  // Expanding / closing ring: faint fill, a band of lw px in col, a 1 px inner line in hi; fades over the ring's life.
+  // Expanding / closing ring: faint fill (≤ 0.06: many overlap at once), a band of lw px in col, a 1 px inner line in hi; fades over the ring's life.
   function ring(B, z, col, hi, lw, fill) {
     if (z.r < 2) return;
     const f = 1 - kOf(z) * kOf(z), x = q(z.x), y = q(z.y);
@@ -36,11 +36,11 @@
       else B.rect(q(x) - (size >> 1), q(y) - (size >> 1), size, size, ca(col, 0.95 * f));
     }
   }
-  // Frost ground: pale fill, 1 px rim, a few twinkling ice pixels (hash of zone id).
+  // Frost ground: faint fill (dozens overlap at full power), 1 px rim, a few twinkling ice pixels (hash of zone id).
   function rime(B, z, t) {
     const f = Math.min(1, z.t / 0.15, (z.dur - z.t) / 0.4), x = q(z.x), y = q(z.y);
-    if (B.zoneLite) { B.zcirc(x, y, z.r, ca(ICE, 0.16 * f), 0); B.zcirc(x, y, z.r, ca(ICE, 0.5 * f), 1); return; }
-    B.circ(x, y, z.r, ca(ICE, 0.16 * f), 0);
+    if (B.zoneLite) { B.zcirc(x, y, z.r, ca(ICE, 0.07 * f), 0); B.zcirc(x, y, z.r, ca(ICE, 0.5 * f), 1); return; }
+    B.circ(x, y, z.r, ca(ICE, 0.07 * f), 0);
     B.circ(x, y, z.r, ca(ICEW, 0.5 * f), 1);
     for (let i = 0; i < 6; i++) {
       const h = U.hash3(z.id, i, 11), a = (h & 1023) / 1024 * TAU, d = Math.sqrt(((h >>> 10) & 1023) / 1024) * (z.r - 2);
@@ -73,12 +73,12 @@
       case 'carb': bellSpr(B, 'weapon.handbells', z.x, z.y, 8, 2, t, z.id, 0); return true;
       case 'cathb': if (!B.zoneLite) B.circ(q(z.x), q(z.y - 8), 14, ca(GOLD, 0.16 + 0.08 * Math.sin(t * 7 + z.id)), 1); bellSpr(B, 'weapon.greatbell', z.x, z.y, 18, 2, t, z.id, 0); return true;
       case 'chime': chime(B, z, t); return true;
-      case 'tollw': ring(B, z, BRONZE, WHITE, 2, 0.08); return true;
-      case 'tollf': ring(B, z, ICE, ICEW, 2, 0.08); return true;
-      case 'cathw': ring(B, z, GOLD, WHITE, 3, 0.1); return true;
-      case 'glacw': ring(B, z, ICE, ICEW, 2, 0.12); rimMarks(B, z, 10, ICEW, 2, false); return true;
-      case 'underw': ring(B, z, TEAL, WHITE, 2, 0.1); rimMarks(B, z, 12, TEAL, 0, true); return true;
-      case 'chimew': ring(B, z, WHITE, GOLD, 1, 0.05); return true;
+      case 'tollw': ring(B, z, BRONZE, WHITE, 2, 0.04); return true;
+      case 'tollf': ring(B, z, ICE, ICEW, 2, 0.04); return true;
+      case 'cathw': ring(B, z, GOLD, WHITE, 3, 0.05); return true;
+      case 'glacw': ring(B, z, ICE, ICEW, 2, 0.06); rimMarks(B, z, 10, ICEW, 2, false); return true;
+      case 'underw': ring(B, z, TEAL, WHITE, 2, 0.05); rimMarks(B, z, 12, TEAL, 0, true); return true;
+      case 'chimew': ring(B, z, WHITE, GOLD, 1, 0.025); return true;
       case 'rime': rime(B, z, t); return true;
       case 'pealw': peal(B, z); return true;
       default: return false;

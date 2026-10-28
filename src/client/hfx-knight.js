@@ -1,4 +1,4 @@
-// Knight visuals (pixel only: atlas sprites + Batch primitives): crescents, gale crescents and spiral blades (projectiles), crack / cut / shock / charge zones,
+// Knight visuals (pixel only: atlas sprites + Batch primitives): crescent outlines, gale crescents and spiral blades (projectiles), crack / cut / shock / charge zones,
 // a blade glint orbiting a knight holding a spin Form (HeroFx). Everything derives from render-visible fields and view time; per-zone variation from U.hash3(z.id, i, ...).
 (function (ED) {
   'use strict';
@@ -22,19 +22,23 @@
   const STEEL = 0xd8e6ff, WIND = 0xc8f0e0, EARTH = 0x2a1a10, DUST = 0xc8a878;
 
   // ---------------- projectiles ----------------
-  // Crescent (Cleave waves, Tempest blades): additive slash sprite along the heading, scaled by its radius, plus a 1 px bright edge.
-  const crescent = (B, pr) => {
-    const sc = U.clamp(pr.r / 9, 0.8, 2.2);
-    B.spr('fx.slash.arc', 2, pr.x, pr.y, o(0.95, sc, pr.a, true));
-    B.cone(pr.x - Math.cos(pr.a) * 8 * sc, pr.y - Math.sin(pr.a) * 8 * sc, 13 * sc, pr.a, 1.9, rgba(0xfff1d6, 190), 1);
-    return true;
+  // Crescents are outlines, never fills: overlapping waves form a mesh of thin arcs, not a white mass. Size = hit radius pr.r.
+  const PT = new Float32Array(18);
+  // n points on the circle (cx, cy, R) spanning `span` rad around angle a, into PT; returns n.
+  const arcPts = (cx, cy, R, a, span, n) => { for (let i = 0; i < n; i++) { const b = a + (i / (n - 1) - 0.5) * span; PT[i * 2] = cx + Math.cos(b) * R; PT[i * 2 + 1] = cy + Math.sin(b) * R; } return n; };
+  // Crescent outline bulging along a: a 2 px outer arc in col and a 1 px white inner arc 3 px behind it (4 px thick at the middle, tapering to the tips).
+  const arcBlade = (B, x, y, a, R, col, al) => {
+    const c = Math.cos(a), s = Math.sin(a), cx = x - c * R * 0.5, cy = y - s * R * 0.5;
+    B.poly(PT, arcPts(cx, cy, R, a, 2.0, 9), 2, rgba(col, al));
+    B.poly(PT, arcPts(cx - c * 3, cy - s * 3, R - 1, a, 1.6, 7), 1, rgba(0xffffff, al * 0.55));
   };
-  // Gale crescent: a wide pale-green wind blade (two stacked slash frames) with a short pixel trail.
+  // Crescent (Cleave waves, Tempest blades): steel arc outline.
+  const crescent = (B, pr) => { arcBlade(B, pr.x, pr.y, pr.a, U.clamp(pr.r, 6, 34), STEEL, 230); return true; };
+  // Gale crescent: a pale-green arc outline, a fainter echo arc behind it and a short pixel trail.
   const galeProj = (B, pr, t) => {
-    const sc = U.clamp(pr.r / 9, 1.2, 3), c = Math.cos(pr.a), s = Math.sin(pr.a);
-    B.spr('fx.slash.arc', 3, pr.x - c * 6, pr.y - s * 6, o(0.5, sc, pr.a, true, WIND));
-    B.spr('fx.slash.arc', 2, pr.x, pr.y, o(1, sc, pr.a, true, WIND));
-    B.cone(pr.x - c * 10 * sc, pr.y - s * 10 * sc, 16 * sc, pr.a, 2.1, rgba(0xffffff, 200), 1);
+    const R = U.clamp(pr.r, 8, 40), c = Math.cos(pr.a), s = Math.sin(pr.a);
+    arcBlade(B, pr.x - c * 7, pr.y - s * 7, pr.a, R * 0.85, WIND, 70);
+    arcBlade(B, pr.x, pr.y, pr.a, R, WIND, 220);
     for (let i = 1; i <= 3; i++) B.rect(Math.round(pr.x - c * i * 9 + ((pr.id + i) % 3 - 1) * 4), Math.round(pr.y - s * i * 9), 2, 1, rgba(WIND, 200 - i * 50));
     return true;
   };
@@ -65,16 +69,16 @@
     }
     return true;
   };
-  // Cut: a wind line that grows behind its crescent (260 px/s), thin bright core over a pale band with drifting streaks, fading out over the last 0.4 s.
+  // Cut: a wind line that grows behind its crescent (260 px/s), thin core over a faint band (many overlap: kept dim) with drifting streaks, fading out over the last 0.4 s.
   const cutZone = (B, z, t) => {
     const k = life(z, 0.05, 0.4), c = Math.cos(z.a), s = Math.sin(z.a), L = Math.min(z.len, 14 + z.t * 260), ex = z.x + c * L, ey = z.y + s * L;
     if (k <= 0) return true;
-    B.line(z.x, z.y, ex, ey, Math.max(2, Math.round(z.w * 0.6)), rgba(WIND, 46 * k));
-    B.line(z.x, z.y, ex, ey, 1, rgba(0xffffff, 170 * k));
+    B.line(z.x, z.y, ex, ey, Math.max(2, Math.round(z.w * 0.6)), rgba(WIND, 24 * k));
+    B.line(z.x, z.y, ex, ey, 1, rgba(0xffffff, 100 * k));
     const n = Math.max(2, Math.round(L / 30));
     for (let i = 0; i < n; i++) {
       const f = ((H(z.id, i, 5) + t * 0.8) % 1), x = z.x + c * f * L, y = z.y + s * f * L, off = (H(z.id, i, 6) - 0.5) * z.w;
-      B.line(x - s * off, y + c * off, x - s * off + c * 6, y + c * off + s * 6, 1, rgba(WIND, 200 * k));
+      B.line(x - s * off, y + c * off, x - s * off + c * 6, y + c * off + s * 6, 1, rgba(WIND, 150 * k));
     }
     return true;
   };
@@ -109,6 +113,41 @@
   for (const id of ['cleave', 'whirlwind', 'colossus', 'gale', 'earthsplitter', 'tempest']) ED.WeaponFx[id] = { proj: knightProj, zone: knightZone };
   // render.js looks zones up as WeaponFx[wid] || SkillFx[wid] and projectiles as WeaponFx[wid]: skills that also shoot share one entry in both tables.
   ED.SkillFx.charge = ED.WeaponFx.charge = { zone: knightZone, proj: shieldProj };
+
+  // ---------------- swings ----------------
+  // Knight 'swing' events skip fx.js's filled slash cone (stacked strings at full reach washed the view): outline arcs at the reach (2 px steel) and 2/3 reach (1 px white),
+  // a ring pair for full spins, fading over SW_LIFE s of FX time; drawn in the FX layer after ED.FX.draw. The hero's swing pose still goes through ED.Actors.event.
+  const KW = { cleave: 1, whirlwind: 1, colossus: 1, gale: 1, earthsplitter: 1, tempest: 1 };
+  const SW_LIFE = 0.18, SWN = 24, SWS = [];
+  for (let i = 0; i < SWN; i++) SWS.push({ x: 0, y: 0, a: 0, r: 0, arc: 0, t0: -1e9 });
+  let swI = 0;
+  const SP = new Float32Array(66);
+  // Arc polyline at (x, y) radius r spanning arc around a: up to 33 points, one per ~10 px of arc.
+  const sweep = (B, x, y, r, a, arc, lw, col) => {
+    const n = U.clamp(Math.ceil(arc * r / 10) + 1, 4, 33);
+    for (let i = 0; i < n; i++) { const b = a + (i / (n - 1) - 0.5) * arc; SP[i * 2] = x + Math.cos(b) * r; SP[i * 2 + 1] = y + Math.sin(b) * r; }
+    B.poly(SP, n, lw, col);
+  };
+  const F = ED.FX;
+  if (F && F.handle && F.draw) {
+    const handle = F.handle, draw = F.draw;
+    F.handle = (ev, ctx) => {
+      if (ev.t !== 'swing' || !KW[ev.wid]) return handle(ev, ctx);
+      if (ED.Actors) ED.Actors.event(ev);
+      const s = SWS[swI = (swI + 1) % SWN];
+      s.x = ev.x; s.y = ev.y; s.a = ev.a; s.r = ev.r; s.arc = ev.arc; s.t0 = F.now;
+    };
+    F.draw = (B, t) => {
+      draw(B, t);
+      for (let i = 0; i < SWN; i++) {
+        const s = SWS[i], age = F.now - s.t0;
+        if (age < 0 || age >= SW_LIFE || s.r < 2) continue;
+        const k = 1 - age / SW_LIFE, r = s.r * (0.94 + 0.06 * (1 - k));
+        if (s.arc >= 6.2) { B.circ(s.x, s.y, r, rgba(STEEL, 210 * k), 2); B.circ(s.x, s.y, r * 0.66, rgba(0xffffff, 100 * k), 1); }
+        else { sweep(B, s.x, s.y, r, s.a, s.arc, 2, rgba(STEEL, 210 * k)); sweep(B, s.x, s.y, r * 0.66, s.a, s.arc * 0.85, 1, rgba(0xffffff, 100 * k)); }
+      }
+    };
+  }
 
   // ---------------- hero ----------------
   // Spin Forms: two steel glints orbit the knight at its blade's reach (whirlwind fastest), a dust ring for Earthsplitter.
