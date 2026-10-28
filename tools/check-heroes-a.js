@@ -96,7 +96,7 @@ for (const [cls, ids] of [['cleric', ['longbow', 'firebolt', 'boneshard', 'cleav
   ok(!err && ids.every(id => p.dealt[id] > 0), `${cls} carrying ${ids.join(', ')}: ${dealt.join(', ')}` + (err ? ': ' + err.stack : ''));
   ok(maxMin > 0, `${cls} carrying ${ids[2]}: the slain rise (peak ${maxMin} minions)`);
 }
-// Cleave aims at a foe inside the facing cone, holds while the only foe is behind, swings back at it once it has the back swing.
+// Cleave aims at a foe inside the facing cone, falls back to the nearest foe in reach (behind), holds with no foe in reach.
 {
   const w = new ED.World({ seed: 3, stage: 0, players: [{ pid: 'p1', cls: 'knight' }], cheats: { god: true } }), p = w.heroes[0];
   w.foes.length = 0; p.mdir = 0;
@@ -104,10 +104,10 @@ for (const [cls, ids] of [['cleric', ['longbow', 'firebolt', 'boneshard', 'cleav
   const put = (a) => { for (const e of w.foes) e.dead = true; w.spawnFoe(FODDER, p.x + Math.cos(a) * 40, p.y - 4 + Math.sin(a) * 40); };
   put(1.2); const a1 = fire();
   put(Math.PI); const a2 = fire();
-  ws.lvl = 3; const a3 = fire();
+  for (const e of w.foes) e.dead = true; w.spawnFoe(FODDER, p.x + 300, p.y); const a3 = fire();
   ok(a1 !== null && Math.abs(U.angDiff(a1, 1.2)) < 0.15, `knight: Cleave swings at a foe 69 deg off its facing (a ${a1 && a1.toFixed(2)})`);
-  ok(a2 === null, 'knight: Cleave holds while the only foe is behind');
-  ok(a3 !== null, 'knight: Cleave 3 swings at a foe behind');
+  ok(a2 !== null && Math.abs(U.angDiff(a2, Math.PI)) < 0.15, `knight: Cleave swings at the only foe, behind (a ${a2 && a2.toFixed(2)})`);
+  ok(a3 === null, 'knight: Cleave holds with no foe in reach');
 }
 // Shape flags reach the effective numbers.
 {

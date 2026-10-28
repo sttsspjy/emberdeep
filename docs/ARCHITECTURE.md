@@ -54,6 +54,7 @@ src/client/music.js         synthesized per-stage tracks (run / mid-boss / final
 src/client/input.js aim.js  keyboard/mouse (e.code), aim
 src/client/hud.js           in-run HUD (canvas)
 src/client/ui.js            DOM screens
+src/client/codex.js         Achievements (unlock progress, records) and Encyclopedia (heroes, weapons, passives, foes, bosses, stages) screens (ED.Codex)
 src/main.js                 app state machine + frame loop
 ```
 

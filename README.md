@@ -22,7 +22,7 @@ No build step, no backend, no install. It is a static site: open it from any web
 | Banish a card | Banish button, then click the card | |
 | Pause | Esc | Start |
 
-Weapons fire automatically. Facing weapons (Cleave, Twin Daggers, Bone Spear) swing or throw toward the nearest foe in front of you. Keys follow the physical key position, so they work on any keyboard layout.
+Weapons fire automatically. Facing weapons (Cleave, Twin Daggers, Bone Spear) swing or throw toward the nearest foe in front of you, or the nearest foe anywhere when none is in front. Keys follow the physical key position, so they work on any keyboard layout.
 
 Menus work with the keyboard too: arrows or WASD move between buttons, Enter presses, Esc goes back.
 
@@ -60,6 +60,8 @@ Knight, Ranger and Pyro are open from the start. Necro: survive 10 minutes. Cler
 ## Camp and saving
 
 Gold buys permanent ranks at Camp (damage, health, armor, regen, speed, pickup radius, XP, gold, luck, revivals, rerolls, skips, banishes). Refund all gives every coin back.
+
+**Achievements** (main menu) lists every unlock with your progress toward it, plus your records: runs, wins, lifetime kills, best time, kills and level, and each stage's best run. **Encyclopedia** (main menu) describes every hero, weapon (with its levels and evolution recipe), passive, foe, boss and stage, locked ones included.
 
 Progress saves in the browser automatically. Camp → **Show my code** gives a save code you can paste into **Load code** on another browser or device.
 

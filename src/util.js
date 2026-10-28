@@ -13,7 +13,7 @@
     SNAP_HZ: 20,
     INPUT_HZ: 30,
     HERO_R: 10,           // hero collision radius
-    DASH: { t: 0.22, dist: 110, cd: 3.5 }, // dash length (s), distance (px), cooldown (s); i-frames for its whole length
+    DASH: { t: 0.2, dist: 80, cd: 3.5 }, // dash length (s), distance (px), cooldown (s); i-frames for its whole length
     IFRAME: 0.5,          // invulnerability after a hit (s)
     RUN_LEN: 900,         // survival length (s): the final boss spawns here
     ENRAGE_T: 1020,       // the final boss enrages at this time (s)

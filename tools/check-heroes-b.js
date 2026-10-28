@@ -105,7 +105,7 @@ const cast = (w, p, slot, x, y) => { w.input(p.pid, slot ? { e: true, ax: x, ay:
   const w = world(['shade']), p = w.heroes[0], sk = p.skills[0];
   const x0 = p.x, f = w.spawnFoe('skelknight', p.x + 80, p.y);
   cast(w, p, 0, p.x + 160, p.y);
-  ok(p.x - x0 > 150 && f.hp < f.maxHp, `shadow step blinks ${Math.round(p.x - x0)} px and cuts the path`);
+  ok(p.x - x0 > 120 && f.hp < f.maxHp, `shadow step blinks ${Math.round(p.x - x0)} px and cuts the path`);
   step(w, 1);
   ok(f.hp < f.maxHp && sk.cd > 0, 'afterimage, cooldown running at L1');
   const w2 = world(['shade']), p2 = w2.heroes[0], sk2 = p2.skills[0]; sk2.lvl = 4;

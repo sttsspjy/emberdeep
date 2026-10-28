@@ -90,5 +90,17 @@ for (const id of BASES) {
   ok(b >= a * 1.15, `${ED.WEAPONS[id].evo} out-damages ${id} L8 on a dense crowd: ${Math.round(b)} vs ${Math.round(a)} (x${(b / a).toFixed(2)})`);
 }
 
+// 5. Facing aim fallback: with the only foe outside the facing cone, Bone Spear and Twin Daggers still throw at it.
+{
+  const FODDER = ED.FOE_IDS.find(id => !ED.FOES[id].boss && !ED.FOES[id].brute && !ED.FOES[id].range);
+  for (const [cls, wid] of [['knight', 'bonespear'], ['shade', 'daggers']]) {
+    const w = new ED.World({ seed: 5, stage: 0, players: [{ pid: 'p1', cls }], cheats: { god: true } }), p = w.heroes[0];
+    w.foes.length = 0; p.mdir = 0; p.weapons.length = 0;
+    const ws = w.addWeapon(p, wid);
+    w.spawnFoe(FODDER, p.x - 150, p.y - 6);
+    const n0 = w.projs.length, r = ED.WIMPL[wid].fire(w, p, ws, w.weaponS(p, 0)), pr = w.projs[n0];
+    ok(r && pr && Math.abs(U.angDiff(pr.a, Math.PI)) < 0.2, `${wid}: throws at the only foe, behind the facing (a ${pr && pr.a.toFixed(2)})`);
+  }
+}
 console.log(`check-wpn-b: ${fails ? fails + ' failure(s)' : 'all passed'} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exitCode = fails ? 1 : 0;

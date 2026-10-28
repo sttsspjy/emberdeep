@@ -10,6 +10,8 @@ Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with th
 - mode: Waves mode (round + shop) on the same core; rules not written yet.
 - audio: no per-attack boss cues.
 - co-op: no visual substitute for hit-stop; host-only motion shows ~0.1 s late on clients.
+- ui: gamepad does not drive DOM menus (Input.read pad nav unused outside runs).
+- codex: boss attack lines are a client copy (codex.js BOSS_TXT) of boss-*.js headers; bonearcher in no stage roster.
 
 ## In progress
 
@@ -17,6 +19,7 @@ Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with th
 - Foundation: core sim, solo playable.
 - 15 lanes merged; co-op runs start from the lobby UI.
 - Fix round 2026-10-28: facing aim cone + weapon kill callbacks; stronger evolutions (stormcrown, twinmoons, choir, barrage); density floor; stage 3 bosses weaver + wickeater; spawn-once zones (NET_VERSION 4); hit-flash throttle, zone fade + Canvas2D zone LOD, hero markers, co-op slot palettes; phase banner number. Density floor refill (0.1 × deficit per tick, max 40). Canvas2D render gate 8 ms (WebGL 4 ms).
+- Playtest prep 2026-10-28: facing aim falls back to the nearest foe in range (Cleave, Daggers, Shadow Fan, Bone Spear, Impaler; Bramble stays path-bound); dash 80 px, Shield Charge 110 (+40), Shadow Step 130 (+50); Achievements + Encyclopedia screens (src/client/codex.js).
 
 ## Known traps
 - Sim/data/heroes/weapons/save run in Node: no DOM, no Math.random/Date.now; use w.rng.
