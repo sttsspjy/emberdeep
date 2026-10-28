@@ -44,7 +44,7 @@ src/client/render.js        frame: camera, floor, layer order, telegraphs, prese
 src/client/post.js          WebGL post (bloom/grade/vignette); Post.gl() / Post.glCanvas() expose its context for gl.js
 src/client/actors.js        picks anim/frame/flip/tint for heroes, foes, bosses, minions → ED.Batch
 src/client/fx.js            juice: particles, death bursts, damage numbers, hit-stop, shake, flashes, rings, banners, offscreen arrows
-src/client/hfx-a.js hfx-b.js  hero weapon / Form / skill visuals; hfx-<cls>.js (7) per-hero path / Form visuals; hfx-a registers ED.ZoneActor.minion / boneknight; bfx-b wraps ED.FX.handle/update/draw/clear (calls the original first)
+src/client/hfx-a.js         shared hero zone looks; hfx-<cls>.js (7) per-hero weapon / Form / skill visuals (hfx-necro registers ED.ZoneActor minions); bfx-b wraps ED.FX.handle/update/draw/clear (calls the original first)
 src/client/bfx-a.js bfx-b.js bfx-c.js  boss bodies (ED.BossFx) and boss zones (ED.ZoneFx)
 src/client/audio.js         SFX: synth recipes pre-rendered per cue; ED.Audio.event(ev, myPid) (per-frame aggregation), flush(), play(name, vol, rate, pan), def(name, spec, recipe), setVolumes, preview
 src/client/music.js         synthesized per-stage tracks (run / mid-boss / final), intensity from alive count and boss state; ED.Music.update(view, dt)
@@ -57,7 +57,7 @@ src/main.js                 app state machine + frame loop
 
 Node load order (`tools/sim.js` FILES): util, data/foes, data/stages, data/passives, data/meta, save, sim/stats, sim/arena, sim/grid, sim/world, sim/combat, sim/foes, sim/ai, sim/spawner, sim/weapons, sim/skills, sim/progress, sim/bosses, sim/boss-{warden, spore, king, hollow, twins, cyclops, samurai, weaver, wickeater}, heroes/{knight, ranger, pyro, necro, cleric, shade, bell}. `require('./tools/sim.js').load()` resets `globalThis.ED`, runs FILES and returns ED.
 
-Browser order (index.html): vendor/peerjs.min.js, the sim list above, src/net.js, src/game.js, src/art/*.js, client atlas, pixfx, gl, render, post, actors, fx, hfx-a, hfx-b, hfx-{knight, ranger, pyro, necro, cleric, shade, bell}, bfx-a, bfx-b, bfx-c, audio, music, input, aim, hud, ui, src/main.js.
+Browser order (index.html): vendor/peerjs.min.js, the sim list above, src/net.js, src/game.js, src/art/*.js, client atlas, pixfx, gl, render, post, actors, fx, hfx-a, hfx-{knight, ranger, pyro, necro, cleric, shade, bell}, bfx-a, bfx-b, bfx-c, audio, music, input, aim, hud, ui, src/main.js.
 
 ## 3. Registries (how lanes plug in without editing core files)
 

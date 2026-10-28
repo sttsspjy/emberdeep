@@ -1,4 +1,4 @@
-// Necro visuals (ED.WeaponFx / ED.SkillFx / ED.ZoneActor hooks; loaded after hfx-b.js): bone shards and splinters, blight globs, minion ground rings and bodies
+// Necro visuals (ED.WeaponFx / ED.SkillFx / ED.ZoneActor hooks; loaded after hfx-a.js): bone shards and splinters, blight globs, minion ground rings and bodies
 // (skeleton, Bone Knight, archer, ghoul; y-sorted by render.js), Bone Knight slams, blight / plague pools, Corpse Blast detonations.
 // Everything derives from render-visible fields (zones: x, y, r, a, w, t, dur, k, id; projectiles: x, y, a, k, id) and view time; pixel art only (atlas sprites, thin rings).
 (function (ED) {

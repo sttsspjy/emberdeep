@@ -120,20 +120,20 @@ const cast = (w, p, slot, x, y) => { w.input(p.pid, { q: true, ax: x, ay: y }); 
   ring(w, p.x, p.y, 40, 150, 'skeleton', 50); ring(w, p.x, p.y, 40, 300, 'skeleton', 50);
   w.spawnPickup('xp5', p.x + 250, p.y, 5);
   cast(w, p, 0, p.x, p.y); step(w, 0.55);
-  let n = 0, s = 0; for (const e of w.foes) if (!e.dead && U.dist(p.x, p.y, e.x, e.y) < 330) { n++; if (e.stunT > 0) s++; }
+  let n = 0, s = 0; for (const e of w.foes) if (!e.dead && U.dist(p.x, p.y, e.x, e.y) < 330 && ED.inView(p, e.x, e.y, e.r)) { n++; if (e.stunT > 0) s++; }
   const g = w.pickups.find(x => x.k === 'xp5');
-  ok(n > 0 && s === n, `great peal stuns every foe within 330 px (${s}/${n})`);
+  ok(n > 0 && s === n, `great peal stuns every foe in view within 330 px (${s}/${n})`);
   ok(!g || g.pull === p.pid, 'great peal L4 pulls gems');
 }
 { // Toll / Cathedral bell bodies
   const w = world(['bell']), p = w.heroes[0], ws = p.weapons[0];
   step(w, 0.2);
   ok(w.zones.filter(z => z.k === 'tollb').length === 1, 'toll: one bell orbits');
-  w.setRanks(p, ws, 1, false); step(w, 0.2);
-  ok(w.zones.filter(z => z.k === 'tollb').length === 2, 'toll Carillon rank 1: two bells orbit');
-  w.setRanks(p, ws, 2, true); step(w, 0.5);
+  w.rankPath(p, ws, 2); w.rankPath(p, ws, 2); w.recalc(p, false); step(w, 0.2);
+  ok(w.zones.filter(z => z.k === 'tollb').length === 2, 'toll Pendulum rank 2: two bells orbit');
+  w.setRanks(p, ws, 3, true); step(w, 0.5);
   const nb = w.weaponS(p, 0).n | 0;
-  ok(ws.id === 'cathedral' && nb >= 3 && w.zones.filter(z => z.k === 'cathb').length === nb && !w.zones.some(z => z.k === 'tollb'), `cathedral: ${nb} bells (3 + Carillon), toll bells gone`);
+  ok(ws.id === 'cathedral' && nb === 5 && w.zones.filter(z => z.k === 'cathb').length === nb && !w.zones.some(z => z.k === 'tollb'), `cathedral: ${nb} bells (4 + Pendulum), toll bells gone`);
 }
 
 // 4. 60 s runs with level-ups and Q / E spam, determinism
