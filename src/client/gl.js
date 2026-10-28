@@ -1,16 +1,17 @@
 // ED.Batch: the renderer's only drawing API (ARCHITECTURE §10). Two backends implement the same calls; B.use('gl' | '2d') swaps them in place (callers keep calling ED.Batch.*):
-//  'gl': WebGL instanced quads on post.js's context into a world-size FBO texture (B.out) that Post.render composites. One program draws sprites, text and shapes (SDF rect / disc / ring /
-//        cone / soft ellipse); premultiplied blending lets normal and additive instances share a draw, so a frame is one draw per texture switch (atlas pages are packed into one texture).
+//  'gl': WebGL instanced quads on post.js's context into a world-size FBO texture (B.out) that Post.render composites. One program draws sprites, text and hard-edged pixel shapes (rect / disc /
+//        ring / cone / ellipse / line); premultiplied blending lets normal and additive instances share a draw, so a frame is one draw per texture switch (atlas pages are packed into one texture).
 //        Flash, tint and the 'grey' / 'frozen' variants are shader work; 'pal:*' / 'outline:*' variant sheets (ED.Atlas.variant), runtime pages (ED.Pix.define), font and small img() sources
 //        are uploaded once into a dynamic region of the atlas texture (shelf allocator, reset when full); large img() sources (floor chunks) get their own textures.
-//  '2d': Canvas2D through ED.Atlas.draw with crowd LOD (above LOD_CROWD foes on screen: no shadows, no partial flashes), zone LOD (zcirc / zflush) and view-rect culling.
+//  '2d': Canvas2D through ED.Atlas.draw with crowd LOD (above LOD_CROWD foes on screen: no shadows, no partial flashes), zone LOD (zcirc / zflush) and view-rect culling;
+//        shapes are scan-converted in JS into whole-px rects (pixel-identical to the WebGL shapes, no canvas paths with AA).
 // Coordinates are world px; begin() sets the camera. Colours: rgba = 0xRRGGBBAA (unsigned), tint / text colour = 0xRRGGBB. Callers y-sort; the batch draws in call order.
 // B.ctx: the 2D context to draw on directly (2d: the world buffer; gl: a transparent bridge canvas uploaded and composited in call order at the next Batch call; costs one upload per use).
 (function (ED) {
   'use strict';
   const LOD_CROWD = 250, PI = Math.PI;
   // zoneLoad / zoneN / zoneLite: own-team zone coverage (sum of disc areas / view area), count and the 2D zone LOD flag, set by render.js each frame for the zone hooks.
-  // zoneUnion: zcirc batches union paths (render.js sets it when the 2D canvas is software-rasterised).
+  // zoneUnion: zcirc batches per-colour unions drawn by zflush (render.js sets it when the 2D canvas is software-rasterised).
   const B = ED.Batch = { mode: '2d', crowd: 0, stats: { spr: 0, shapes: 0, draws: 0, inst: 0 }, out: { tex: null, w: 0, h: 0 }, glError: '', zoneLoad: 0, zoneN: 0, zoneLite: false, zoneUnion: false };
   let c = null, sc = 1, cx = 0, cy = 0, vx0 = 0, vy0 = 0, vx1 = 0, vy1 = 0;
   const css = new Map(), hex = new Map();
@@ -32,11 +33,11 @@
   const lwPx = (lw) => (lw > 0 ? Math.max(1, Math.round(lw)) : 0);
   let gx = 0, gy = 0, gr = 0, gw = 0; // circGeo out: centre, outer radius, ring width (0 = fill)
   function circGeo(x, y, r, lw) { let l = lwPx(lw); const d = Math.max(1, Math.round(2 * r + l)); if (2 * l >= d) l = 0; gr = d / 2; gw = l; gx = snap(x, d); gy = snap(y, d); }
-  let lx0 = 0, ly0 = 0, lc = 1, ls = 0, lhl = 0, lht = 0, lmx = 0, lmy = 0; // lineGeo out: snapped start, direction, half length (ends inclusive), half thickness, midpoint
+  let lc = 1, ls = 0, lhl = 0, lht = 0, lmx = 0, lmy = 0; // lineGeo out: direction, half length (ends inclusive), half thickness, midpoint
   function lineGeo(x0, y0, x1, y1, lw) {
     const l = Math.max(1, Math.round(lw)); x0 = snap(x0, l); y0 = snap(y0, l); x1 = snap(x1, l); y1 = snap(y1, l);
     const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx * dx + dy * dy);
-    lx0 = x0; ly0 = y0; lc = len > 0 ? dx / len : 1; ls = len > 0 ? dy / len : 0; lhl = len / 2 + 0.49; lmx = (x0 + x1) / 2; lmy = (y0 + y1) / 2;
+    lc = len > 0 ? dx / len : 1; ls = len > 0 ? dy / len : 0; lhl = len / 2 + 0.49; lmx = (x0 + x1) / 2; lmy = (y0 + y1) / 2;
     lht = l <= 3 ? l / 2 * Math.max(Math.abs(lc), Math.abs(ls)) : l / 2;
   }
   // Pie SDF (same as the WebGL shader): local frame along the cone axis (lx) / across it (ly), radius R, half-arc sin / cos sh, ch.
@@ -86,7 +87,7 @@
     if (add) c.globalCompositeOperation = 'source-over';
     return ok;
   };
-  // Shapes are scan-converted into whole-px rects of one path (axis-aligned integer rects rasterise without AA) and filled once, so a shape never blends with itself.
+  // Shapes are scan-converted into non-overlapping whole-px rects (integer rects rasterise without AA), so a shape never blends with itself.
   // Run merger: a row span equal to the slot's span on the row above extends that rect downwards; slot = span index within the row.
   const RN = 4, RUN = new Float64Array(RN * 4); // per slot: x0, x1 (inclusive px), y0, rows
   let rx0 = 0, rx1 = 0, ry0 = 0, ry1 = 0, pt = null; // clip rect in whole px (view rect); pt: rect target (the context or a Path2D being built)
@@ -145,7 +146,7 @@
     B.stats.shapes++; c.fillStyle = rgbaCss(rgba); c.fillRect(x0, y0, x1 - x0, y1 - y0);
   };
   // Disc / ring paths: circGeo's shape as a Path2D of whole-px rects with its box at (0, 0), cached by (D, width) and filled translated by whole px (one fill call per shape).
-  const PATH_MAX = 1024, PC = new Map(), PM = typeof DOMMatrix !== 'undefined' ? new DOMMatrix() : null;
+  const PATH_MAX = 1024, PC = new Map();
   function shapePath() {
     const d = gr * 2, key = d * 64 + Math.min(63, gw);
     let p = PC.get(key); if (p) return p;
@@ -216,7 +217,7 @@
     fillEnd();
   };
   // Zone LOD disc / ring (lw 0 = fill). With B.zoneUnion (a software-rasterised canvas): collected per colour (alpha in steps of 8) and width, then drawn by zflush()
-  // as one path per bucket, fills before rings, so overlapping ground discs cost their union once; otherwise drawn at once.
+  // once per bucket, fills before rings, so overlapping ground discs cost their union once; otherwise drawn at once.
   // Buckets and their coordinate arrays persist across frames (no per-frame allocation).
   const ZB = new Map();
   D.zcirc = (x, y, r, rgba, lw) => {
