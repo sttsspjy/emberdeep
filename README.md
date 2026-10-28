@@ -55,7 +55,7 @@ The host's browser runs the game, so the host needs the steadiest connection. Co
 
 ## Heroes
 
-Each hero has one weapon of their own (three paths, hidden Forms) and one skill on Q. Knight, Ranger and Pyro are open from the start. Necro: survive 10 minutes. Cleric: beat stage 1. Shade: kill 3000 foes in one run. Bellwarden: reach level 25 in one run. Stages 2 and 3 open when you beat the stage before.
+Each hero has one weapon of their own (three paths, hidden Forms) and one skill on Q, and each plays a different role: the Knight brawls inside the crowd, the Ranger shoots long piercing lines, the Pyro paints the ground with fire, the Necro grows an army, the Cleric heals and smites, the Shade stabs and crits up close, and the Bellwarden holds the horde back. Knight, Ranger and Pyro are open from the start. Necro: survive 10 minutes. Cleric: beat stage 1. Shade: kill 3000 foes in one run. Bellwarden: reach level 25 in one run. Stages 2 and 3 open when you beat the stage before.
 
 ## Camp and saving
 

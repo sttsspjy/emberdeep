@@ -46,15 +46,17 @@ Units: world px (hero sprite ≈ 16–24 px tall), seconds. HP numbers are integ
 
 ### Heroes
 
-| Hero | HP | Speed | Weapon (auto) | Q |
-|---|---|---|---|---|
-| Knight | 130 | 68 | **Cleave**: a wide sword arc toward the facing direction | Shield Charge: dash forward through foes, knock all aside |
-| Ranger | 90 | 80 | **Longbow**: arrows at the nearest foe | Volley: a rain of arrows on a cursor area for 2 s |
-| Pyro | 85 | 74 | **Fire Bolt**: a bolt that bursts into a small fire pool | Meteor: a big impact at the cursor after a 0.5 s fall, burning ground |
-| Necro | 95 | 70 | **Bone Shard**: piercing shards; foes its holder kills (any hero) have a 6% chance to rise as skeleton minions (max 8) | Corpse Blast: detonates every minion and fresh corpse within view |
-| Cleric | 110 | 70 | **Smite**: holy pillars strike random foes on screen | Sanctuary: a zone at the cursor that heals allies 5 HP/s and damages foes, 4 s |
-| Shade | 80 | 80 | **Twin Daggers**: fast thrown daggers in the facing direction, high crit | Shadow Step: blink to the cursor and leave a damaging afterimage |
-| Bell | 115 | 69 | **Toll**: a bell orbits the hero; each peal sends a shockwave ring that pushes foes back | Great Peal: a huge ring that stuns every foe on screen for 1.2 s |
+Full trees and numbers: `docs/heroes/<cls>.md` (canonical per hero).
+
+| Hero | Role | HP | Speed | Weapon (auto) | Q |
+|---|---|---|---|---|---|
+| Knight | Brawler | 130 | 68 | **Cleave**: a heavy sword arc toward the facing direction | Shield Charge: plows forward carrying up to 10 foes, slams them where it stops |
+| Ranger | Marksman | 90 | 80 | **Longbow**: piercing arrows, elites and bosses first | Volley: an arrow rain on the cursor area for 2 s |
+| Pyro | Area denial | 85 | 74 | **Fire Bolt**: a bolt that bursts into burning ground | Meteor: a 0.6 s fall, a heavy core hit and knockback (boss tool) |
+| Necro | Summoner | 95 | 70 | **Bone Shard**: piercing shards; keeps 3 skeletons raised from fresh corpses | Corpse Blast: detonates minions, fresh corpses and own blight pools in view |
+| Cleric | Support | 110 | 70 | **Smite**: holy pillars on foes within 230 px | Sanctuary: a zone that heals allies 5 HP/s and slows foes |
+| Shade | Assassin | 80 | 80 | **Twin Daggers**: rapid narrow stabs, crits | Shadow Step: blink to the cursor, leaving a damaging afterimage |
+| Bell | Controller | 115 | 69 | **Toll**: an orbiting bell peals rings that hold the horde at the rim | Great Peal: stuns every foe in view for 1.2 s |
 
 ## 4. Weapons
 
@@ -64,7 +66,19 @@ One weapon per hero: its own. It never changes hands and no other weapon joins t
 - **Forms**: a path at rank 3 unlocks that path's Form card (if it has one); 0–2 hidden **hybrid Forms** per hero need two specific paths at rank 3. A run takes **one Form**: taking it locks every other Form. A Form replaces the weapon's pattern; path ranks keep applying after it (the other paths can still reach rank 3). A Form then has 2 refine ranks.
 - **Hidden**: a Form card shows `???` and "An unknown form" until the profile has owned that Form; no recipe is shown anywhere.
 - **Numbers**: base damage 12–20 per hit, cooldown 0.6–1.6 s; cooldown floor 0.2 s; haste (passives + meta) caps at 50%.
-- **Placeholder trees** (phase 2 replaces them): path 0 → the Form, paths 1–2 without a Form, no hybrids. Cleave → Whirlwind (360° spins); Longbow → Hail of Arrows (arrows split on hit); Fire Bolt → Inferno (pools merge and spread); Bone Shard → Bone Storm (shards orbit then launch, minion cap 16); Smite → Wrath (pillars chain to neighbours); Twin Daggers → Shadow Fan (daggers return and crit twice); Toll → Cathedral (three bells peal in sequence).
+- **Trees** (paths → Form; hybrids need both paths at rank 3):
+
+| Hero | Path 0 → Form | Path 1 → Form | Path 2 → Form | Hybrids |
+|---|---|---|---|---|
+| Knight | Greatblade → Colossus Blade | Whirl → Whirlwind | Edge Wave → Rending Gale | Earthsplitter (0+1), Blade Tempest (1+2) |
+| Ranger | Spread → Hail of Arrows | Piercer → Ballista | Ricochet → Seeker | Gale Barrage (0+1), Rebound (1+2) |
+| Pyro | Blaze → Inferno | Mortar → Firestorm | Combustion → Wildfire | Pyre (Blaze+Combustion), Napalm (Blaze+Mortar) |
+| Necro | Legion → Bone Lord | Shards → Bone Storm | Plague → Plague Field | Lich (Legion+Plague), Ossuary (Legion+Shards) |
+| Cleric | Storm → Wrath | Censer → Halo | Lance → Judgment Ray | Consecration (Storm+Censer), Verdict (Storm+Lance) |
+| Shade | Flurry → Thousand Cuts | Lethality → Assassinate | Return → Shadow Fan | Death Lotus (0+1), Reaper's Return (1+2) |
+| Bell | Peal → Cathedral | Resonance → Glacier Toll | Pendulum → Carillon | Undertow (Peal+Pendulum), Windchime (Resonance+Pendulum) |
+
+- **Power yardstick** (`tools/dps.js`, minute-10 crowd, no passives): base 300–700 crowd dps; all 9 ranks 2,000–3,500; all ranks + Form 5,000–8,000 (single-target roles lower crowd, higher single). Forms of one hero sit within ±25% of each other.
 
 ## 5. Passives (12, levels 1–5)
 
