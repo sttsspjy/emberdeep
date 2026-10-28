@@ -14,7 +14,6 @@ Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with th
 - codex: boss attack lines are a client copy (codex.js BOSS_TXT) of boss-*.js headers.
 
 ## In progress
-- art: 28 Form icons (feat/form-icons).
 - fx: Form readability pass + per-Form shot harness (feat/form-visuals); Knight Whirlwind crescents whiten 1/3 of the view.
 
 ## Done
