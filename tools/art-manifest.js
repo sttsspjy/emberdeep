@@ -31,7 +31,7 @@
 // prop.<brazier (8f)|brazier.broken|chest.closed|chest.open|chest.empty>
 // deco.<bones.0..4|skull|moss.0..2|candle.0..3|urn.0..5|mushroom.0..3|root.0..1|puddle.0..3|crystal.0..2|shard.0..2|shell.0..2|seaweed.0..1|coral.0..1|pillarstub|chain>
 // pickup.<xp1|xp5|xp25|gold|food|magnet|bomb (2f)|chest|chest.open (3f)> run pickups; pickup.<xp|coin|heart|flask.red|flask.yellow> base sprites; cos.platino (DawnLike's Platino)
-// icon.w.<weaponId>      16x16 weapon icons (centre pivot): 12 general + evolutions, 7 signatures + evolutions (ids in art-src/wickdeep/icons.js W)
+// icon.w.<weaponId>      16x16 weapon icons (centre pivot): 12 general + evolutions, 7 signatures + evolutions, 28 hero Forms (4 per hero) (ids in art-src/wickdeep/icons.js W)
 // icon.p.<passiveId>     16x16 passive icons: might haste reach velocity duration multishot vigor plating mending swiftness magnet fortune
 // proj.<arrow|bolt|knife|fireball|hammer|shield|bone|trident|skull|web|thorn>      hero/foe projectile sprites (the other kinds are procedural orbs)
 // fx.<cut|cutx|cslash|slash.arc|slash.small|hit.spark|explosion|flam|ice.burst|thunder|circle.spark|circle.white|shield.gold|spark.magic|smoke|smoke.ring|ember|glint|flame>
