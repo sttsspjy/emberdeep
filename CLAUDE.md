@@ -34,7 +34,7 @@ src/client/              atlas · pixfx · gl (ED.Batch) · render · post · ac
 src/art/                 generated atlas pages (data URIs) from tools/art.js; never hand-edited
 art-src/                 vendored CC0/CC-BY source art + SOURCES.md (packs, licences, hashes)
 src/main.js              app state machine + frame loop
-tools/                   sim.js (Node loader) · check-*.js (headless checks, exit 1 on failure) · check-perf.js · browse.js (headless browser smoke, shots, crowd perf; never a visible window) · art.js + art-manifest.js
+tools/                   sim.js (Node loader) · check-*.js (headless checks, exit 1 on failure) · check-perf.js · browse.js (headless browser smoke, shots, crowd perf; never a visible window) · art.js + art-manifest.js · bot-brain.js + bot.js + bench.js (bot balance bench)
 docs/                    GAME-DESIGN.md · ARCHITECTURE.md · MASTERPLAN.md · MASTERPLAN-AGENT.md · HANDOFF-*.md
 ```
 
@@ -48,7 +48,7 @@ docs/                    GAME-DESIGN.md · ARCHITECTURE.md · MASTERPLAN.md · M
 6. **No per-tick allocation in hot paths** — foes, projectiles, gems, hit sources are pooled; arrays compact in place.
 7. **All hotkeys use `e.code`** — `e.key` breaks on non-Latin layouts.
 8. **Save code is positional** (HERO_IDS, SHOP order): append only; reordering or removing bumps the code version.
-9. **No bot balance batches** — numbers come from GAME-DESIGN.md and the user's playtests. Heavy CPU jobs run at idle priority on at most half the cores.
+9. **Minimized testing** — run only the checks and bot runs a change needs; balance numbers come from GAME-DESIGN.md, the user's playtests and `tools/bench.js` bot runs.
 10. **Low quality must stay fast** — WebGL is optional; the Canvas2D fallback must stay playable.
 11. **Rules and numbers follow [docs/GAME-DESIGN.md](docs/GAME-DESIGN.md)** — change the doc and the code together.
 12. **`src/art/` is generated** — edit `art-src/` or `tools/art-manifest.js`, run `node tools/art.js`, and keep `node tools/art.js --check` passing; attribution for CC-BY packs stays in the README Credits and the in-game Credits screen.

@@ -8,7 +8,7 @@
   ED.addHero({ id: 'knight', name: 'Knight', hp: 130, speed: 85, crit: 0.05, sig: 'cleave', skills: ['charge', 'bulwark'], icon: 'hero.knight.idle', col: '#c9d4e8', txt: 'Sword and shield. Holds the line.' });
 
   // ---------------- Cleave ----------------
-  // A sword arc toward the nearest foe in reach within ED.FACING_CONE of the movement direction (with back: of either direction); holds (retry 0.1 s) while none.
+  // A sword arc toward the nearest foe in reach within ED.FACING_CONE of the movement direction (with back: of either direction), else toward the nearest foe in reach; holds (retry 0.1 s) while none.
   // Custom numbers: arc (rad), back (also swings behind), wave (each swing flings that many piercing crescents). S.n swings: the first at once, the rest 0.15 s apart, alternating 0.3 rad either side.
   const WAVE = { look: 'crescent', speed: 250, dmg: 0, pierce: 999, r: 12, life: 0.5, knock: 0 };
   const wave = (w, p, ws, S, a, k) => {
@@ -40,6 +40,7 @@
       const R = S.range * S.area + 24 + ((S.wave | 0) ? 90 : 0);
       let a = w.coneFoe(p, p.mdir, R);
       if (a === null && S.back) { a = w.coneFoe(p, p.mdir + Math.PI, R); if (a !== null) a += Math.PI; }
+      if (a === null) a = w.nearAngle(p, R);
       if (a === null) return false;
       swings(w, p, ws, S, a);
       ws.st.left = (S.n | 0) - 1; ws.st.t = 0.15; ws.st.a = a;
@@ -88,9 +89,9 @@
   const shockFx = (w, p, wid, x, y, r) => w.zone({ team: 0, p, wid, x, y, r, dur: 0.4, look: 'shock' });
   ED.addSkill({
     id: 'charge', name: 'Shield Charge', icon: 'shield.kite', cd: 7, txt: 'Charge through the horde',
-    base: { dmg: 45, dist: 180, t: 0.32, stun: 0.7, width: 30, shards: 0 },
+    base: { dmg: 45, dist: 110, t: 0.24, stun: 0.7, width: 30, shards: 0 },
     levels: [
-      { mods: { dist: 70, width: 12 }, txt: '+70 distance, wider path' },
+      { mods: { dist: 40, width: 12 }, txt: '+40 distance, wider path' },
       { mods: { quake: true }, txt: 'Ends in a big shockwave' },
       { mods: { shards: 10 }, txt: 'Shockwave hurls 10 shields' },
     ],

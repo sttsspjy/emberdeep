@@ -12,11 +12,16 @@ North-star: a co-op browser survivors-like (solo or up to 4 friends, zero instal
 - [x] Co-op: host runs the game, friends join with a code, slot colours
 - [x] HUD, menus, results screen, unlocks
 - [x] Music and sound
+- [x] Facing weapons aim at the nearest foe when none is in front; shorter dash, Shield Charge and Shadow Step
+- [x] Achievements and Encyclopedia screens
+- [x] Bot benchmark: win rate, boss kill time and damage taken per stage × hero × weapon (`node tools/bench.js`), bot watch mode (`?bot=1`)
 
 ## Next
 - [ ] Your playtest: feel, balance, readability (all numbers untuned)
+- [ ] Weapon balance pass using the bench report (bot wins ~100% on stages 1–2 at full skill: game may be too easy)
 - [ ] Co-op test over a real internet connection
 - [ ] Canvas2D fallback: late-game frames still over budget
 - [ ] Art gaps: per-stage foe colours, Q/E skill icons, own art for The Twins, Rift Weaver, Wick-Eater
 - [ ] Waves mode (planned): second game mode; rules to be decided with you
-- [ ] Merge feat/survivors into main and publish
+- [x] Merged into main
+- [ ] Publish on GitHub Pages

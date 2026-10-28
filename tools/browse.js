@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it. Never opens a visible window.
-// Usage: node tools/browse.js [smoke|shots|crowdN|coop ...] [--scen=a,b] [--cls=knight,...] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1]
+// Usage: node tools/browse.js [smoke|shots|crowdN|coop|botwatch ...] [--scen=a,b] [--cls=knight,...] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1]
 //                             [--software] [--quality=high|low] [--gate] [--ff=480] [--timeout=600]
 //   smoke: for each hero (--cls, default all 7) a solo stage-1 run driven ~--seconds (10) s (circling, Q / E, dash, first card picked); fails on a page or console error,
 //          a stalled sim, no Q or E cast, or a signature weapon that dealt nothing.
@@ -13,6 +13,8 @@
 //          (about 1,000 kills/s); measures like crowdN plus own-zone count / coverage. --gate fails when Render.frame p95 > 4 ms on WebGL or > 8 ms on Canvas2D (GAME-DESIGN §13).
 //   coop: two pages of one browser context on ?net=local (BroadcastChannel transport): host + guest through the ED.Net lobby API (host, join, ready, start), then the real co-op
 //         run on both peers for --seconds (6) s: the guest's mirror shows 2 heroes and foes, snapshots <= 12 KB.
+//   botwatch: ?bot=1&speed=8&seed=--seed with the real tools/bot-brain.js; a knight solo run on stage 0 watched --seconds (20) s: fails on sim time < 3x real time (notes < 6x),
+//         a hero that never left a 40 px radius, no automatic level-up pick, no BOT tag, [ / ] not changing the speed, Esc not pausing, a missing file or a page / console error.
 // In-page debug API (injected only by this harness, absent in normal play; every call is a no-op without a solo / host run): ED.Debug.{fastForward(sec), give(id, lvl), evolve(wid?),
 //   spawnBoss(id?), setTime(sec), levelUp(n), chest(), win(), lose(), god(on), state()}.
 // Mechanism: a read-only http server on 127.0.0.1 (random port) serves the repo; Playwright resolves via require('playwright'), else the npx cache (%LOCALAPPDATA%\npm-cache\_npx).
@@ -24,7 +26,7 @@ const fs = require('fs'), os = require('os'), path = require('path'), http = req
 const FLAGS = { scen: 's', cls: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', json: 'b', help: 'b' };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
-const SCEN_RE = /^(smoke|shots|coop|crowd\d{1,4}|late[abc]?)$/;
+const SCEN_RE = /^(smoke|shots|coop|botwatch|crowd\d{1,4}|late[abc]?)$/;
 function parseArgs(argv) {
   const o = { scen: '', cls: HEROES.join(','), browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
   const pos = [];
@@ -40,7 +42,7 @@ function parseArgs(argv) {
   }
   o.scens = (o.scen ? o.scen.split(',') : []).concat(pos).map(s => s.trim()).filter(Boolean);
   if (!o.scens.length) o.scens = ['smoke'];
-  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, crowdN, late[a|b|c], coop)');
+  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, crowdN, late[a|b|c], coop, botwatch)');
   if (!['chromium', 'firefox'].includes(o.browser)) throw new Fail('--browser is chromium or firefox');
   const vp = /^(\d{3,5})x(\d{3,5})$/.exec(o.viewport);
   if (!vp) throw new Fail('--viewport is WxH');
@@ -599,6 +601,66 @@ async function scenCoop() {
   return res;
 }
 
+// Bot watch mode: the page runs the bot (ED.Bot) at speed 8; sim time against real time, movement, automatic picks, speed keys and pause.
+async function scenBotwatch() {
+  const o = S.opt, res = newResult('botwatch'), secs = o.seconds || 20;
+  const { ctx, page, errors, info } = await openPage('?bot=1&speed=8&seed=' + (o.seed >>> 0));
+  const need = (cond, note) => { if (!cond) fail(res, note); };
+  const st = () => page.evaluate(() => {
+    const E = window.ED, A = E.App, G = E.Game, w = G.w, me = w && w.hero(G.myPid), B = A.bot;
+    return { app: A.state, real: performance.now() / 1000, time: w ? w.time : -1, x: me ? me.x : 0, y: me ? me.y : 0, level: w ? w.level : 0, kills: w ? w.kills : 0, hp: me ? Math.round(me.hp) : 0,
+      picks: window.__BR.mine.pick || 0, botPicks: B ? B.picks : -1, speed: B ? B.speed : 0, rate: B ? +B.rate.toFixed(2) : 0, tag: (G.view && G.view.botTag) || '', paused: !!G.paused, offerShown: !document.getElementById('ov-offer').hidden };
+  });
+  try {
+    res.notes.push(bootNote(info));
+    await call(page, 'settings', o.quality);
+    const loaded = await page.waitForFunction(() => !!window.ED.Bot || !!(window.ED.App.bot && window.ED.App.bot.err), null, { timeout: 5000 }).then(() => page.evaluate(() => !!window.ED.Bot), () => false);
+    if (!loaded) { fail(res, 'ED.Bot not available (tools/bot-brain.js missing or broken): ' + await page.evaluate(() => (window.ED.App.bot && window.ED.App.bot.err) || 'timeout')); return res; }
+    const started = await page.evaluate(() => { const A = window.ED.App; if (!A.hasProfile) A.createProfile('Bot'); A.startSolo({ cls: 'knight', stage: 0 }); return A.state === 'run' && !!window.ED.Game.bot; });
+    need(started, 'bot run did not start: ' + await page.evaluate(() => document.getElementById('title-msg').textContent));
+    if (!started) return res;
+    const a = await st();
+    let b = a, maxD = 0, offerSeen = 0;
+    const t0 = Date.now();
+    while (Date.now() - t0 < secs * 1000) {
+      await wait(500);
+      const s = await st();
+      if (s.app !== 'run') break;
+      b = s; maxD = Math.max(maxD, Math.hypot(s.x - a.x, s.y - a.y)); if (s.offerShown) offerSeen++;
+    }
+    const real = b.real - a.real, sim = b.time - a.time, ratio = real > 0 ? sim / real : 0;
+    res.rows.push({ real: +real.toFixed(1), sim: +sim.toFixed(1), ratio: +ratio.toFixed(2), rate: b.rate, tag: b.tag, maxD: Math.round(maxD), level: b.level, kills: b.kills, hp: b.hp, picks: b.picks, botPicks: b.botPicks, ended: b.app !== 'run' });
+    const now = await st();
+    if (b.app !== 'run' || now.app !== 'run') res.notes.push('run ended before ' + secs + ' s (state ' + now.app + '); measured over the live part');
+    need(real >= 3, 'run was live for only ' + real.toFixed(1) + ' s');
+    need(ratio > 3, `sim ran ${ratio.toFixed(2)}x real time (need > 3x)`);
+    if (ratio <= 6) res.notes.push(`note: sim ran ${ratio.toFixed(2)}x real time (speed 8, below 6x on this machine)`);
+    need(maxD > 40, 'hero never moved more than ' + Math.round(maxD) + ' px from the start');
+    need(b.picks >= 1, 'no level-up card was picked automatically');
+    need(b.botPicks === b.picks, `HUD pick counter ${b.botPicks} != pick events ${b.picks}`);
+    need(/^BOT \u00d78/.test(b.tag), 'HUD tag is "' + b.tag + '"');
+    need(offerSeen === 0, 'offer overlay was visible in ' + offerSeen + ' samples');
+    await shoot(page, res, 'botwatch');
+    if ((await st()).app === 'run') {
+      await page.keyboard.press('BracketRight'); await frames(page, 3);
+      const up = await st();
+      await page.keyboard.press('BracketLeft'); await frames(page, 3); await page.keyboard.press('BracketLeft'); await frames(page, 3);
+      const down = await st();
+      need(up.speed === 16 && down.speed === 4, `speed keys: ] -> ${up.speed} (want 16), [ [ -> ${down.speed} (want 4)`);
+      await page.keyboard.press('Escape'); await frames(page, 3);
+      const p0 = await st(); await wait(500); const p1 = await st();
+      need(p0.paused && p1.time === p0.time, `Esc: paused ${p0.paused}, sim ${p0.time.toFixed(2)} -> ${p1.time.toFixed(2)} s`);
+      await page.keyboard.press('Escape'); await frames(page, 3); await wait(300);
+      const p2 = await st();
+      need(!p2.paused && p2.time > p1.time, 'Esc again did not resume');
+      await call(page, 'stop'); await wait(300);
+      need((await st()).app === 'results', 'quit did not reach the results screen');
+    }
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 // ---------------- output ----------------
 const tri = (s) => (s ? [s.p50, s.p95, s.max].join('/') : '-');
 function table(results) {
@@ -610,7 +672,7 @@ function table(results) {
     for (const w of r.rows) {
       if (r.name === 'smoke') out.push(`  ${w.cls.padEnd(7)} t ${w.time}s foes ${w.foes} kills ${w.kills} lvl ${w.level} hp ${w.hp} Q ${w.q} E ${w.e} sig dmg ${w.sigDealt} weapons ${w.weapons.join(',')}`);
       else if (r.name === 'shots') out.push(`  ${w.cls.padEnd(7)} ff ${(w.ffMs / 1000).toFixed(1)} s wall -> t ${w.time}s lvl ${w.level} foes ${w.foes} projs ${w.projs} kills ${w.kills} weapons ${w.weapons.join(',')} passives ${w.passives.join(',')}`);
-      else if (r.name === 'coop') out.push('  ' + Object.entries(w).map(([k, v]) => k + ' ' + v).join(', '));
+      else if (r.name === 'coop' || r.name === 'botwatch') out.push('  ' + Object.entries(w).map(([k, v]) => k + ' ' + v).join(', '));
       else out.push(`  ${w.quality}: foes ${w.foes}, frames ${w.frames}, frame ms p50/p95/max ${tri(w.frame)}, work ms ${tri(w.work)}, sim ms/tick ${tri(w.tick)}, render ms ${tri(w.render)}, batch ${w.batch}, post ${w.usePost ? 'on' : 'off'}${w.soft ? ' (software)' : ''}, canvas ${w.canvas.join('x')}`);
     }
     if (r.name !== 'shots') for (const f of r.shots) out.push('  shot ' + f);
@@ -634,7 +696,7 @@ async function main() {
     for (const sc of S.opt.scens) {
       const t0 = Date.now();
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'coop' ? await scenCoop() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'coop' ? await scenCoop() : sc === 'botwatch' ? await scenBotwatch() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
       catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); fail(r, 'harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); }
       r.wallMs = Date.now() - t0;
       if (S.server.missing.size) { r.missing = [...S.server.missing]; fail(r, 'missing files: ' + r.missing.join(', ')); S.server.missing.clear(); }

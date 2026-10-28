@@ -28,6 +28,7 @@
         <button class="btn btn-primary btn-big" id="btn-play" data-focus>Play solo</button>
         <div class="menu-pair"><button class="btn" id="btn-host">Host co-op</button><button class="btn" id="btn-join">Join co-op</button></div>
         <button class="btn" id="btn-camp">Camp shop</button>
+        <div class="menu-pair"><button class="btn" id="btn-achieve">Achievements</button><button class="btn" id="btn-codex">Encyclopedia</button></div>
         <div class="menu-pair"><button class="btn" id="btn-settings">Settings</button><button class="btn" id="btn-credits">Credits</button></div>
       </nav>
       <div class="msg" id="title-msg" role="status"></div>
@@ -63,6 +64,26 @@
       <div class="row"><button class="btn btn-sm" id="btn-code-copy">Show my code</button><button class="btn btn-sm" id="btn-code-load">Load code</button></div>
       <div class="msg" id="code-msg" role="status"></div>
     </div>
+  </section>
+
+  <section id="scr-achieve" class="screen tall" hidden>
+    <h2>Achievements</h2>
+    <p class="hint" id="ach-count"></p>
+    <div class="ach-body" id="ach-body" tabindex="0" data-scroll aria-label="Unlocks and records">
+      <div class="ach-list" id="ach-list" tabindex="0" data-scroll aria-label="Unlocks"></div>
+      <div class="ach-rec plate" id="ach-rec" tabindex="0" data-scroll aria-label="Records"></div>
+    </div>
+    <div class="row"><button class="btn btn-primary" id="btn-ach-back" data-back data-focus>Back</button></div>
+  </section>
+
+  <section id="scr-codex" class="screen tall" hidden>
+    <h2>Encyclopedia</h2>
+    <div class="cx-tabs" id="cx-tabs" role="tablist" aria-label="Encyclopedia sections"></div>
+    <div class="cx-body" id="cx-body" tabindex="0" data-scroll aria-label="Encyclopedia">
+      <div class="cx-list" id="cx-list" role="listbox" aria-label="Entries"></div>
+      <div class="cx-detail plate" id="cx-detail" tabindex="0" data-scroll aria-live="polite"></div>
+    </div>
+    <div class="row"><button class="btn" id="btn-codex-back" data-back>Back</button></div>
   </section>
 
   <section id="scr-join" class="screen" hidden>
@@ -208,6 +229,7 @@
 <script src="src/client/aim.js" defer></script>
 <script src="src/client/hud.js" defer></script>
 <script src="src/client/ui.js" defer></script>
+<script src="src/client/codex.js" defer></script>
 <script src="src/main.js" defer></script>
 </body>
 </html>

@@ -23,15 +23,18 @@
     pr.vx = Math.cos(a) * pr.sp; pr.vy = Math.sin(a) * pr.sp; pr.a = a;
     pr.pierce++; pr.st = BOUNCE[b - 1]; pr.life = Math.max(pr.life, 0.45);
   }
-  // Facing volleys bend toward the nearest foe within AIM_CONE rad of their direction (w.facingAim).
+  // Facing volleys bend toward the nearest foe within AIM_CONE rad of their direction, else toward the nearest foe in range (w.facingAim).
   const AIM_CONE = 0.9;
-  // S.n daggers along the facing direction, bent toward a foe inside the 0.9 rad aim cone (staggered 5 px, spread 0.06 rad); back: as many behind. Fires only when a foe is within range.
+  // S.n daggers along the facing direction, bent toward a foe inside the 0.9 rad aim cone, else the nearest foe (staggered 5 px, spread 0.06 rad);
+  // back: as many opposite the front volley, bent toward a foe inside the rear aim cone. Fires only when a foe is within range.
   function volley(w, p, ws, S) {
     if (!w.nearestFoe(p.x, p.y, S.range)) return false;
     const n = Math.max(1, S.n | 0), b = BOUNCE[Math.min(5, S.bounce | 0)], opt = OPT;
     opt.st = b; opt.onHit = b.b > 0 ? ricochet : null;
+    const af = w.facingAim(p, p.mdir, S.range, AIM_CONE);
     for (let side = 0; side < (S.back ? 2 : 1); side++) {
-      const a0 = w.facingAim(p, p.mdir + side * Math.PI, S.range, AIM_CONE);
+      let a0 = af;
+      if (side) { a0 = w.coneFoe(p, af + Math.PI, S.range, AIM_CONE); if (a0 === null) a0 = af + Math.PI; }
       for (let i = 0; i < n; i++) { const o = i - (n - 1) / 2; w.shoot(p, ws.id, p.x - Math.sin(a0) * o * 5, p.y - 6 + Math.cos(a0) * o * 5, a0 + o * 0.06, S, opt); }
     }
     return true;
@@ -52,7 +55,7 @@
     pair: 'velocity', evo: 'shadowfan',
   }, { fire: volley });
 
-  // Shadow Fan: S.n boomerang daggers in a fan toward the facing direction and a mirrored fan behind; they pierce everything and always crit on the way back.
+  // Shadow Fan: S.n boomerang daggers in a fan toward the facing aim (w.facingAim) and a mirrored fan behind; they pierce everything and always crit on the way back.
   function backCrit(w, pr) { if (pr.back) pr.critC = 1; }
   const FAN_OPT = { look: 'sknife', pierce: 999, ret: true, tick: backCrit };
   ED.addWeapon({
@@ -63,8 +66,9 @@
     fire(w, p, ws, S) {
       if (!w.nearestFoe(p.x, p.y, S.range * 0.6)) return false;
       const n = Math.max(1, S.n | 0), spread = Math.min(0.28, 1.6 / n);
+      const af = w.facingAim(p, p.mdir, S.range);
       for (let side = 0; side < 2; side++) {
-        const a0 = p.mdir + side * Math.PI;
+        const a0 = af + side * Math.PI;
         for (let i = 0; i < n; i++) w.shoot(p, ws.id, p.x, p.y - 6, a0 + (i - (n - 1) / 2) * spread, S, FAN_OPT);
       }
       return true;
@@ -77,10 +81,10 @@
   // recast: the first cast opens a 2.5 s window in which Q blinks again at no cost (hook tick; the cooldown resumes if unused).
   ED.addSkill({
     id: 'step', name: 'Shadow Step', icon: 'fx.smoke', cd: 7, txt: 'Blink, cut the path, leave a decoy',
-    base: { dmg: 45, r: 64, dur: 0.8, dist: 180, w: 30 },
+    base: { dmg: 45, r: 64, dur: 0.8, dist: 130, w: 30 },
     levels: [
       { mods: { knives: true }, txt: 'Afterimage throws knives' },
-      { mods: { dist: 80, dmg: 0.4 }, txt: '+80 blink range, +40% damage' },
+      { mods: { dist: 50, dmg: 0.4 }, txt: '+50 blink range, +40% damage' },
       { mods: { recast: true }, txt: 'Recast once within 2.5 s' },
     ],
   }, (w, p, x, y, N) => {

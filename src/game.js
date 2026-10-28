@@ -4,6 +4,7 @@
 // the newest input), snapshots go out at SNAP_HZ, offers as JSON when they change. Client: inputs go out at INPUT_HZ; the own hero (movement + dash) is predicted per local
 // tick and reconciled on every snapshot (server state at the acked input, then the newer inputs replayed; the visible jump blends out); everything else is interpolated
 // INTERP behind the newest snapshot, and snapshot events are released at that render time.
+// Bot watch (solo, set by main.js): ED.Game.bot.think(w, hero) is the local hero's input frame once per sim tick; sfxLite: only SFX_KEEP events reach the audio.
 (function (ED) {
   'use strict';
   const C = ED.CONST, U = ED.U, STEP = C.TICK, MAX_STEPS = 8;
@@ -18,12 +19,13 @@
   const BLEND = 12;     // client: correction offset decay (1/s)
   const NET_EV_CAP = 5000;
 
-  const blankView = () => ({ me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: null, stage: 0, seed: 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, bossBar: null, events: [] });
+  const blankView = () => ({ me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: null, stage: 0, seed: 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, bossBar: null, events: [], botTag: '', botPick: '' });
+  const SFX_KEEP = { boss: 1, warn: 1, evolve: 1, level: 1, down: 1, dead: 1, revive: 1, end: 1 }; // events still sounded with sfxLite
 
   function Session() { this.onEnd = null; this.onEvent = null; this.clear(); }
   const S = Session.prototype;
   S.clear = function () {
-    this.w = null; this.mode = 'off'; this.myPid = 'p1'; this.view = null; this.paused = false; this.acc = 0; this.ended = false;
+    this.w = null; this.bot = null; this.sfxLite = false; this.mode = 'off'; this.myPid = 'p1'; this.view = null; this.paused = false; this.acc = 0; this.ended = false;
     this.net = null; this.mir = null; this.rem = null; this.netEv = []; this.pidIdx = {}; this.snapTick = 0;
     if (this.bg) { clearInterval(this.bg); this.bg = 0; }
   };
@@ -68,16 +70,19 @@
   S.skip = function () { if (this.mode === 'client') this.L.ed |= 16; else if (this.w) this.w.input(this.myPid, { skip: true }); };
   S.banish = function (i) { if (this.mode === 'client') this.clientBanish(i + 1); else if (this.w) this.w.input(this.myPid, { banish: i + 1 }); };
 
-  // Advances by real time dt (fixed steps, at most cap) and routes events. Returns the number of steps run.
-  S.update = function (dt, cap) {
+  // Advances by real time dt (fixed steps, at most cap) and routes events. ms: work budget per call; past it the remaining time is dropped. Returns the number of steps run.
+  S.update = function (dt, cap, ms) {
     if (this.mode === 'client') return this.clientUpdate(dt);
     const w = this.w; if (!w || this.paused) return 0;
     this.acc = Math.min(this.acc + dt, STEP * (cap || MAX_STEPS));
+    const bot = this.bot, t0 = ms ? performance.now() : 0;
     let n = 0;
     while (this.acc >= STEP) {
       this.acc -= STEP;
       if (this.rem) for (const rc of this.rem.values()) this.feed(rc);
+      if (bot) { const me = w.hero(this.myPid); if (me) w.input(this.myPid, bot.think(w, me)); }
       w.update(STEP); n++; this.drain();
+      if (ms && performance.now() - t0 > ms) { this.acc = 0; break; }
     }
     if (this.rem && this.rem.size && w.tick - this.snapTick >= SNAP_TICKS) { this.snapTick = w.tick; this.sendSnaps(); }
     this.syncView();
@@ -100,7 +105,7 @@
   };
   S.route = function (ev, ctx) {
     if (ED.FX) ED.FX.handle(ev, ctx);
-    sound(ev, this.myPid);
+    if (!this.sfxLite || SFX_KEEP[ev.t]) sound(ev, this.myPid);
     if (this.onEvent) this.onEvent(ev);
   };
   // Leaves the run: solo / host end it as lost (a host ends it for everyone); a client leaves the party and gets its own results.

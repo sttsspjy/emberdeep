@@ -1,7 +1,7 @@
 // In-run HUD on the screen canvas (device px). Sizes are CSS px at 1280x720 scaled by k = dpr x clamp(viewport / 1280x720, 1, 2), so text never drops below its CSS size (numbers >= 16 px).
 // Draws: XP bar across the top with the level, timer, kills / gold, 6 weapon + 6 passive slots with levels (evolved = gold frame, evolution-ready = pulsing),
 // HP bar, Q / E cooldown dials and the dash dial with charge pips, boss bar, teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
-// low-HP edge glow and banners. No per-frame allocation: strings are cached by value. Font 'Pixel Operator'.
+// low-HP edge glow, banners and the bot-watch tag (view.botTag / view.botPick, bottom-left). No per-frame allocation: strings are cached by value. Font 'Pixel Operator'.
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = Math.PI * 2;
@@ -200,6 +200,10 @@
       txt(cs('mbl', Math.ceil(me.bleed), fmtBleed), W / 2, yy, (now * 3 | 0) % 2 ? '#ff6a5a' : '#ffb0a0', 32, 'center');
       txt('A teammate can revive you', W / 2, yy + R(38), '#f0e0c8', 18, 'center');
       bar(Math.round(W / 2 - R(110)), yy + R(62), R(220), R(10), me.revive, '#7fe39a');
+    }
+    if (view.botTag) {
+      txt(view.botTag, x0, Hh - R(12), '#7fe3ff', 24, 'left', 'bottom');
+      if (view.botPick) txt(view.botPick, x0, Hh - R(42), '#f0e0c8', 18, 'left', 'bottom');
     }
     banner(dt);
   };

@@ -14,7 +14,7 @@
   };
 
   // ---------------- Bone Spear / Impaler ----------------
-  // Spears fly toward the nearest foe within ED.FACING_CONE of the movement direction (else along it), S.n in a fan 0.16 rad apart; back / cross add the rear / side directions. shards: each spear bursts into 3 bone shards at its end.
+  // Spears fly toward the nearest foe within ED.FACING_CONE of the movement direction (else the nearest foe in range), S.n in a fan 0.16 rad apart; back / cross add the rear / side directions. shards: each spear bursts into 3 bone shards at its end.
   const SP = { look: 'spear', r: 5, onEnd: null };
   const SHARD = { look: 'bone', dmg: 0, pierce: 1, speed: 300, life: 0.35, r: 3, knock: 30 };
   const shardEnd = (w, pr) => {

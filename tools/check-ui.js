@@ -59,7 +59,7 @@ async function main() {
     console.log('title');
     const page = await open('?net=local');
     await shot(page, 'title');
-    for (const id of ['btn-play', 'btn-host', 'btn-join', 'btn-camp', 'btn-settings', 'btn-credits']) check(await vis(page, id), id + ' visible');
+    for (const id of ['btn-play', 'btn-host', 'btn-join', 'btn-camp', 'btn-achieve', 'btn-codex', 'btn-settings', 'btn-credits']) check(await vis(page, id), id + ' visible');
     check(await active(page) === 'btn-play', 'Play focused on the title');
     await page.keyboard.press('ArrowDown');
     { const a = await active(page); check(a === 'btn-host', 'ArrowDown moves to Host (' + a + ')'); }
@@ -113,6 +113,61 @@ async function main() {
     check(await minFont(page, '.shop-row span, .shop-row button') >= 20, 'camp text >= 20 px');
     await page.keyboard.press('Escape');
     check(await vis(page, 'scr-title'), 'Esc leaves the camp');
+
+    console.log('achievements');
+    await page.evaluate(() => { const p = ED.App.profile; p.stats.bestTime = 432; p.stats.bestKills = 1840; p.stats.bestLevel = 31; p.played = ['knight']; ED.App.persist(); });
+    await page.locator('#btn-achieve').click();
+    check(await vis(page, 'scr-achieve'), 'Achievements opens');
+    const nAch = await page.evaluate(() => { const U0 = ED.UNLOCKS; return ED.HERO_IDS.filter(c => !U0.heroes[c].start).length + Object.keys(U0.stages).filter(i => !U0.stages[i].start).length + (U0.sigAfterRun ? ED.HERO_IDS.length : 0); });
+    check(await page.locator('.ach-row').count() === nAch, nAch + ' unlock rows');
+    check(await page.locator('.ach-row.done').count() === 1, 'one done (Cleave after a Knight run)');
+    const at = await page.locator('#ach-list').innerText();
+    check(/7:12 \/ 10:00/.test(at) && /1840 \/ 3000/.test(at) && /Level 31 \/ 40/.test(at), 'unlock progress texts');
+    check(/1 \/ \d+ unlocked/.test(await page.locator('#ach-count').innerText()), 'header counts unlocks');
+    check(/Lifetime kills/.test(await page.locator('#ach-rec').innerText()) && await page.locator('.rec-stage').count() === 3, 'records and 3 stage bests');
+    check(await minFont(page, '#scr-achieve span, #scr-achieve b') >= 20, 'achievements text >= 20 px');
+    check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.getElementById('scr-achieve').scrollWidth <= innerWidth), 'achievements: no horizontal scroll');
+    await shot(page, 'achieve');
+    await page.keyboard.press('Escape');
+    check(await vis(page, 'scr-title'), 'Esc leaves achievements');
+
+    console.log('encyclopedia');
+    await page.locator('#btn-codex').click();
+    check(await vis(page, 'scr-codex'), 'Encyclopedia opens');
+    check(await page.locator('#cx-tabs button').count() === 6, '6 tabs');
+    check(await page.evaluate(() => document.activeElement.dataset.tab) === 'heroes', 'focus starts on the Heroes tab');
+    await page.keyboard.press('ArrowDown');
+    if (await active(page) === 'cx-detail') await page.keyboard.press('ArrowLeft'); // a long detail pane sits under the tab
+    check(await page.evaluate(() => document.activeElement.dataset.key) === 'knight', 'arrows reach the first list entry');
+    await page.keyboard.press('ArrowDown');
+    check(/Volley/.test(await page.locator('#cx-detail').innerText()), 'keyboard focus selects (Ranger: Volley)');
+    await page.locator('.cx-item[data-key="necro"]').click();
+    check(/Locked: Survive 10 minutes/.test(await page.locator('#cx-detail').innerText()) && /Lv 4/.test(await page.locator('#cx-detail').innerText()), 'locked hero shows unlock line and skill levels');
+    check(await minFont(page, '#scr-codex span, #scr-codex b, #scr-codex button') >= 20, 'encyclopedia text >= 20 px');
+    await shot(page, 'codex-hero');
+    const tabs = { weapons: /Evolution/, passives: /Evolves/, foes: /Appears in/, bosses: /Attacks/, stages: /Bosses/ };
+    for (const t in tabs) {
+      await page.locator('#cx-tabs [data-tab="' + t + '"]').click();
+      const n = await page.locator('.cx-item').count(), txt = await page.locator('#cx-detail').innerText();
+      check(n > 0 && tabs[t].test(txt), t + ': ' + n + ' entries, detail filled');
+      check(await page.evaluate(() => document.getElementById('scr-codex').scrollWidth <= innerWidth), t + ': no horizontal scroll');
+      await shot(page, 'codex-' + t);
+    }
+    check(await page.locator('#cx-tabs [data-tab="weapons"]').count() === 1, 'weapons tab present');
+    await page.locator('#cx-tabs [data-tab="weapons"]').click();
+    check(await page.locator('.cx-item').count() === await page.evaluate(() => ED.WEAPON_IDS.length), 'every weapon listed');
+    await page.setViewportSize({ width: 480, height: 800 });
+    await wait(200);
+    check(await page.evaluate(() => document.getElementById('scr-codex').scrollWidth <= innerWidth), 'encyclopedia at 480 px: no horizontal scroll');
+    await shot(page, 'codex-narrow');
+    await page.keyboard.press('Escape');
+    await page.locator('#btn-achieve').click();
+    check(await page.evaluate(() => document.getElementById('scr-achieve').scrollWidth <= innerWidth), 'achievements at 480 px: no horizontal scroll');
+    await shot(page, 'achieve-narrow');
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: +VP[1], height: +VP[2] });
+    check(await vis(page, 'scr-title'), 'Esc returns to the title');
+    await page.evaluate(() => { const p = ED.App.profile; p.stats.bestTime = 0; p.stats.bestKills = 0; p.stats.bestLevel = 0; p.played = []; ED.App.persist(); });
 
     console.log('settings and credits');
     await page.locator('#btn-settings').click();

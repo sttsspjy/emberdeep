@@ -1,13 +1,15 @@
-// DOM screens (client only): title, hero select, stage select, Camp shop (+ save code), join, lobby, results; overlays: level-up cards, chest popup, pause, settings, credits.
-// ED.UI.show(name) shows one screen ('title' | 'hero' | 'stage' | 'camp' | 'join' | 'lobby' | 'results' | 'none'); overlays toggle separately.
+// DOM screens (client only): title, hero select, stage select, Camp shop (+ save code), join, lobby, results; achievements and encyclopedia are filled by codex.js (ED.Codex);
+//   overlays: level-up cards, chest popup, pause, settings, credits.
+// ED.UI.show(name) shows one screen ('title' | 'hero' | 'stage' | 'camp' | 'achieve' | 'codex' | 'join' | 'lobby' | 'results' | 'none'); overlays toggle separately.
 // Menus work with mouse and keyboard: arrows / WASD move focus spatially inside the top layer, Enter / Space press, Esc presses the layer's [data-back] button.
+//   A focused [data-scroll] box (a stop only while it overflows) scrolls on up / down until its edge, then focus moves on.
 // Shop and unlock rules go through ED.Save with A.profile. Co-op goes through the ED.Net lobby API (host / join / setHero / setReady / setStage / start / leave, ED.Net.onChange).
 (function (ED) {
   'use strict';
   const U = ED.U;
   const $ = (id) => document.getElementById(id);
   const UI = ED.UI = { offerSig: '', lastMode: 'solo', banishOn: false };
-  const SCREENS = ['title', 'hero', 'stage', 'camp', 'join', 'lobby', 'results'];
+  const SCREENS = ['title', 'hero', 'stage', 'camp', 'achieve', 'codex', 'join', 'lobby', 'results'];
   const LAYERS = ['ov-settings', 'ov-credits', 'ov-pause', 'ov-offer']; // top-most first
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   UI.esc = esc;
@@ -26,14 +28,13 @@
     stageOpen: (p, i) => SV.stageUnlocked(p, i),
   };
   UI.M = M;
-  // Progress toward a hero's unlock rule (0..1) from the profile records.
-  const unlockProgress = (p, rule) => {
+  // Progress toward an ED.UNLOCKS rule: { k (0..1), txt ('' for beat rules) } from the one-run records ED.Save.applyRun checks (p.stats bestTime / bestKills / bestLevel).
+  const unlockProgress = UI.unlockProgress = (p, rule) => {
     if (!rule) return { k: 0, txt: '' };
-    let best = 0, kills = 0;
-    for (const id in p.best) { best = Math.max(best, p.best[id].time || 0); kills = Math.max(kills, p.best[id].kills || 0); }
-    if (rule.survive) return { k: best / rule.survive, txt: U.fmtTime(best) + ' / ' + U.fmtTime(rule.survive) };
-    if (rule.kills) return { k: kills / rule.kills, txt: kills + ' / ' + rule.kills };
-    if (rule.level) return { k: p.stats.bestLevel / rule.level, txt: 'Level ' + p.stats.bestLevel + ' / ' + rule.level };
+    const st = p.stats, of = (cur, need, f) => ({ k: U.clamp(cur / need, 0, 1), txt: f(Math.min(cur, need)) + ' / ' + f(need) });
+    if (rule.survive) return of(st.bestTime, rule.survive, U.fmtTime);
+    if (rule.kills) return of(st.bestKills, rule.kills, String);
+    if (rule.level) { const r = of(st.bestLevel, rule.level, String); r.txt = 'Level ' + r.txt; return r; }
     if (rule.beat !== undefined) return { k: p.beat.indexOf(rule.beat) >= 0 ? 1 : 0, txt: '' };
     return { k: 0, txt: '' };
   };
@@ -58,7 +59,7 @@
   // Animated portraits: redrawn by one rAF loop while a menu shows them.
   const anims = [];
   let animOn = false;
-  const animCanvas = (id, size, cls) => { const cv = UI.iconCanvas(id, size, cls); cv._anim = id; cv._f = 0; anims.push(cv); kick(); return cv; };
+  const animCanvas = UI.animCanvas = (id, size, cls) => { const cv = UI.iconCanvas(id, size, cls); cv._anim = id; cv._f = 0; anims.push(cv); kick(); return cv; };
   const kick = () => { if (!animOn) { animOn = true; requestAnimationFrame(animLoop); } };
   function animLoop(now) {
     const A = ED.Atlas, t = now / 1000;
@@ -71,8 +72,8 @@
     }
     if (anims.length && !(App() && App().state === 'run')) requestAnimationFrame(animLoop); else animOn = false;
   }
-  const heroIcon = (cls) => (ED.HEROES[cls] && ED.HEROES[cls].icon) || 'hero.' + cls + '.idle';
-  const keyOf = (action, dflt) => { const I = ED.Input, l = I && I.labels ? I.labels(action) : null; return (l && l[0]) || dflt; };
+  const heroIcon = UI.heroIcon = (cls) => (ED.HEROES[cls] && ED.HEROES[cls].icon) || 'hero.' + cls + '.idle';
+  const keyOf = UI.keyOf = (action, dflt) => { const I = ED.Input, l = I && I.labels ? I.labels(action) : null; return (l && l[0]) || dflt; };
 
   // ---------------- screens ----------------
   UI.show = (name) => {
@@ -167,11 +168,11 @@
   // ---------------- stage select ----------------
   const stagePrev = new Map();
   // Stage card art: floor tiles, deco and the final boss (cached per stage once the atlas is ready); stagePreview returns a fresh canvas.
-  function stagePreview(i) {
+  const stagePreview = UI.stagePreview = (i) => {
     const out = document.createElement('canvas'); out.width = 256; out.height = 128; out.className = 'prev';
     out.getContext('2d').drawImage(stageArt(i), 0, 0);
     return out;
-  }
+  };
   function stageArt(i) {
     if (stagePrev.has(i)) return stagePrev.get(i);
     const sd = ED.STAGES[i], cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
@@ -561,8 +562,9 @@
     for (const s of SCREENS) { const el = $('scr-' + s); if (!el.hidden) return el; }
     return null;
   };
-  const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), textarea, a[href]';
-  const items = (layer) => [...layer.querySelectorAll(FOCUSABLE)].filter(visible);
+  const FOCUSABLE = 'button:not([disabled]), input:not([disabled]), textarea, a[href], [data-scroll]';
+  const scrolls = (el) => !el.hasAttribute('data-scroll') || el.scrollHeight > el.clientHeight + 1;
+  const items = (layer) => [...layer.querySelectorAll(FOCUSABLE)].filter(el => visible(el) && scrolls(el));
   function focusLayer() {
     const L0 = topLayer(); if (!L0) return;
     if (L0.contains(document.activeElement) && document.activeElement !== document.body) return;
@@ -608,6 +610,10 @@
     if (t && t.type === 'range' && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) return;
     if (run && layer.id === 'ov-offer' && e.code.startsWith('Key')) return;
     e.preventDefault();
+    if (d[1] && t && t.hasAttribute && t.hasAttribute('data-scroll')) {
+      const room = d[1] > 0 ? t.scrollHeight - t.clientHeight - t.scrollTop : t.scrollTop;
+      if (room > 1) { t.scrollBy({ top: d[1] * Math.max(40, t.clientHeight * 0.4) }); return; }
+    }
     move(layer, d[0], d[1]);
   }
 
@@ -618,6 +624,10 @@
     $('btn-host').onclick = () => { say('title-msg', ''); UI.hostParty(); };
     $('btn-join').onclick = () => { ensureProfile(); say('title-msg', ''); say('join-msg', ''); UI.show('join'); $('inp-join').focus(); };
     $('btn-camp').onclick = () => { ensureProfile(); say('title-msg', ''); UI.renderCamp(); UI.show('camp'); };
+    $('btn-achieve').onclick = () => { ensureProfile(); say('title-msg', ''); ED.Codex.renderAchievements(); UI.show('achieve'); };
+    $('btn-codex').onclick = () => { ensureProfile(); say('title-msg', ''); ED.Codex.renderCodex(); UI.show('codex'); };
+    $('btn-ach-back').onclick = () => { UI.renderTitle(); UI.show('title'); };
+    $('btn-codex-back').onclick = () => { UI.renderTitle(); UI.show('title'); };
     $('btn-settings').onclick = () => UI.openSettings('title');
     $('btn-credits').onclick = () => { opener = $('btn-credits'); $('ov-credits').hidden = false; };
     $('btn-credits-close').onclick = () => { $('ov-credits').hidden = true; refocus(); };
