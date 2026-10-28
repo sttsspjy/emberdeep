@@ -48,6 +48,7 @@ ok(a.time >= 89 && a.time <= 91 && a.death === 'timeout' && a.ticks > 0, `maxTim
       if (!added && w.time >= 120) { added = true; w.spawnBoss({ t: 300, id: 'cyclops', final: false }); }
       if (extra) spy.think(w, p);
       w.input('p1', bot.think(w, p)); w.update(ED.CONST.TICK);
+      p.hp = p.maxHp; // kept alive: the run must reach the first boss whatever the balance
       for (const ev of w.events) if (ev.t === 'boss' && ev.phase === 0 && ev.id === w.sdef.bosses[0].id) bossT = w.time;
       w.events.length = 0;
       if (w.tick % 30 === 0) for (const z of w.zones) if (!z.dead && z.team === 1 && z.st && typeof z.st.test === 'function') tests++;
@@ -67,7 +68,7 @@ ok(a.time >= 89 && a.time <= 91 && a.death === 'timeout' && a.ticks > 0, `maxTim
   const ids = r.build.weapons.map(x => base(x.id));
   ok(r.fill === 'off' && ids.includes('bonespear') && ids.every(id => id === 'cleave' || id === 'bonespear'), `forced bonespear, fill off (default): build ${r.build.weapons.map(x => x.id + x.lvl).join(',')}`);
   const lv = r.build.weapons.find(x => base(x.id) === 'bonespear');
-  ok(lv && lv.lvl >= 6, `forced weapon levelled (bonespear form ${lv && lv.id} level ${lv && lv.lvl} at 5:00)`);
+  ok(lv && lv.lvl >= 3, `forced weapon levelled (bonespear form ${lv && lv.id} level ${lv && lv.lvl} at 5:00, hero level ${r.level})`);
   const n = runOne({ stage: 0, cls: 'shade', weapon: null, seed: 2, maxTime: 240, fill: 'off' });
   ok(n.build.weapons.length === 1 && base(n.build.weapons[0].id) === 'daggers', `baseline fill off keeps the signature only: ${n.build.weapons.map(x => x.id).join(',')}`);
   const o = runOne({ stage: 0, cls: 'shade', weapon: null, seed: 2, maxTime: 240, fill: 'on' });

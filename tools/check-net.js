@@ -280,6 +280,13 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
     ok(bad === 0 && M.view.foes.length >= inR && M.view.projs.length > 0 && M.view.pickups.length > 0, `decode round trip: ${M.view.foes.length} foes (${inR} in view), ${M.view.projs.length} projectiles, ${M.view.pickups.length} pickups, mismatches ${bad}`);
     const h = M.view.heroes.find(x => x.pid === 'host');
     ok(h && h.weapons.length === 6 && h.weapons.every(ws => ws.lvl === 8), 'hero weapon table decodes');
+    // braziers: broken and relit states both reach the client (bitmask)
+    const HB = r.W2.arena.braziers, MB = M.view.props.braziers, same = () => HB.every((b, i) => MB[i].broken === b.broken && MB[i].hp === (b.broken ? 0 : 1));
+    const snap = () => { cc1.seq++; cc1.evs.length = 0; M.frame(M.apply(N.encodeSnap(r.W2, cc1))); };
+    HB.forEach((b, i) => { if (i % 3 === 0) { b.broken = true; b.hp = 0; } }); snap();
+    const brokeOk = same() && MB.some(b => b.broken);
+    HB.forEach(b => { b.broken = false; b.hp = 1; }); snap();
+    ok(brokeOk && same() && MB.every(b => !b.broken), `braziers: ${HB.length} decode broken, then relit`);
   }
 }
 

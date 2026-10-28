@@ -1,26 +1,28 @@
-// Timeline director (GAME-DESIGN §7-8): reads ED.STAGES[stage].timeline per minute (rate, cap, roster), spawns on a ring 380-460 px from a random living hero (never inside obstacles),
+// Timeline director (GAME-DESIGN §7-8): reads ED.STAGES[stage].timeline per minute (rate, cap, roster), spawns on a ring 380-460 px from a random living hero (never inside obstacles);
+// successive spawn angles step by the golden angle (+-0.3 rad jitter), so foes arrive from every side;
 // swarm events, elites and boss timers from the stage data. Party scaling: rate and cap x (1 + 0.25 per extra hero), hard cap 900; a living boss halves the rate.
 // Density floor: while alive < row.floor x alive cap the spawn budget is raised to REFILL x the deficit (at most REFILL_MAX per tick), so the screen refills within ~0.3 s.
-// Packs: swarm-brain roster picks spawn 12-16 at once at 0:00, 20-30 from 10:00 (each member costs 0.5 of a spawn); def.pack foes spawn [min, max] together (1 each).
+// Packs: swarm-brain roster picks spawn a pack sized by PACK (4-6 at 0:00, 12-16 at 5:00, 20-30 from 10:00; each member costs 0.5 of a spawn); def.pack foes spawn [min, max] together (1 each).
 // Swarm event (every events.swarm.every s): a closing ring of swarmers rushing at one hero's spot, or a stampede line crossing that hero's screen (40 at the first event to 80 by 12:00).
 // Elites: a non-swarm, non-exploder roster foe promoted. Bosses: a 5 s 'warn' event, then w.spawnBoss; a stage boss id without an ED.Bosses script spawns the stage's brute as an elite boss stand-in.
 (function (ED) {
   'use strict';
   const U = ED.U, W = ED.World.prototype;
-  const HARD_CAP = 900, RING = [380, 460], BOSS_WARN = 5, SWARM_R = 430, REFILL = 0.1, REFILL_MAX = 40;
+  const HARD_CAP = 900, RING = [380, 460], BOSS_WARN = 5, SWARM_R = 430, REFILL = 0.1, REFILL_MAX = 40, GOLDEN = Math.PI * (3 - Math.sqrt(5));
+  const PACK = [[0, 4, 6], [5, 12, 16], [10, 20, 30]]; // swarm pack size keys [minute, min, max], linear between keys, the last holds
 
   W.initSpawner = function () {
     const sd = this.sdef, ev = (sd.events && sd.events.swarm) || null, el = sd.elites || null;
-    this.sp = { acc: 0, swarmT: ev ? ev.first : Infinity, eliteT: el ? el.first : Infinity, bossI: 0, warnI: -1, pt: { x: 0, y: 0 }, rows: [] };
+    this.sp = { acc: 0, ang: 0, swarmT: ev ? ev.first : Infinity, eliteT: el ? el.first : Infinity, bossI: 0, warnI: -1, pt: { x: 0, y: 0 }, rows: [] };
   };
   W.timelineRow = function () { const tl = this.sdef.timeline; return tl[Math.min(tl.length - 1, Math.floor(this.time / 60))]; };
   W.aliveCap = function () { const row = this.timelineRow(); return Math.min(HARD_CAP, Math.round(row.cap * (1 + 0.25 * (this.partyN - 1)))); };
 
-  // A free point on a ring rmin..rmax around hero p (ahead: within 70 degrees of its movement when it moves). Returns the scratch point or null after 8 tries.
-  W.ringPoint = function (p, rmin, rmax, ahead) {
+  // A free point on a ring rmin..rmax around hero p (ahead: within 70 degrees of its movement when it moves; a0: the first try at angle a0, later tries random). Returns the scratch point or null after 8 tries.
+  W.ringPoint = function (p, rmin, rmax, ahead, a0) {
     const A = this.arena, pt = this.sp.pt;
     for (let i = 0; i < 8; i++) {
-      const a = ahead && p.moving ? p.mdir + this.rng.range(-1.2, 1.2) : this.rng.next() * U.TAU, d = this.rng.range(rmin, rmax);
+      const a = ahead && p.moving ? p.mdir + this.rng.range(-1.2, 1.2) : i === 0 && a0 !== undefined ? a0 : this.rng.next() * U.TAU, d = this.rng.range(rmin, rmax);
       const x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d;
       if (!ED.Arena.blocked(A, x, y, 14)) { pt.x = x; pt.y = y; return pt; }
     }
@@ -28,6 +30,12 @@
   };
   const pickRoster = (w, roster) => w.rng.weighted(roster, r => r[1])[0];
   const randHero = (w) => w.living[w.rng.int(0, w.living.length - 1)];
+  // Swarm pack size at minute m: a random int in the PACK range at m.
+  const packN = (w, m) => {
+    let i = 0; while (i < PACK.length - 2 && m >= PACK[i + 1][0]) i++;
+    const a = PACK[i], b = PACK[i + 1], k = U.clamp((m - a[0]) / (b[0] - a[0]), 0, 1);
+    return w.rng.int(Math.round(a[1] + (b[1] - a[1]) * k), Math.round(a[2] + (b[2] - a[2]) * k));
+  };
 
   // Spawns n foes of id scattered within spread px of (x, y), skipping blocked spots. Returns the number spawned.
   W.spawnPack = function (id, x, y, n, spread) {
@@ -72,7 +80,7 @@
     const p = randHero(this), pt = this.ringPoint(p, 260, 320, false) || { x: p.x + 280, y: p.y };
     const e = this.spawnFoe(id, pt.x, pt.y, { elite: true });
     e.boss = true; e.final = !!b.final;
-    e.maxHp = e.hp = Math.round(400 * (b.t / 60) * this.partyHp());
+    e.maxHp = e.hp = this.bossHp(b.t);
     this.bossList.push(e); this.boss = e;
     this.emit({ t: 'boss', id, fid: e.id, phase: 0, final: e.final });
     return e;
@@ -81,16 +89,17 @@
   W.updateSpawner = function (dt) {
     const L = this.living;
     if (!L.length) return;
-    const sd = this.sdef, row = this.timelineRow(), party = 1 + 0.25 * (this.partyN - 1), cap = this.aliveCap(), sp = this.sp, mk = Math.min(1, this.time / 600);
+    const sd = this.sdef, row = this.timelineRow(), party = 1 + 0.25 * (this.partyN - 1), cap = this.aliveCap(), sp = this.sp;
     const deficit = (row.floor || 0) * cap - this.foes.length;
     sp.acc = Math.min(10, sp.acc + row.rate * party * (this.boss ? 0.5 : 1) * dt);
     if (deficit > 0) sp.acc = Math.max(sp.acc, Math.min(REFILL_MAX, Math.max(1, deficit * REFILL)));
     while (sp.acc >= 1 && this.foes.length < cap) {
-      const id = pickRoster(this, row.roster), def = ED.FOES[id], pt = this.ringPoint(randHero(this), RING[0], RING[1], false);
+      sp.ang = (sp.ang + GOLDEN + this.rng.range(-0.3, 0.3)) % U.TAU;
+      const id = pickRoster(this, row.roster), def = ED.FOES[id], pt = this.ringPoint(randHero(this), RING[0], RING[1], false, sp.ang);
       if (!pt) { sp.acc -= 1; continue; }
       const x = pt.x, y = pt.y, room = cap - this.foes.length;
       if (def.ai === 'swarm' && !def.solo) {
-        const n = Math.min(this.rng.int(Math.round(12 + 8 * mk), Math.round(16 + 14 * mk)), room);
+        const n = Math.min(packN(this, this.time / 60), room);
         this.spawnPack(id, x, y, n, 44);
         sp.acc -= Math.max(1, n * 0.5);
       } else if (def.pack) {

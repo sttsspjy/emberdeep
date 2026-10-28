@@ -409,14 +409,14 @@
     const B = this.arena.braziers;
     for (let i = 0; i < B.length; i++) { const b = B[i]; if (!b.broken && U.dist2(x, y, b.x, b.y) <= (r + b.r) * (r + b.r)) this.breakBrazier(b, p); }
   };
-  // Drops: food 8%, magnet 3%, holy bomb 2%, else 1-5 gold (GAME-DESIGN §9).
+  // Drops: food 20%, magnet 3%, holy bomb 2%, else 1-5 gold (GAME-DESIGN §9). b.t = the sim time it broke (relight: progress.js).
   W.breakBrazier = function (b, p) {
     if (b.broken) return;
-    b.broken = true; b.hp = 0;
+    b.broken = true; b.hp = 0; b.t = this.time;
     const r = this.rng.next();
-    if (r < 0.08) this.spawnPickup('food', b.x, b.y, 30);
-    else if (r < 0.11) this.spawnPickup('magnet', b.x, b.y, 1);
-    else if (r < 0.13) this.spawnPickup('bomb', b.x, b.y, 1);
+    if (r < 0.2) this.spawnPickup('food', b.x, b.y, 30);
+    else if (r < 0.23) this.spawnPickup('magnet', b.x, b.y, 1);
+    else if (r < 0.25) this.spawnPickup('bomb', b.x, b.y, 1);
     else this.spawnPickup('gold', b.x, b.y, this.rng.int(1, 5));
     this.emit({ t: 'brazier', id: b.id, x: b.x, y: b.y, pid: p ? p.pid : '' });
   };

@@ -10,10 +10,13 @@
   W.initFoes = function () { this.foePool = []; };
   // Contact damage at the current time: 3 at 0:00 rising to 12 at 15:00 (GAME-DESIGN §7), x the stage damage factor.
   W.contactDmg = function () { return (3 + 9 * Math.min(1, this.time / 900)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
-  // Shot / blast damage factor at the current time: x1 at 0:00 rising to x2.2 at 15:00 (ranged 6-15 per hit), x the stage damage factor.
+  // Shot / blast damage factor at the current time: x1 at 0:00 rising to x2.2 at 15:00 (shots 4-11 per hit), x the stage damage factor.
   W.foeDmgK = function () { return (1 + 1.2 * Math.min(1, this.time / 900)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
-  // Foe HP at the current time: base x (1 + 0.18 x minutes) x party factor x the stage HP factor.
-  W.foeHp = function (base) { return base * (1 + 0.18 * this.time / 60) * this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1); };
+  // Foe HP at the current time: base x (1 + 0.24 x minutes) x party factor x the stage HP factor.
+  W.foeHp = function (base) { return base * (1 + 0.24 * this.time / 60) * this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1); };
+  // Boss HP for a boss due at t s (GAME-DESIGN §8): 1500 x (minute / 5)^2.5 (1500 / 8485 / 23383 at 5 / 10 / 15 min) x party factor x the stage HP factor.
+  ED.bossHp = (t, k) => Math.round(1500 * Math.pow(t / 300, 2.5) * k); // boss HP at spawn time t s; k = party x stage HP factor (GAME-DESIGN §8)
+  W.bossHp = function (t) { return ED.bossHp(t, this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1)); };
 
   // Spawns foe k (id string or FOE_IDX) at (x, y). opts: { elite, hpMul, rush: [dx, dy, s] (fixed heading for s seconds, default 6) }. Returns the foe.
   W.spawnFoe = function (k, x, y, opts) {
@@ -117,7 +120,7 @@
     }
   };
 
-  // Foe e dies: kill credit, 'die' event, drops (gem by def.xp; elites a chest, gold and a large gem; bosses via onBossKilled), splitter children, the killer's weapon kill callbacks, then its hero kill hook.
+  // Foe e dies: kill credit, 'die' event, drops (gem by def.xp; elites a chest, gold, a large gem and food at 50%; bosses via onBossKilled), splitter children, the killer's weapon kill callbacks, then its hero kill hook.
   W.killFoe = function (e, src) {
     if (e.dead) return;
     e.dead = true; e.hp = 0; e.hpQ = 0;
@@ -126,7 +129,7 @@
     if (p) p.kills++;
     this.emit({ t: 'die', id: e.id, k: e.k, x: Math.round(e.x), y: Math.round(e.y), elite: e.elite, boss: e.boss });
     if (e.boss) this.onBossKilled(e, p);
-    else if (e.elite) { this.spawnPickup('chest', e.x, e.y, 1); this.spawnPickup('gold', e.x + 8, e.y, this.rng.int(1, 5)); this.dropGem(e.x - 8, e.y, 25); }
+    else if (e.elite) { this.spawnPickup('chest', e.x, e.y, 1); this.spawnPickup('gold', e.x + 8, e.y, this.rng.int(1, 5)); this.dropGem(e.x - 8, e.y, 25); if (this.rng.chance(0.5)) this.spawnPickup('food', e.x, e.y + 10, 30); }
     else this.dropGem(e.x, e.y, e.def.xp || 1);
     const sp = e.def.split;
     if (sp && !e.boss) {

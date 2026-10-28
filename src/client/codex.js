@@ -211,7 +211,7 @@
   const bossDetail = (box, key) => {
     const [si, bi] = key.split(':').map(Number), sd = ED.STAGES[si], b = sd.bosses[bi], d = ED.FOES[b.id];
     head(box, foeIcon(b.id), d.name, (b.final ? 'Final boss' : 'Mid-boss') + ', ' + sd.name + ' at ' + U.fmtTime(b.t), '');
-    chips(box, [['HP', U.fmtNum(Math.round(400 * b.t / 60)) + ' solo'], ['Speed', d.spd]]);
+    chips(box, [['HP', U.fmtNum(ED.bossHp(b.t, (sd.foe && sd.foe.hp) || 1)) + ' solo'], ['Speed', d.spd]]);
     h3(box, 'Attacks');
     lvls(box, (BOSS_TXT[b.id] || []).map((t, i) => [String(i + 1), t]));
     para(box, 'Every attack is telegraphed: a red outline marks where it lands.', 'mut');

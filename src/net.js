@@ -625,7 +625,7 @@
     if (bf & 1) { const d = ED.FOES[ED.FOE_IDS[rv()]]; BB.on = true; BB.final = !!(bf & 2); BB.enraged = !!(bf & 4); BB.id = d ? d.id : ''; BB.name = d ? d.name : 'Boss'; BB.q = r8(); BB.phase = r8(); BB.n = r8(); const rv8b = r8(); BB.rev = rv8b === 255 ? -1 : rv8b / 254; } else BB.on = false;
     v.bossBar = BB;
     const nb = r8(), BR = v.props.braziers;
-    for (let i = 0; i < nb; i += 8) { const m = r8(); for (let k = 0; k < 8 && i + k < nb; k++) if (BR[i + k]) { const br = !!(m & (1 << k)); BR[i + k].broken = br; if (br) BR[i + k].hp = 0; } }
+    for (let i = 0; i < nb; i += 8) { const m = r8(); for (let k = 0; k < 8 && i + k < nb; k++) if (BR[i + k]) { const br = !!(m & (1 << k)); BR[i + k].broken = br; BR[i + k].hp = br ? 0 : 1; } }
     // heroes
     const nh = r8();
     for (let c = 0; c < nh; c++) {

@@ -3,13 +3,13 @@
 //   pal: { bg, wall, accent, light } } (bg: void outside the arena, wall: obstacle fill, accent/light: post grade).
 //   feature: { f: 'row' (colonnade) | 'arc' (broken wall with one gap) | 'cluster' (tight clump) | 'single', w (pick weight), look ('' = plain rock disc), r: [min, max], n: [min, max], gap: [min, max] (px between surfaces), spread (cluster radius) }.
 // arena: { size, obstacles: [min, max] (colliders), braziers: [min, max], clear (no obstacle within this radius of the centre) }.
-// foe: { hp, dmg } stage multipliers on foe HP and contact / shot damage.
+// foe: { hp, dmg } stage multipliers on foe and boss HP and on contact / shot damage.
 // timeline[m] (minute m; the last entry holds for the rest of the run): { rate (spawns/s solo), cap (alive cap solo), floor (density floor, fraction of the alive cap), roster: [[foeId, weight]] }.
 // events.swarm: { first, every, ring: [ids], stampede: [ids], n: [at first, at 12:00] } a closing ring or a stampede line of swarmers; elites: { first, every }; bosses: [{ t (s), id, final }].
 (function (ED) {
   'use strict';
   const capAt = (m) => Math.round(300 + Math.min(m, 12) * (400 / 12)); // GAME-DESIGN §7: 300 at 0:00 to 700 at 12:00
-  const floorAt = (m) => Math.min(0.6, m / 10); // GAME-DESIGN §7: density floor = alive cap x min(0.6, 0.1 x minute)
+  const floorAt = (m) => Math.min(0.6, (2 + m) / 20); // GAME-DESIGN §7: density floor = alive cap x min(0.6, 0.1 + 0.05 x minute)
   // Weight of keyframes [[minute, weight], ...] at minute m: 0 before the first key, linear between keys, the last value after the last key.
   const keyAt = (keys, m) => {
     if (m < keys[0][0]) return 0;
@@ -42,13 +42,13 @@
         brazier: 'prop.brazier',
         pal: { bg: '#0b0908', wall: '#2a2320', accent: '#ff8a3d', light: '#ffcf8a' },
       },
-      arena: { size: 3200, obstacles: [30, 40], braziers: [14, 20], clear: 220 },
+      arena: { size: 3200, obstacles: [30, 40], braziers: [40, 55], clear: 220 },
       foe: { hp: 1, dmg: 1 },
       timeline: timeline(
-        [1.2, 2.2, 3.5, 5, 6.5, 7.5, 10, 12, 14, 16, 16, 20, 23, 26, 29, 22],
+        [2, 3, 4, 5, 6.5, 8, 11, 13, 15.5, 17.5, 17.5, 22, 25, 28, 32, 24],
         {
-          bat: [[0, 6], [3, 4], [7, 5], [11, 7], [14, 8]],
-          skeleton: [[0, 6], [4, 5], [9, 4], [14, 4]],
+          bat: [[0, 2], [3, 4], [7, 5], [11, 7], [14, 8]],
+          skeleton: [[0, 9], [4, 6], [9, 4], [14, 4]],
           slime: [[1, 2], [3, 3], [8, 4], [14, 4]],
           drowned: [[3, 1], [6, 3], [10, 4], [14, 5]],
           priest: [[2, 1], [5, 2], [10, 3], [14, 3]],
@@ -72,13 +72,13 @@
         brazier: 'prop.brazier',
         pal: { bg: '#07090b', wall: '#1d2a2a', accent: '#7fe39a', light: '#c9ffd9' },
       },
-      arena: { size: 3200, obstacles: [30, 40], braziers: [14, 20], clear: 220 },
-      foe: { hp: 1.3, dmg: 1.15 },
+      arena: { size: 3200, obstacles: [30, 40], braziers: [40, 55], clear: 220 },
+      foe: { hp: 0.85, dmg: 1 },
       timeline: timeline(
-        [1.4, 2.5, 4, 5.5, 7, 8.5, 11, 13, 15.5, 17.5, 17.5, 22, 25, 28, 32, 24],
+        [2, 3, 4, 5, 6.5, 7.5, 10, 12, 14, 16, 16, 20, 23, 26, 29, 22],
         {
-          glowlet: [[0, 6], [3, 5], [8, 6], [14, 8]],
-          myconid: [[0, 6], [5, 5], [10, 4], [14, 4]],
+          glowlet: [[0, 2], [3, 5], [8, 6], [14, 8]],
+          myconid: [[0, 9], [5, 6], [10, 4], [14, 4]],
           glowslime: [[1, 2], [4, 3], [9, 4], [14, 4]],
           cavespider: [[2, 1], [5, 3], [10, 4], [14, 4]],
           spitter: [[3, 1], [6, 2], [10, 3], [14, 3]],
@@ -87,7 +87,7 @@
           drone: [[5, 1], [8, 2], [12, 3]],
           shroomhulk: [[5, 0.6], [8, 1.2], [12, 2]],
         },
-        { 2: { cavespider: 3 }, 4: { spitter: 3 }, 6: { sporepuff: 5 }, 7: { reaver: 4 }, 9: { drone: 5 }, 11: { shroomhulk: 3 }, 13: { cavespider: 5, spitter: 2 } }),
+        { 2: { cavespider: 2 }, 4: { spitter: 3 }, 6: { sporepuff: 5 }, 7: { reaver: 4 }, 9: { drone: 5 }, 11: { shroomhulk: 3 }, 13: { cavespider: 5, spitter: 2 } }),
       events: { swarm: { first: 90, every: 90, ring: ['glowlet'], stampede: ['glowlet', 'myconid'], n: [40, 80] } },
       elites: { first: 120, every: 60 },
       bosses: [{ t: 300, id: 'spore' }, { t: 600, id: 'cyclops' }, { t: 900, id: 'king', final: true }],
@@ -102,13 +102,13 @@
         brazier: 'prop.brazier',
         pal: { bg: '#08060c', wall: '#241c33', accent: '#c58aff', light: '#ffc6f0' },
       },
-      arena: { size: 3200, obstacles: [30, 40], braziers: [14, 20], clear: 220 },
-      foe: { hp: 1.6, dmg: 1.3 },
+      arena: { size: 3200, obstacles: [30, 40], braziers: [40, 55], clear: 220 },
+      foe: { hp: 0.9, dmg: 1 },
       timeline: timeline(
-        [1.6, 2.8, 4.5, 6, 8, 9.5, 12, 14.5, 17, 19, 19, 24, 27, 31, 35, 26],
+        [2.1, 3.2, 4.2, 5.3, 6.8, 7.9, 10.5, 12.6, 14.7, 16.8, 16.8, 21, 24, 27, 30, 23],
         {
-          starspawn: [[0, 6], [3, 5], [8, 6], [14, 8]],
-          shade: [[0, 6], [5, 5], [10, 5], [14, 5]],
+          starspawn: [[0, 2], [3, 5], [8, 6], [14, 8]],
+          shade: [[0, 9], [5, 6], [10, 5], [14, 5]],
           jelly: [[1, 2], [4, 3], [9, 4], [14, 4]],
           voidwraith: [[2, 1], [5, 2], [10, 3], [14, 3]],
           eel: [[3, 1], [6, 3], [11, 4], [14, 4]],
@@ -117,7 +117,7 @@
           riftcaller: [[6, 0.6], [9, 1.5], [13, 2]],
           horror: [[5, 0.6], [8, 1.2], [12, 2]],
         },
-        { 2: { voidwraith: 3 }, 4: { eel: 4 }, 6: { gloom: 5 }, 8: { voideye: 5 }, 9: { riftcaller: 3 }, 11: { horror: 3 }, 13: { eel: 4, gloom: 4 } }),
+        { 2: { voidwraith: 3 }, 4: { eel: 3 }, 6: { gloom: 5 }, 8: { voideye: 5 }, 9: { riftcaller: 3 }, 11: { horror: 3 }, 13: { eel: 4, gloom: 4 } }),
       events: { swarm: { first: 90, every: 90, ring: ['starspawn'], stampede: ['starspawn', 'shade'], n: [40, 80] } },
       elites: { first: 120, every: 60 },
       bosses: [{ t: 300, id: 'samurai' }, { t: 600, id: 'weaver' }, { t: 900, id: 'wickeater', final: true }],

@@ -1,5 +1,5 @@
 // Open arena: deterministic props from (stage, seed) and circle collision against the bounds and the obstacles. Pure; clients rebuild the same arena from the seed.
-// ED.Arena.generate(stage, seed) -> A = { size, obstacles: [{id, x, y, r, look}], braziers: [{id, x, y, r, hp, broken, look}], deco: [{x, y, look}], cell, cw, cells: [[obstacle index]] }.
+// ED.Arena.generate(stage, seed) -> A = { size, obstacles: [{id, x, y, r, look}], braziers: [{id, x, y, r, hp, broken, t (sim time it broke), look}], deco: [{x, y, look}], cell, cw, cells: [[obstacle index]] }.
 // Obstacles come from the stage theme features (ED.STAGES theme.features): colonnade rows, broken wall arcs with one gap, tight clusters, singles. Separate features keep a LANE px
 // passage (heroes and the horde pass, crowds squeeze into chokepoints); nothing within arena.clear of the centre (the party start).
 (function (ED) {
@@ -8,6 +8,7 @@
   const Ar = ED.Arena = {};
   const CELL = 128, PAD = 40; // bucket size; obstacles are bucketed with this margin so any body up to PAD radius finds them from its own cell
   const LANE = 30, SPACE = 140; // min surface gap between features; min gap from a feature's first member to every earlier obstacle
+  const BR_GAP = 220; // min distance between braziers
 
   Ar.generate = (stage, seed) => {
     const sd = ED.STAGES[stage] || ED.STAGES[0], th = sd.theme, ar = sd.arena, size = ar.size || ED.CONST.ARENA;
@@ -45,11 +46,11 @@
     }
     const nBr = rng.int(ar.braziers[0], ar.braziers[1]);
     guard = 0;
-    while (A.braziers.length < nBr && guard++ < 400) {
+    while (A.braziers.length < nBr && guard++ < 3000) {
       const x = rng.range(120, size - 120), y = rng.range(120, size - 120);
       if (!free(x, y, 10, 30)) continue;
-      if (A.braziers.some(b => Math.hypot(b.x - x, b.y - y) < 320)) continue;
-      A.braziers.push({ id: A.braziers.length, x: Math.round(x), y: Math.round(y), r: 8, hp: 1, broken: false, look: th.brazier });
+      if (A.braziers.some(b => Math.hypot(b.x - x, b.y - y) < BR_GAP)) continue;
+      A.braziers.push({ id: A.braziers.length, x: Math.round(x), y: Math.round(y), r: 8, hp: 1, broken: false, t: 0, look: th.brazier });
     }
     const nDeco = Math.round(size * size / 26000);
     for (let i = 0; i < nDeco; i++) A.deco.push({ x: Math.round(rng.range(16, size - 16)), y: Math.round(rng.range(16, size - 16)), look: th.deco[rng.int(0, th.deco.length - 1)] });

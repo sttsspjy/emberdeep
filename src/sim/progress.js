@@ -1,12 +1,13 @@
 // Pickups, party XP / levels, card offers, banish / reroll / skip, chests, gold and the per-weapon damage table (GAME-DESIGN §6, §9; ARCHITECTURE §8).
 // Pickup k: 'xp1' | 'xp5' | 'xp25' (val = XP) | 'gold' (val coins) | 'food' (val HP) | 'magnet' | 'bomb' | 'chest' (val 1 elite, 2 boss). Gems merge into the nearest gem above GEM_CAP on the ground.
 // Gems and gold are pulled inside the hero's pickup radius; food, magnet, bomb and chests need a touch. Pulled pickups fly to the hero with an accelerating curve.
+// Braziers break on a hero's touch (weapon hits: combat.js) and relight RELIGHT s after breaking, once no living hero is within RELIGHT_R px.
 // Card: { kind: 'weapon'|'wlvl'|'passive'|'plvl'|'skill'|'gold'|'heal', id, lvl (level after the pick), name, txt (<= 40 chars), sub (second line or ''), icon, evo (true: the pick makes a weapon evolution-ready), val (gold / heal amount) }.
 // Hero fields (initHeroProgress): rerolls, skips, banishes (counts from meta stats), banned (card keys 'w:id' | 'p:id' | 's:id' removed from this run's pool).
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST, W = ED.World.prototype;
-  const GEM_CAP = 350, TOUCH = 6, GOLD_CARD = 25, HEAL_CARD = 30;
+  const GEM_CAP = 350, TOUCH = 6, GOLD_CARD = 25, HEAL_CARD = 30, RELIGHT = 60, RELIGHT_R = 700;
 
   W.initProgress = function () { this.pickPool = []; this.gemCount = 0; };
   W.initHeroProgress = function (p) { p.rerolls = p.stats.rerolls | 0; p.skips = p.stats.skips | 0; p.banishes = p.stats.banishes | 0; p.banned = []; };
@@ -58,6 +59,14 @@
     this.gemCount = gems;
     const B = this.arena.braziers;
     for (const p of this.living) for (let i = 0; i < B.length; i++) { const b = B[i]; if (!b.broken && U.dist2(p.x, p.y, b.x, b.y) <= (p.r + b.r + 4) ** 2) this.breakBrazier(b, p); }
+    // relight (checked once a second): a brazier broken RELIGHT s ago lights again while no living hero is within RELIGHT_R px
+    if (this.tick % 60 === 0) for (let i = 0; i < B.length; i++) {
+      const b = B[i];
+      if (!b.broken || this.time - b.t < RELIGHT) continue;
+      let near = false;
+      for (let h = 0; h < this.living.length && !near; h++) { const p = this.living[h]; near = U.dist2(p.x, p.y, b.x, b.y) < RELIGHT_R * RELIGHT_R; }
+      if (!near) { b.broken = false; b.hp = 1; }
+    }
   };
 
   // Hero p collects pickup g: gems -> party XP (x the collector's growth), gold (x goldMul), food heal, magnet (vacuums every gem on the map), holy bomb (kills every non-elite, non-boss foe in view), chest.
