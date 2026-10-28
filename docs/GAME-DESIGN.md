@@ -143,6 +143,7 @@ Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (m
 
 ## 12. Feel (juice)
 
+- Pixel-only world: every world visual (sprites, zones, telegraphs, rings, cones, lines) is pixel art at 1 art px = 1 world px with hard edges (no anti-aliasing), integer-upscaled; only post effects (bloom, grade, vignette) are smooth.
 - Hit flash on every hit (white 60 ms); knockback on non-brute foes.
 - Death burst particles (pooled), capped per frame.
 - Damage numbers: on by default, merged per foe per 150 ms, capped at 60 alive (oldest dropped); crits bigger and yellow.

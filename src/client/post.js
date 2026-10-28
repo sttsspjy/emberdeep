@@ -1,7 +1,7 @@
 // WebGL present + post-process. The world arrives as a small image (1 px = 1 world px): either ED.Batch's GL render target (o.tex, same context, no upload) or the 2D world buffer canvas
 // (uploaded as a texture). Post renders bloom (1/2 of
 // the buffer, 2 separable blur iterations) at buffer resolution, then composites to the screen-size WebGL canvas with a sharp-bilinear upscale (crisp art pixels at
-// non-integer scales, the fractional camera offset applied here), a per-stage colour grade (Post.grade(theme): { id, pal: { accent, light } }), vignette, film grain and FX-driven chromatic aberration. The WebGL canvas sits
+// non-integer scales, the fractional camera offset applied here), a per-stage colour grade (Post.grade(theme): { id, pal: { accent, light } }), vignette, film grain and FX-driven chromatic aberration (channel offsets rounded to whole buffer px: at the integer scales Render uses, art pixels stay exact nearest-neighbour squares). The WebGL canvas sits
 // beneath the transparent HUD canvas. Any failure leaves Post.ready false and Render falls back to the plain 2D present.
 (function (ED) {
   'use strict';
@@ -46,7 +46,7 @@ void main(){
   vec2 p=uv-.5;
   vec2 o=p*(aberr*(.35+dot(p,p)*3.));
   vec2 pd=vec2(gl_FragCoord.x,res.y-gl_FragCoord.y)/scl+off;
-  vec2 od=vec2(o.x*res.x,-o.y*res.y)/scl;
+  vec2 od=floor(vec2(o.x*res.x,-o.y*res.y)/scl+.5);
   vec3 c=vec3(samp(pd+od).r,samp(pd).g,samp(pd-od).b);
   c+=texture2D(bloom,vec2(pd.x/bsz.x,1.-pd.y/bsz.y)).rgb*bloomK;
   c=c*gain+lift;

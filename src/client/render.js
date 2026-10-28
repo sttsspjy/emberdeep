@@ -169,7 +169,7 @@
       PO_ARGS.biome = { id: sd.id, pal: theme.pal };
     }
     const me = view.me, A = view.props;
-    if (me) { R.camX = Math.round(me.x - R.bw / 2); R.camY = Math.round(me.y - 10 - R.bh / 2); }
+    if (me) { R.camX = Math.round(me.x) - (R.bw >> 1); R.camY = Math.round(me.y) - 10 - (R.bh >> 1); } // whole world px, a fixed offset from the hero's drawn px: the hero never jitters against the screen
     ED.FX.shakeXY(SH);
     const cx = R.camX + Math.round(SH.x), cy = R.camY + Math.round(SH.y);
     const postOk = R.quality === 'high' && P && P.ready && !P.soft;
