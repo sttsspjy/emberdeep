@@ -17,7 +17,7 @@ Units: world px (hero sprite ≈ 16–24 px tall), seconds. HP numbers are integ
 ## 2. Run structure (Survival mode)
 
 - **Length**: 15:00. Bosses at 5:00 and 10:00; the final boss at 15:00. Killing the final boss wins the run. At 17:00, if it is still alive, the final boss enrages (×3 damage and speed).
-- **Arena**: bounded 3200 × 3200 world px per stage, solid edge walls, 20–40 scattered obstacles (pillars, ruins; circle colliders, radius 12–40) that make chokepoints, 12–20 destructible braziers that drop pickups.
+- **Arena**: bounded 3200 × 3200 world px per stage, solid edge walls, 20–40 scattered obstacles (pillars, ruins; circle colliders, radius 12–40) that make chokepoints, 40–55 destructible braziers (≥ 220 px apart, about one on screen) that drop pickups; a broken brazier relights 60 s after breaking once no living hero is within 700 px.
 - **View**: about 640 × 360 world px (integer-scaled to the canvas). Each client follows its own hero.
 - **Stages**: 3 stages (themes from the old biomes), each with its own foe roster, palette, two mid-bosses and a final boss. Stage 1 is open; beating stage N unlocks N+1. Stage choice happens before the run.
 - **Victory screen**: time, kills, level, damage per weapon (bar chart), gold earned.
@@ -108,20 +108,20 @@ Max 6 passives. Passive cards also show a line naming the weapon they evolve.
 
 ## 7. Foes and spawning
 
-- **Spawn timeline** per stage, per minute: spawn rate (foes/s), alive cap, weighted roster. Foes spawn on a ring 380–460 px from a random living hero, never inside walls or obstacles.
+- **Spawn timeline** per stage, per minute: spawn rate (foes/s), alive cap, weighted roster. Foes spawn on a ring 380–460 px from a random living hero, never inside walls or obstacles; successive spawn angles step by the golden angle (±0.3 rad), so the horde closes in from every side. Rate 2 foes/s at 0:00 rising to about 30 at 14:00; the 0:00 roster is mostly chasers.
 - **Alive cap**: 300 at 0:00 rising to 700 at 12:00 (solo); +25% per extra player, hard cap 900.
-- **Density floor**: while fewer foes live than the floor, each tick spawns up to 10% of the deficit (max 40), refilling the screen within ~0.3 s. Floor = alive cap × min(0.6, 0.1 × minute): 0 at 0:00, 60% from 6:00. A fast-killing build still faces a full screen.
-- **Foe HP**: `base × (1 + 0.18 × minute) × (1 + 0.5 × (players − 1)) × stage HP` (stage HP 1 / 1.3 / 1.6).
-- **Contact damage**: 3 at 0:00 rising to 12 at 15:00, × stage damage (1 / 1.15 / 1.3). Foe shots and blasts: base × (1 + 1.2 × min(1, t / 15:00)) × stage damage.
-- **Foe kinds**: chaser (straight line), swarmer (fast, weak; packs of 12–16 at 0:00 growing to 20–30 by 10:00), brute (slow, 8× HP, knockback-immune, telegraphed slam), ranged (stops at 160 px, shoots a telegraphed bolt, fan or ring; only from inside the target's screen), exploder (telegraphed 0.7 s burst on contact), splitter (splits in 2–3 on death), charger (telegraphed dash; packs of 2–4), diver (telegraphed dive; packs of 3–5). Every attack telegraph is ≥ 0.6 s and aimed where the target stood when the wind-up began; killing, stunning or freezing the foe cancels it.
+- **Density floor**: while fewer foes live than the floor, each tick spawns up to 10% of the deficit (max 40), refilling the screen within ~0.3 s. Floor = alive cap × min(0.6, 0.1 + 0.05 × minute): 10% at 0:00 (pressure from the first seconds), 35% at 5:00, 60% from 10:00. A fast-killing build still faces a full screen.
+- **Foe HP**: `base × (1 + 0.24 × minute) × (1 + 0.5 × (players − 1)) × stage HP` (stage HP 1 / 0.85 / 0.9: the later stages' rosters and bosses are tougher, the factor evens them out). Base HP at 0:00 solo: chasers 36–42 (2–3 hits of a level-1 signature weapon), swarmers 15–21 (1–2 hits), brutes 300–420, ranged / chargers / divers / exploders / splitters 24–72.
+- **Contact damage**: 3 at 0:00 rising to 12 at 15:00, × stage damage (1 / 1 / 1). Foe shots and blasts: base (shots 4–5, blasts 10–12 at 0:00) × (1 + 1.2 × min(1, t / 15:00)) × stage damage.
+- **Foe kinds**: chaser (straight line), swarmer (fast, weak; packs of 4–6 at 0:00, 12–16 at 5:00, 20–30 from 10:00), brute (slow, 8× HP, knockback-immune, telegraphed slam), ranged (stops at 160 px, shoots a telegraphed bolt, fan or ring; only from inside the target's screen), exploder (telegraphed 0.7 s burst on contact), splitter (splits in 2–3 on death), charger (telegraphed dash; packs of 2–4), diver (telegraphed dive; packs of 3–5). Every attack telegraph is ≥ 0.6 s and aimed where the target stood when the wind-up began; killing, stunning or freezing the foe cancels it.
 - **Events**: a swarm wave every 90 s (a ring of 40–80 swarmers closing in, or a stampede line crossing the screen).
-- **Elites**: one every 60 s from 2:00 (a non-exploder roster foe at 2× size, 25× HP, glowing outline); drops a chest. Elite attacks change shape: ranged fire 2 more shots (ring casters 1.5×), charges and dives last 1.35× longer, brute slams get 1.5× radius plus a shot ring, splitters split into 3 extra children.
+- **Elites**: one every 60 s from 2:00 (a non-exploder roster foe at 2× size, 25× HP, glowing outline); drops a chest and, at 50%, food. Elite attacks change shape: ranged fire 2 more shots (ring casters 1.5×), charges and dives last 1.35× longer, brute slams get 1.5× radius plus a shot ring, splitters split into 3 extra children.
 - **Off-screen culling**: foes farther than 900 px (elites 1300 px) from every hero teleport to a fresh spawn point ahead of a hero; bosses never.
 - **Separation**: foes push apart on the spatial grid; they flow around obstacles.
 
 ## 8. Bosses
 
-Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 400 × minute × players factor`. Mid-bosses drop a chest with evolution priority. While a boss lives, normal spawns run at 50% rate.
+Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (minute / 5)^2.5 × players factor × stage HP` (1500 / 8485 / 23383 at 5:00 / 10:00 / 15:00). Mid-bosses drop a chest with evolution priority. While a boss lives, normal spawns run at 50% rate.
 
 - **Roster** (5:00 · 10:00 · final 15:00): Ossuary — Bone Warden · The Twins · Hollow King. Glowmire — Sporemother · Demon Cyclops · Drowned King. Abyss — Blue Samurai · Rift Weaver · The Wick-Eater.
 - **Rift Weaver**: rift gates around the target open into portals that shoot; warned threads cross the target (strands stay from phase 2); blink with a bolt ring; adds.
@@ -130,8 +130,8 @@ Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 400 × min
 ## 9. Pickups
 
 - **XP gems**: small (1), medium (5, from elites and brutes), large (25). When more than 350 gems lie on the ground, new ones merge into the nearest gem.
-- **Gold coins**: 1–5 from braziers and elites (meta currency), worth value × (1 + greed + luck / 2).
-- **Food**: heals 30 HP; braziers only (8% chance). No default sustain.
+- **Gold coins**: 1–5 from braziers (75%) and elites (meta currency), worth value × (1 + greed + luck / 2).
+- **Food**: heals 30 HP; braziers (20%) and elites (50%, on top of the chest). No passive regen by default.
 - **Magnet** (braziers, 3%): pulls every gem on the map.
 - **Holy Bomb** (braziers, 2%): kills every non-elite foe on screen.
 - **Chest**: from elites and bosses: evolves the first evolution-ready weapon; otherwise 1 roll, a 2nd at 30% + luck, a 3rd at 10% + luck / 2; each roll levels a random owned item (weapons weight 2, passives 1), or pays gold when nothing can level.

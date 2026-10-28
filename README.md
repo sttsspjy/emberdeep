@@ -32,7 +32,7 @@ Menus work with the keyboard too: arrows or WASD move between buttons, Enter pre
 2. Collect the gems foes drop. Each level offers 3–4 cards: a new weapon, a weapon level, a passive or a skill level. Solo play pauses while you choose.
 3. A weapon at level 8 evolves when you also own its paired passive: open the next chest to evolve it. Elites drop chests.
 4. Bosses arrive at 5:00 and 10:00; the final boss at 15:00. Beat it to win.
-5. Break braziers for gold, food, a magnet or a holy bomb.
+5. Break braziers for gold, food, a magnet or a holy bomb. A brazier relights a minute after it breaks once you are away from it; elites often drop food.
 6. The results screen shows how much damage each weapon and skill dealt.
 
 ## Stages and bosses
