@@ -116,11 +116,11 @@ for (const [cls, id] of [['cleric', 'boneshard'], ['bell', 'bonestorm']]) {
   for (const p of w.heroes) { w.setRanks(p, p.weapons[0], 9, false); for (const sk of p.skills) sk.lvl = 4; }
   const S = (p) => ED.Stats.weapon(p, 0), N = (p, i) => ED.Stats.skill(p, i);
   ok(S(k).back && S(k).wave === 3 && S(k).n === 3, 'knight: Cleave 333 swings back, 3 waves, 3 swings');
-  ok(S(r).back && S(r).ring === 4 && S(r).ringN === 24 && S(r).n === 4 && S(r).pierce === 3, 'ranger: Longbow 333 fires behind, ring of 24 every 4th, 4 arrows, pierce 3');
+  ok(S(r).heavy === 2 && S(r).two && S(r).n === 5 && S(r).pierce === 12 && S(r).bounce === 4 && S(r).kshot === 1, 'ranger: Longbow 333 heavy every 2nd, two targets, 5 arrows, pierce 12, 4 bounces, kill shots');
   ok(S(py).embers === 6 && S(py).n === 4 && S(py).pierce === 1, 'pyro: Fire Bolt 333 throws 6 embers, 4 bolts, pierce 1');
   ok(S(n).mshot && S(n).homing === 3 && S(n).n === 5 && S(n).pierce === 6 && Math.abs(S(n).rise - 0.14) < 1e-9, 'necro: Bone Shard 333 minion shots, homing, 5 shards, pierce 6, rise 14%');
   ok(N(k, 0).shards === 10 && N(k, 0).quake, 'knight: Charge quake + shards');
-  ok(N(r, 0).follow && N(r, 0).flank === 2, 'ranger: Volley follow + flank');
+  ok(N(r, 0).pin && N(r, 0).follow && N(r, 0).flank === 2, 'ranger: Volley pin + follow + flank');
   ok(N(py, 0).shards === 10 && N(py, 0).extra === 2, 'pyro: Meteor shards + extra');
   ok(N(n, 0).shards && N(n, 0).rerise, 'necro: Corpse Blast shards + rerise');
   // Skill damage: base x levels x might x weapon factor x (1 + 0.05 (party level - 1)).

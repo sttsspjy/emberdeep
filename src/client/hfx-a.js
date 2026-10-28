@@ -92,26 +92,6 @@
   // render.js looks zones up as WeaponFx[wid] || SkillFx[wid] and projectiles as WeaponFx[wid]: skills that also shoot share one entry in both tables.
   ED.SkillFx.charge = ED.WeaponFx.charge = { zone: knightZone, proj: shieldProj };
 
-  // ---------------- ranger ----------------
-  const rangerZone = (B, z, t) => {
-    if (z.k === 'arrows') { // arrow rain: arrows drop in 0.35 s cycles at hashed spots, dust where they land
-      const k = life(z, 0.1, 0.25), n = U.clamp(Math.round(z.r * z.r / 220), 10, 34);
-      kick(z, 2);
-      B.circ(z.x, z.y, z.r, rgba(0xd8d0c0, 26 * k), 0);
-      B.circ(z.x, z.y, z.r, rgba(0xf0e6d0, 110 * k), 1);
-      for (let i = 0; i < n; i++) {
-        const ph = H(z.id, i, 0), c = t / 0.35 + ph, cyc = Math.floor(c), f = c - cyc;
-        const a = H(z.id, i, cyc) * TAU, d = Math.sqrt(H(z.id, i + 77, cyc)) * z.r, x = z.x + Math.cos(a) * d, y = z.y + Math.sin(a) * d;
-        if (f < 0.8) B.spr('proj.arrow', 0, x + (1 - f) * 10, y - (1 - f / 0.8) * 70, o(k, 1, PI / 2 - 0.15));
-        else B.circ(x, y, 2 + (f - 0.8) * 20, rgba(0xe8dcc0, 160 * k * (1 - f) * 5), 1);
-      }
-      return true;
-    }
-    if (z.k === 'shock') return shock(B, z, 0xf0e6d0, 6);
-    return false;
-  };
-  ED.SkillFx.volley = { zone: rangerZone };
-
   // ---------------- pyro ----------------
   const fireTrail = (B, pr, t, sc) => {
     B.circ(pr.x, pr.y, 6 * sc, 0xff8a3d40, 0);
