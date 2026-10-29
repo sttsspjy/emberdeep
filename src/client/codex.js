@@ -1,6 +1,6 @@
 // Achievements and Encyclopedia screens (client only; DOM in #scr-achieve / #scr-codex, shown through ED.UI.show).
 // ED.Codex.renderAchievements(): one row per ED.UNLOCKS unlock (non-start heroes, non-start stages) with progress from ED.App.profile, plus lifetime and per-stage records.
-// ED.Codex.renderCodex(tab?): tab row (heroes | weapons | passives | foes | bosses | stages), entry list and detail pane, read from the data tables. Only what the profile has met
+// ED.Codex.renderCodex(tab?): tab row (heroes | weapons (hero weapons, then a Supports section) | passives | foes | bosses | stages), entry list and detail pane, read from the data tables. Only what the profile has met
 // (profile.seen via ED.Save.isSeen; bosses by their foe id) is described: the rest lists as a '???' silhouette whose detail says 'Not discovered yet' (plus the unlock line for
 // locked heroes / stages), and cross-references to unmet entries read '???'.
 // List entries select on click or on keyboard focus (a hover-focus never changes the detail).
@@ -27,6 +27,8 @@
   const UNSEEN = 'Not discovered yet';
   const seen = (k, id) => SV.isSeen(App().profile, k, id);
   const MODE = { cursor: 'Toward your cursor', around: 'Around you', random: 'Random foes', densest: 'Densest crowd' };
+  const ROLE = { horde: 'Horde', control: 'Control', lane: 'Lane' };
+  const supportRoots = () => ED.WEAPON_IDS.filter(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved);
 
   // ---------------- achievements ----------------
   // Unlock rows: { sec, icon, name, rule, k (0..1), txt, done }.
@@ -108,7 +110,7 @@
   // Forms of root weapon d: name and line once discovered, else ???; how to reach them stays hidden.
   const formLine = (box, d) => {
     const F = ED.weaponForms(d.id); if (!F.length) return;
-    h3(box, 'Forms (one per run)');
+    h3(box, F.length > 1 ? 'Forms (one per weapon, from chests)' : 'Form (from a chest)');
     for (const f of F) { const e = ED.WEAPONS[f.id]; ref(box, e.icon, e.name, e.txt, '', !seen('weapons', e.id)); }
   };
 
@@ -126,8 +128,8 @@
     skillBlock(box, h.skills[0], UI.keyOf('skill1', 'Q'));
   };
   const weaponDetail = (box, id) => {
-    const d = ED.WEAPONS[id], hero = d.sig && ED.HEROES[d.sig];
-    const tag = (d.form ? 'Form' : 'Weapon') + (hero ? ', ' + hero.name : '');
+    const d = ED.WEAPONS[id], hero = d.sig && ED.HEROES[d.sig], root = d.from && ED.WEAPONS[d.from];
+    const tag = d.form ? 'Form' + (root ? ' of ' + root.name : '') : d.support ? 'Support' + (ROLE[d.role] ? ', ' + ROLE[d.role] : '') : 'Weapon' + (hero ? ', ' + hero.name : '');
     head(box, d.icon, d.name, tag, d.txt);
     if (MODE[d.mode]) chips(box, [['Aims', MODE[d.mode]]]);
     if (d.form) { if (d.refine) { h3(box, 'Refine'); lvls(box, d.refine.map((l, i) => ['Rank ' + (i + 1), l.txt])); } return; }
@@ -193,7 +195,7 @@
     h3(box, 'Attacks');
     lvls(box, (BOSS_TXT[b.id] || []).map((t, i) => [String(i + 1), t]));
     para(box, 'Every attack is telegraphed: a red outline marks where it lands.', 'mut');
-    para(box, b.final ? 'Beat it to win the stage. Still alive at ' + U.fmtTime(ED.CONST.ENRAGE_T) + ', it enrages: x3 damage and speed.' : 'Drops a chest that evolves a ready weapon first.');
+    para(box, b.final ? 'Beat it to win the stage. Still alive at ' + U.fmtTime(ED.CONST.ENRAGE_T) + ', it enrages: x3 damage and speed.' : 'Drops a chest: pick a Form for a ready weapon, else an extra level-up.');
     para(box, 'HP grows with the party size.', 'mut');
   };
   const stageDetail = (box, i) => {
@@ -233,6 +235,13 @@
         out.push({ sec: h.name });
         out.push({ key: d.id, icon: d.icon, name: d.name, cls: '' });
         for (const f of ED.weaponForms(d.id)) { const e = ED.WEAPONS[f.id]; out.push({ key: e.id, icon: e.icon, name: e.name, cls: 'evo' }); }
+      }
+      const S = supportRoots();
+      if (S.length) out.push({ sec: 'Supports' });
+      for (const id of S) {
+        const d = ED.WEAPONS[id];
+        out.push({ key: id, icon: d.icon, name: d.name, cls: '' });
+        for (const f of ED.weaponForms(id)) { const e = ED.WEAPONS[f.id]; out.push({ key: e.id, icon: e.icon, name: e.name, cls: 'evo' }); }
       }
       return out;
     } },

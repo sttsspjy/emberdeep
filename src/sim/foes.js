@@ -1,7 +1,7 @@
 // Foe pool, spawn, per-tick update (statuses, knockback, brain, contact), kill and drops, elites, off-screen recycling (GAME-DESIGN §7).
 // Foe fields: ARCHITECTURE §4 plus internal ones: tgt (nearest living hero, retargeted every RETARGET ticks staggered by id), cd (contact cooldown), age, invulnT, takeMul (damage taken factor),
 // scale (draw scale), final (final boss), rushT / rx / ry (stampede or closing ring: fixed heading), burnTick, hev / hevT (hit aggregation), enraged,
-// acd (attack cooldown), aa (locked attack angle), tz / tzId (the brain's live telegraph zone; ai.js). No per-foe allocation: pooled objects carry every field.
+// acd (attack cooldown), aa (locked attack angle), tz / tzId (the brain's live telegraph zone; ai.js), ovT / ovK / ovX / ovY / ovP (skill override: flee or lure, ai.js). No per-foe allocation: pooled objects carry every field.
 (function (ED) {
   'use strict';
   const U = ED.U, W = ED.World.prototype;
@@ -32,6 +32,7 @@
     e.slowT = 0; e.slowK = 0; e.burnT = 0; e.burnDps = 0; e.burnOwner = null; e.burnTick = 0.5; e.stunT = 0; e.freezeT = 0;
     e.hitT = 0; e.vars = null; e.tgt = null; e.cd = 0; e.age = 0; e.invulnT = 0; e.takeMul = def.take || 1; e.scale = def.scale || 1; e.hev = 0; e.hevT = -1;
     e.rushT = 0; e.rx = 0; e.ry = 0; e.acd = 0.6 + (e.id % 7) * 0.2; e.aa = 0; e.tz = null; e.tzId = 0; e.dead = false;
+    e.ovT = 0; e.ovK = 0; e.ovX = 0; e.ovY = 0; e.ovP = null;
     if (opts && opts.rush) { e.rushT = opts.rush[2] || 6; e.rx = opts.rush[0]; e.ry = opts.rush[1]; }
     if (opts && opts.elite) this.promoteElite(e);
     this.foes.push(e);
@@ -98,7 +99,8 @@
         e.x += e.vx * dt; e.y += e.vy * dt; e.face = e.rx < 0 ? -1 : 1;
         if (e.x < -60 || e.y < -60 || e.x > A.size + 60 || e.y > A.size + 60) e.rushT = 0;
         ED.Arena.collide(A, e, e.r);
-      } else if (tg) {
+      } else if (e.ovT > 0) ED.AI.override(this, e, dt);
+      else if (tg) {
         const brain = ED.AI[e.def.ai] || ED.AI.chaser;
         brain(this, e, dt);
       }

@@ -155,6 +155,11 @@ const full = S.normalize(rich); for (const k of S.SEEN_KEYS) full.seen[k] = ids(
 const fullBack = S.decode(S.encode(full));
 ok(eq(fullBack.seen, full.seen), 'everything seen: round trip (' + S.encode(full).length + ' chars)');
 ok(eq(S.decode(S.encode(sp)).seen, sp.seen), 'partial seen: round trip');
+const sv = S.normalize({ played: ['knight'] }), srec = S.seenRun();
+S.seenView(srec, { stage: 0, me: { cls: 'knight', weapons: [{ id: 'cleave' }, { id: 'censer' }, { id: 'avalanche' }, { id: 'waraxe' }], passives: [] }, foes: [], boss: null }, 0, 0, 640, 360);
+S.mergeSeen(sv, srec);
+ok(['censer', 'avalanche', 'waraxe'].every(id => S.isSeen(sv, 'weapons', id) && S.isSeen(S.decode(S.encode(sv)), 'weapons', id)) && S.SEEN_WEAPONS.indexOf('waraxe') > S.SEEN_WEAPONS.indexOf('windchime'),
+  'support slots (and their Forms) are seen and survive the save code; new supports append after the hero weapons');
 // A v1 code from before the seen section: played Knight, stage 1 best -> back-fill only.
 const wv = S._writer(); wv.u8(1); wv.vu(0); wv.vu(0); wv.vu(0); wv.vu(0); wv.vu(1); wv.u8(3); wv.vu(1); wv.u8(4); wv.vu(30); wv.vu(5); wv.vu(2); wv.vu(0);
 const pre = S.decode(S._pack(wv.b));

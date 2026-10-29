@@ -1,4 +1,4 @@
-// Pyro: hero data, signature Fire Bolt (3 paths x 3 ranks: Blaze, Mortar, Combustion), Forms Inferno / Firestorm / Wildfire (pure) and Pyre / Napalm (hybrid), Q Meteor (3 skill levels).
+// Pyro: hero data, signature Fire Bolt (3 paths x 3 ranks: Blaze, Mortar, Combustion), Forms Inferno / Firestorm / Wildfire (pure) and Pyre / Napalm (hybrid), Q Flashpoint (3 skill levels).
 // Role: area denial. Instant hits are weak; fire pools, burns and death blasts carry the damage. Every damage source credits the slot's current id (ws.id).
 // Ground fire (pools 'firepool', pyres 'pyre', fire lines 'napalm') lives in ws.st.pools (ring of live zones, refs checked by id), at most POOL_MAX + S.pools per hero; a new one past the cap ends the oldest.
 // Shared by the root and every Form (impl.tick / impl.kill): Mortar shells (S.shells, Forms with def.shellForm lob their own), death blasts of burning foes (S.combust) and fire leaps (S.spread).
@@ -7,8 +7,8 @@
   const U = ED.U, TAU = U.TAU;
   const POOL_MAX = 12, INF_R = 95, DQ_MAX = 40, RANGE = 210, SHELL_RANGE = 220;
 
-  ED.regLook('firepool', 'ember', 'meteor', 'crater', 'shell', 'bomblet', 'pyre', 'napalm', 'seed', 'echo');
-  ED.addHero({ id: 'pyro', name: 'Pyro', hp: 85, speed: 74, crit: 0.05, sig: 'firebolt', skills: ['meteor'], icon: 'hero.pyro.idle', col: '#ff8a3d', txt: 'Paints the ground with fire.' });
+  ED.regLook('firepool', 'ember', 'meteor', 'crater', 'shell', 'bomblet', 'pyre', 'napalm', 'seed', 'echo', 'flash');
+  ED.addHero({ id: 'pyro', name: 'Pyro', hp: 85, speed: 74, crit: 0.05, sig: 'firebolt', skills: ['flashpoint'], icon: 'hero.pyro.idle', col: '#ff8a3d', txt: 'Paints the ground with fire.' });
 
   // ---------------- ground fire ----------------
   // Live ground-fire list of a slot: ws.st.pools = [zone], ws.st.ids = [id]; returns the live count after dropping dead entries.
@@ -345,38 +345,30 @@
     return true;
   }));
 
-  // ---------------- skill ----------------
-  // Meteor: a 0.6 s fall onto the cursor (team 0 warn zone, z.st = { dmg, echo }), then an impact: the whole radius takes 0.12 x dmg, knockback 320 and a short burn; the core (0.4 r) takes 0.88 x more;
-  // a burning crater stays on the core (0.15 x dmg per second, 3 s x duration). echo: the core erupts again 1 s later (0.5 x dmg, 1.2 x r, look 'echo');
-  // extra: that many 0.6 x meteors (0.7 r) land around it, 0.15 s apart.
-  const RIM = { look: 'meteor', burn: [0, 2], knock: 320 }, CORE = { look: 'meteor', noEv: true, knock: 0 };
-  const CRATER = { team: 0, p: null, wid: 'meteor', x: 0, y: 0, r: 0, dur: 3, dps: 0, tick: 0.5, burn: null, look: 'crater' };
-  const impact = (w, p, x, y, r, dmg) => {
-    RIM.burn[0] = dmg * 0.05;
-    w.blast(p, 'meteor', x, y, r, dmg * 0.12, RIM);
-    w.blast(p, 'meteor', x, y, r * 0.4, dmg * 0.88, CORE);
-  };
-  const echoEnd = (w, z) => impact(w, z.p, z.x, z.y, z.r, z.st.dmg * 0.5);
-  const metEnd = (w, z) => {
-    const s = z.st, p = z.p;
-    impact(w, p, z.x, z.y, z.r, s.dmg);
-    CRATER.p = p; CRATER.x = z.x; CRATER.y = z.y; CRATER.r = z.r * 0.4; CRATER.dur = 3 * (1 + p.stats.duration); CRATER.dps = s.dmg * 0.15;
-    w.zone(CRATER);
-    if (s.echo) w.zone({ team: 0, warn: true, p, wid: 'meteor', x: z.x, y: z.y, r: z.r * 1.2, dur: 1, look: 'echo', st: s, onEnd: echoEnd });
-  };
-  const meteor = (w, p, x, y, r, dmg, fall, echo) => w.zone({ team: 0, warn: true, p, wid: 'meteor', x, y, r, dur: fall, look: 'meteor', st: { dmg, echo }, onEnd: metEnd });
+  // ---------------- Q: Flashpoint ----------------
+  // Zero damage. A flash at the hero: every foe within N.r px (inside its view) slides N.push px away (W.push: elites half, bosses and knockback-immune foes stay) and flees from
+  // the hero for N.flee s (W.foeFlee; bosses never); gems (L4): every xp gem within N.gem px flies to the hero. Zone 'flash' (visual, r = flash radius).
   ED.addSkill({
-    id: 'meteor', name: 'Meteor', icon: 'proj.fireball', cd: 11, txt: 'A meteor falls on the cursor',
-    base: { dmg: 75, r: 55, fall: 0.6, echo: 0, extra: 0 },
+    id: 'flashpoint', name: 'Flashpoint', icon: 'fx.blast.red', cd: 10, txt: 'A flash that sends the horde fleeing',
+    base: { r: 140, push: 120, flee: 2, gem: 0 },
     levels: [
-      { mods: { r: 0.4 }, txt: '+40% impact size' },
-      { mods: { echo: 1 }, txt: 'The crater erupts again 1 s later' },
-      { mods: { extra: 2 }, txt: '+2 meteors land around it' },
+      { mods: { r: 0.3 }, txt: '+30% flash radius' },
+      { mods: { flee: 1.5 }, txt: 'Foes flee 1.5 s longer' },
+      { mods: { gem: 200 }, txt: 'The flash pulls in gems' },
     ],
   }, (w, p, x, y, N) => {
-    meteor(w, p, x, y, N.r, N.dmg, N.fall, N.echo | 0);
-    const m = N.extra | 0, a0 = Math.atan2(y - p.y, x - p.x);
-    for (let i = 0; i < m; i++) { const a = a0 + Math.PI / 2 + i / m * TAU; meteor(w, p, x + Math.cos(a) * N.r * 1.3, y + Math.sin(a) * N.r * 1.3, N.r * 0.7, N.dmg * 0.6, N.fall + 0.15 * (i + 1), 0); }
-    return { r: Math.round(N.r), shake: 5, stop: 0.04 };
+    const R = N.r, q = w.foeScan(p.x, p.y, R);
+    let n = 0;
+    for (let k = 0; k < q.length; k++) {
+      const e = q[k];
+      if (e.dead || U.dist2(p.x, p.y, e.x, e.y) > (R + e.r) * (R + e.r) || !ED.inView(p, e.x, e.y, e.r)) continue;
+      w.push(e, p.x, p.y, N.push);
+      w.foeFlee(e, p, N.flee);
+      n++;
+    }
+    w.foeEnd();
+    if (N.gem > 0) w.pullGems(p, p.x, p.y, N.gem);
+    w.zone({ team: 0, p, wid: 'flashpoint', x: p.x, y: p.y, r: R, dur: 0.5, look: 'flash' });
+    return { r: Math.round(R), n, shake: 6, stop: 0.05 };
   });
 })(globalThis.ED || (globalThis.ED = {}));

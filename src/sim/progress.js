@@ -1,17 +1,18 @@
-﻿// Pickups, party XP / levels, card offers, banish / reroll / skip, chests, gold and the per-weapon damage table (GAME-DESIGN 짠6, 짠9; ARCHITECTURE 짠8).
+﻿// Pickups, party XP / levels, card offers, banish / reroll / skip, chests, gold and the per-weapon damage table (GAME-DESIGN §6, §9; ARCHITECTURE §8).
 // Pickup k: 'xp1' | 'xp5' | 'xp25' (val = XP) | 'gold' (val coins) | 'food' (val HP) | 'magnet' | 'bomb' | 'chest' (val 1 elite, 2 boss). Gems merge into the nearest gem above GEM_CAP on the ground.
 // Gems and gold are pulled inside the hero's pickup radius; food, magnet, bomb and chests need a touch. Pulled pickups fly to the hero with an accelerating curve.
 // Braziers break on a hero's touch (weapon hits: combat.js) and relight RELIGHT s after breaking, once no living hero is within RELIGHT_R px.
-// Card: { kind: 'path'|'form'|'refine'|'passive'|'plvl'|'skill'|'gold'|'heal', id (path: root weapon id; form / refine: form id), path (path index; form: -1 hybrid), lvl (rank / level after the pick),
-//   name (path: path name), txt (<= 40 chars), sub (always ''), icon, val (gold / heal amount) }.
-// Hero fields (initHeroProgress): rerolls, skips, banishes (counts from meta stats), banned (card keys, see cardKey, removed from this run's pool).
+// Card: { kind: 'path'|'support'|'form'|'refine'|'passive'|'plvl'|'skill'|'gold'|'heal', id (path / support: root weapon id; form / refine: form id), path (path index; form: -1 hybrid),
+//   lvl (rank / level after the pick), name (path: path name), txt (<= 40 chars), sub (always ''), icon, val (gold / heal amount) }.
+// Level-up offers hold no Form cards. A Form offer (every card kind 'form', one per ready Form of any slot) comes from chests only (chestFor); it takes picks only (no reroll / skip / banish).
+// Hero fields (initHeroProgress): rerolls, skips, banishes (counts from meta stats), banned (card keys, see cardKey, removed from this run's pool), pendForm (queued Form offers).
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST, W = ED.World.prototype;
   const GEM_CAP = 350, TOUCH = 6, GOLD_CARD = 25, HEAL_CARD = 30, RELIGHT = 60, RELIGHT_R = 700;
 
   W.initProgress = function () { this.pickPool = []; this.gemCount = 0; };
-  W.initHeroProgress = function (p) { p.rerolls = p.stats.rerolls | 0; p.skips = p.stats.skips | 0; p.banishes = p.stats.banishes | 0; p.banned = []; };
+  W.initHeroProgress = function (p) { p.rerolls = p.stats.rerolls | 0; p.skips = p.stats.skips | 0; p.banishes = p.stats.banishes | 0; p.banned = []; p.pendForm = 0; };
   const gemKind = (v) => (v >= 25 ? 'xp25' : v >= 5 ? 'xp5' : 'xp1');
   const isGem = (k) => k === 'xp1' || k === 'xp5' || k === 'xp25';
   // Gold multiplier of hero p: greed adds fully, luck adds half (GAME-DESIGN 짠5 Fortune: more gold).
@@ -96,20 +97,23 @@
       for (const p of this.heroes) if (!p.dead) p.pend++;
     }
   };
+  // Opens the next queued offer of each living hero: a Form offer first (none ready any more: an extra level-up instead), then level-ups.
   W.updateProgress = function () {
     for (const p of this.heroes) {
-      if (!this.alive(p) || p.offer || p.pend <= 0) continue;
-      p.pend--; p.offer = this.makeOffer(p);
+      if (!this.alive(p) || p.offer || (p.pend <= 0 && !(p.pendForm > 0))) continue;
+      if (p.pendForm > 0) { p.pendForm--; p.offer = this.makeFormOffer(p); if (!p.offer) { p.pend++; continue; } }
+      else { p.pend--; p.offer = this.makeOffer(p); }
       this.emit({ t: 'offer', pid: p.pid });
       if (this.solo()) this.paused = true;
     }
   };
-  // Inputs that act on offers (also while paused): pick 1-4, banish 1-4 (p.banishes), reroll (p.rerolls), skip (p.skips).
+  // Inputs that act on offers (also while paused): pick 1-4, banish 1-4 (p.banishes), reroll (p.rerolls), skip (p.skips); a Form offer takes picks only.
   W.applyPicks = function () {
     for (const p of this.heroes) {
       const I = p.in;
       if (p.offer && !p.dead) {
         if (I.pick) this.pickCard(p, I.pick - 1);
+        else if (isFormOffer(p.offer)) { /* picks only */ }
         else if (I.banish) this.banishCard(p, I.banish - 1);
         else if (I.reroll && p.rerolls > 0) { p.rerolls--; p.offer = this.makeOffer(p); this.emit({ t: 'offer', pid: p.pid, reroll: true }); }
         else if (I.skip && p.skips > 0) { p.skips--; p.offer = null; this.emit({ t: 'pick', pid: p.pid, kind: 'skip', id: '' }); }
@@ -121,8 +125,8 @@
   };
 
   // ---------------- cards ----------------
-  // Card keys (banish): path 'r:<root>:<i>', form 'f:<form>', refine 'x:<form>', passive 'p:<id>', skill 's:<id>'.
-  const cardKey = (c) => (c.kind === 'path' ? 'r:' + c.id + ':' + c.path : c.kind === 'form' ? 'f:' + c.id : c.kind === 'refine' ? 'x:' + c.id
+  // Card keys (banish): path 'r:<root>:<i>', new support 'w:<root>', form 'f:<form>', refine 'x:<form>', passive 'p:<id>', skill 's:<id>'.
+  const cardKey = (c) => (c.kind === 'path' ? 'r:' + c.id + ':' + c.path : c.kind === 'support' ? 'w:' + c.id : c.kind === 'form' ? 'f:' + c.id : c.kind === 'refine' ? 'x:' + c.id
     : c.kind === 'passive' || c.kind === 'plvl' ? 'p:' + c.id : c.kind === 'skill' ? 's:' + c.id : c.id);
   W.cardKey = cardKey;
   const ownsP = (p, pid) => p.passives.some(ps => ps.id === pid);
@@ -132,6 +136,7 @@
     const d = ED.WEAPONS[ws.root], pa = d.paths[i], r = pa.ranks[ws.pr[i]];
     return { kind: 'path', id: ws.root, path: i, lvl: ws.pr[i] + 1, name: pa.name, txt: (r && r.txt) || 'Path rank', sub: '', icon: d.icon, val: 0 };
   };
+  const supportCard = (id) => { const d = ED.WEAPONS[id]; return { kind: 'support', id, path: -1, lvl: 1, name: d.name, txt: d.txt || 'New support', sub: '', icon: d.icon, val: 0 }; };
   const formCard = (f) => { const d = ED.WEAPONS[f.id]; return { kind: 'form', id: f.id, path: f.path, lvl: 1, name: d.name, txt: d.txt || 'New form', sub: '', icon: d.icon, val: 0 }; };
   const refineCard = (ws) => { const d = ED.WEAPONS[ws.id], r = d.refine[ws.fl]; return { kind: 'refine', id: ws.id, path: -1, lvl: ws.fl + 1, name: d.name, txt: (r && r.txt) || 'Refine', sub: '', icon: d.icon, val: 0 }; };
   // Passive card: line per level (def.lines) or def.txt.
@@ -140,8 +145,15 @@
   W.goldCard = function (p) { return { kind: 'gold', id: 'gold', lvl: 0, name: 'Gold', txt: '+' + Math.round(GOLD_CARD * this.goldMul(p)) + ' gold', sub: '', icon: 'pickup.coin', val: Math.round(GOLD_CARD * this.goldMul(p)) }; };
   const healCard = () => ({ kind: 'heal', id: 'heal', lvl: 0, name: 'Meal', txt: '+' + HEAL_CARD + ' HP', sub: '', icon: 'pickup.heart', val: HEAL_CARD });
 
-  // Weighted card pool of hero p ([{ w, c }]), without banned keys and keys in `skip` (cards already shown).
-  // Weights: path rank 4; Form 6 (no Form taken yet: pure Forms of paths at rank 3, hybrids with both paths at rank 3); refine 3; new passive 2; passive level 3 (+1.5 with every passive slot full); skill 1.5.
+  // Supports hero p may still add (registration order): registered support roots (not Forms) it does not hold; [] while every slot is full.
+  const supportsFree = (p) => {
+    const out = [];
+    if (p.weapons.length >= ED.MAX_WEAPONS) return out;
+    for (const id of ED.WEAPON_IDS) { const d = ED.WEAPONS[id]; if (d.support && !d.evolved && !p.weapons.some(ws => ws.root === id)) out.push(id); }
+    return out;
+  };
+  // Weighted card pool of hero p ([{ w, c }]), without banned keys and keys in `skip` (cards already shown). No Form cards (chest Form offers only).
+  // Weights: path rank 4 (every slot); new support 2.5 (while a support slot is free); refine 3; new passive 2; passive level 3 (+1.5 with every passive slot full); skill 1.5.
   W.cardPool = function (p, skip) {
     const pool = [], ban = p.banned || [], pFull = p.passives.length >= ED.MAX_PASSIVES;
     const take = (w, c) => { const k = cardKey(c); if (ban.indexOf(k) < 0 && (!skip || skip.indexOf(k) < 0)) pool.push({ w, c }); };
@@ -149,10 +161,10 @@
       const d = ED.WEAPONS[ws.root];
       if (!d || !d.paths) continue;
       for (let i = 0; i < d.paths.length; i++) if (ws.pr[i] < Math.min(ED.PATH_MAX, d.paths[i].ranks.length)) take(4, pathCard(ws, i));
-      for (const f of this.formsReady(p, ws)) take(6, formCard(f));
       const fd = ED.WEAPONS[ws.id];
       if (ws.evo && fd.refine && ws.fl < fd.refine.length) take(3, refineCard(ws));
     }
+    for (const id of supportsFree(p)) take(2.5, supportCard(id));
     if (!pFull) for (const id of ED.PASSIVE_IDS) if (!ownsP(p, id)) take(2, passiveCard(id, 1));
     for (const ps of p.passives) if (ps.lvl < ED.PASSIVES[ps.id].max) take(3 + (pFull ? 1.5 : 0), passiveCard(ps.id, ps.lvl + 1));
     for (const sk of p.skills) {
@@ -162,9 +174,11 @@
     }
     return pool;
   };
-  const isWeapon = (c) => c.kind === 'path' || c.kind === 'form' || c.kind === 'refine';
+  const isWeapon = (c) => c.kind === 'path' || c.kind === 'support' || c.kind === 'refine';
+  const isFormOffer = W.isFormOffer = (o) => !!(o && o.length && o[0].kind === 'form');
   // Offer of hero p: 3 cards (a 4th when a luck roll succeeds), weighted draw without repeats; missing cards are filled with Gold, then Meal.
-  // Weapon guarantee: the first draws come from the weapon cards (path rank, Form, refine) - 2 for the offers of levels 2-5, else 1, as far as the pool holds them; the drawn cards are then shuffled.
+  // Weapon guarantee: the first draws come from the weapon cards (path rank of any slot, new support, refine) - 2 for the offers of levels 2-5, else 1, as far as the pool holds them;
+  // the drawn cards are then shuffled.
   W.makeOffer = function (p) {
     const pool = this.cardPool(p, null), n = 3 + (this.rng.next() < p.stats.luck ? 1 : 0), out = [], need = Math.min(n, this.level - p.pend <= 5 ? 2 : 1); // offer's own level: queued offers count back from party level
     while (out.length < need) {
@@ -182,10 +196,30 @@
     if (out.length < n) out.push(healCard());
     return out;
   };
-  // Banishes card i of p's offer: its item leaves this run's pool and a fresh card replaces it (dropped when the pool is empty). Gold / Meal cannot be banished. Returns true when done.
+  // Every Form hero p may take now, all slots in slot order: [{ ws, f }].
+  W.formsReadyAll = function (p) {
+    const out = [];
+    for (const ws of p.weapons) for (const f of this.formsReady(p, ws)) out.push({ ws, f });
+    return out;
+  };
+  const FORM_OFFER = 4;
+  // Form offer of hero p: one 'form' card per ready Form in slot order; above 4, 4 drawn by this.rng (hero-weapon Forms weight 2, support Forms 1), kept in slot order. null when none is ready.
+  W.makeFormOffer = function (p) {
+    const all = this.formsReadyAll(p);
+    if (!all.length) return null;
+    let pick = all;
+    if (all.length > FORM_OFFER) {
+      const pool = all.map((x, i) => ({ i, w: ED.WEAPONS[x.ws.root].support ? 1 : 2 })), keep = [];
+      while (keep.length < FORM_OFFER) { const it = this.rng.weighted(pool, x => x.w); pool.splice(pool.indexOf(it), 1); keep.push(it.i); }
+      keep.sort((a, b) => a - b); pick = keep.map(i => all[i]);
+    }
+    return pick.map(x => formCard(x.f));
+  };
+  // Banishes card i of p's offer: its item leaves this run's pool and a fresh card replaces it (dropped when the pool is empty). Gold / Meal and Form offers cannot be banished.
+  // Returns true when done.
   W.banishCard = function (p, i) {
     const c = p.offer && p.offer[i];
-    if (!c || p.banishes <= 0 || c.kind === 'gold' || c.kind === 'heal') return false;
+    if (!c || p.banishes <= 0 || c.kind === 'gold' || c.kind === 'heal' || isFormOffer(p.offer)) return false;
     p.banishes--; p.banned.push(cardKey(c));
     p.offer = p.offer.slice(); // a new array: the host resends offers when the reference changes
     const shown = p.offer.map(cardKey), pool = this.cardPool(p, shown);
@@ -211,6 +245,7 @@
   const slotOf = (p, rid) => p.weapons.find(x => x.root === rid);
   W.applyCard = function (p, c) {
     if (c.kind === 'path') { const ws = slotOf(p, c.id); if (ws) this.rankPath(p, ws, c.path); }
+    else if (c.kind === 'support') this.addWeapon(p, c.id);
     else if (c.kind === 'form') { const ws = slotOf(p, ED.weaponRoot(c.id)); if (ws && this.formsReady(p, ws).some(f => f.id === c.id)) this.takeForm(p, ws, c.id); }
     else if (c.kind === 'refine') { const ws = p.weapons.find(x => x.id === c.id); if (ws) this.refineForm(p, ws); }
     else if (c.kind === 'passive') { if (p.passives.length < ED.MAX_PASSIVES && !ownsP(p, c.id)) p.passives.push({ id: c.id, lvl: 1 }); }
@@ -227,12 +262,16 @@
     for (const q of this.heroes) if (!q.dead || q === p) { const r = this.chestFor(q, val); if (q === p) mine = r; }
     return mine || [];
   };
-  // Chest reward for hero p. Elite (val 1): one roll levelling a random owned passive or skill below max (never paths / Forms: those are choices); nothing to level pays 25 gold x goldMul.
-  // Boss (val 2): one extra level-up offer for p (p.pend++; a downed hero picks after revival).
-  // Emits 'chest' { pid, val, results: [{ kind: 'plvl'|'skill'|'gold'|'offer', id, lvl, name, icon, txt, val (gold) }] } and returns results.
+  // Chest reward for hero p (a downed hero picks its offers after revival). Form offer: queued (p.pendForm++) while p has more slots with a ready Form than queued Form offers.
+  // Boss (val 2): a Form offer, else one extra level-up offer (p.pend++). Elite (val 1): from the benchmark (w.sp.bench) a Form offer when one is ready; else one roll levelling a random
+  // owned passive or skill below max (never paths: those are choices); nothing to level pays 25 gold x goldMul.
+  // Emits 'chest' { pid, val, results: [{ kind: 'form'|'offer'|'plvl'|'skill'|'gold', id, lvl, name, icon, txt, val (gold) }] } and returns results.
   W.chestFor = function (p, val) {
-    const results = [];
-    if ((val | 0) >= 2) {
+    const results = [], boss = (val | 0) >= 2;
+    if ((boss || (this.sp && this.sp.bench)) && p.weapons.filter(ws => this.formsReady(p, ws).length).length > (p.pendForm | 0)) {
+      p.pendForm = (p.pendForm | 0) + 1;
+      results.push({ kind: 'form', id: 'form', lvl: 0, name: 'Form', icon: 'fx.spark.magic', txt: 'Choose a Form', val: 0 });
+    } else if (boss) {
       p.pend++;
       results.push({ kind: 'offer', id: 'offer', lvl: 0, name: 'Level up', icon: 'fx.spark.magic', txt: 'An extra level-up', val: 0 });
     } else {

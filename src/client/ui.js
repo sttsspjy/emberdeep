@@ -278,16 +278,18 @@
   // ---------------- level-up offer ----------------
   // A Form shows as ??? until the profile has seen it (Encyclopedia record).
   const formKnown = UI.formKnown = (id) => !!(ED.Meta && ED.Meta.seen && ED.Meta.seen('weapons', id));
-  // Card face: name, line, badge, rank pips, Form flag. Path: weapon + path name, rank line; Form: name or ???; refine: Form name.
+  // Card face: name, line, badge, rank pips, Form flag. Path: weapon + path name, rank line; support: support name, line; Form: name or ??? (line names the weapon it evolves); refine: Form name.
   function cardInfo(me, c) {
     const o = { name: c.name, txt: c.txt, badge: '', bcls: '', max: 0, lvl: c.lvl || 0, ready: false };
     if (c.kind === 'path') {
       const d = ED.WEAPONS[c.id];
       o.name = (d ? d.name + ': ' : '') + c.name; o.max = ED.PATH_MAX || 3;
       o.badge = 'RANK ' + c.lvl; o.bcls = 'lv';
+    } else if (c.kind === 'support') {
+      o.badge = 'NEW SUPPORT'; o.bcls = 'new';
     } else if (c.kind === 'form') {
-      const known = formKnown(c.id);
-      o.name = known ? c.name : '???'; o.txt = known ? c.txt : 'An unknown form';
+      const known = formKnown(c.id), d = ED.WEAPONS[c.id], r = d && ED.WEAPONS[d.from];
+      o.name = known ? c.name : '???'; o.txt = known ? c.txt : r ? 'Unknown form of ' + r.name : 'An unknown form';
       o.badge = 'FORM'; o.bcls = 'new'; o.ready = true;
     } else if (c.kind === 'refine') {
       const d = ED.WEAPONS[c.id]; o.max = d && d.refine ? d.refine.length : 2;
@@ -311,12 +313,12 @@
     ov.hidden = !offer;
     ov.classList.toggle('strip', !solo);
     if (!offer) return;
-    const v = ED.Game.view;
-    $('offer-title').textContent = solo ? 'Level ' + (v ? v.level : '') + '!' : 'Level up: press 1-' + offer.length;
+    const v = ED.Game.view, form = offer[0].kind === 'form'; // Form offer (chest): picks only
+    $('offer-title').textContent = form ? (solo ? 'Choose a Form' : 'Choose a Form: press 1-' + offer.length) : solo ? 'Level ' + (v ? v.level : '') + '!' : 'Level up: press 1-' + offer.length;
     const box = $('offer-cards'); box.textContent = '';
     offer.forEach((c, i) => {
       const f = cardInfo(me, c), b = document.createElement('button');
-      const banOk = UI.banishOn && c.kind !== 'gold' && c.kind !== 'heal';
+      const banOk = UI.banishOn && !form && c.kind !== 'gold' && c.kind !== 'heal';
       b.className = 'offer-card k-' + c.kind + (f.ready ? ' evo-ready' : '') + (banOk ? ' banish' : '');
       b.insertAdjacentHTML('beforeend', `<span class="key">${keyOf('pick' + (i + 1), String(i + 1))}</span>`);
       b.appendChild(UI.iconCanvas(c.kind === 'form' && f.name === '???' ? 'fx.spark.magic' : c.icon, 64, 'ic'));
@@ -330,7 +332,7 @@
     sk.textContent = 'Skip (' + keyOf('skip', 'X') + ') ' + me.skips; sk.disabled = !(me.skips > 0);
     const bn = $('btn-banish');
     bn.textContent = (UI.banishOn ? 'Pick a card to banish ' : 'Banish ') + (me.banishes | 0); bn.disabled = !(me.banishes > 0); bn.classList.toggle('on', UI.banishOn);
-    $('offer-foot').hidden = !(me.rerolls > 0 || me.skips > 0 || me.banishes > 0);
+    $('offer-foot').hidden = form || !(me.rerolls > 0 || me.skips > 0 || me.banishes > 0);
   };
 
   // ---------------- chest popup ----------------
@@ -341,16 +343,17 @@
     if (now) { el.hidden = true; el.classList.remove('out'); return; }
     el.classList.add('out'); chestOut = setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, 350);
   }
-  UI.showChest = (results) => {
+  // Chest popup for results (chestFor); val 2: boss chest. A 'form' / 'offer' row (an offer follows) keeps the popup up longer.
+  UI.showChest = (results, val) => {
     const me = ED.Game.view && ED.Game.view.me, list = $('chest-list'), el = $('ov-chest');
     list.textContent = '';
     let evo = false;
     for (const r of results) {
       const row = document.createElement('div'); row.className = 'chest-row';
-      if (r.kind === 'offer') {
+      if (r.kind === 'offer' || r.kind === 'form') {
         evo = true; row.classList.add('evo');
         row.appendChild(UI.iconCanvas(r.icon || 'fx.spark.magic', 48));
-        row.insertAdjacentHTML('beforeend', `<span>${esc(r.txt || 'An extra level-up')}</span>`);
+        row.insertAdjacentHTML('beforeend', `<span>${esc(r.txt || (r.kind === 'form' ? 'Choose a Form' : 'An extra level-up'))}</span>`);
       } else if (r.kind === 'plvl' || r.kind === 'skill') {
         const d = r.kind === 'plvl' ? ED.PASSIVES[r.id] : ED.SKILLS[r.id], slot = me && (r.kind === 'plvl' ? me.passives : me.skills).find(x => x.id === r.id);
         if (d) row.appendChild(UI.iconCanvas(d.icon, 48));
@@ -362,14 +365,14 @@
       row.style.animationDelay = (list.children.length * 0.12 + 0.15) + 's';
       list.appendChild(row);
     }
-    $('chest-head').textContent = evo ? 'Boss chest!' : 'Chest!';
+    $('chest-head').textContent = (val === undefined ? evo : val >= 2) ? 'Boss chest!' : 'Chest!';
     clearTimeout(chestT); clearTimeout(chestOut);
     el.classList.remove('out'); el.hidden = false;
     el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
     chestT = setTimeout(() => hideChest(false), evo ? 3800 : 2800);
   };
   UI.onEvent = (ev) => {
-    if (ev.t === 'chest' && ev.pid === ED.Game.myPid && ev.results && ev.results.length) UI.showChest(ev.results);
+    if (ev.t === 'chest' && ev.pid === ED.Game.myPid && ev.results && ev.results.length) UI.showChest(ev.results, ev.val);
   };
 
   // ---------------- pause ----------------
@@ -394,6 +397,7 @@
       }
       box.appendChild(r);
     };
+    row(me.weapons, ED.WEAPONS, ED.MAX_WEAPONS || 1);
     for (const ws of me.weapons) { const l = document.createElement('div'); l.className = 'pb-line'; l.textContent = buildLine(ws); box.appendChild(l); }
     row(me.passives, ED.PASSIVES, ED.MAX_PASSIVES || 6);
   }
@@ -406,7 +410,7 @@
     t.className = 'res-title ' + (won ? 'won' : 'lost');
     const me = sum.perHero.find(h => h.pid === ED.Game.myPid) || sum.perHero[0], sd = ED.STAGES[sum.stage];
     $('res-sub').textContent = (sd ? sd.name : '') + (me && ED.HEROES[me.cls] ? '  -  ' + ED.HEROES[me.cls].name : '');
-    $('res-build').textContent = me && me.build ? me.build.map(buildLine).join('   ') : '';
+    $('res-build').textContent = me && me.build ? me.build.map(buildLine).join('\n') : ''; // one line per slot (#res-build: pre-line)
     $('res-stats').innerHTML = `<div><b>${U.fmtTime(sum.time)}</b><span>Time</span></div><div><b>${U.fmtNum(sum.kills)}</b><span>Kills</span></div><div><b>${sum.level}</b><span>Level</span></div><div><b>+${sum.gold}</b><span>Gold</span></div>`;
     const chart = $('res-chart');
     chart.textContent = '';

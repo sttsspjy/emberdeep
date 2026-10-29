@@ -4,13 +4,25 @@
 // 2. 60 s co-op run (god cheat), scripted inputs on both heroes (walk, dash, Q, card picks by key): client foes match the host's within tolerance at render time,
 //    nearly every host foe inside the client's view is shown, own-hero prediction corrections stay small, vitals / weapon (id, path ranks, refine) / one skill / level match, offers resolve.
 // 3. Downed / revive reach the client. 4. A late join is refused. 5. The host leaving ends the client's run with a note; a client quitting drops its hero on the host.
-// 6. Snapshot bytes at 300 / 900 foes (+600 projectiles, 400 gems, a busy event window): reported; gate <= 12 KB at 900 (ARCHITECTURE §11); decode round trip exact to 0.25 px.
+// 6. Snapshot bytes at 300 / 900 foes (+600 projectiles, 400 gems, a busy event window): reported; gate <= 12 KB at 900 (ARCHITECTURE §11); decode round trip exact to 0.25 px;
+//    all 3 weapon slots (hero weapon + 2 supports, Forms refined) decode.
 // 7. Late-game zones: 4 zone-heavy heroes (cleric, pyro, necro, bell) with their Form maxed (all paths rank 3, refine 2), max passives, 900 foes, 3 clients: every snapshot <= 12 KB;
 //    client 1's mirrored zones equal the host's in-rect zones at every snapshot. 8. A client's banish reaches it as a new offer.
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
+// two support roots for the 3-slot tests: the registered pool, else two no-op test supports registered in this process only (before the wire tables are built)
+let SUPS = ED.WEAPON_IDS.filter(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved);
+if (SUPS.length < 2) {
+  for (const id of ['tna', 'tnb']) {
+    ED.addWeapon({ id, name: 'T ' + id, icon: 'icon.w.cleave', support: true, role: 'horde', mode: 'around', txt: 'Test', base: { dmg: 1, cd: 1 }, hybrids: [],
+      paths: [0, 1, 2].map(i => ({ id: id + i, name: 'P' + i, form: id + 'f', ranks: [0, 1, 2].map(() => ({ mods: { dmg: 0.1 }, txt: 'R' })) })) }, { fire: () => true });
+    ED.addWeapon({ id: id + 'f', name: 'T ' + id + ' Form', icon: 'icon.w.cleave', support: true, evolved: true, form: true, from: id, txt: 'Test', base: { dmg: 2, cd: 1 },
+      refine: [{ mods: { dmg: 0.1 }, txt: 'R' }, { mods: { dmg: 0.1 }, txt: 'R' }] }, { fire: () => true });
+  }
+  SUPS = ['tna', 'tnb'];
+}
 // client-side stubs (no DOM): FX / audio / render are not under test
 ED.FX = { handle() {}, clear() {} }; ED.Render = { crowd: 0, bw: 641, bh: 361 }; ED.AimFx = { point: (me, inp) => ({ wx: inp.ax, wy: inp.ay }) };
 for (const f of ['net.js', 'game.js']) vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8'), { filename: f });
@@ -18,7 +30,7 @@ const N = ED.Net;
 { const r = U.RNG(4242); Math.random = r.next; } // party codes and pids: same every run
 const GATE = 12 * 1024;
 let fails = 0;
-const okV = N.VERSION === 6 && ED.NET_VERSION === 6;
+const okV = N.VERSION === 7 && ED.NET_VERSION === 7;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
 const t0 = Date.now();
 
@@ -156,6 +168,7 @@ ok(gC.view.me.downed && gC.view.me.bleed > 0 && gC.view.me.bleed <= 20, `client 
 runFor(3.5, { hostTo: () => ({ x: cliHero.x + 12, y: cliHero.y }) });
 ok(!cliHero.downed && !cliHero.dead && !gC.view.me.downed && gC.view.me.hp > 0, `revived on the host and on the client (hp ${Math.round(gC.view.me.hp)})`);
 runFor(18, { compare: true, crowd: 500 });
+const pendLive = cliHero.pend; // queued level-ups while the client still picks (the still phase below picks nothing)
 // settle with no input: prediction must land exactly on the host
 runFor(1.5, { still: true });
 const me = gC.view.me;
@@ -171,9 +184,9 @@ ok(cliDash >= 10, `client dashes predicted locally (${cliDash})`);
 const atSnap = ring[Math.round(gC.mir.T / C.TICK) % RING];
 ok(atSnap && atSnap.tick === Math.round(gC.mir.T / C.TICK) && Math.abs(me.hp - atSnap.hp) < 0.01 && me.maxHp === cliHero.maxHp && gC.view.level === atSnap.level && gC.view.kills === atSnap.kills && gC.view.gold === atSnap.gold, `vitals / level / kills / gold match the host at the snapshot tick (lv ${w.level}, kills ${w.kills})`);
 const sig = (p) => p.weapons.map(x => x.id + x.lvl + ':' + x.pr.join('') + x.fl + (x.evo ? 'F' : '')).join(',') + '|' + p.passives.map(x => x.id + x.lvl).join(',') + '|' + p.skills.map(x => x.id + x.lvl).join(',');
-ok(sig(me) === sig(cliHero) && me.skills.length === 1 && me.weapons.length === 1 && me.weapons[0].pr.some(r => r > 0), 'client hero weapon (path ranks, refine) / passives / one skill match the host: ' + sig(me));
-ok(okV, 'NET_VERSION 6');
-ok(cliPicks >= 5 && hostPicks >= 5 && !cliHero.pend, `co-op level-ups resolve without pause (client picks ${cliPicks}, host picks ${hostPicks}, client pending ${cliHero.pend})`);
+ok(sig(me) === sig(cliHero) && me.skills.length === 1 && me.weapons.length >= 1 && me.weapons[0].root === ED.HEROES[me.cls].sig && me.weapons[0].pr.some(r => r > 0), 'client hero weapon (path ranks, refine) / passives / one skill match the host: ' + sig(me));
+ok(okV, 'NET_VERSION 7');
+ok(cliPicks >= 5 && hostPicks >= 5 && !pendLive, `co-op level-ups resolve without pause (client picks ${cliPicks}, host picks ${hostPicks}, client pending ${pendLive} while picking)`);
 ok(gH.rem.get(cliPid).ack > 3000, `host consumed client inputs (ack ${gH.rem.get(cliPid).ack})`);
 const avgB = sumCliBytes / Math.max(1, nSnap);
 console.log(`     snapshots ${nSnap} in ${(simMs / 1000).toFixed(0)} s sim, avg ${(avgB / 1024).toFixed(2)} KB, max ${(maxCliBytes / 1024).toFixed(2)} KB; link down ${(links[0].bytes.down / 1024 / (simMs / 1000)).toFixed(1)} KB/s, up ${(links[0].bytes.up / 1024 / (simMs / 1000)).toFixed(2)} KB/s`);
@@ -248,6 +261,7 @@ function scene(n, spread) {
   W2.sp.swarmT = W2.sp.eliteT = Infinity; W2.sdef = Object.assign({}, W2.sdef, { bosses: [] });
   const p = W2.heroes[0], c = W2.heroes[1], rng = U.RNG(9), ids = ['bat', 'skeleton', 'slime', 'skelknight', 'bonearcher'];
   W2.setRanks(p, p.weapons[0], 9, true);
+  for (const id of SUPS.slice(0, 2)) W2.setRanks(p, W2.addWeapon(p, id), 9, true); // all 3 slots: hero weapon + 2 supports, Forms refined
   const top = () => {
     while (W2.foes.length < n) { const x = c.x + spread(rng, 'x'), y = c.y + spread(rng, 'y'); if (!ED.Arena.blocked(W2.arena, x, y, 8)) W2.spawnFoe(ids[rng.int(0, ids.length - 1)], x, y, { hpMul: 400 }); }
     while (W2.projs.length < 600) { const a = rng.next() * U.TAU; W2.shoot(p, 'longbow', p.x + Math.cos(a) * rng.range(0, 300), p.y + Math.sin(a) * rng.range(0, 300), rng.next() * U.TAU, null, { look: 'arrow', dmg: 5, speed: 120, pierce: 9999, rehit: 0.5, life: 4 }); }
@@ -281,8 +295,10 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
     const inR = r.W2.foes.filter(e => Math.abs(e.x - r.c.x) < 480 && Math.abs(e.y - r.c.y) < 340).length;
     ok(bad === 0 && M.view.foes.length >= inR && M.view.projs.length > 0 && M.view.pickups.length > 0, `decode round trip: ${M.view.foes.length} foes (${inR} in view), ${M.view.projs.length} projectiles, ${M.view.pickups.length} pickups, mismatches ${bad}`);
     const h = M.view.heroes.find(x => x.pid === 'host');
-    const hw = h && h.weapons[0];
-    ok(h && h.weapons.length === 1 && hw.id === 'hail' && hw.evo && hw.pr.join('') === '333' && hw.fl === 2 && hw.lvl === 13 && hw.root === 'longbow', 'hero weapon decodes: Form, path ranks, refine');
+    const hw = h && h.weapons[0], HP = r.W2.heroes[0];
+    ok(h && hw.id === 'hail' && hw.evo && hw.pr.join('') === '333' && hw.fl === 2 && hw.lvl === 13 && hw.root === 'longbow', 'hero weapon decodes: Form, path ranks, refine');
+    ok(h && h.weapons.length === 3 && HP.weapons.every((ws, i) => { const s = h.weapons[i]; return s.id === ws.id && s.root === ws.root && s.lvl === ws.lvl && s.evo === ws.evo && s.pr.join() === ws.pr.join() && s.fl === ws.fl; }),
+      'all 3 slots decode: ' + (h ? h.weapons.map(s => s.id + ':' + s.pr.join('') + s.fl).join(' ') : ''));
     // braziers: broken and relit states both reach the client (bitmask)
     const HB = r.W2.arena.braziers, MB = M.view.props.braziers, same = () => HB.every((b, i) => MB[i].broken === b.broken && MB[i].hp === (b.broken ? 0 : 1));
     const snap = () => { cc1.seq++; cc1.evs.length = 0; M.frame(M.apply(N.encodeSnap(r.W2, cc1))); };

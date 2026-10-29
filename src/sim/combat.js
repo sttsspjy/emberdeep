@@ -88,6 +88,42 @@
     const l = Math.hypot(kx, ky) || 1, k = force * e.def.kb * (e.elite ? 0.35 : 1);
     e.kbx += kx / l * k; e.kby += ky / l * k;
   };
+  // Utility push (zero damage): slides foe e dist px straight away from (x, y) (knockback speed dist x 10: travel ~ speed / 10 at the 10/s decay); elites half; bosses and knockback-immune foes stay.
+  // Replaces the foe's current knockback. Returns whether it moved.
+  W.push = function (e, x, y, dist) {
+    if (e.dead || e.boss || !(e.def.kb > 0) || !(dist > 0)) return false;
+    let dx = e.x - x, dy = e.y - y, d = Math.hypot(dx, dy);
+    if (d < 1e-3) { const a = e.id * 2.39996; dx = Math.cos(a); dy = Math.sin(a); d = 1; }
+    const v = dist * (e.elite ? 0.5 : 1) * 10;
+    e.kbx = dx / d * v; e.kby = dy / d * v;
+    return true;
+  };
+  // Blocker zone tick (zone onTick; zero damage): non-boss foes cannot cross the band of half width z.w / 2 on the circle (z.x, z.y, z.r): a full ring (z.arc 0) or an arc of z.arc rad
+  // centred on angle z.a (foes pass around its ends). A foe touching the band is put back on its side (z.st.out: always the outside) and loses its knockback into the band.
+  // z.st.lure > 0: every 0.25 s every non-boss foe within st.lure px of the band is lured to the band's nearest point on its side (0.4 s, refreshed). z.st: { out, lure, lt }.
+  W.blockZone = function (z) {
+    const s = z.st, R = z.r, h = z.w / 2, part = z.arc > 0 && z.arc < TAU - 1e-3, half = z.arc / 2, A = this.arena;
+    const lure = s.lure > 0 && z.t >= s.lt, L = lure ? s.lure : 0;
+    if (lure) s.lt = z.t + 0.25;
+    const q = this.foeScan(z.x, z.y, R + h + L + 24);
+    for (let k = 0; k < q.length; k++) {
+      const e = q[k]; if (e.dead || e.boss) continue;
+      const dx = e.x - z.x, dy = e.y - z.y, d = Math.hypot(dx, dy) || 1e-3, m = h + e.r, ux = dx / d, uy = dy / d;
+      const off = part ? U.angDiff(z.a, Math.atan2(dy, dx)) : 0, inArc = !part || Math.abs(off) <= half + e.r / R;
+      if (inArc && Math.abs(d - R) < m) {
+        const outS = s.out || d >= R, td = outS ? R + m : R - m, kr = e.kbx * ux + e.kby * uy;
+        e.x = z.x + ux * td; e.y = z.y + uy * td;
+        if (outS ? kr < 0 : kr > 0) { e.kbx -= kr * ux; e.kby -= kr * uy; }
+        ED.Arena.collide(A, e, e.r);
+      } else if (L > 0) {
+        const b = part ? z.a + U.clamp(off, -half, half) : Math.atan2(dy, dx), td = s.out || d >= R ? R + m + 2 : R - m - 2, lx = z.x + Math.cos(b) * td, ly = z.y + Math.sin(b) * td;
+        if (U.dist2(e.x, e.y, lx, ly) <= (L + e.r) * (L + e.r)) this.foeLure(e, lx, ly, 0.4);
+      }
+    }
+    this.foeEnd();
+  };
+  ED.blockTick = (w, z) => w.blockZone(z);
+
   // Shared status options of arc / blast / zone hits: opt.slow [k, dur], opt.stun s, opt.freeze s, opt.burn [dps, dur].
   const applyOpt = (w, e, opt, p) => {
     if (opt.slow) w.slow(e, opt.slow[0], opt.slow[1]);

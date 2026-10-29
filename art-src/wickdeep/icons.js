@@ -119,6 +119,20 @@ const W = {
     'kcccccbbbbbbbbbk',
     'kbbbbbbbbbbbbbbk',
     'kkkkkkkkkkkkkkkk'],
+  // War Axe (its Form Avalanche uses the avalanche icon)
+  waraxe: [
+    '.........kkk....',
+    '........kSSSk...',
+    '.......kSwwSSk..',
+    '......kkSwSSS1k.',
+    '.....kWdkSSSS1k.',
+    '....kWdk.kSS11k.',
+    '...kWdk...kS1k..',
+    '..kWdk.....kk...',
+    '.kWdk...........',
+    'kWdk............',
+    'kdk.............',
+    '.k..............'],
   // Bramble Trail / Thornwood
   bramble: [
     '............kk..',

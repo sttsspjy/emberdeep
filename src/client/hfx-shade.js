@@ -1,4 +1,4 @@
-// Shade visuals: stabs, the mark, shadow cuts, blooms, executes, thrown / fan / pinning daggers (Twin Daggers and its Forms) and Shadow Step (afterimage, blink slash).
+// Shade visuals: stabs, the mark, shadow cuts, blooms, executes, thrown / fan / pinning daggers (Twin Daggers and its Forms) and Shadow Step (decoy afterimage, blink streak).
 // Hooks read only snapshot-visible fields (zone: k, x, y, r, a, len, w, t, dur, id; projectile: k, x, y, a, id) and route by look name. Pixel art only: atlas sprites and Batch primitives.
 // Stab-type zones draw in the top pass (over the horde); the ground pass returns true for them so the default zone fill is skipped.
 (function (ED) {
@@ -93,14 +93,15 @@
   }
 
   // ---------------- Shadow Step ----------------
+  // Decoy (afterimg): the Shade's silhouette flickering in violet, a lure beacon (rings pulsing out to 70 px every 0.5 s), a ground ring and rising wisps; fades over its last 0.4 s.
   function afterimage(B, z, t) {
-    const k = kOf(z), flick = 0.45 + 0.15 * Math.sin(t * 40 + z.id), flip = Math.cos(z.a) > 0;
-    B.circ(z.x, z.y - 4, z.r, ca(DUSK, 0.12 + 0.3 * k), 0);
-    B.circ(z.x, z.y - 4, z.r, ca(VIOLET, 0.5 + 0.5 * k), 1);
-    B.circ(z.x, z.y - 4, z.r * (1 - k), ca(LILAC, 0.8), 1);
+    const fin = Math.min(1, z.t / 0.12, (z.dur - z.t) / 0.4), flick = (0.45 + 0.15 * Math.sin(t * 40 + z.id)) * fin, flip = Math.cos(z.a) > 0;
+    B.circ(z.x, z.y - 4, z.r, ca(DUSK, 0.35 * fin), 0);
+    B.circ(z.x, z.y - 4, z.r, ca(VIOLET, 0.9 * fin), 1);
+    for (let i = 0; i < 2; i++) { const c = (z.t / 0.5 + i * 0.5) % 1; B.circ(z.x, z.y - 4, z.r + c * 46, ca(LILAC, 0.7 * (1 - c) * fin), c < 0.5 ? 2 : 1); }
     if (!B.spr('hero.shade.idle', 0, z.x, z.y, opt(flick, 0, 1, false, flip))) B.circ(z.x, z.y - 8, 7, ca(VIOLET, flick), 0);
-    B.spr('hero.shade.idle', 0, z.x + 2, z.y, opt(0.35, 0, 1, true, flip));
-    for (let i = 0; i < 6; i++) { const h = U.hash3(z.id, i, 3), a = (h & 1023) / 1024 * TAU, c = (t * 1.5 + (h >>> 12 & 255) / 256) % 1; B.rect(z.x + Math.cos(a) * 10 * c, z.y - 10 - c * 18, 2, 2, ca(VIOLET, 1 - c)); }
+    B.spr('hero.shade.idle', 0, z.x + 2, z.y, opt(0.35 * fin, 0, 1, true, flip));
+    for (let i = 0; i < 6; i++) { const h = U.hash3(z.id, i, 3), a = (h & 1023) / 1024 * TAU, c = (t * 1.5 + (h >>> 12 & 255) / 256) % 1; B.rect(z.x + Math.cos(a) * 10 * c, z.y - 10 - c * 18, 2, 2, ca(VIOLET, (1 - c) * fin)); }
   }
   function stepcut(B, z, t) {
     const k = kOf(z), f = 1 - k, ex = z.x + Math.cos(z.a) * z.len, ey = z.y - 6 + Math.sin(z.a) * z.len;

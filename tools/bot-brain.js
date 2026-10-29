@@ -11,7 +11,8 @@
 // skill < 1 (a casual player): slower re-plans, shots / zones seen only after a reaction delay,
 // a share of shots and telegraphs never seen (per-id seeded hash), later and unreliable dashes, wandering heading noise; below 0.5 also 8 directions and shot paths read short
 // (velocity x 2 skill: none at 0).
-// Cards: a Form always > refine > path ranks (the path closest to rank 3 first: one path to 3, then a second) > passives by a fixed preference > skill; reroll / banish weak offers.
+// Cards: a Form always (a chest Form offer: the first card) > refine > hero path ranks (the path closest to rank 3 first: one path to 3, then a second) > new support > support path ranks
+// (same order) > passives by a fixed preference > skill; reroll / banish weak offers.
 (function (root) {
   'use strict';
   const NDIR = 16, NC = NDIR + 1, PLAN = 3;
@@ -23,7 +24,7 @@
   // Hit reach (px from the hero centre to the edge of a foe of radius r) of short-reach weapons from their live numbers (ED.World.weaponS); weapons absent here are ranged.
   // Frost rings test the foe centre; auras, arcs, pools and orbiting bodies the foe's edge (orbits: outer edge of the body ring).
   const bell = (S) => S.orbit * Math.sqrt(S.area) + S.r * S.area * 0.5, arc = (S) => S.range * S.area;
-  const REACH = { toll: bell, cathedral: bell, cleave: arc, whirlwind: arc, colossus: arc, earthsplitter: arc };
+  const REACH = { toll: bell, cathedral: bell, cleave: arc, whirlwind: arc, colossus: arc, earthsplitter: arc, gale: arc, tempest: arc };
   const FOE_TYP = 10; // typical foe radius for the crowd stance
   // Contact band (danger() reads it): gaps below CG px are scored; CK weighs contact at the far horizons (H >= 0.55 s). Ranged stance 30 / 1; short-reach stance narrower.
   let CG = 30, CK = 1;
@@ -454,10 +455,11 @@
     if (c.kind === 'form') return 2000;
     if (c.kind === 'refine') return 1200;
     if (c.kind === 'path') {
-      // c.lvl - 1 = the path's current rank: the path closest to rank 3 goes first (one path to 3, then a second); ties to the path with a Form, then the lower index.
+      // c.lvl - 1 = the path's current rank: the path closest to rank 3 goes first (one path to 3, then a second); ties to the path with a Form, then the lower index. Support paths below a new support.
       const d = ED.WEAPONS[c.id] || {}, pa = (d.paths || [])[c.path] || {};
-      return 1000 + 30 * (c.lvl - 1) + (pa.form ? 5 : 0) - c.path;
+      return (d.support ? 600 : 1000) + 30 * (c.lvl - 1) + (pa.form ? 5 : 0) - c.path;
     }
+    if (c.kind === 'support') return 800;
     if (c.kind === 'passive' || c.kind === 'plvl') {
       const id = c.id, isNew = c.kind === 'passive';
       let s = (PASSIVE_PREF[id] || 150) * (isNew ? 1 : 0.9);

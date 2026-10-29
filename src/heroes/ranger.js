@@ -1,11 +1,11 @@
 // Ranger (marksman): hero data, signature Longbow (paths Spread / Piercer / Ricochet) and its Forms Hail of Arrows (Spread), Ballista (Piercer), Seeker (Ricochet),
-// hybrids Gale Barrage (Piercer + Spread) and Rebound (Piercer + Ricochet); Q Volley (arrow rain on the cursor area, 3 skill levels).
+// hybrids Gale Barrage (Piercer + Spread) and Rebound (Piercer + Ricochet); Q Vault (leap toward the cursor, 3 skill levels).
 (function (ED) {
   'use strict';
-  const U = ED.U, TAU = U.TAU, TICK = ED.CONST.TICK;
+  const U = ED.U, TAU = U.TAU;
 
-  ED.regLook('arrows', 'shock');
-  ED.addHero({ id: 'ranger', name: 'Ranger', hp: 90, speed: 80, crit: 0.08, sig: 'longbow', skills: ['volley'], icon: 'hero.ranger.idle', col: '#9fd38a', txt: 'Piercing arrows down long lines.' });
+  ED.regLook('vault', 'vland', 'caltrops', 'shock');
+  ED.addHero({ id: 'ranger', name: 'Ranger', hp: 90, speed: 80, crit: 0.08, sig: 'longbow', skills: ['vault'], icon: 'hero.ranger.idle', col: '#9fd38a', txt: 'Piercing arrows down long lines.' });
 
   // ---------------- shared arrow mechanics ----------------
   // Projectile fields used here: pr.st = bounces left (number), pr.rk = per-arrow counter (Seeker kill refreshes, Rebound segment pierce); pr.dmg drops from x FIRST to x1 after the first hit.
@@ -165,7 +165,7 @@
   const SEEK = { look: 'arrow', homing: 10, pierce: 0, onHit: seekHit };
   ED.addWeapon({
     id: 'seeker', name: 'Seeker', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'Homing arrows hunt kill to kill',
-    base: { dmg: 38, cd: 0.68, n: 5, pierce: 0, area: 1, speed: 360, dur: 0, knock: 20, range: 360, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 44, cd: 0.68, n: 5, pierce: 0, area: 1, speed: 360, dur: 0, knock: 20, range: 360, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows' },
       { mods: { dmg: 0.25, bounce: 2 }, txt: '+25% damage, +2 bounces' },
@@ -234,37 +234,47 @@
     ],
   }, { fire: (w, p, ws, S) => { rebound(w, p, ws, S); return true; }, kill: killShot });
 
-  // ---------------- skill ----------------
-  // Volley: N.n x (r / R0)^2 arrows fall at random spots (w.rng) inside a rain circle of radius r over N.dur s, each a N.ar px hit of N.dmg; pin: hit foes slowed 60% for 0.8 s.
-  // follow: the rain drifts toward the cursor (150 px/s); flank: that many extra rains beside it (perpendicular to the aim, 1.7 r apart, 0.8 r).
-  const R0 = 90, RAIN = { kind: 'skill', noEv: true, knock: 0 }, RAIN_PIN = { kind: 'skill', noEv: true, knock: 0, slow: [0.6, 0.8] };
-  const rainTick = (w, z) => {
-    const s = z.st;
-    if (s.follow && s.p) {
-      const I = s.p.in, dx = I.ax - z.x, dy = I.ay - z.y, d = Math.hypot(dx, dy), step = 150 * TICK;
-      if (d > step) { z.x += dx / d * step; z.y += dy / d * step; } else { z.x = I.ax; z.y = I.ay; }
-    }
-    s.acc += s.rate;
-    const opt = s.pin ? RAIN_PIN : RAIN;
-    for (; s.acc >= 1; s.acc--) {
-      const a = w.rng.next() * TAU, d = Math.sqrt(w.rng.next()) * z.r;
-      w.blast(s.p, 'volley', z.x + Math.cos(a) * d, z.y + Math.sin(a) * d, s.ar, s.dmg, opt);
-    }
-  };
-  const rain = (w, p, x, y, N, r) => w.zone({ team: 0, p, wid: 'volley', x, y, r, dur: N.dur, look: 'arrows',
-    st: { p, dmg: N.dmg, ar: N.ar, acc: 0, rate: N.n * (r / R0) * (r / R0) / (N.dur / TICK), pin: !!N.pin, follow: !!N.follow }, onTick: rainTick });
+  // ---------------- Q: Vault ----------------
+  // Zero damage. Leaps N.dist px toward the cursor over N.t s, over foes and obstacles, untouchable (the landing steps back along the line to the first free spot); on landing every
+  // xp gem within N.gem px flies to the hero. charges (L3): 2 casts stored. caltrops (L4): a caltrop field (CALT_R px, CALT_T s) at the takeoff slows foes inside 50% for 2 s.
+  // State p.vault { t, T, end (sim time), x0, y0, x1, y1, gem } (HOOK.ranger moves the hero). Zones: 'vault' (follows the hero during the leap, a = heading), 'vland' (landing dust), 'caltrops'.
+  const CALT_R = 56, CALT_T = 3;
+  let CW = null;
+  const caltFoe = (e) => CW.slow(e, 0.5, 2);
+  const caltTick = (w, z) => { if (z.t < z.st.nt) return; z.st.nt = z.t + 0.2; CW = w; w.zoneFoes(z, caltFoe); CW = null; };
   ED.addSkill({
-    id: 'volley', name: 'Volley', icon: 'proj.arrow', cd: 10, txt: 'Arrow rain on the cursor area',
-    base: { dmg: 3, r: R0, dur: 2, n: 36, ar: 22, flank: 0 },
+    id: 'vault', name: 'Vault', icon: 'proj.arrow', cd: 9, txt: 'Leap over the horde, pull in gems',
+    base: { dist: 160, t: 0.34, gem: 200, charges: 1, caltrops: 0 },
     levels: [
-      { mods: { r: 0.35, pin: true, dmg: 0.5 }, txt: 'Wider, harder rain that pins foes' },
-      { mods: { follow: true, dmg: 0.5 }, txt: 'Harder rain follows your cursor' },
-      { mods: { flank: 2 }, txt: 'Two more rains flank it' },
+      { mods: { dist: 60 }, txt: 'Leap 60 px farther' },
+      { mods: { charges: 1 }, txt: '2 charges' },
+      { mods: { caltrops: 1 }, txt: 'Caltrops at takeoff slow pursuers' },
     ],
   }, (w, p, x, y, N) => {
-    rain(w, p, x, y, N, N.r);
-    const a = Math.atan2(y - p.y, x - p.x), f = N.flank | 0;
-    for (let i = 0; i < f; i++) { const s = i % 2 ? -1 : 1, d = N.r * 1.7 * (1 + (i >> 1)); rain(w, p, x - Math.sin(a) * d * s, y + Math.cos(a) * d * s, N, N.r * 0.8); }
-    return { r: Math.round(N.r), shake: 3 };
+    const a = Math.hypot(x - p.x, y - p.y) < 1 ? p.mdir : Math.atan2(y - p.y, x - p.x), c = Math.cos(a), s = Math.sin(a);
+    let d = N.dist;
+    while (d > 0 && ED.Arena.blocked(w.arena, p.x + c * d, p.y + s * d, p.r)) d -= 8;
+    d = Math.max(0, d);
+    const v = p.vault || (p.vault = { t: 0, T: 0, end: 0, x0: 0, y0: 0, x1: 0, y1: 0, gem: 0 });
+    v.T = v.t = N.t; v.end = w.time + N.t; v.x0 = p.x; v.y0 = p.y; v.x1 = p.x + c * d; v.y1 = p.y + s * d; v.gem = N.gem;
+    p.invuln = Math.max(p.invuln, N.t + 0.15); p.mdir = a;
+    w.zone({ team: 0, p, wid: 'vault', x: p.x, y: p.y, r: 14, a, dur: N.t, follow: p.pid, look: 'vault' });
+    if (N.caltrops > 0) w.zone({ team: 0, p, wid: 'vault', x: p.x, y: p.y, r: CALT_R, dur: CALT_T, look: 'caltrops', st: { nt: 0 }, onTick: caltTick });
+    return { a, x0: Math.round(p.x), y0: Math.round(p.y), shake: 3 };
   });
+  ED.HOOK.ranger = {
+    init(w, p) { p.vault = null; },
+    tick(w, p, dt) {
+      const v = p.vault;
+      if (!v || v.t <= 0) return;
+      if (w.time > v.end + 0.1) { v.t = 0; return; } // went down mid-leap: the leap is dropped
+      v.t -= dt;
+      const k = U.clamp(1 - v.t / v.T, 0, 1);
+      p.x = v.x0 + (v.x1 - v.x0) * k; p.y = v.y0 + (v.y1 - v.y0) * k; p.moving = true;
+      if (v.t > 0) return;
+      ED.Arena.collide(w.arena, p, p.r);
+      w.pullGems(p, p.x, p.y, v.gem);
+      w.zone({ team: 0, p, wid: 'vault', x: p.x, y: p.y, r: 40, dur: 0.4, look: 'vland' });
+    },
+  };
 })(globalThis.ED || (globalThis.ED = {}));

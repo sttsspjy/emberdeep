@@ -1,15 +1,17 @@
 // Weapon runtime and registry (ARCHITECTURE §6). ED.addWeapon(def, impl) registers ED.WEAPONS[id] / ED.WIMPL[id]; ED.WEAPON_IDS is registration order (wire / card order, append only).
-// One weapon per hero: the signature. Root def: paths [{ id, name, ranks: [{ mods, txt }] x 3, form: formId | null }] x 3, hybrids [{ need: [i, j], form }] (0-2).
-// Form def: { evolved: true, form: true, from: rootId, refine: [{ mods, txt }] x 2 }. A path at rank 3 unlocks its Form card; a hybrid needs both paths at rank 3; one Form per run.
+// Slots: p.weapons[0] = the hero weapon (spawned, fixed), [1], [2] = supports (defs with support: true, shared pool, docs/supports.md); ED.MAX_WEAPONS 3.
+// Root def: paths [{ id, name, ranks: [{ mods, txt }] x 3, form: formId | null }] x 3, hybrids [{ need: [i, j], form }] (0-2; supports: none, all 3 paths name one Form).
+// Form def: { evolved: true, form: true, from: rootId, refine: [{ mods, txt }] x 2 }. A path at rank 3 readies its Form; a hybrid needs both paths at rank 3. One Form per slot (taking it locks the slot's
+// other Forms); Forms are taken from chest Form offers only (progress.js).
 // Slot ws = { id (root, then the Form once taken), root, lvl (display: 1 + sum pr + form + fl), pr: [rank x 3], fl (refine 0-2), evo, cd, st (impl state), S (cached numbers) }.
 // Each tick per living hero and slot: impl.tick?(w, p, ws, S, dt); ws.cd -= dt; at <= 0 impl.fire(w, p, ws, S) -> true resets cd = S.cd and emits { t: 'shoot', pid, wid }, false retries in 0.1 s.
 // Aim rule (GAME-DESIGN §3): directional patterns fire along w.aimDir(p) (the cursor), foe or no foe; targeted patterns (shells, pillars, globs, minions, the mark) pick foes and fall back to w.aimDir(p).
-// Signatures fire on cooldown with no foe in range. Targeting sees only the holder's view (w.vclamp, combat.js).
+// Weapons fire on cooldown with no foe in range. Targeting sees only the holder's view (w.vclamp, combat.js).
 (function (ED) {
   'use strict';
   const W = ED.World.prototype;
   ED.WEAPONS = {}; ED.WIMPL = {}; ED.WEAPON_IDS = [];
-  ED.MAX_WEAPONS = 1; ED.MAX_PASSIVES = 6; ED.PATH_MAX = 3;
+  ED.MAX_WEAPONS = 3; ED.MAX_PASSIVES = 6; ED.PATH_MAX = 3;
   // impl: { fire, tick?, init?(w, p, ws), kill?(w, p, ws, S, e) (any foe e its holder kills, by any source), draw? }.
   ED.addWeapon = (def, impl) => {
     if (ED.WEAPONS[def.id]) throw new Error('weapon id registered twice: ' + def.id); // ids are wire / save keys: one owner each
@@ -22,19 +24,27 @@
   };
   // Root weapon id of a slot or weapon id.
   ED.weaponRoot = (x) => { const id = typeof x === 'string' ? x : x.root || x.id, d = ED.WEAPONS[id]; return d && d.from ? d.from : id; };
-  // Forms of root weapon `rid`: [{ id, path (i or -1 hybrid), need: [i] | [i, j] }].
+  // Forms of root weapon `rid`, one entry per Form id: [{ id, path (first path naming it; -1 hybrid), need: [i] | [i, j] (hybrid: all), any: [paths naming it] (pure: one at rank 3 readies it) }].
   ED.weaponForms = (rid) => {
     const d = ED.WEAPONS[rid], out = [];
     if (!d) return out;
-    (d.paths || []).forEach((pa, i) => { if (pa.form && ED.WEAPONS[pa.form]) out.push({ id: pa.form, path: i, need: [i] }); });
-    for (const h of d.hybrids || []) if (ED.WEAPONS[h.form]) out.push({ id: h.form, path: -1, need: h.need.slice() });
+    (d.paths || []).forEach((pa, i) => {
+      if (!pa.form || !ED.WEAPONS[pa.form]) return;
+      const f = out.find(x => x.id === pa.form);
+      if (f) f.any.push(i); else out.push({ id: pa.form, path: i, need: [i], any: [i] });
+    });
+    for (const h of d.hybrids || []) if (ED.WEAPONS[h.form] && !out.some(x => x.id === h.form)) out.push({ id: h.form, path: -1, need: h.need.slice(), any: [] });
     return out;
   };
   const setLvl = (ws) => { ws.lvl = 1 + ws.pr[0] + ws.pr[1] + ws.pr[2] + (ws.evo ? 1 : 0) + ws.fl; };
 
+  // Adds weapon `id` to hero p. Refused: slots full, unknown id, a root already held, a hero weapon (non-support) outside slot 0, a support beyond MAX_WEAPONS - 1 supports.
+  // Returns the slot or null.
   W.addWeapon = function (p, id) {
-    if (p.weapons.length >= ED.MAX_WEAPONS || !ED.WEAPONS[id] || p.weapons.some(ws => ws.id === id)) return null;
-    const ws = { id, root: ED.weaponRoot(id), lvl: 1, pr: [0, 0, 0], fl: 0, evo: !!ED.WEAPONS[id].evolved, cd: 0.4, st: {}, S: null, Sv: -1, Sk: -1, Sid: '' };
+    const d = ED.WEAPONS[id], rid = d ? ED.weaponRoot(id) : '';
+    if (!d || p.weapons.length >= ED.MAX_WEAPONS || p.weapons.some(ws => ws.root === rid)) return null;
+    if (ED.WEAPONS[rid].support ? p.weapons.filter(ws => ED.WEAPONS[ws.root].support).length >= ED.MAX_WEAPONS - 1 : p.weapons.length > 0) return null;
+    const ws = { id, root: rid, lvl: 1, pr: [0, 0, 0], fl: 0, evo: !!ED.WEAPONS[id].evolved, cd: 0.4, st: {}, S: null, Sv: -1, Sk: -1, Sid: '' };
     setLvl(ws);
     p.weapons.push(ws);
     const im = ED.WIMPL[id]; if (im && im.init) im.init(this, p, ws);
@@ -47,10 +57,10 @@
     ws.pr[i]++; setLvl(ws);
     return ws.pr[i];
   };
-  // Form ids slot ws may take now (none once a Form is taken): pure forms of paths at rank 3, hybrids with both paths at rank 3.
+  // Forms slot ws may take now (none once a Form is taken): pure Forms with a naming path at rank 3, hybrids with both paths at rank 3.
   W.formsReady = function (p, ws) {
     if (ws.evo) return [];
-    return ED.weaponForms(ws.root).filter(f => f.need.every(i => ws.pr[i] >= ED.PATH_MAX));
+    return ED.weaponForms(ws.root).filter(f => (f.path < 0 ? f.need.every(i => ws.pr[i] >= ED.PATH_MAX) : f.any.some(i => ws.pr[i] >= ED.PATH_MAX)));
   };
   // Takes Form `to` on slot ws: id swaps, impl state resets and re-inits, emits 'evolve' { pid, wid, from }.
   W.takeForm = function (p, ws, to) {

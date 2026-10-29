@@ -1,7 +1,7 @@
 // Headless check for the Pyro tree (exit 1 on failure). Usage: node tools/check-hero-pyro.js
 // 1. defs: 3 paths x 3 ranks, 3 pure Forms + 2 hybrids, card lines <= 40 chars that never name a Form; 2. every path rank and refine changes the effective numbers;
 // 3. each Form is ready exactly when its paths are at rank 3, one Form per run; 4. every Form fires (crowd and no foe) and deals damage; 5. shells, death blasts and fire leaps act;
-// 6. same seed -> same digest; 7. no damage outside the hero's view; 8. Meteor casts at levels 1-4 (echo at 3, extra meteors at 4), cooldown >= 6 s.
+// 6. same seed -> same digest; 7. no damage outside the hero's view; 8. Flashpoint at levels 1-4: zero damage push + flee, radius / flee / gem levels, telegraph cancel.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
@@ -140,28 +140,40 @@ for (const id of ['firebolt'].concat(FORMS.map(f => f.id))) {
   ok(far.every(e => !e.dead && e.hp === e.maxHp), `${id}: no damage outside the view (${far.filter(e => e.hp < e.maxHp).length} of 12 far foes hurt)`);
 }
 
-// 8. Meteor levels
+// 8. Flashpoint levels (zero damage): foes within r slide 120 px away (elites half, bosses / knockback-immune stay) and flee from the hero for 2 s (L3 3.5 s), then return;
+// L2 +30% radius; L4 pulls gems within 200 px; a foe in wind-up loses its telegraph.
 {
-  const def = ED.SKILLS.meteor;
+  const def = ED.SKILLS.flashpoint, U2 = U.dist;
+  ok(def.cd >= 7 && def.cd <= 16 && def.levels.length === 3 && def.levels.every(l => l.txt.length <= 40) && def.txt.length <= 40, `Flashpoint: cooldown ${def.cd} s, 3 level cards, lines <= 40 chars`);
   for (let L = 1; L <= 4; L++) {
-    const w = world(3), p = w.heroes[0], rng = U.RNG(5); p.skills[0].lvl = L;
-    w.weaponS(p, 0); // warm weapon numbers first: Stats.skill's weaponMul call may reuse its level-mod scratch (stats.js)
-    const N = w.skillN(p, 0);
-    ok(N.cd >= 6 && Math.abs(N.r - 55 * (L >= 2 ? 1.4 : 1)) < 1e-9, `Meteor level ${L}: cooldown ${N.cd} s >= 6, radius ${N.r}`);
-    feed(w, p, rng, 60, 3);
-    p.in.q = true; p.in.ax = p.x + 60; p.in.ay = p.y;
-    let casts = 0, meteors = 0, echo = 0;
-    for (let i = 0; i < 150; i++) {
-      step(w, p); p.in.q = false;
-      for (const ev of w.events) if (ev.t === 'skill' && ev.id === 'meteor') casts++;
-      w.events.length = 0;
-      let m = 0; for (const z of w.zones) { if (z.k === 'meteor' && !z.dead) m++; if (z.k === 'echo') echo = 1; }
-      meteors = Math.max(meteors, m);
-    }
-    ok(casts === 1 && (p.dealt.meteor || 0) > 0, `Meteor level ${L}: casts once, deals ${Math.round(p.dealt.meteor || 0)}`);
-    ok(meteors === (L >= 4 ? 3 : 1) && echo === (L >= 3 ? 1 : 0), `Meteor level ${L}: ${meteors} meteor(s), echo ${echo}`);
+    const w = world(3), p = w.heroes[0]; p.skills[0].lvl = L; p.weapons.length = 0;
+    const N = w.skillN(p, 0), cx = p.x, cy = p.y;
+    const foes = []; for (let i = 0; i < 12; i++) { const a = i / 12 * U.TAU, d = 30 + (i % 3) * 40; foes.push(w.spawnFoe('skeleton', cx + Math.cos(a) * d, cy + Math.sin(a) * d, { hpMul: 50 })); }
+    const edge = w.spawnFoe('skeleton', cx, cy + 165, { hpMul: 50 }), el = w.spawnFoe('skeleton', cx - 50, cy - 30, { elite: true, hpMul: 5 }), im = w.spawnFoe('skelknight', cx + 20, cy - 60, { hpMul: 50 });
+    const boss = w.spawnFoe('skeleton', cx - 30, cy + 60, { hpMul: 50 }); boss.boss = true;
+    el.spd = im.spd = boss.spd = 0; // isolate the push from walking
+    const wind = foes[1]; wind.st = 1; const tz = w.zone({ team: 1, warn: true, src: wind, x: wind.x, y: wind.y, r: 30, dur: 2, look: 'tele' }); wind.tz = tz; wind.tzId = tz.id;
+    const gem = w.spawnPickup('xp5', cx + 180, cy, 5);
+    const d0 = foes.map(e => U2(cx, cy, e.x, e.y)), de0 = U2(cx, cy, el.x, el.y), di0 = U2(cx, cy, im.x, im.y), db0 = U2(cx, cy, boss.x, boss.y);
+    p.in.q = true; p.in.ax = cx + 60; p.in.ay = cy; step(w, p); p.in.q = false; w.events.length = 0;
+    const fled = foes.filter(e => e.ovK === 1 && e.ovT > N.flee - 0.1).length, edgeHit = edge.ovK === 1;
+    const cancelled = wind.st === 0 && tz.dead;
+    for (let i = 0; i < 30; i++) { p.x = cx; p.y = cy; step(w, p); w.events.length = 0; }
+    const pushed = foes.filter((e, i) => U2(cx, cy, e.x, e.y) >= d0[i] + 110).length, de = U2(cx, cy, el.x, el.y) - de0;
+    for (let i = 0; i < 40; i++) { p.x = cx; p.y = cy; step(w, p); w.events.length = 0; }
+    const mid = foes.map(e => U2(cx, cy, e.x, e.y));
+    for (let i = 0; i < Math.round((N.flee + 0.6) * 60) - 70; i++) { p.x = cx; p.y = cy; step(w, p); w.events.length = 0; }
+    const far = foes.map(e => U2(cx, cy, e.x, e.y));
+    for (let i = 0; i < 60; i++) { p.x = cx; p.y = cy; step(w, p); w.events.length = 0; }
+    const back = foes.filter((e, i) => U2(cx, cy, e.x, e.y) < far[i] - 10).length, kept = foes.filter((e, i) => far[i] > mid[i] + 10).length;
+    const hurt = w.foes.filter(e => e.hp < e.maxHp).length;
+    ok(N.cd >= 7 && Math.abs(N.r - 140 * (L >= 2 ? 1.3 : 1)) < 1e-9 && fled === 12 && edgeHit === (L >= 2) && hurt === 0 && !(p.dealt.flashpoint > 0),
+      `Flashpoint L${L}: r ${N.r.toFixed(0)}, 12/12 flee ${N.flee} s (${fled}), foe at 165 px hit ${edgeHit}, zero damage (hurt ${hurt})`);
+    ok(pushed === 12 && Math.abs(de - 60) < 10 && Math.abs(U2(cx, cy, im.x, im.y) - di0) < 3 && boss.ovT === 0 && Math.abs(U2(cx, cy, boss.x, boss.y) - db0) < 3,
+      `Flashpoint L${L}: 12/12 pushed >= 110 px (${pushed}), elite ${de.toFixed(0)} px (half), immune foe moved ${Math.abs(U2(cx, cy, im.x, im.y) - di0).toFixed(0)} px, boss ${Math.abs(U2(cx, cy, boss.x, boss.y) - db0).toFixed(0)} px, boss flee ${boss.ovT}`);
+    ok(kept >= 10 && back >= 10 && cancelled, `Flashpoint L${L}: foes keep fleeing (${kept}/12) then come back (${back}/12); wind-up telegraph cancelled ${cancelled}`);
+    ok((L >= 4) === (gem.pull === p.pid), `Flashpoint L${L}: gem pull ${gem.pull === p.pid}`);
   }
-  ok(def.levels.length === 3 && def.levels.every(l => l.txt.length <= 40), 'Meteor: 3 level cards, lines <= 40 chars');
 }
 
 console.log(`check-hero-pyro: ${fails ? fails + ' failure(s)' : 'all passed'} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);

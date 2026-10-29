@@ -2,7 +2,7 @@
 // 1. Every path rank changes the effective numbers or the fired pattern (swings / booms / projectiles / zones of one attack string).
 // 2. Every Form (3 pure + 2 hybrid) is ready only under its rule (its path(s) at rank 3), locks the others once taken, refines twice and deals damage in a foe ring.
 // 3. Damage only in view: a full 3/3/3 build of every Form never hurts a pinned foe 340 px away (outside the 320 px half view) while hurting near ones.
-// 4. Shield Charge at levels 1..4: casts, moves the hero, damages; carries foes, stops at a knockback-immune foe; quake (L3) and shards (L4).
+// 4. Bulwark Shove at levels 1..4: zero damage; pushes foes out to the shove edge (elites half, immune foes stay), slows (L3 stuns); L4 ring blocks a foe walking in.
 // 5. Determinism: the same seed and inputs give the same digest (hero, foes, damage) for every Form; client draw hooks run on a mock batch without non-finite args.
 'use strict';
 const path = require('path'), fs = require('fs'), vm = require('vm');
@@ -95,30 +95,36 @@ for (const f of [{ id: 'cleave' }].concat(FORMS)) {
   ok(hurtFar === 0 && hurtNear >= 6, `${f.id} 3/3/3: no damage outside the view (far hurt ${hurtFar}, near hurt ${hurtNear}/8)`);
 }
 
-// 4. Shield Charge.
+// 4. Bulwark Shove (zero damage): foes within r slide out to r x 5/3 and are slowed (L3: stunned), elites half the way, bosses / knockback-immune foes stay; L2 +30% radius; L4 ring foes cannot cross.
+const qWorld = (L) => { const w = world(6), p = w.heroes[0]; p.weapons.length = 0; p.skills[0].lvl = L; return { w, p, N: w.skillN(p, 0) }; };
+const qCast = (w, p, x, y) => { w.input(p.pid, { q: true, ax: x, ay: y }); w.update(C.TICK); w.events.length = 0; };
+const qRun = (w, n, each) => { for (let i = 0; i < n; i++) { if (each) each(i); w.update(C.TICK); w.events.length = 0; } };
+ok(ED.SKILLS.shove.cd >= 7 && ED.SKILLS.shove.cd <= 16 && ED.SKILLS.shove.levels.every(l => l.txt.length <= 40) && ED.SKILLS.shove.txt.length <= 40, `shove: cooldown ${ED.SKILLS.shove.cd} s, card lines <= 40 chars`);
 for (let L = 1; L <= 4; L++) {
-  const w = world(6), p = w.heroes[0], sk = p.skills[0]; sk.lvl = L;
-  const N = w.skillN(p, 0), x0 = p.x;
-  for (let i = 0; i < 5; i++) w.spawnFoe('skeleton', p.x + 30 + i * 8, p.y + (i - 2) * 8, { hpMul: 50 });
-  const foes = w.foes.slice();
-  w.input(p.pid, { q: true, ax: p.x + 300, ay: p.y });
-  let casts = 0, booms = 0, shards = 0;
-  for (let i = 0; i < 40; i++) {
-    w.update(C.TICK);
-    for (const ev of w.events) { if (ev.t === 'skill') casts++; if (ev.t === 'boom' && ev.wid === 'charge' && ev.r >= 110) booms++; }
-    w.events.length = 0;
-    for (const q of w.projs) if (!q.dead && q.wid === 'charge') shards = Math.max(shards, w.projs.filter(z => !z.dead && z.wid === 'charge').length);
-  }
-  const moved = p.x - x0, carried = foes.filter(e => e.x - x0 > N.dist * 0.6).length;
-  ok(casts === 1 && sk.cd > 6 && moved > N.dist * 0.85 && p.dealt.charge > 0, `charge L${L}: cast, moved ${Math.round(moved)} of ${N.dist} px, dealt ${Math.round(p.dealt.charge || 0)}, cd ${sk.cd.toFixed(1)}`);
-  ok(carried >= 3, `charge L${L}: carries foes along (${carried}/5 pushed past ${Math.round(N.dist * 0.6)} px)`);
-  ok((L >= 3) === (booms > 0) && (L >= 4) === (shards >= 8), `charge L${L}: quake ${booms > 0}, shards ${shards}`);
+  const { w, p, N } = qWorld(L), cx = p.x, cy = p.y, to = N.r * 5 / 3;
+  const foes = []; for (let i = 0; i < 12; i++) { const a = i / 12 * U.TAU, d = 20 + (i % 4) * (N.r - 30) / 3; foes.push(w.spawnFoe('skeleton', cx + Math.cos(a) * d, cy + Math.sin(a) * d, { hpMul: 50 })); }
+  const out = w.spawnFoe('skeleton', cx + to + 60, cy, { hpMul: 50 });
+  for (const e of w.foes) e.spd = 0;
+  qCast(w, p, cx + 100, cy);
+  const slowed = foes.filter(e => e.slowT > 2).length, stunned = foes.filter(e => e.stunT > 0.5).length;
+  qRun(w, 45, () => { p.x = cx; p.y = cy; });
+  const dmin = Math.min(...foes.map(e => U.dist(cx, cy, e.x, e.y))), hurt = w.foes.filter(e => e.hp < e.maxHp).length;
+  ok(dmin >= to - 6 && slowed === 12 && (L >= 3) === (stunned === 12) && hurt === 0 && !(p.dealt.shove > 0) && p.skills[0].cd > 6,
+    `shove L${L}: r ${N.r.toFixed(0)}, 12 foes pushed to >= ${dmin.toFixed(0)} of ${to.toFixed(0)} px, slowed ${slowed}, stunned ${stunned}, zero damage (hurt ${hurt})`);
+  const ring = w.zones.find(z => !z.dead && z.k === 'bulwark');
+  if (L === 4) {
+    out.spd = 60; out.slowT = 0; out.slowK = 0; out.x = cx + Math.cos(U.TAU / 24) * (to + 60); out.y = cy + Math.sin(U.TAU / 24) * (to + 60); // between the pushed foes
+    let inside = 0; qRun(w, 100, () => { p.x = cx; p.y = cy; if (U.dist(cx, cy, out.x, out.y) < to - 4) inside++; });
+    ok(!!ring && inside === 0 && U.dist(cx, cy, out.x, out.y) < to + 30, `shove L4: ring r ${ring ? ring.r.toFixed(0) : '-'} holds; a foe walking in stays outside (${U.dist(cx, cy, out.x, out.y).toFixed(0)} px)`);
+  } else ok(!ring, `shove L${L}: no ring`);
 }
 {
-  const w = world(6), p = w.heroes[0], x0 = p.x, b = w.spawnFoe('skelknight', p.x + 50, p.y, { hpMul: 100 });
-  w.input(p.pid, { q: true, ax: p.x + 300, ay: p.y });
-  for (let i = 0; i < 40; i++) { b.x = x0 + 50; b.y = p.y; w.update(C.TICK); w.events.length = 0; }
-  ok(p.x - x0 < 40 && b.hp < b.maxHp, `charge stops at a knockback-immune foe (moved ${Math.round(p.x - x0)} px) and slams it (${Math.round(b.maxHp - b.hp)})`);
+  const { w, p, N } = qWorld(1), cx = p.x, cy = p.y, to = N.r * 5 / 3;
+  const el = w.spawnFoe('skeleton', cx + 40, cy, { elite: true, hpMul: 5 }), im = w.spawnFoe('skelknight', cx - 50, cy, { hpMul: 50 });
+  for (const e of w.foes) e.spd = 0;
+  qCast(w, p, cx + 100, cy); qRun(w, 45, () => { p.x = cx; p.y = cy; });
+  const de = U.dist(cx, cy, el.x, el.y), di = U.dist(cx, cy, im.x, im.y), want = 40 + (to - 40) / 2;
+  ok(Math.abs(de - want) < 12 && Math.abs(di - 50) < 3 && el.hp === el.maxHp, `shove: elite pushed half the way (${de.toFixed(0)} px, want ~${want.toFixed(0)}), knockback-immune foe stays (${di.toFixed(0)} px)`);
 }
 
 // 5. Determinism + client hooks on a mock batch.
@@ -142,7 +148,7 @@ function digestRun(form, draw) {
         for (const q of w.projs) { const f = !q.dead && ED.WeaponFx[q.wid]; if (f && f.proj) f.proj(mockB, q, w.time); }
         ED.HeroFx.knight(mockB, p, w.time);
       }
-      if (i % 30 === 0) { let s = w.tick + '|' + p.x.toFixed(3) + ',' + p.y.toFixed(3) + '|' + Math.round(p.dealt[form] || 0) + '|' + Math.round(p.dealt.charge || 0) + '|' + w.kills; for (const e of w.foes) if (!e.dead) s += '|' + e.x.toFixed(2) + ',' + e.hp; d = (Math.imul(d, 31) + U.hashStr(s)) >>> 0; }
+      if (i % 30 === 0) { let s = w.tick + '|' + p.x.toFixed(3) + ',' + p.y.toFixed(3) + '|' + Math.round(p.dealt[form] || 0) + '|' + Math.round(p.dealt.shove || 0) + '|' + w.kills; for (const e of w.foes) if (!e.dead) s += '|' + e.x.toFixed(2) + ',' + e.hp; d = (Math.imul(d, 31) + U.hashStr(s)) >>> 0; }
     }
   } catch (e) { err = e; }
   return { d, err, dealt: p.dealt[form] || 0 };

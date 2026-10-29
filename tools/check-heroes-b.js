@@ -1,7 +1,7 @@
 // Headless check of heroes Cleric, Shade and Bell (exit 1 on failure). Usage: node tools/check-heroes-b.js
 // 1. Signature weapon at 0..9 path ranks (path 0 first) and its path-0 Form refined twice: 10 s each in a foe ring, no exceptions, damage > 0 (prints dps per rank count).
-// 2. Q at every skill level 1..4: cast on cooldown at the nearest foe, damage > 0 (prints damage per cast).
-// 3. Mechanics: Sanctuary heals an ally, Shadow Step blinks and recasts, Great Peal stuns the screen and pulls gems, Toll / Cathedral bell bodies.
+// 2. Q at every skill level 1..4: cast on cooldown at the nearest foe, zero damage, foes affected (stunned, slowed, displaced or lured; prints casts).
+// 3. Mechanics: Sanctuary heals an ally, Shadow Step blinks with 2 charges at L4, Great Peal stuns the screen and pulls gems, Toll / Cathedral bell bodies.
 // 4. 60 s solo run per hero with level-ups and Q spam: no exceptions, same digest twice. 5. Crowd cost at 900 foes (informational).
 // 6. No-target fire: every signature (no ranks) and its Form on its own hero, standing still facing east with no foe alive, breaks a brazier 60 px ahead
 //    within the first fire (0.4 s) + its cooldown + 0.9 s travel; a hero projectile crossing a brazier breaks it and keeps its pierce and its flight.
@@ -72,15 +72,16 @@ for (const cls of HEROES) {
     for (let L = 1; L <= 4; L++) {
       const w = world([cls], 30 + L), p = w.heroes[0];
       p.skills[si].lvl = L; p.weapons.length = 0; // skill damage only
-      let casts = 0;
+      let casts = 0, hit = 0;
       const err = arena(w, p, 20, 30, () => {
         const t = w.nearestFoe(p.x, p.y, 400);
         if (p.skills[si].cd <= 0) { casts++; w.input(p.pid, { q: true, ax: t ? t.x : p.x + 50, ay: t ? t.y : p.y }); }
+        for (const e of w.foes) if (!e.dead && (e.stunT > 0 || e.slowT > 0 || e.ovT > 0 || Math.abs(e.kbx) + Math.abs(e.kby) > 40)) hit++;
       });
-      const d = p.dealt[id] || 0; line.push(Math.round(d / Math.max(1, casts)));
-      ok(!err && d > 0 && casts > 0, `${id} L${L}: ${casts} casts, dealt ${Math.round(d)}` + (err ? ': ' + err.stack : ''));
+      const d = p.dealt[id] || 0; line.push(casts);
+      ok(!err && d === 0 && casts > 0 && hit > 0, `${id} L${L}: ${casts} casts, zero damage (${Math.round(d)}), ${hit} foe-ticks affected` + (err ? ': ' + err.stack : ''));
     }
-    console.log(`     ${id} damage per cast by level: ${line.join(' ')}`);
+    console.log(`     ${id} casts by level: ${line.join(' ')}`);
   }
 }
 
@@ -98,21 +99,17 @@ const cast = (w, p, slot, x, y) => { w.input(p.pid, { q: true, ax: x, ay: y }); 
   ok(sk.cd === 0 && !w.events.some(e => e.t === 'skill'), 'an E press casts nothing');
   w.events.length = 0;
 }
-{ // Shadow Step: blink + recast window
-  const w = world(['shade']), p = w.heroes[0], sk = p.skills[0];
+{ // Shadow Step: blink + decoy; L4: two charges, then the recharge
+  const w = world(['shade']), p = w.heroes[0], sk = p.skills[0]; p.weapons.length = 0;
   const x0 = p.x, f = w.spawnFoe('skelknight', p.x + 80, p.y);
   cast(w, p, 0, p.x + 160, p.y);
-  ok(p.x - x0 > 120 && f.hp < f.maxHp, `shadow step blinks ${Math.round(p.x - x0)} px and cuts the path`);
-  step(w, 1);
-  ok(f.hp < f.maxHp && sk.cd > 0, 'afterimage, cooldown running at L1');
+  ok(p.x - x0 > 120 && f.hp === f.maxHp && sk.cd > 6, `shadow step blinks ${Math.round(p.x - x0)} px through a foe without damage, cooldown ${sk.cd.toFixed(1)} s`);
+  step(w, 0.3);
+  ok(f.ovK === 2, 'the foe chases the decoy');
   const w2 = world(['shade']), p2 = w2.heroes[0], sk2 = p2.skills[0]; sk2.lvl = 4;
-  cast(w2, p2, 0, p2.x + 160, p2.y); w2.update(C.TICK);
-  ok(sk2.cd === 0, 'L4: recast ready right after the first blink');
+  cast(w2, p2, 0, p2.x + 160, p2.y); step(w2, 0.35);
   const x1 = p2.x; cast(w2, p2, 0, p2.x + 160, p2.y);
-  ok(p2.x - x1 > 150 && sk2.cd > 6, `L4: recast blinks again, full cooldown after (${sk2.cd.toFixed(1)} s)`);
-  const w3 = world(['shade']), p3 = w3.heroes[0], sk3 = p3.skills[0]; sk3.lvl = 4;
-  cast(w3, p3, 0, p3.x + 160, p3.y); step(w3, 3);
-  ok(Math.abs(sk3.cd - (sk3.cdMax - 3)) < 0.1, `L4: unused recast window resumes the cooldown (${sk3.cd.toFixed(1)} s of ${sk3.cdMax} s)`);
+  ok(p2.x - x1 > 150 && sk2.cd > 6, `L4: the second charge blinks again, then the recharge runs (${sk2.cd.toFixed(1)} s)`);
 }
 
 { // Great Peal: stuns the screen, pulls gems at L4

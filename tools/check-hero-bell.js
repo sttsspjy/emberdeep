@@ -1,7 +1,7 @@
 // Headless check of the Bell's Toll tree and Great Peal (exit 1 on failure). Usage: node tools/check-hero-bell.js
 // 1. Cards: 3 paths x 3 ranks, lines <= 40 chars that never name a Form; every rank changes the weapon's numbers and its pattern (checked per rank).
 // 2. Forms: each is ready only under its rule (pure: its path at 3; hybrid: both paths at 3), one Form per run, refines twice, fires, and draws its own pattern.
-// 3. View clamp: rings neither damage nor stun a foe outside the hero's view. 4. Great Peal at levels 1-4 (echo, shield, gems, cooldown >= 6 s). 5. Determinism digest per Form.
+// 3. View clamp: rings neither damage nor stun a foe outside the hero's view. 4. Great Peal at levels 1-4 (zero damage stun + push, echo, shield, gems, cooldown >= 7 s). 5. Determinism digest per Form.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
@@ -144,14 +144,15 @@ for (const form of ['', 'cathedral']) {
   out.spd = inn.spd = 0;
   let outHit = false;
   run(w, 3, (i) => { if (i === 10) w.input(p.pid, { q: true, ax: p.x, ay: p.y }); out.y = p.y - ED.HERO_VIEW.oy + ED.HERO_VIEW.hh + 30; out.x = p.x; if (out.hp < out.maxHp || out.stunT > 0) outHit = true; });
-  ok(!outHit && inn.hp < inn.maxHp, `${form || 'toll'} + Great Peal: foe outside the view untouched, inside hit`);
+  ok(!outHit && inn.hp < inn.maxHp, `${form || 'toll'} + Great Peal: foe outside the view untouched (no damage, no stun), inside hit`);
 }
 
 // 4. Great Peal levels
 {
   const lvl = (L) => {
-    const w = world(3), p = w.heroes[0]; p.skills[0].lvl = L;
+    const w = world(3), p = w.heroes[0]; p.skills[0].lvl = L; p.weapons.length = 0; // skill only
     ring(w, p.x, p.y, 20, 120, 'skeleton', 50);
+    const d0 = w.foes.map(e => U.dist(p.x, p.y, e.x, e.y));
     w.spawnPickup('xp5', p.x + 200, p.y, 5);
     const ev = [];
     let maxP = 0, stun = 0, inv = 0;
@@ -161,10 +162,11 @@ for (const form of ['', 'cathedral']) {
       if (i === 36) { inv = p.invuln; for (const e of w.foes) if (!e.dead && e.stunT > 0) stun++; }
     }, ev);
     const g = w.pickups.find(x => x.k === 'xp5');
-    return { w, p, cast: ev.some(e => e.t === 'skill' && e.id === 'peal'), dealt: p.dealt.peal || 0, maxP, inv, gem: !g || g.pull === p.pid, stun, cd: p.skills[0].cdMax };
+    const hurt = w.foes.filter(e => e.hp < e.maxHp).length, pushed = w.foes.filter((e, i) => U.dist(p.x, p.y, e.x, e.y) > d0[i] + 3).length;
+    return { w, p, cast: ev.some(e => e.t === 'skill' && e.id === 'peal'), dealt: p.dealt.peal || 0, hurt, pushed, maxP, inv, gem: !g || g.pull === p.pid, stun, cd: p.skills[0].cdMax };
   };
   const L = [1, 2, 3, 4].map(lvl);
-  L.forEach((r, i) => ok(r.cast && r.dealt > 0 && r.stun > 0 && r.cd >= 6, `great peal L${i + 1}: cast, dealt ${Math.round(r.dealt)}, ${r.stun} stunned, cd ${r.cd}`));
+  L.forEach((r, i) => ok(r.cast && r.dealt === 0 && r.hurt === 0 && r.stun === 20 && r.pushed >= 15 && r.cd >= 7, `great peal L${i + 1}: cast, zero damage (hurt ${r.hurt}), ${r.stun}/20 stunned, ${r.pushed}/20 pushed, cd ${r.cd}`));
   ok(L[0].maxP === 1 && L[1].maxP === 2, `great peal L2: a second ring (${L[0].maxP} -> ${L[1].maxP})`);
   ok(L[1].inv < 0.1 && L[2].inv > 0.8, `great peal L3: shields the hero (${L[2].inv.toFixed(2)} s left at 0.6 s)`);
   ok(!L[2].gem && L[3].gem, 'great peal L4: pulls gems');

@@ -1,5 +1,5 @@
 // In-run HUD on the screen canvas (device px). Sizes are CSS px at 1280x720 scaled by k = dpr x clamp(viewport / 1280x720, 1, 2), so text never drops below its CSS size (numbers >= 16 px).
-// Draws: XP bar across the top with the level, timer, kills / gold, the weapon slot (level; Form = gold frame) + 6 passive slots with levels,
+// Draws: XP bar across the top with the level, timer, kills / gold, 3 weapon slots (hero weapon + 2 supports, empty ones dim; level; Form = gold frame) + 6 passive slots with levels,
 // HP bar, Q cooldown dial and the dash dial with charge pips, boss bar, teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
 // low-HP edge glow, banners and the bot-watch tag (view.botTag / view.botPick, bottom-left). No per-frame allocation: strings are cached by value. Font 'Pixel Operator'.
 (function (ED) {

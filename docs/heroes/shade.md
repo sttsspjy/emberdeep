@@ -26,39 +26,41 @@ Path ranks keep applying after a Form (extra stabs, length, crit, execute, throw
 | Form | Need | Pattern | Base | Refine 1 | Refine 2 |
 |---|---|---|---|---|---|
 | **Thousand Cuts** (`thousand`) | Flurry 3 | Stab storm: every stab jittered within ±0.36 rad of the aim, length ×0.8–1.15 | 20 dmg, 6 stabs / 0.4 s, 68 × 12 px, knockback 2 | +2 stabs per storm | Storm widens, stabs reach farther (cone +0.12 rad, length +14) |
-| **Assassinate** (`assassinate`) | Lethality 3 | Marks the toughest foe within 220 px in view (boss ×4, elite ×2 weight; rechecked every 0.5 s). Stabs aim at the mark while it is in reach (+12 px) and within ±52° (0.9 rad) of the cursor, else along the cursor; hits on it always crit, ×1.1. A shadow cuts an X through the mark every 0.45 s (two 64 px lines, forced crits). A dying mark bursts (52 px, 2× damage, crits). | 17 dmg, 2 stabs / 0.45 s, crit +15% | The shadow strikes far more often (−0.2 s) | Shadow cuts reach twice as far (+40 px) |
+| **Assassinate** (`assassinate`) | Lethality 3 | Marks the toughest foe within 220 px in view (boss ×4, elite ×2 weight; rechecked every 0.5 s). Stabs aim at the mark while it is in reach (+12 px) and within ±52° (0.9 rad) of the cursor, else along the cursor; hits on it always crit, ×1.1. A shadow cuts an X through the mark every 0.45 s (two 64 px lines, forced crits). A dying mark bursts (52 px, 2× damage, crits). | 18 dmg, 2 stabs / 0.45 s, crit +15% | The shadow strikes far more often (−0.2 s) | Shadow cuts reach twice as far (+40 px) |
 | **Shadow Fan** (`shadowfan`) | Return 3 | Stabs + every 1 s a fan of 3 + thrown daggers along the cursor and as many behind (out 120 px and back, 0.42× damage); the return leg always crits | 21 dmg, 2 stabs / 0.45 s | +2 daggers each way | Daggers fly farther, +15% damage (+48 px) |
-| **Death Lotus** (`lotus`) | Flurry 3 + Lethality 3 (hybrid) | Crit stabs bloom: 6 blades radiate from the first foe struck (0.6 × reach long, 0.32× damage) | 20 dmg, 4 stabs / 0.45 s, crit +15% | +2 blades per bloom | +10% crit, blades reach farther (+0.4 × reach) |
+| **Death Lotus** (`lotus`) | Flurry 3 + Lethality 3 (hybrid) | Crit stabs bloom: 6 blades radiate from the first foe struck (0.6 × reach long, 0.32× damage) | 19 dmg, 4 stabs / 0.45 s, crit +15% | +2 blades per bloom | +10% crit, blades reach farther (+0.4 × reach) |
 | **Reaper's Return** (`reaper`) | Lethality 3 + Return 3 (hybrid) | Stabs + every 1 s, 3 + thrown daggers that pin the first foe hit for 1.2 s (stabs on a pinned foe always crit), then tear out (24 px cut, crits) and fly back as crits | 18 dmg, 2 stabs / 0.45 s, thrown daggers full damage | +1 pinning dagger | +1 pinning dagger, thrown more often (−0.3 s) |
 
 Forms show as `???` until discovered; no card line names a Form.
 
 ## Skill (Q): Shadow Step (`step`)
 
-Blink toward the cursor (40–130 px, through foes and over obstacles), 0.35 s invulnerable; every foe on the path takes a forced crit, is shoved aside and stunned 0.4 s. The afterimage left behind detonates after 0.8 s (44 px, 1.5× damage). Base 11 damage (scales with the weapon and party level), cooldown 8 s.
+Zero damage. Blink toward the cursor (40–130 px, through foes and over obstacles), 0.35 s invulnerable. The afterimage left behind is a decoy for 2 s (scales with duration): every non-boss foe inside its view rect walks to it instead of the shade. Cooldown 8 s.
 
 | Level | Card | Change |
 |---|---|---|
-| 2 | Afterimage throws knives | 3 knives at random foes in view every 0.2 s until it detonates |
-| 3 | Blink farther, cut a wider path | range +50 px, path width +18 px, afterimage +30% radius |
-| 4 | Recast once within 2.5 s | a second free blink; the cooldown resumes if unused |
+| 2 | Blink 60 px farther | 190 px |
+| 3 | The decoy lasts 3.5 s | decoy 3.5 s |
+| 4 | 2 charges | two blinks stored, one recharge per 8 s |
 
-## Balance (`node tools/dps.js shade`, weapon dps; build fixed during the run, no XP)
+## dps.js (`node tools/dps.js shade`: weapon only, no Q casts, build fixed, no level-ups)
 
-| build | form | crowd wpn | crowd q | kills/s | single wpn | single q |
-|---|---|---|---|---|---|---|
-| base | – | 630 | 186 | 4.6 | 62 | 3 |
-| p0 | – | 1,275 | 230 | 10.9 | 150 | 5 |
-| p1 | – | 1,531 | 219 | 12.9 | 70 | 5 |
-| p2 | – | 1,101 | 236 | 8.7 | 98 | 5 |
-| all | – | 2,636 | 198 | 21.6 | 204 | 6 |
-| f0 | thousand | 3,060 | 337 | 26.1 | 522 | 9 |
-| f1 | assassinate | 3,009 | 323 | 25.4 | 435 | 7 |
-| f2 | shadowfan | 4,221 | 205 | 33.3 | 238 | 10 |
-| h0 | lotus | 4,900 | 92 | 38.3 | 475 | 9 |
-| h1 | reaper | 3,778 | 203 | 31.0 | 413 | 8 |
-| F0 | thousand | 4,042 | 309 | 33.6 | 672 | 12 |
-| F1 | assassinate | 4,268 | 305 | 35.1 | 710 | 11 |
-| F2 | shadowfan | 5,790 | 105 | 44.9 | 461 | 15 |
-| H0 | lotus | 4,787 | 149 | 37.9 | 540 | 12 |
-| H1 | reaper | 4,107 | 179 | 33.3 | 631 | 11 |
+| build | form | kind | crowd wpn | kills/s | single wpn |
+|---|---|---|---|---|---|
+| base | - |  | 663 | 1.4 | 62 |
+| p0 | - |  | 1,713 | 7.2 | 150 |
+| p1 | - |  | 1,691 | 7.8 | 70 |
+| p2 | - |  | 1,254 | 4.4 | 97 |
+| all | - |  | 3,525 | 17.1 | 203 |
+| f0 | thousand | dir | 4,838 | 24.1 | 522 |
+| f1 | assassinate | dir | 3,640 | 17.6 | 470 |
+| f2 | shadowfan | dir | 4,562 | 22.1 | 248 |
+| h0 | lotus | dir | 5,573 | 28.0 | 451 |
+| h1 | reaper | dir | 4,297 | 22.1 | 421 |
+| F0 | thousand | dir | 6,328 | 31.5 | 626 |
+| F1 | assassinate | dir | 5,209 | 25.9 | 766 |
+| F2 | shadowfan | dir | 6,482 | 32.1 | 461 |
+| H0 | lotus | dir | 5,702 | 28.8 | 510 |
+| H1 | reaper | dir | 5,126 | 26.1 | 636 |
+
+All Forms directional; f / h rows within ±25% of their mean.

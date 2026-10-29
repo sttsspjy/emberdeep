@@ -3,7 +3,7 @@
 // Stab: a segment from the hero's hand along the aim, S.len x area long, S.wid x area wide; every foe touching it is hit. Crit is rolled once per stab (a crit stab forces a crit on
 // every foe it touches, others never crit). A strike of S.n stabs is spread evenly over the cooldown (ws.st queue), each stab re-aimed. Visual: one line zone per stab.
 // Zone looks: stab / stabx (crit) / tcut (storm stab) line zones 0.12 s; smark (mark on a foe), mcut (shadow X cut, w = cut length), petal (bloom, w = blade count), sexec (execute pop,
-// w = 1 with a burst), stepcut (blink slash), afterimg (afterimage). Projectile looks: rknife (returning dagger), sknife (Shadow Fan), pknife (pinning dagger), knife (afterimage knives).
+// w = 1 with a burst), stepcut (blink slash), afterimg (Shadow Step decoy). Projectile looks: rknife (returning dagger), sknife (Shadow Fan), pknife (pinning dagger).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU;
@@ -233,7 +233,7 @@
   // Assassinate (Lethality): stabs + the mark and the shadow's X cuts.
   ED.addWeapon({
     id: 'assassinate', name: 'Assassinate', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A shadow hunts the toughest foe',
-    base: base({ dmg: 17, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.15, mark: true, mk: 1.1, mcd: 0.45, mlen: 64 }),
+    base: base({ dmg: 18, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.15, mark: true, mk: 1.1, mcd: 0.45, mlen: 64 }),
     refine: [
       { mods: { mcd: -0.2 }, txt: 'The shadow strikes far more often' },
       { mods: { mlen: 40 }, txt: 'Shadow cuts reach twice as far' },
@@ -242,7 +242,7 @@
   // Death Lotus (Flurry + Lethality): crit stabs bloom into a ring of blades around their first foe.
   ED.addWeapon({
     id: 'lotus', name: 'Death Lotus', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Crits bloom into a ring of blades',
-    base: base({ dmg: 20, cd: 0.45, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 10, range: 0, crit: 0.15, bloom: 0.32, petals: 6, plen: 0.6 }),
+    base: base({ dmg: 19, cd: 0.45, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 10, range: 0, crit: 0.15, bloom: 0.32, petals: 6, plen: 0.6 }),
     refine: [
       { mods: { petals: 2 }, txt: '+2 blades per bloom' },
       { mods: { crit: 0.1, plen: 0.4 }, txt: '+10% crit, blades reach farther' },
@@ -259,16 +259,17 @@
   }, stabImpl);
 
   // ---------------- Shadow Step ----------------
-  // Blinks toward the cursor (40..N.dist px, through foes and over obstacles), cutting every foe within N.w / 2 of the path (forced crit, shoved aside, stunned 0.4 s), invulnerable 0.35 s.
-  // The afterimage left at the start detonates after N.dur s (N.r radius, N.dmg x 1.5); knives: it throws 3 knives at random foes in view every 0.2 s until then.
-  // recast: the first cast opens a 2.5 s window in which Q blinks again at no cost (hook tick; the cooldown resumes if unused).
+  // Zero damage. Blinks toward the cursor (40..N.dist px, through foes and over obstacles), invulnerable 0.35 s. The afterimage left at the start is a decoy for N.dur s:
+  // every 0.25 s each non-boss foe inside the decoy's view rect is lured to it (W.foeLure, 0.4 s, refreshed). charges (L4): 2 casts stored.
+  // Zones: 'stepcut' (blink streak), 'afterimg' (the decoy).
+  const DV = ED.HERO_VIEW;
   ED.addSkill({
-    id: 'step', name: 'Shadow Step', icon: 'fx.smoke', cd: 8, txt: 'Blink, cut the path, leave a decoy',
-    base: { dmg: 11, r: 44, dur: 0.8, dist: 130, w: 26 },
+    id: 'step', name: 'Shadow Step', icon: 'fx.smoke', cd: 8, txt: 'Blink and leave a decoy foes chase',
+    base: { dur: 2, dist: 130, charges: 1 },
     levels: [
-      { mods: { knives: true }, txt: 'Afterimage throws knives' },
-      { mods: { dist: 50, w: 18, r: 0.3 }, txt: 'Blink farther, cut a wider path' },
-      { mods: { recast: true }, txt: 'Recast once within 2.5 s' },
+      { mods: { dist: 60 }, txt: 'Blink 60 px farther' },
+      { mods: { dur: 0.75 }, txt: 'The decoy lasts 3.5 s' },
+      { mods: { charges: 1 }, txt: '2 charges' },
     ],
   }, (w, p, x, y, N) => {
     let a = Math.atan2(y - p.y, x - p.x), d = Math.hypot(x - p.x, y - p.y);
@@ -278,46 +279,16 @@
     p.x += Math.cos(a) * d; p.y += Math.sin(a) * d; ED.Arena.collide(w.arena, p, p.r);
     p.invuln = Math.max(p.invuln, 0.35); p.mdir = a;
     const len = Math.hypot(p.x - ox, p.y - oy) || 1;
-    cut(w, p, ox, oy, p.x, p.y, N.w / 2, N.dmg, a);
-    w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, a, len, w: N.w, dur: 0.3, look: 'stepcut' });
-    w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, r: N.r, a, dur: N.dur, warn: true, dmg: N.dmg * 1.5, knock: 240, look: 'afterimg',
-      st: N.knives ? { kt: 0, dmg: N.dmg * 0.35 } : null, onTick: N.knives ? afterKnives : null });
-    w.hitBraziers(p.x, p.y, 24, p);
-    if (N.recast) { if (p.stepRe > 0) p.stepRe = 0; else { p.stepRe = 2.5; p.stepArm = true; } }
+    w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, a, len, w: 26, dur: 0.3, look: 'stepcut' });
+    w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, r: 24, a, dur: N.dur, look: 'afterimg', st: { nt: 0 }, onTick: decoyTick });
     return { x0: Math.round(ox), y0: Math.round(oy), a, shake: 4 };
   });
-  // Segment cut (x0, y0) -> (x1, y1) of half width hw: every foe touching it takes dmg as a forced crit, shoved perpendicular away from the path.
-  function cut(w, p, x0, y0, x1, y1, hw, dmg, a) {
-    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, R = Math.hypot(x1 - x0, y1 - y0) / 2 + hw + 24, q = w.foeScan(mx, my, R);
-    for (let k = 0; k < q.length; k++) {
-      const e = q[k]; if (e.dead) continue;
-      const m = hw + e.r; if (U.segDist2(e.x, e.y, x0, y0, x1, y1) > m * m) continue;
-      const side = U.angDiff(a, Math.atan2(e.y - y0, e.x - x0)) > 0 ? 1 : -1, s = w.src(p, 'step', 'skill', 220);
-      s.crit = true; s.kx = -Math.sin(a) * side; s.ky = Math.cos(a) * side;
-      w.hitFoe(e, dmg, s);
-      if (!e.dead) w.stun(e, 0.4);
-    }
+  // Decoy: lures every non-boss foe inside its view rect (centred on the afterimage), every 0.25 s.
+  function decoyTick(w, z) {
+    if (z.t < z.st.nt) return;
+    z.st.nt = z.t + 0.25;
+    const q = w.foeScan(z.x, z.y, Math.hypot(DV.hw, DV.hh)), T = Math.min(0.4, z.dur - z.t + 0.05);
+    for (let k = 0; k < q.length; k++) { const e = q[k]; if (!e.dead && Math.abs(e.x - z.x) <= DV.hw && Math.abs(e.y - z.y) <= DV.hh) w.foeLure(e, z.x, z.y, T); }
     w.foeEnd();
   }
-  const KNIFE = { look: 'knife', dmg: 0, speed: 420, pierce: 1, life: 0.6, knock: 20 };
-  function afterKnives(w, z) {
-    const st = z.st;
-    for (st.kt += 1 / 60; st.kt >= 0.2; st.kt -= 0.2) {
-      KNIFE.dmg = st.dmg;
-      for (let i = 0; i < 3; i++) {
-        const t = w.target('random', z.p, 220);
-        const a = t ? Math.atan2(t.y - z.y, t.x - z.x) : w.rng.next() * TAU;
-        w.shoot(z.p, 'step', z.x, z.y - 8, a, null, KNIFE);
-      }
-    }
-  }
-
-  ED.HOOK.shade = {
-    init(w, p) { p.stepRe = 0; p.stepArm = false; p.stepRest = 0; },
-    tick(w, p, dt) {
-      const sk = p.skills[0];
-      if (p.stepArm) { p.stepArm = false; p.stepRest = sk.cd; sk.cd = 0; }
-      else if (p.stepRe > 0) { p.stepRe -= dt; p.stepRest -= dt; if (p.stepRe <= 0) sk.cd = Math.max(0, p.stepRest); }
-    },
-  };
 })(globalThis.ED || (globalThis.ED = {}));

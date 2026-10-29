@@ -4,7 +4,7 @@
 // 2. 4 heroes (knight, ranger, pyro, cleric), same script, god cheat: no exceptions, reaches the final boss; run twice -> same digest.
 // 3. Victory runs (full: all 7 heroes, stages 1 / 2 / 3 in turn; quick: knight on stage 1): a cheat build (six passives at max, weapon unranked) with { god, might: 40 }, walking to chests:
 //    3 bosses met, the stage's final boss dies (state 'won', one 'end' event, summary), the hero reaches a Form through its own picks; the stage 3 ranger run twice -> same digest.
-//    Quick mode adds a 240 s Form reach run per hero ({ god, might: 40, xp: 4 }, same build): every hero takes a Form.
+//    Quick mode adds a Form reach run per hero up to 420 s ({ god, might: 40, xp: 4 }, same build; Forms come from boss chest Form offers, the first at 5:00): every hero takes a Form.
 // 4. Mortal solo knight run until it ends (no cheats): state 'lost' with one 'end' event, or survives.
 // 5. Every hero x every stage, 90 s, god cheat: no exceptions, Q casts (E is unbound: never cast), the signature weapon deals damage, foes die; combined digest printed.
 // 6. Invariants on every run: hit events <= 200 per tick, foe telegraphs >= 0.6 s, alive cap respected.
@@ -120,7 +120,7 @@ for (const [cls, st, seed] of VICTORY) {
   ok(v.bosses.length >= 3, `${tag}: meets ${v.bosses.length} bosses`);
   const f = formOf(v);
   if (f) formed.add(cls);
-  ok(!!f && v.evolved.length === 1, `${tag}: reaches one Form through its picks (${v.evolved.join(',') || 'none'}; build ${build(v)})`);
+  ok(!!f && v.evolved.filter(e => e.startsWith(v.w.heroes[0].weapons[0].root + '>')).length === 1, `${tag}: reaches one hero-weapon Form through its picks (${v.evolved.join(',') || 'none'}; build ${build(v)})`);
   invariants(v, tag);
   if (st === 0 && !sum) {
     sum = v.w.summary();
@@ -131,7 +131,7 @@ for (const [cls, st, seed] of VICTORY) {
 }
 if (QUICK) for (const cls of ED.HERO_IDS) {
   if (formed.has(cls)) continue;
-  const v = run(vcfg(cls, 0, 20 + ED.HERO_IDS.indexOf(cls), 4), 240, Object.assign({}, vopt, { stopAt: (w) => w.heroes[0].weapons[0].evo }));
+  const v = run(vcfg(cls, 0, 20 + ED.HERO_IDS.indexOf(cls), 4), 420, Object.assign({}, vopt, { stopAt: (w) => w.heroes[0].weapons[0].evo }));
   if (formOf(v)) formed.add(cls);
   ok(!v.err && !!formOf(v), `${cls}: reaches a Form by ${v.w.time.toFixed(0)} s (level ${v.w.level}; build ${build(v)})` + errOf(v));
 }

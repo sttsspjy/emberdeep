@@ -214,6 +214,31 @@
     }
   };
 
+  // Skill overrides (hero Q utility; never on bosses), run by updateFoes instead of the brain while e.ovT > 0: ovK 1 flee (away from hero ovP, else from (ovX, ovY), x FLEE speed),
+  // ovK 2 lure (walks to (ovX, ovY) and holds there). Starting one cancels the foe's live telegraph (w.foeCancel). Elites are affected like normal foes.
+  const FLEE = 1.2;
+  AI.override = (w, e, dt) => {
+    e.ovT -= dt;
+    if (e.ovK === 1) {
+      const P = e.ovP, dx = e.x - (P ? P.x : e.ovX), dy = e.y - (P ? P.y : e.ovY), d = Math.hypot(dx, dy);
+      if (d > 0.5) w.steer(e, e.x + dx / d * 100, e.y + dy / d * 100, FLEE, dt);
+      else { const a = e.id * 2.39996; w.steer(e, e.x + Math.cos(a) * 100, e.y + Math.sin(a) * 100, FLEE, dt); }
+    } else if (U.dist2(e.x, e.y, e.ovX, e.ovY) > 9) w.steer(e, e.ovX, e.ovY, 1, dt);
+    else e.vx = e.vy = 0;
+    if (e.ovT <= 0) { e.ovT = 0; e.ovK = 0; e.ovP = null; }
+  };
+  const W = ED.World.prototype;
+  const overrideOn = (w, e, k, dur) => {
+    if (e.dead || e.boss || !(dur > 0)) return false;
+    if (e.st) w.foeCancel(e);
+    e.ovT = Math.max(e.ovK === k ? e.ovT : 0, dur); e.ovK = k;
+    return true;
+  };
+  // Foe e flees from hero p for dur s. Returns whether it took the state.
+  W.foeFlee = function (e, p, dur) { if (!overrideOn(this, e, 1, dur)) return false; e.ovP = p; e.ovX = p.x; e.ovY = p.y; return true; };
+  // Foe e walks to (x, y) and holds there for dur s (decoys, wall taunts). Returns whether it took the state.
+  W.foeLure = function (e, x, y, dur) { if (!overrideOn(this, e, 2, dur)) return false; e.ovP = null; e.ovX = x; e.ovY = y; return true; };
+
   // Bosses: ED.Bosses[def.id](w, e, dt) (src/sim/bosses.js runner), chaser when the boss has no script.
   AI.boss = (w, e, dt) => { const b = ED.Bosses[e.def.id]; if (typeof b === 'function') b(w, e, dt); else AI.chaser(w, e, dt); };
 })(globalThis.ED || (globalThis.ED = {}));
