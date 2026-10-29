@@ -6,6 +6,7 @@
   'use strict';
   const PI = Math.PI, TAU = PI * 2, q = Math.round;
   const FIRE = [0x4a1006, 0xb82c14, 0xff7a2a, 0xffc24a, 0xfff4c0], ICE = [0x1c3358, 0x3a78b0, 0x7fe3ff, 0xc8f6ff, 0xffffff], HOLY = [0x6a4c18, 0xe0a82e, 0xffcf5a, 0xfff0c2, 0xffffff];
+  const SAINT = [0x9fe8f0, 0xd8fbff, 0xf0ffff]; // Holy Censer aura: pale white-cyan (fill, rim / rays, motes), apart from the warm knight fans and gold pickups
   const SMOKE = 0xbfb8b0, BRASS = 0xc8962e, CHAIN = 0xa08050;
   const O = { flip: false, flash: 0, alpha: 1, rot: 0, sx: 1, sy: 1, tint: 0xffffff, add: false };
   const so = (alpha, sc, rot, add) => { O.alpha = alpha; O.sx = O.sy = sc; O.rot = rot || 0; O.add = !!add; O.tint = 0xffffff; O.flip = false; O.flash = 0; return O; };
@@ -20,31 +21,31 @@
   const disc = (B) => (B.zoneLite ? B.zcirc : B.circ);
 
   // ---------------- Censer ----------------
-  // Aura (r radius, follows the hero; w swinging censers at angle 3.2 x t): faint fill, 1 px rim, an outgoing pulse line, rim motes, rising smoke; holy: gold, slow light rays.
+  // Aura (r radius, follows the hero; w swinging censers at angle 3.2 x t): faint fill, 1 px rim, an outgoing pulse line, rim motes, rising smoke; holy: pale white-cyan, slow light rays.
   // Canvas2D (any frame) or zone LOD: fill + rim only.
   // Swinging censers: a 1 px chain from the hero, a brass bowl with a glowing coal and a short smoke trail.
   function censer(B, z, t, holy) {
     const R = z.r, x = q(z.x), y = q(z.y - 2), ph = z.id * 0.618, f = Math.min(1, z.t / 0.25);
-    const fill = holy ? HOLY[2] : 0xc8a060, rim = holy ? HOLY[3] : 0xe0c080;
+    const fill = holy ? SAINT[0] : 0xc8a060, rim = holy ? SAINT[1] : 0xe0c080;
     if (B.zoneLite || B.mode !== 'gl') { B.zcirc(x, y, R, ca(fill, 22 * f), 0); B.zcirc(x, y, R, ca(rim, 110 * f), 1); }
     else {
-      B.circ(x, y, R, ca(fill, (holy ? 26 : 18) * f), 0);
-      if (holy) for (let i = 0; i < 6; i++) { const a = t * 0.6 + i * TAU / 6; B.line(x, y, q(x + Math.cos(a) * R), q(y + Math.sin(a) * R), 2, ca(HOLY[3], 26 * f)); }
-      B.circ(x, y, R, ca(rim, 120 * f), 1);
+      B.circ(x, y, R, ca(fill, 18 * f), 0);
+      if (holy) for (let i = 0; i < 6; i++) { const a = t * 0.6 + i * TAU / 6; B.line(x, y, q(x + Math.cos(a) * R), q(y + Math.sin(a) * R), 1, ca(SAINT[1], 40 * f)); }
+      B.circ(x, y, R, ca(rim, (holy ? 140 : 120) * f), 1);
       const k = (t * 1.6 + ph) % 1;
       B.circ(x, y, R * (0.55 + 0.45 * k), ca(holy ? 0xffffff : 0xffe0a0, (1 - k) * 110 * f), 1);
-      for (let i = 0; i < 10; i++) { const a = (holy ? -t : t) * 0.7 + i * TAU / 10; B.rect(q(x + Math.cos(a) * R * 0.92), q(y + Math.sin(a) * R * 0.92), 1, 1, ca(0xfff4d0, 190 * f)); }
+      for (let i = 0; i < 10; i++) { const a = (holy ? -t : t) * 0.7 + i * TAU / 10; B.rect(q(x + Math.cos(a) * R * 0.92), q(y + Math.sin(a) * R * 0.92), holy ? 2 : 1, holy ? 2 : 1, ca(holy ? SAINT[2] : 0xfff4d0, 190 * f)); }
       for (let i = 0; i < 4; i++) {
         const s = (t * 0.5 + i / 4 + ph) % 1, a = i * 2.3 + ph * 5;
-        B.circ(q(x + Math.cos(a) * R * 0.5), q(y + Math.sin(a) * R * 0.3 - s * 24), 3 + s * 5, ca(holy ? 0xfff4e0 : SMOKE, (1 - s) * 40 * f), 0);
+        B.circ(q(x + Math.cos(a) * R * 0.5), q(y + Math.sin(a) * R * 0.3 - s * 24), 3 + s * 5, ca(holy ? SAINT[1] : SMOKE, (1 - s) * (holy ? 28 : 40) * f), 0);
       }
     }
     const n = z.w | 0;
     for (let i = 0; i < n; i++) {
       const a = z.t * 3.2 + i * TAU / n, cx = q(x + Math.cos(a) * R * 0.8), cy = q(y + Math.sin(a) * R * 0.8);
       B.line(x, y - 8, cx, cy - 3, 1, ca(CHAIN, 170 * f));
-      if (!B.zoneLite) for (let j = 1; j <= 3; j++) { const b = a - j * 0.22; B.circ(q(x + Math.cos(b) * R * 0.8), q(y + Math.sin(b) * R * 0.8 - j), 2 + j, ca(holy ? 0xfff0c0 : SMOKE, (90 - j * 26) * f), 0); }
-      B.circ(cx, cy, 6, ca(holy ? 0xffe27a : 0xffb84a, 60 * f), 0);
+      if (!B.zoneLite) for (let j = 1; j <= 3; j++) { const b = a - j * 0.22; B.circ(q(x + Math.cos(b) * R * 0.8), q(y + Math.sin(b) * R * 0.8 - j), 2 + j, ca(holy ? SAINT[1] : SMOKE, (90 - j * 26) * f), 0); }
+      B.circ(cx, cy, 6, ca(holy ? SAINT[0] : 0xffb84a, 60 * f), 0);
       B.circ(cx, cy, 3, ca(holy ? 0xffe27a : BRASS, 255 * f), 0);
       B.rect(cx - 1, cy - 1, 1, 1, ca(0xfff6d0, 255 * f));
     }
@@ -119,7 +120,7 @@
     return true;
   }
   // Fallers (top): from up-right toward the target, a streak behind, the rock or star at the head. [dx, dy, sprite, scale, colour, width]
-  const FALL = { meteor: [70, 240, 'proj.fireball', 1.4, FIRE[2], 4], mshower: [40, 180, 'proj.fireball', 0.8, FIRE[2], 2], star: [50, 200, '', 0, 0xfff0c2, 2],
+  const FALL = { meteor: [70, 240, 'proj.fireball', 1.4, FIRE[2], 4], mshower: [40, 180, 'proj.fireball', 0.8, FIRE[2], 2], star: [50, 200, '', 0, 0xfff0c2, 3],
     comet: [110, 300, 'proj.fireball', 2.6, 0xff4a2a, 7] };
   let fallX = 0, fallY = 0;
   function faller(B, z, t, f) {
@@ -129,7 +130,11 @@
     if (!B.zoneLite) B.line(x, y, q(x + ux * tail * 2), q(y + uy * tail * 2), f[5], ca(f[4], 60));
     B.line(x, y, q(x + ux * tail), q(y + uy * tail), Math.max(1, f[5] >> 1), ca(0xfff4c0, 200));
     if (f[2]) B.spr(f[2], frame(f[2], t + z.id * 0.1), x, y, so(1, f[3], Math.atan2(-uy, -ux) - 7 * PI / 4));
-    else { if (!B.zoneLite) B.circ(x, y, 4, ca(f[4], 110), 0); B.rect(x - 1, y - 1, 3, 3, 0xffffffff); }
+    else { // star: a 1 px dark-outlined pixel plus, white-hot centre, faint glow
+      if (!B.zoneLite) B.circ(x, y, 6, ca(f[4], 70), 0);
+      B.rect(x - 4, y - 2, 9, 5, 0x2a1c08c8); B.rect(x - 2, y - 4, 5, 9, 0x2a1c08c8);
+      B.rect(x - 3, y - 1, 7, 3, ca(f[4], 255)); B.rect(x - 1, y - 3, 3, 7, ca(f[4], 255)); B.rect(x - 1, y - 1, 3, 3, 0xffffffff);
+    }
   }
   // Impact (top): a hot 3 px ring and a 1 px white ring opening out; the flipbook only for big impacts (smaller ones get the boom event's flash).
   function mboom(B, z) {

@@ -58,13 +58,13 @@
       B.circ(pr.x, pr.y, r + 3, ca(0xd9dfe8, 34), 0);
       disc(B, pr.x, pr.y, r, t * 24 + pr.id, 0x7a8494, 0xd9dfe8, 0xffffff);
     },
-    // Moon glaive: moonlit halo, fading afterimages along its path (WebGL only), a pale spinning disc with a crescent rim.
+    // Moon glaive: a 1 px moonlit halo ring, one 1 px afterimage rim behind it (WebGL only), a spinning disc with blue blades and a pale crescent rim (no white fills or blades: the fanned moons stack near the hero without washing white).
     moon(B, pr, t) {
       const bx = Math.cos(pr.a), by = Math.sin(pr.a), rot = t * 28 + pr.id, r = Math.max(9, pr.r);
-      B.circ(pr.x, pr.y, r + 7, ca(0x9fc4ff, 34), 0);
-      if (B.mode === 'gl') for (let i = 3; i >= 1; i--) B.circ(pr.x - bx * i * 7, pr.y - by * i * 7, r * (1 - i * 0.22), ca(0xc9dcff, 100 - i * 25), 0);
-      disc(B, pr.x, pr.y, r, rot, 0x3a5a9a, 0xc9dcff, 0xffffff);
-      B.cone(pr.x, pr.y, r + 3, rot * 0.25, 2.4, ca(0xe8f0ff, 200), 2);
+      B.circ(pr.x, pr.y, r + 2, ca(0x9fc4ff, 50), 1);
+      if (B.mode === 'gl') B.circ(pr.x - bx * 10, pr.y - by * 10, r * 0.8, ca(0x9fc4ff, 40), 1);
+      disc(B, pr.x, pr.y, r, rot, 0x2a4a8a, 0x7aa4e8, 0xb8d4ff);
+      B.cone(pr.x, pr.y, r + 2, rot * 0.25, 2.4, ca(0xe8f0ff, 150), 2);
     },
   };
 
@@ -100,12 +100,14 @@
     bramble(B, z) { if (!B.zoneLite) splinters(B, z, 0x9be33c, 4); },
     thicket(B, z) { if (!B.zoneLite) splinters(B, z, 0xd2ff82, 6); },
     // Chain hop: a jagged bolt with a glow pass, flickering, plus a spark at the struck end.
+    // Alpha holds full for the first half, then steps down in thirds; a 3 px white core over a 7 px blue glow.
     spark(B, z, t) {
-      const k = fade(z, z.dur), ex = z.x + Math.cos(z.a) * z.len, ey = z.y + Math.sin(z.a) * z.len, seed = z.id * 13 + Math.floor(t * 20);
+      const k = Math.min(1, Math.ceil(fade(z, z.dur) * 6) / 3), ex = z.x + Math.cos(z.a) * z.len, ey = z.y + Math.sin(z.a) * z.len, seed = z.id * 13 + Math.floor(t * 20);
       const segs = Math.max(2, Math.round(z.len / 9));
-      bolt(B, z.x, z.y, ex, ey, seed, segs, Math.min(10, z.len * 0.18), 6, 0x6ab8ff, 0xffffff, k);
-      if (k > 0.5 && !B.zoneLite) bolt(B, z.x, z.y, ex, ey, seed + 91, segs, Math.min(7, z.len * 0.12), 2, 0xc8e6ff, 0xe8f4ff, k * 0.6);
-      B.circ(ex, ey, 4 + 3 * k, ca(0xc8e6ff, 160 * k), 0);
+      bolt(B, z.x, z.y, ex, ey, seed, segs, Math.min(10, z.len * 0.18), 7, 0x6ab8ff, 0xffffff, k);
+      if (k >= 1 && !B.zoneLite) bolt(B, z.x, z.y, ex, ey, seed + 91, segs, Math.min(7, z.len * 0.12), 2, 0xc8e6ff, 0xe8f4ff, 0.6);
+      B.circ(ex, ey, 5, ca(0xc8e6ff, 170 * k), 0);
+      B.rect(Math.round(ex) - 1, Math.round(ey) - 1, 3, 3, ca(0xffffff, 255 * k));
     },
     // Sky strike: a thick bolt from above the screen into the foe, a thunder flash, a white ground ring.
     sbolt(B, z, t) {
@@ -115,15 +117,17 @@
       B.spr('fx.thunder', Math.min(7, Math.floor((1 - k) * 8)), z.x, z.y - 8, so(k, 0, 2, 0xffffff, true));
       B.circ(z.x, z.y, z.r * (0.5 + 0.5 * (1 - k)), ca(0xe8f0ff, 180 * k), 2);
     },
-    // Storm Crown: five crackling sparks circling above the hero's head, arcs flicking between them.
+    // Storm Crown: a turning gold crown floating above the hero's head (a 2 px band through five 3 px spikes with white-hot tips; the far side dimmer), a faint blue glow, arcs flicking between spikes.
     scrown(B, z, t) {
-      const cx = z.x, cy = z.y - 34;
-      B.circ(cx, cy - 3, 16, ca(0xffe66b, 50), 0);
+      const cx = Math.round(z.x), cy = Math.round(z.y - 42), RX = 20, RY = 7;
+      B.circ(cx, cy - 6, 24, ca(0x6ab8ff, 30), 0);
       for (let i = 0; i < 5; i++) {
-        const a = i * TAU / 5 + t * 2.4, x = cx + Math.cos(a) * 13, y = cy + Math.sin(a) * 5;
-        B.line(x, y, x, y - 7, 3, ca(0xffe66b, 240));
-        B.rect(x - 1, y - 10, 3, 3, 0xffffffff);
-        if (hs(Math.floor(t * 12) + i) > 0.6) { const b = a + TAU / 5; bolt(B, x, y - 5, cx + Math.cos(b) * 13, cy + Math.sin(b) * 5 - 5, Math.floor(t * 30) + i, 3, 3, 3, 0x6ab8ff, 0xffffff, 0.9); }
+        const a = i * TAU / 5 + t * 2.4, b = a + TAU / 5, x = Math.round(cx + Math.cos(a) * RX), y = Math.round(cy + Math.sin(a) * RY);
+        const nx = Math.round(cx + Math.cos(b) * RX), ny = Math.round(cy + Math.sin(b) * RY), al = Math.sin(a) > 0 ? 255 : 150;
+        B.line(x, y, nx, ny, 2, ca(0xc8962e, al));
+        B.line(x, y, x, y - 11, 3, ca(0xffe66b, al));
+        B.rect(x - 2, y - 15, 4, 4, ca(0xffffff, al));
+        if (hs(Math.floor(t * 12) + i) > 0.6) bolt(B, x, y - 8, nx, ny - 8, Math.floor(t * 30) + i, 3, 3, 5, 0x6ab8ff, 0xffffff, 0.95);
       }
     },
   };

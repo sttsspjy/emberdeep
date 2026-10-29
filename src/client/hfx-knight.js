@@ -1,5 +1,5 @@
 // Knight visuals (pixel only: atlas sprites + Batch primitives): crescent outlines, gale crescents and spiral blades (projectiles), crack / cut zones, Q shove / bulwark zones,
-// spin fans (full-spin swing events), a blade glint orbiting a knight holding a spin Form (HeroFx). Everything derives from render-visible fields and view time; per-zone variation from U.hash3(z.id, i, ...).
+// spin fans (full-spin swing events), big slam rims (quake booms), a blade glint orbiting a knight holding a spin Form (HeroFx). Everything derives from render-visible fields and view time; per-zone variation from U.hash3(z.id, i, ...).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU, PI = Math.PI;
@@ -139,14 +139,15 @@
 
   // ---------------- spin fan ----------------
   // A full spin is a ceiling fan photographed spinning: FAN[wid].n paddle blades (lines bw x radius wide, at most lw px, from the hub ring R0 px out to the hit radius) turning FAN.w rad/s clockwise on screen.
-  // Each blade is smeared into a wedge of SMEAR stepped-alpha copies trailing behind it (copies overlap near the hub, spread at the tip), brightest at the leading copy,
-  // which also carries a 1 px edge line and a tip glint; a bright hub ring sits at the hero. One fan per hero follows it (view hero by pid): every spin event of a string
-  // keeps it turning; it holds FAN_HOLD s after the last spin, then fades over FAN_FADE s. Crowded Canvas2D: half the copies.
+  // Each blade is smeared into a wedge of SMEAR stepped-alpha copies trailing behind it, brightest at the leading copy, which also carries a 1 px edge line and a tip glint.
+  // Trailing copies start where consecutive copies stop overlapping (lw / step px out, at most half the radius): any foe sits under at most ~1 body copy (leading copy al / 255 <= 0.3).
+  // A hub ring sits at the hero. One fan per hero follows it (view hero by pid): every spin event of a string keeps it turning; it holds FAN_HOLD s after the last spin,
+  // then fades over FAN_FADE s. Crowded Canvas2D: half the copies.
   const FAN = {
-    whirlwind: { n: 4, w: 15.7, bw: 0.19, lw: 13, col: 0xe8cfae, edge: 0xfff6e6, al: 120 },
-    cleave: { n: 4, w: 15.7, bw: 0.19, lw: 13, col: 0xe8cfae, edge: 0xfff6e6, al: 100 },
-    earthsplitter: { n: 3, w: 10.5, bw: 0.27, lw: 17, col: 0xc89e74, edge: 0xffe8c8, al: 130 },
-    tempest: { n: 5, w: 18.8, bw: 0.12, lw: 8, col: 0xc8d8f4, edge: 0xffffff, al: 115 },
+    whirlwind: { n: 4, w: 15.7, bw: 0.19, lw: 13, col: 0xe8d8c0, edge: 0xfff6e6, al: 72 },
+    cleave: { n: 4, w: 15.7, bw: 0.19, lw: 13, col: 0xe8d8c0, edge: 0xfff6e6, al: 64 },
+    earthsplitter: { n: 3, w: 10.5, bw: 0.27, lw: 17, col: 0xc89e74, edge: 0xffe8c8, al: 76 },
+    tempest: { n: 5, w: 18.8, bw: 0.12, lw: 8, col: 0xc8d8f4, edge: 0xffffff, al: 72 },
   };
   const SMEAR = 7, STEP = 0.13, R0 = 8, FAN_HOLD = 0.14, FAN_FADE = 0.16, FANN = 8, FANS = [];
   for (let i = 0; i < FANN; i++) FANS.push({ pid: '', wid: '', x: 0, y: 0, r: 0, a0: 0, t0: -1e9, tl: -1e9 });
@@ -163,11 +164,11 @@
     if (k <= 0 || f.r < R0 + 4) return;
     const h = heroAt(f.pid), x = h ? h.x : f.x, y = h ? h.y - 4 : f.y, R = f.r * (0.88 + 0.12 * Math.min(1, age / 0.08));
     const lw = U.clamp(Math.round(R * D.bw), 3, D.lw), m = B.mode !== 'gl' && B.crowd > 300 ? (SMEAR + 1) >> 1 : SMEAR, st = STEP * SMEAR / m;
-    const th = f.a0 + age * D.w;
+    const th = f.a0 + age * D.w, rs = Math.min(lw / st, R * 0.5);
     for (let j = 0; j < D.n; j++) {
       const b = th + j * TAU / D.n;
-      for (let i = m - 1; i >= 0; i--) { // trailing copies first (shorter at the hub: the smear widens into a wedge outward); the leading copy lands on top
-        const c = b - i * st, q = 1 - i / m, cs = Math.cos(c), sn = Math.sin(c), r0 = R0 + (R - R0) * 0.4 * i / m;
+      for (let i = m - 1; i >= 0; i--) { // trailing copies first (start past the overlap radius rs: the smear widens into a wedge outward); the leading copy lands on top
+        const c = b - i * st, q = 1 - i / m, cs = Math.cos(c), sn = Math.sin(c), r0 = i ? Math.max(rs, R0 + (R - R0) * 0.4 * i / m) : R0;
         B.line(x + cs * r0, y + sn * r0, x + cs * R, y + sn * R, lw, rgba(D.col, D.al * k * q * q));
       }
       const cs = Math.cos(b + D.bw * 0.5), sn = Math.sin(b + D.bw * 0.5), ex = x + Math.cos(b) * R, ey = y + Math.sin(b) * R;
@@ -176,10 +177,29 @@
     }
     B.circ(x, y, R0, rgba(D.edge, 200 * k), 2);
   };
+  // ---------------- big slams ----------------
+  // Knight 'quake' booms wider than SL_MIN px (spin-string slams, Earthsplitter quakes) skip fx.js's boom (full-alpha ring, flash disc, screen flash): a 1 px dust rim
+  // opens 0.85 -> 1 x r over SL_LIFE s with stepped alpha, 12 dust flecks kicked up along it. Smaller slams keep the default boom.
+  const SL_MIN = 100, SL_LIFE = 0.3, SLN = 8, SLS = [];
+  for (let i = 0; i < SLN; i++) SLS.push({ x: 0, y: 0, r: 0, id: 0, t0: -1e9 });
+  let slI = 0, slId = 0;
+  const drawSlam = (B, s, age) => {
+    const e = age / SL_LIFE, k = Math.ceil((1 - e) * 4) / 4, r = s.r * (0.85 + 0.15 * U.easeOut(e));
+    B.circ(s.x, s.y, r, rgba(DUST, 120 * k), 1);
+    for (let i = 0; i < 12; i++) {
+      const a = (i + H(s.id, i, 7) * 0.7) / 12 * TAU, d = r - 2 * H(s.id, i, 8);
+      B.rect(Math.round(s.x + Math.cos(a) * d), Math.round(s.y + Math.sin(a) * d * 0.9 - 6 * e * H(s.id, i, 9)), 2, 1, rgba(DUST, 180 * k));
+    }
+  };
   const F = ED.FX;
   if (F && F.handle && F.draw) {
     const handle = F.handle, draw = F.draw;
     F.handle = (ev, ctx) => {
+      if (ev.t === 'boom' && ev.look === 'quake' && KW[ev.wid] && ev.r > SL_MIN) {
+        const s = SLS[slI = (slI + 1) % SLN]; s.x = ev.x; s.y = ev.y; s.r = ev.r; s.id = ++slId; s.t0 = F.now;
+        if (ev.pid === ctx.me) F.addShake(1.5, ctx.crowd);
+        return;
+      }
       if (ev.t !== 'swing' || !KW[ev.wid]) return handle(ev, ctx);
       if (ED.Actors) ED.Actors.event(ev);
       if (ev.arc >= 6.2) { fanEvent(ev, F.now); return; }
@@ -194,6 +214,7 @@
         const k = 1 - age / SW_LIFE, r = s.r * (0.94 + 0.06 * (1 - k));
         sweep(B, s.x, s.y, r, s.a, s.arc, 2, rgba(STEEL, 210 * k)); sweep(B, s.x, s.y, r * 0.66, s.a, s.arc * 0.85, 1, rgba(0xffffff, 100 * k));
       }
+      for (let i = 0; i < SLN; i++) { const age = F.now - SLS[i].t0; if (age >= 0 && age < SL_LIFE) drawSlam(B, SLS[i], age); }
       for (let i = 0; i < FANN; i++) if (fanLive(FANS[i], F.now)) drawFan(B, FANS[i], F.now);
     };
   }

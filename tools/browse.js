@@ -14,7 +14,7 @@
 //          --support=id,id: the first two named supports join as Forms, every path at rank 3. --prof (crowdN / late, chromium): a CPU profile over the measured window,
 //          the top 15 functions by self time in the notes.
 //   forms: one PNG per hero (--cls) x Form (--form=id,... filters): every path at rank 3, the Form refined twice, six max passives, clock 15:00, 400 last-roster foes held at
-//          real HP, no boss, --seconds (4) s of play; into a fresh folder <outdir>/forms-<stamp>-<browser>[-soft] (printed). Fails on a page / console error or a Form not taken.
+//          real HP, no boss, no level-ups or offers, --seconds (4) s of play; into a fresh folder <outdir>/forms-<stamp>-<browser>[-soft] (printed). Fails on a page / console error or a Form not taken.
 //          --support=id,... (support root or Form id; all: every support root): one PNG per hero Form x support, the support's Form (a root: its first Form) beside the hero's.
 //   coop: two pages of one browser context on ?net=local (BroadcastChannel transport): host + guest through the ED.Net lobby API (host, join, ready, start), then the real co-op
 //         run on both peers for --seconds (6) s: the guest's mirror shows 2 heroes and foes, snapshots <= 12 KB.
@@ -642,6 +642,7 @@ async function scenForms() {
           if (SF) D.give(SF);
           for (const id of ['might', 'reach', 'duration', 'multishot', 'haste', 'velocity']) D.give(id, 99);
           D.setTime(900);
+          w.addXp = w.updateProgress = () => {}; p.pend = p.pendForm = 0; p.offer = null; w.paused = false; // no level-ups, offers or their overlay: the shot shows only this build
           w.recalc(p, false);
           const s = SF ? p.weapons.find(x => x.id === SF) : null;
           return { id: ws.id, pr: ws.pr.join(''), fl: ws.fl, passives: p.passives.length, sup: s ? s.id + ':' + s.pr.join('') + 'r' + s.fl : '', first: p.weapons[0] === ws, held: p.weapons.map(x => x.id).join('+') };
