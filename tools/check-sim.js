@@ -6,7 +6,7 @@
 //    3 bosses met, the stage's final boss dies (state 'won', one 'end' event, summary), the hero reaches a Form through its own picks; the stage 3 ranger run twice -> same digest.
 //    Quick mode adds a 240 s Form reach run per hero ({ god, might: 40, xp: 4 }, same build): every hero takes a Form.
 // 4. Mortal solo knight run until it ends (no cheats): state 'lost' with one 'end' event, or survives.
-// 5. Every hero x every stage, 75 s, god cheat: no exceptions, Q casts (E is unbound: never cast), the signature weapon deals damage, foes die; combined digest printed.
+// 5. Every hero x every stage, 90 s, god cheat: no exceptions, Q casts (E is unbound: never cast), the signature weapon deals damage, foes die; combined digest printed.
 // 6. Invariants on every run: hit events <= 200 per tick, foe telegraphs >= 0.6 s, alive cap respected.
 // 7. Save: code round trip, applyRun unlocks and gold.
 'use strict';
@@ -143,10 +143,10 @@ ok(m.w.state !== 'lost' || m.ends === 1, 'a lost run emits one end event');
 // 5. every hero x every stage
 let mdig = 0;
 for (let st = 0; st < ED.STAGES.length; st++) for (const cls of ED.HERO_IDS) {
-  const r = run({ seed: 11 + st, stage: st, players: players([cls]), cheats: { god: true } }, 75);
+  const r = run({ seed: 11 + st, stage: st, players: players([cls]), cheats: { god: true } }, 90);
   const h = ED.HEROES[cls], dealt = r.w.heroes[0].dealt[h.sig] || 0, q = r.casts[h.skills[0]] || 0, other = Object.keys(r.casts).filter(id => id !== h.skills[0]);
   mdig = (Math.imul(mdig, 31) + r.digest) >>> 0;
-  ok(!r.err && q > 0 && !other.length && dealt > 0 && r.w.kills > 0, `stage ${st + 1} ${cls}: 75 s, Q ${q}${other.length ? ' other ' + other.join(',') : ''}, ${h.sig} dealt ${Math.round(dealt)}, kills ${r.w.kills}, level ${r.w.level}` + errOf(r));
+  ok(!r.err && q > 0 && !other.length && dealt > 0 && r.w.kills > 0, `stage ${st + 1} ${cls}: 90 s, Q ${q}${other.length ? ' other ' + other.join(',') : ''}, ${h.sig} dealt ${Math.round(dealt)}, kills ${r.w.kills}, level ${r.w.level}` + errOf(r));
   if (r.maxHits > 200 || r.overCap || !(r.minTele === Infinity || r.minTele >= 0.6)) invariants(r, `stage ${st + 1} ${cls}`);
 }
 console.log('     hero x stage digest ' + mdig);

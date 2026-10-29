@@ -2,9 +2,9 @@
 // successive spawn angles step by the golden angle (+-0.3 rad jitter), so foes arrive from every side;
 // swarm events, elites and boss timers from the stage data. Party scaling: rate and cap x (1 + 0.25 per extra hero), hard cap 900; a living boss halves the rate.
 // Density floor: while alive < row.floor x alive cap the spawn budget is raised to REFILL x the deficit (at most REFILL_MAX per tick), so the screen refills within ~0.3 s.
-// Packs: swarm-brain roster picks spawn a pack sized by PACK (3-4 at 0:00, 12-16 at 5:00, 20-30 from 10:00; each member costs 0.5 of a spawn); def.pack foes spawn [min, max] together (1 each);
+// Packs: swarm-brain roster picks spawn a pack sized by PACK (3-4 at 0:00, 8-10 at 5:00, 12-16 from 10:00; each member costs 0.5 of a spawn); def.pack foes spawn [min, max] together (1 each);
 // def.wall packs spawn as a line across the hero's direction, def.wall px apart, each member keeping its side offset in e.aa (AI.march).
-// Swarm event (every events.swarm.every s): a closing ring of swarmers rushing at one hero's spot, or a stampede line crossing that hero's screen (24 at the first event to 80 by 12:00); rush time uses the foe's paced speed (W.foePace);
+// Swarm event (every events.swarm.every s): a closing ring of swarmers rushing at one hero's spot, or a stampede line crossing that hero's screen (24 at the first event to 50 by 12:00); rush time uses the foe's paced speed (W.foePace);
 // stampede members cycle the ring ids plus the stampede ids present in the current roster.
 // Benchmark phase (stage bench { t, elite }): from bench.t a 'warn' { kind: 'surge' } event and elites every bench.elite s.
 // Elites: a non-swarm, non-exploder roster foe promoted. Bosses: a 5 s 'warn' event, then w.spawnBoss; a stage boss id without an ED.Bosses script spawns the stage's brute as an elite boss stand-in.
@@ -12,7 +12,7 @@
   'use strict';
   const U = ED.U, W = ED.World.prototype;
   const HARD_CAP = 900, RING = [380, 460], BOSS_WARN = 5, SWARM_R = 430, REFILL = 0.1, REFILL_MAX = 40, GOLDEN = Math.PI * (3 - Math.sqrt(5));
-  const PACK = [[0, 3, 4], [5, 12, 16], [10, 20, 30]]; // swarm pack size keys [minute, min, max], linear between keys, the last holds
+  const PACK = [[0, 3, 4], [5, 8, 10], [10, 12, 16]]; // swarm pack size keys [minute, min, max], linear between keys, the last holds
 
   W.initSpawner = function () {
     const sd = this.sdef, ev = (sd.events && sd.events.swarm) || null, el = sd.elites || null;

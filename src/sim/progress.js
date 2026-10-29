@@ -221,10 +221,16 @@
   };
 
   // ---------------- chests ----------------
-  // Chest opened by p. Elite (val 1): one roll levelling a random owned passive or skill below max (never paths / Forms: those are choices); nothing to level pays 25 gold x goldMul.
-  // Boss (val 2): one extra level-up offer for p (p.pend++).
-  // Emits 'chest' { pid, val, results: [{ kind: 'plvl'|'skill'|'gold'|'offer', id, lvl, name, icon, txt, val (gold) }] } and returns results.
+  // Chest opened by p: every hero that is not dead (downed included) gets its own chestFor roll. Returns p's results.
   W.openChest = function (p, val) {
+    let mine = null;
+    for (const q of this.heroes) if (!q.dead || q === p) { const r = this.chestFor(q, val); if (q === p) mine = r; }
+    return mine || [];
+  };
+  // Chest reward for hero p. Elite (val 1): one roll levelling a random owned passive or skill below max (never paths / Forms: those are choices); nothing to level pays 25 gold x goldMul.
+  // Boss (val 2): one extra level-up offer for p (p.pend++; a downed hero picks after revival).
+  // Emits 'chest' { pid, val, results: [{ kind: 'plvl'|'skill'|'gold'|'offer', id, lvl, name, icon, txt, val (gold) }] } and returns results.
+  W.chestFor = function (p, val) {
     const results = [];
     if ((val | 0) >= 2) {
       p.pend++;

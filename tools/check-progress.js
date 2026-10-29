@@ -211,6 +211,18 @@ const KINDS = ['path', 'form', 'refine', 'passive', 'plvl', 'skill', 'gold', 'he
   b.downed = true; w.addXp(ED.World.xpFor(w.level)); tick(w, 1 / 60);
   ok(b.pend >= 1, 'a downed hero keeps its queued level-ups');
 }
+// ---- co-op chests: every hero that is not dead gets its own reward and 'chest' event
+{
+  const w = world('knight', {}, 3), [a, b, c] = w.heroes;
+  for (const h of w.heroes) { h.passives.push({ id: 'might', lvl: 1 }); w.recalc(h, false); }
+  b.downed = true; c.dead = true; w.events.length = 0;
+  const lv = (h) => h.passives[0].lvl + h.skills[0].lvl, l0 = w.heroes.map(lv);
+  const r = w.openChest(a, 1), evs = w.events.filter(e => e.t === 'chest');
+  ok(evs.length === 2 && evs[0].pid === a.pid && evs[0].results === r && evs[1].pid === b.pid && lv(a) === l0[0] + 1 && lv(b) === l0[1] + 1 && lv(c) === l0[2], 'co-op elite chest: opener and downed hero each roll and get their own event; the dead hero gets nothing');
+  const p0 = w.heroes.map(h => h.pend); w.events.length = 0;
+  w.openChest(a, 2);
+  ok(w.events.filter(e => e.t === 'chest').length === 2 && a.pend === p0[0] + 1 && b.pend === p0[1] + 1 && c.pend === p0[2], 'co-op boss chest: an extra level-up for every hero that is not dead');
+}
 // ---- damage table
 {
   const rows = ED.dmgRows({ dealt: { cleave: 100, whirlwind: 300, charge: 50, bomb: 25, other: 5 }, weapons: ['whirlwind'] });

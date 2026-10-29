@@ -30,7 +30,7 @@ Menus work with the keyboard too: arrows or WASD move between buttons, Enter pre
 1. Pick a hero, then a stage.
 2. Collect the gems foes drop. Each level offers 3–4 cards: a rank on one of your weapon's three paths, a passive (up to 6) or a skill level. Every rank changes how the weapon looks and fires. Solo play pauses while you choose.
 3. Ranking paths can reveal a **Form**: a new shape of your weapon. Unknown Forms show as ???. You can take only one Form per run; after that it can be refined twice.
-4. Elites drop a chest that levels a passive or your skill. A boss chest gives an extra level-up.
+4. Elites drop a chest that levels a passive or your skill. A boss chest gives an extra level-up. In co-op every hero gets a chest reward, whoever opens it.
 5. Bosses arrive at 5:00 and 10:00; the final boss at 15:00. Beat it to win.
 6. Break braziers for gold, food, a magnet or a holy bomb. A brazier relights a minute after it breaks once you are away from it; elites often drop food.
 7. The results screen shows your build and how much damage your weapon and skill dealt.

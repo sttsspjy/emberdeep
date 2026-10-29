@@ -29,7 +29,7 @@
     return out;
   };
   // Spawn rate per minute (solo spawns/s; GAME-DESIGN §7), shared by the stages (stage 3 x1.05); BENCH: the 12:00-15:00 benchmark phase.
-  const RATE = [1.2, 2.2, 3.3, 4.5, 5.8, 7, 9.5, 12, 14, 16, 16.5, 19, 21, 23, 25, 22];
+  const RATE = [1.2, 2.2, 2.8, 3.8, 4.9, 6, 8.1, 10.2, 11.9, 13.6, 14, 16.2, 17.8, 19.6, 21.3, 18.7];
   const BENCH = { t: 720, elite: 30 };
   const ROW = (look, r, n, gap, w) => ({ f: 'row', w, look, r, n, gap });
   const ARC = (look, r, n, gap, w) => ({ f: 'arc', w, look, r, n, gap });
@@ -52,7 +52,7 @@
       timeline: timeline(
         RATE,
         {
-          bat: [[1, 1], [3, 4], [7, 5], [11, 6]],
+          bat: [[1, 0.5], [3, 2], [7, 2.5], [11, 3]],
           skeleton: [[0, 9], [3, 7], [5, 3], [7, 0]],
           slime: [[1, 2], [3, 3], [5, 2], [7, 0]],
           priest: [[1, 1], [3, 2], [8, 2], [10, 0]],
@@ -65,7 +65,7 @@
           bonecaller: [[10, 1], [11, 2]],
         },
         { 2: { slime: 3 }, 4: { imp: 2 }, 6: { bulwark: 3 }, 8: { frostwisp: 3 }, 11: { bonecaller: 2 }, 13: { skelknight: 2 } }),
-      events: { swarm: { first: 120, every: 90, ring: ['bat'], stampede: ['bat', 'skeleton', 'drowned'], n: [24, 80] } },
+      events: { swarm: { first: 120, every: 120, ring: ['bat'], stampede: ['bat', 'skeleton', 'drowned'], n: [24, 50] } },
       elites: { first: 150, every: 60 }, bench: BENCH,
       bosses: [{ t: 300, id: 'warden' }, { t: 600, id: 'twins' }, { t: 900, id: 'hollow', final: true }],
     },
@@ -84,7 +84,7 @@
       timeline: timeline(
         RATE,
         {
-          glowlet: [[1, 1], [3, 5], [8, 6]],
+          glowlet: [[1, 0.5], [3, 2.5], [8, 3]],
           myconid: [[0, 9], [3, 7], [5, 3], [7, 0]],
           glowslime: [[1, 2], [3, 3], [5, 2], [7, 0]],
           spitter: [[1, 1], [3, 2], [8, 2], [10, 0]],
@@ -97,7 +97,7 @@
           mirecrab: [[10, 0.6], [11, 1], [13, 1.5]],
         },
         { 2: { glowslime: 3 }, 4: { spitter: 2 }, 6: { bloater: 3 }, 8: { drone: 3 }, 11: { mirecrab: 1 }, 13: { shroomhulk: 2 } }),
-      events: { swarm: { first: 120, every: 90, ring: ['glowlet'], stampede: ['glowlet', 'myconid', 'reaver'], n: [24, 80] } },
+      events: { swarm: { first: 120, every: 120, ring: ['glowlet'], stampede: ['glowlet', 'myconid', 'reaver'], n: [24, 50] } },
       elites: { first: 150, every: 60 }, bench: BENCH,
       bosses: [{ t: 300, id: 'spore' }, { t: 600, id: 'cyclops' }, { t: 900, id: 'king', final: true }],
     },
@@ -116,7 +116,7 @@
       timeline: timeline(
         RATE.map(r => Math.round(r * 1.05 * 10) / 10),
         {
-          starspawn: [[1, 1], [3, 5], [8, 6]],
+          starspawn: [[1, 0.5], [3, 2.5], [8, 3]],
           shade: [[0, 9], [3, 7], [5, 3], [7, 0]],
           jelly: [[1, 2], [3, 3], [5, 2], [7, 0]],
           voidwraith: [[1, 1], [3, 2], [8, 2], [10, 0]],
@@ -129,7 +129,7 @@
           colossus: [[10, 0.6], [11, 1], [13, 1.5]],
         },
         { 2: { jelly: 3 }, 4: { voidwraith: 2 }, 6: { stalker: 3 }, 8: { voideye: 3 }, 11: { colossus: 1 }, 13: { horror: 2 } }),
-      events: { swarm: { first: 120, every: 90, ring: ['starspawn'], stampede: ['starspawn', 'shade', 'stalker'], n: [24, 80] } },
+      events: { swarm: { first: 120, every: 120, ring: ['starspawn'], stampede: ['starspawn', 'shade', 'stalker'], n: [24, 50] } },
       elites: { first: 150, every: 60 }, bench: BENCH,
       bosses: [{ t: 300, id: 'samurai' }, { t: 600, id: 'weaver' }, { t: 900, id: 'wickeater', final: true }],
     },

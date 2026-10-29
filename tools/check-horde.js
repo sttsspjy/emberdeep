@@ -3,7 +3,7 @@
 //    early kinds fade out); boss ids per stage; foe wire order (tier foes after the boss bodies); the XP curve.
 // 2. Brains: each attack kind (ranged, exploder, charger, diver, brute, blinker) shows a warn zone >= 0.6 s before it deals damage; a stun cancels a wind-up and drops its telegraph;
 //    guard (shield up, open after the bash), summoner (summons after its ring), pull slam (drags a still hero in), wall packs (a line across the approach).
-// 3. Spawner: a weaponless god hero per stage reaches the alive cap by the mid-game, sees swarm events every 90 s from 2:00, elites every 60 s from 2:30, bosses at 5/10/15 min; a missing boss script spawns a stand-in;
+// 3. Spawner: a weaponless god hero per stage reaches the alive cap by the mid-game, sees swarm events every 120 s from 2:00, elites every 60 s from 2:30, bosses at 5/10/15 min; a missing boss script spawns a stand-in;
 //    from an empty field at 6:00 / 8:00 (solo and a party of 4) the alive count refills to the density floor within 0.5 s without passing the cap; at the floor the rate is x1.
 //    benchmark phase: a 'surge' warning at 12:00, elites every 30 s.
 // 4. Recycling: a foe left 1000 px behind returns to the spawn ring. 5. Arena: deterministic, obstacle count in range, centre clear, features keep lanes.
@@ -49,7 +49,7 @@ ok(['chaser', 'swarm', 'brute', 'ranged', 'exploder', 'splitter', 'diver', 'char
 { // wire order: boss bodies keep their indices, tier foes follow them; XP curve
   const I = ED.FOE_IDX, X = ED.World.xpFor; let c10 = 0, c20 = 0, c30 = 0; for (let L = 1; L < 30; L++) { if (L < 10) c10 += X(L); if (L < 20) c20 += X(L); c30 += X(L); }
   ok(I.sporepod === 37 && I.twinhammer === 38 && I.weaver === 39 && I.wickeater === 40 && I.bulwark === 41 && I.colossus === 47 && ED.FOES.weaver.name === 'Rift Weaver', `foe wire order: boss bodies 37-40, tier foes 41-${ED.FOE_IDS.length - 1}`);
-  ok(X(1) === 5 && c10 === 1316 && c20 === 9210 && c30 === 29094, `XP curve: ${X(1)} for level 2, cumulative ${c10} / ${c20} / ${c30} to levels 10 / 20 / 30`);
+  ok(X(1) === 4 && c10 === 987 && c20 === 6907 && c30 === 21820, `XP curve: ${X(1)} for level 2, cumulative ${c10} / ${c20} / ${c30} to levels 10 / 20 / 30`);
 }
 
 // ---------------- 2. brains ----------------
@@ -172,7 +172,7 @@ function spawnRun(stage, until, mut) {
 }
 for (const st of [0, 1, 2]) {
   const r = spawnRun(st, 11 * 60 + 5);
-  ok(r.swarms.slice(0, 5).join() === '120,210,300,390,480', `${ED.STAGES[st].id}: swarm events at ${r.swarms.join(',')}`);
+  ok(r.swarms.slice(0, 5).join() === '120,240,360,480,600', `${ED.STAGES[st].id}: swarm events at ${r.swarms.join(',')}`);
   ok(r.elites.slice(0, 4).join() === '150,210,270,330', `${ED.STAGES[st].id}: elites at ${r.elites.slice(0, 6).join(',')}...`);
   ok(r.bosses.length === 2 && r.bosses[0].endsWith('@300') && r.bosses[1].endsWith('@600'), `${ED.STAGES[st].id}: bosses ${r.bosses.join(', ')}`);
   ok(r.capHit > 0 && r.capHit < 420 && r.over === 0, `${ED.STAGES[st].id}: alive cap reached at ${r.capHit} s (alive by minute ${Object.values(r.alive).join(' ')})`);
@@ -196,7 +196,7 @@ for (const st of [0, 1, 2]) {
   ok(Math.abs(hi.k - 1) < 1e-6, `density floor at 8:00 (${hi.need} foes): rate x${hi.k.toFixed(2)} at the floor`);
 }
 { // opening: no instant fill at 0:00 (0.5 s holds at most 2 foes); spawn spread: the 1:00 refill (density floor) surrounds a still hero from every octant;
-  // swarm packs are 3-4 at 0:00, 12-16 at 5:00, 20-30 at 10:00; foes walk at 80% speed at 0:00, 100% from 4:00
+  // swarm packs are 3-4 at 0:00, 8-10 at 5:00, 12-16 at 10:00; foes walk at 80% speed at 0:00, 100% from 4:00
   const v0 = new ED.World({ seed: 77, stage: 0, players: players(['knight']), cheats: { god: true } });
   for (let i = 0; i < 30; i++) { v0.update(C.TICK); v0.events.length = 0; }
   ok(v0.foes.length <= 2, `opening: ${v0.foes.length} foes after 0.5 s`);
@@ -215,7 +215,7 @@ for (const st of [0, 1, 2]) {
     for (let i = 0; i < 30; i++) { for (const e of v.foes) e.dead = true; v.foes.length = 0; v.sp.acc = 1; v.updateSpawner(0); if (v.foes.length) out.push(v.foes.length); }
     return out.sort((a, b) => a - b);
   };
-  for (const [min, lo, hi] of [[0, 3, 4], [5, 12, 16], [10, 20, 30]]) {
+  for (const [min, lo, hi] of [[0, 3, 4], [5, 8, 10], [10, 12, 16]]) {
     const s = packs(min), med = s[s.length >> 1];
     ok(s.length >= 20 && s[s.length - 1] <= hi && med >= lo, `swarm packs at ${min}:00: ${s[0]}-${s[s.length - 1]} (median ${med}, design ${lo}-${hi})`);
   }
@@ -224,7 +224,7 @@ for (const st of [0, 1, 2]) {
   const w = new ED.World({ seed: 77, stage: 1, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];
   p.weapons.length = 0; p.skills.length = 0; w.time = 715; w.sp.eliteT = 720; w.sp.swarmT = Infinity; w.sp.bossI = 99;
   const surge = [], el = [];
-  for (let i = 0; i < 70 * 60; i++) { w.input('p1', { mx: 0, my: 0, ax: p.x + 50, ay: p.y }); w.update(C.TICK); for (const ev of w.events) if (ev.t === 'warn') (ev.kind === 'surge' ? surge : ev.kind === 'elite' ? el : []).push(Math.round(w.time)); w.events.length = 0; }
+  for (let i = 0; i < 70 * 60; i++) { w.input('p1', { mx: 0, my: 0, ax: p.x + 50, ay: p.y, pick: p.offer ? 1 : 0 }); w.update(C.TICK); for (const ev of w.events) if (ev.t === 'warn') (ev.kind === 'surge' ? surge : ev.kind === 'elite' ? el : []).push(Math.round(w.time)); w.events.length = 0; }
   ok(surge.join() === '720' && el.join() === '720,750,780', `benchmark: surge at ${surge.join()}, elites at ${el.join()}`);
 }
 { // a boss id without a script spawns a stand-in brute boss
