@@ -181,10 +181,10 @@ for (const cls of HEROES) {
 
 // 6. no-target fire, braziers
 {
-  // World with no foes, the hero at rest facing east (mdir 0), brazier 0 moved 60 px ahead (before the first tick builds the brazier buckets).
+  // World with no foes, the hero at rest aiming east (mdir 0, cursor 100 px east), brazier 0 moved 60 px ahead (before the first tick builds the brazier buckets).
   const setup = (cls, wid) => {
     const w = world([cls], 11), p = w.heroes[0], b = w.arena.braziers[0];
-    w.foes.length = 0; p.mdir = 0; p.weapons.length = 0; w.addWeapon(p, wid);
+    w.foes.length = 0; p.mdir = 0; p.in.ax = p.x + 100; p.in.ay = p.y; p.weapons.length = 0; w.addWeapon(p, wid);
     b.x = Math.round(p.x + 60); b.y = Math.round(p.y); b.broken = false;
     return { w, p, b };
   };

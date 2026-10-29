@@ -62,8 +62,8 @@
   }
 
   // Volley: S.n pillars on distinct random foes within S.range inside the hero's view (partial shuffle of a reused candidate list); pillars beyond the foe count fall again on random
-  // picks, 0.1 s apart. With no such foe, n pillars stride ahead along
-  // p.mdir (step max(60, 2.5 r), squeezed so the last stays within S.range and STRIDE_IN px of the view edge). Riders per Form kind. Always fires.
+  // picks, 0.1 s apart. With no such foe, n pillars stride out along
+  // the cursor dir (w.aimDir; step max(60, 2.5 r), squeezed so the last stays within S.range and STRIDE_IN px of the view edge). Riders per Form kind. Always fires.
   const cand = [], STRIDE_IN = 16, HW = ED.CONST.VIEW_W / 2 - STRIDE_IN, HH = ED.CONST.VIEW_H / 2 - STRIDE_IN;
   function volley(w, p, ws, S, kind) {
     const n = Math.max(1, S.n | 0), r = S.r * S.area, big = kind === 'wrath', hop = big ? S.hop | 0 : 0, jump = S.jump | 0, gd = kind === 'hallow' ? S.dmg * S.groundK : 0;
@@ -79,7 +79,7 @@
     }
     cand.length = 0;
     if (m) return true;
-    const c = Math.cos(p.mdir), s = Math.sin(p.mdir);
+    const a = w.aimDir(p), c = Math.cos(a), s = Math.sin(a);
     const reach = Math.min(S.range, Math.abs(c) > 1e-6 ? HW / Math.abs(c) : Infinity, Math.abs(s) > 1e-6 ? HH / Math.abs(s) : Infinity);
     const step = Math.min(Math.max(60, 2.5 * r), reach / n);
     for (let i = 1; i <= n; i++) pillar(w, p, ws.id, p.x + c * step * i, p.y + s * step * i, r, S.dmg, S.knock, FALL, null, big);
@@ -144,16 +144,14 @@
     const c = Math.cos(a1), sn = Math.sin(a1);
     for (let i = 1; i <= 3; i++) w.hitBraziers(cx + c * len * i / 3, cy + sn * len * i / 3, 10, p);
   }
-  // Lance sweep (S.beam ranks): every S.bcd s (x haste) toward the densest foe cluster within the beam length (BEAM_L x (1 + blen) x area), 1 + S.beams beams spread evenly sweep
+  // Lance sweep (S.beam ranks): every S.bcd s (x haste), centred on the cursor dir (w.aimDir; beam length BEAM_L x (1 + blen) x area), 1 + S.beams beams spread evenly sweep
   // SWEEP_ARC rad in PASS_T s, 1 + S.pass passes (alternating). Each crossing: dmg x beamK and a 0.2 s stun. Verdict: a pillar falls along each beam every VP_T s (distance cycles VP_F).
   const BEAM_L = 130, SWEEP_ARC = 1.9, PASS_T = 0.4, BEAM_W = 12, VP_T = 0.06, VP_F = [0.5, 0.78, 1.0];
   function beamTick(w, p, ws, S, dt, verdict) {
     const st = ws.st, L = BEAM_L * (1 + (S.blen || 0)) * S.area, nb = 1 + (S.beams | 0), np = 1 + (S.pass | 0), T = PASS_T * np;
     if (!st.bOn) {
       if ((st.bT -= dt) > 0) return;
-      const pt = w.target('densest', p, L);
-      if (!pt) { st.bT = 0.2; return; }
-      st.bOn = true; st.bt = 0; st.vT = 0; st.ba = Math.atan2(pt.y - p.y, pt.x - p.x) - SWEEP_ARC / 2;
+      st.bOn = true; st.bt = 0; st.vT = 0; st.ba = w.aimDir(p) - SWEEP_ARC / 2;
       for (let i = 0; i < nb && i < 4; i++) {
         const a = st.ba + i * TAU / nb;
         st.bz[i] = w.zone({ team: 0, p, wid: ws.id, x: p.x, y: p.y, a, len: L, w: BEAM_W, dur: T + 0.05, look: 'beam', follow: p.pid }); st.bzid[i] = st.bz[i].id; st.bp[i] = a;

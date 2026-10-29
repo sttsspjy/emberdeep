@@ -13,7 +13,7 @@ No build step, no backend, no install. It is a static site: open it from any web
 | Action | Keyboard / mouse | Gamepad |
 |---|---|---|
 | Move | WASD or arrow keys | Left stick |
-| Aim skills | Mouse | Right stick |
+| Aim weapon and skill | Mouse | Right stick (else the left stick direction) |
 | Hero skill | Q | RB or LB |
 | Dash | Space | A |
 | Pick a level-up card | 1–4 or click | X / Y / B / RT |
@@ -21,7 +21,7 @@ No build step, no backend, no install. It is a static site: open it from any web
 | Banish a card | Banish button, then click the card | |
 | Pause | Esc | Start |
 
-Mouse buttons do nothing in a run by default; the mouse only aims the skill. Your weapon fires automatically and only at foes on your screen. Facing weapons (Cleave, Twin Daggers) swing or throw toward the nearest foe in front of you, or the nearest foe anywhere when none is in front. Keys follow the physical key position, so they work on any keyboard layout.
+Mouse buttons do nothing in a run by default; the mouse aims. Your weapon fires automatically, straight toward the cursor: swings, arrows, bolts, shards, stabs and beam sweeps go exactly where you point. A few attacks pick their own targets on your screen: Pyro shells, Plague Field globs, Smite pillars, minions and the Shade's Assassinate mark. Orbits, auras and spins hit all around you. Keys follow the physical key position, so they work on any keyboard layout.
 
 Menus work with the keyboard too: arrows or WASD move between buttons, Enter presses, Esc goes back.
 

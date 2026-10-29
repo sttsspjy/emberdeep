@@ -164,7 +164,7 @@
   const impl = (fire) => ({ fire, tick: common.tick, kill: common.kill });
 
   // ---------------- Fire Bolt ----------------
-  // S.n bolts (0.25 rad fan) at the nearest foe within S.range, else along p.mdir. A bolt bursts at the first foe it hits, or where it lands: a blast (20 px x area, half damage, burn)
+  // S.n bolts (0.25 rad fan) along the cursor (w.aimDir). A bolt bursts at the first foe it hits, or where it lands: a blast (20 px x area, half damage, burn)
   // and a fire pool (22 px x area, 0.45 x dmg per second, S.dur s). Later hits of a piercing bolt only blast.
   const BURST = { look: 'fire', burn: null, knock: 40 };
   const burst = (w, pr, x, y, pooled) => {
@@ -176,16 +176,15 @@
   const boltHit = (w, pr, e) => { burst(w, pr, e.x, e.y, !pr.lit); pr.lit = true; };
   const boltEnd = (w, pr) => { if (!pr.lit) burst(w, pr, pr.x, pr.y, true); };
   const BOLT = { look: 'fireball', onHit: boltHit, onEnd: boltEnd, st: null };
-  // Fires S.n projectiles `opt` (st = ws) in a fan of `spread` rad at the nearest foe, else along p.mdir. Each projectile gets lit = false.
+  // Fires S.n projectiles `opt` (st = ws) in a fan of `spread` rad along the cursor. Each projectile gets lit = false.
   const fan = (w, p, ws, S, opt, spread) => {
-    const t = w.heroFoe(p, S.range);
-    const a = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.mdir, n = Math.max(1, S.n | 0);
+    const a = w.aimDir(p), n = Math.max(1, S.n | 0);
     opt.st = ws;
     for (let i = 0; i < n; i++) w.shoot(p, ws.id, p.x, p.y - 6, a + (i - (n - 1) / 2) * spread, S, opt).lit = false;
     return true;
   };
   ED.addWeapon({
-    id: 'firebolt', name: 'Fire Bolt', icon: 'weapon.firestaff', look: 'fireball', sig: 'pyro', mode: 'nearest', txt: 'Bolt that leaves a fire pool',
+    id: 'firebolt', name: 'Fire Bolt', icon: 'weapon.firestaff', look: 'fireball', sig: 'pyro', mode: 'cursor', txt: 'Bolt that leaves a fire pool',
     base: { dmg: 12, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 230, dur: 2.5, knock: 20, range: RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     paths: [
       { id: 'blaze', name: 'Blaze', form: 'inferno', ranks: [
@@ -233,7 +232,7 @@
   const infEnd = (w, pr) => { if (!pr.lit) { const ws = pr.st, S = ws && ws.S; if (S) { pr.lit = true; pool(w, pr.p, ws, S, pr.x, pr.y, 24 * S.area, S.dmg * 0.5, { p: pr.p, ws, gen: 0, spread: false }, infTick); } } };
   const IBOLT = { look: 'fireball', onHit: infHit, onEnd: infEnd, st: null };
   ED.addWeapon({
-    id: 'inferno', name: 'Inferno', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'nearest', evolved: true, form: true, from: 'firebolt', txt: 'Pools merge and spread',
+    id: 'inferno', name: 'Inferno', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'cursor', evolved: true, form: true, from: 'firebolt', txt: 'Pools merge and spread',
     base: { dmg: 16, cd: 1.0, n: 3, pierce: 1, area: 1.5, speed: 250, dur: 3.5, knock: 30, range: RANGE, pools: 8, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 1 }, txt: '+1 bolt' },
@@ -243,7 +242,7 @@
 
   // ---------------- Firestorm (Mortar) ----------------
   // A walking salvo: S.n + S.shells shells land in a line across the densest cluster within SHELL_RANGE along the line of fire (26 px x area apart, 0.08 s apart);
-  // each blasts, leaves a fire pool and scatters S.cluster bomblets. No foe: the salvo walks ahead along p.mdir.
+  // each blasts, leaves a fire pool and scatters S.cluster bomblets. No foe: the salvo walks 120 px out along the cursor dir.
   ED.addWeapon({
     id: 'firestorm', name: 'Firestorm', icon: 'weapon.inferno', look: 'shell', sig: 'pyro', mode: 'densest', evolved: true, form: true, from: 'firebolt', shellForm: true, txt: 'A walking salvo of shells',
     base: { dmg: 24, cd: 1.6, n: 3, pierce: 0, area: 1.2, speed: 0, dur: 2.5, knock: 100, range: SHELL_RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
@@ -254,7 +253,7 @@
   }, impl((w, p, ws, S) => {
     const t = w.target('densest', p, S.range);
     let tx, ty;
-    if (t) { tx = t.x; ty = t.y; } else { tx = p.x + Math.cos(p.mdir) * 120; ty = p.y + Math.sin(p.mdir) * 120; }
+    if (t) { tx = t.x; ty = t.y; } else { const a = w.aimDir(p); tx = p.x + Math.cos(a) * 120; ty = p.y + Math.sin(a) * 120; }
     const a = Math.atan2(ty - p.y, tx - p.x), c = Math.cos(a), s = Math.sin(a), n = Math.max(1, (S.n | 0) + (S.shells | 0)), step = 26 * S.area, r = 34 * S.area;
     for (let i = 0; i < n; i++) {
       const o = (i - (n - 1) / 2) * step;
@@ -264,7 +263,7 @@
   }));
 
   // ---------------- Wildfire (Combustion) ----------------
-  // S.n homing seeds at the nearest foe (else along p.mdir); a seed hit blasts (20 px x area, 0.75 x dmg), sets a heavy burn (0.6 x dmg per second, 3 s) and splits into 3 sparks
+  // S.n homing seeds launched along the cursor; a seed hit blasts (20 px x area, 0.75 x dmg), sets a heavy burn (0.6 x dmg per second, 3 s) and splits into 3 sparks
   // (a 1.2 rad fan along its heading, 0.4 x dmg, burn). Death blasts: budget 5 / s (+ path), 1.4x damage, chains four generations deep.
   const SPARK = { look: 'ember', speed: 200, dmg: 0, pierce: 1, r: 5, life: 0.45, knock: 20, onHit: emberHit };
   const SEEDB = { look: 'fire', burn: null, knock: 30 };
@@ -277,7 +276,7 @@
   };
   const SEED = { look: 'seed', homing: 4, onHit: seedHit, st: null };
   ED.addWeapon({
-    id: 'wildfire', name: 'Wildfire', icon: 'weapon.inferno', look: 'seed', sig: 'pyro', mode: 'nearest', evolved: true, form: true, from: 'firebolt', txt: 'Fire that jumps from foe to foe',
+    id: 'wildfire', name: 'Wildfire', icon: 'weapon.inferno', look: 'seed', sig: 'pyro', mode: 'cursor', evolved: true, form: true, from: 'firebolt', txt: 'Fire that jumps from foe to foe',
     base: { dmg: 16, cd: 1.0, n: 3, pierce: 0, area: 1.2, speed: 240, dur: 2.5, knock: 20, range: RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 5, cemb: 2, spread: 0, cgen: 3, bmul: 1.4 },
     refine: [
       { mods: { n: 1, cemb: 1 }, txt: '+1 seed, +1 ember per blast' },
@@ -303,7 +302,7 @@
   };
   const PBOLT = { look: 'fireball', onHit: (w, pr, e) => plant(w, pr, e.x, e.y), onEnd: (w, pr) => plant(w, pr, pr.x, pr.y), st: null };
   ED.addWeapon({
-    id: 'pyre', name: 'Pyre', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'nearest', evolved: true, form: true, from: 'firebolt', txt: 'Fire that gathers, then erupts',
+    id: 'pyre', name: 'Pyre', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'cursor', evolved: true, form: true, from: 'firebolt', txt: 'Fire that gathers, then erupts',
     base: { dmg: 14, cd: 1.1, n: 2, pierce: 0, area: 1.3, speed: 230, dur: 2.5, knock: 20, range: RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 1 }, txt: '+1 bolt' },
@@ -312,7 +311,7 @@
   }, impl((w, p, ws, S) => fan(w, p, ws, S, PBOLT, 0.45)));
 
   // ---------------- Napalm (Blaze + Mortar) ----------------
-  // S.n + S.shells canisters lob onto the densest cluster and random foes within SHELL_RANGE (no foe: ahead along p.mdir); each splashes (26 px x area, 0.6 x dmg) and leaves a fire line
+  // S.n + S.shells canisters lob onto the densest cluster and random foes within SHELL_RANGE (no foe: 120 px out along the cursor dir, extras fanned 0.5 rad); each splashes (26 px x area, 0.6 x dmg) and leaves a fire line
   // (90 px x area long, 16 px x area wide, across the throw, 0.45 x dmg per second, 1.3 x S.dur s); S.cluster bomblets.
   const LINE = { team: 0, p: null, wid: '', x: 0, y: 0, r: 0, a: 0, len: 0, w: 0, dur: 0, dps: 0, tick: 0.5, burn: null, look: 'napalm', onEnd: null };
   const SPL = { look: 'fire', burn: null, knock: 60 };
@@ -336,11 +335,11 @@
   }, impl((w, p, ws, S) => {
     const t = w.target('densest', p, S.range);
     let tx, ty;
-    if (t) { tx = t.x; ty = t.y; } else { tx = p.x + Math.cos(p.mdir) * 120; ty = p.y + Math.sin(p.mdir) * 120; }
+    if (t) { tx = t.x; ty = t.y; } else { const a = w.aimDir(p); tx = p.x + Math.cos(a) * 120; ty = p.y + Math.sin(a) * 120; }
     const n = Math.max(1, (S.n | 0) + (S.shells | 0));
     for (let i = 0; i < n; i++) {
       let x = tx, y = ty;
-      if (i > 0) { const e = w.target('random', p, S.range); if (e) { x = e.x; y = e.y; } else { const a = p.mdir + (i % 2 ? 1 : -1) * 0.5 * Math.ceil(i / 2); x = p.x + Math.cos(a) * 120; y = p.y + Math.sin(a) * 120; } }
+      if (i > 0) { const e = w.target('random', p, S.range); if (e) { x = e.x; y = e.y; } else { const a = w.aimDir(p) + (i % 2 ? 1 : -1) * 0.5 * Math.ceil(i / 2); x = p.x + Math.cos(a) * 120; y = p.y + Math.sin(a) * 120; } }
       lob(w, p, ws.id, p.x, p.y - 10, x, y, 26 * S.area, 0.6 + i * 0.1, S.dmg * 0.6, 'shell', canEnd);
     }
     return true;

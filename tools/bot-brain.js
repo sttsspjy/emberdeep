@@ -67,7 +67,7 @@
     this.jit = 0; this.jitT = 0; this.mix = Math.imul(this.seed, 0x9e3779b1) >>> 0;
 
     this.rs = (this.seed ^ 0x5eed1234) >>> 0 || 1; // LCG state
-    this.n = 0; this.plan = 0; this.dir = -1; this.mx = 0; this.my = 0; this.aimX = 0; this.aimY = 0;
+    this.n = 0; this.plan = 0; this.dir = -1; this.mx = 0; this.my = 0;
     this.tgt = null; this.tgtId = 0; this.tgtT = 0; this.tgtK = 0;
     this.lastX = 0; this.lastY = 0; this.stuckN = 0; this.wander = -1; this.wanderT = 0; this.planT = 0;
     this.castGap = 0; this.zSeen = 0; this.pSeen = 0;
@@ -77,7 +77,7 @@
     this.reach = 0; this.close = false; this.bossFn = null; this.bossS = null; this.bossOn = false; // stance(): main weapon reach to a typical foe's edge (0 = ranged), crowd / boss stance
   }
   Brain.prototype.rnd = function () { this.rs = (Math.imul(this.rs, 1664525) + 1013904223) >>> 0; return this.rs / 4294967296; };
-  Brain.prototype.onStart = function (w, p) { this.lastX = p.x; this.lastY = p.y; this.aimX = p.x + 80; this.aimY = p.y; this.planT = w.time; };
+  Brain.prototype.onStart = function (w, p) { this.lastX = p.x; this.lastY = p.y; this.planT = w.time; };
 
   Brain.prototype.think = function (w, p) {
     const ED = root.ED, f = this.f;
@@ -89,7 +89,7 @@
     const urgent = this.newThreat(w, p);
     if (this.n >= this.plan || (urgent && this.skill >= 1)) { this.plan = this.n + this.planN; this.replan(ED, w, p); }
     f.mx = this.mx; f.my = this.my;
-    if (!f.q) { f.ax = this.aimX; f.ay = this.aimY; }
+    if (!f.q) this.aim(ED, w, p);
     return f;
   };
 
@@ -275,7 +275,6 @@
 
   Brain.prototype.replan = function (ED, w, p) {
     this.gather(ED, w, p);
-    this.nearest(p);
     this.pickTarget(ED, w, p);
     const hpF = p.hp / Math.max(1, p.maxHp), hpMul = 1 + 1.6 * (1 - hpF), S = w.arena.size;
     this.stance(ED, w, p, hpF);
@@ -367,11 +366,20 @@
     this.tgt = best; this.tgtId = best ? best.id : 0; this.tgtK = bk * (1 - 0.6 * danger);
   };
 
-  // Aim point: the nearest local foe, else ahead of the walk (weapons aim themselves; this sets facing and keeps Volley's rain on foes).
-  Brain.prototype.nearest = function (p) {
-    let bd = Infinity, bx = p.x + this.mx * 80, by = p.y + this.my * 80;
-    for (let i = 0; i < FN; i++) { const d = (FX[i] - p.x) * (FX[i] - p.x) + (FY[i] - p.y) * (FY[i] - p.y); if (d < bd) { bd = d; bx = FX[i]; by = FY[i]; } }
-    this.aimX = bx; this.aimY = by;
+  // Aim point (every think; the weapon fires along it): the nearest elite / boss in view within AIM_BIG px (short reach: reach + 60), else the nearest foe in view within AIM_R px,
+  // else 80 px ahead of the walk. Linear scan of w.foes.
+  const AIM_BIG = 300, AIM_R = 360;
+  Brain.prototype.aim = function (ED, w, p) {
+    const es = w.foes, rb = this.reach > 0 ? this.reach + 60 : AIM_BIG, rb2 = rb * rb, r2 = AIM_R * AIM_R, f = this.f;
+    let bd = Infinity, bb = Infinity, n = null, b = null;
+    for (let i = 0; i < es.length; i++) {
+      const e = es[i]; if (e.dead || !ED.inView(p, e.x, e.y, e.r)) continue;
+      const d = (e.x - p.x) * (e.x - p.x) + (e.y - p.y) * (e.y - p.y);
+      if (d < bd && d <= r2) { bd = d; n = e; }
+      if ((e.elite || e.boss) && d < bb && d <= rb2) { bb = d; b = e; }
+    }
+    const t = b || n;
+    if (t) { f.ax = t.x; f.ay = t.y; } else { f.ax = p.x + this.mx * 80; f.ay = p.y + this.my * 80; }
   };
 
   // Densest 64 px cell of local foes within range of (x, y): writes this.dx / this.dy (mean of that cell) and returns its count.

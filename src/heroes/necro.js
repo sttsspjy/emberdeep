@@ -155,9 +155,9 @@
     for (let i = 0; i < n; i++) w.shoot(pr.p, pr.wid, pr.x, pr.y, pr.a + (i - (n - 1) / 2) * 0.9, null, SPL);
   };
   const SHARD = { look: 'bone', homing: 0, onEnd: null, st: null };
-  // S.n shards (0.16 rad fan) at the nearest foe within range, else along p.mdir.
+  // S.n shards (0.16 rad fan) along the cursor (w.aimDir).
   const shards = (w, p, ws, S) => {
-    const t = w.nearestFoe(p.x, p.y, S.range), a = t ? Math.atan2(t.y - p.y, t.x - p.x) : p.mdir, n = Math.max(1, S.n | 0);
+    const a = w.aimDir(p), n = Math.max(1, S.n | 0);
     SHARD.homing = S.homing || 0; SHARD.st = S; SHARD.onEnd = S.split > 0 ? splitEnd : null;
     for (let i = 0; i < n; i++) w.shoot(p, ws.id, p.x, p.y - 6, a + (i - (n - 1) / 2) * 0.16, S, SHARD);
     SHARD.st = null; SHARD.onEnd = null;
@@ -191,7 +191,7 @@
   const base = (o) => Object.assign({}, ARMY, o);
   const SHOT = { fire(w, p, ws, S) { shards(w, p, ws, S); army(w, p, ws, S); return true; }, kill: onKill };
   ED.addWeapon({
-    id: 'boneshard', name: 'Bone Shard', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'nearest', txt: 'Shards pierce; the dead rise to serve',
+    id: 'boneshard', name: 'Bone Shard', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', txt: 'Shards pierce; the dead rise to serve',
     base: base({ dmg: 12, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220 }),
     paths: [
       { id: 'legion', name: 'Legion', form: 'bonelord', ranks: [
@@ -209,7 +209,7 @@
     ],
     hybrids: [{ need: [0, 2], form: 'lich' }, { need: [0, 1], form: 'ossuary' }],
   }, SHOT);
-  // Bone Storm: S.n shards orbit the hero (radius 30, S.orbit s, re-hitting foes they touch), then launch at the nearest foe (homing), else along p.mdir; they split as Bone Shard.
+  // Bone Storm: S.n shards orbit the hero (radius 30, S.orbit s, re-hitting foes they touch), then launch along the cursor dir (homing after); they split as Bone Shard.
   const orbitTick = (w, pr) => {
     const s = pr.st, p = pr.p;
     if (s.go) return;
@@ -219,7 +219,7 @@
       return;
     }
     s.go = true;
-    const t = w.nearestFoe(pr.x, pr.y, s.range), a = t ? Math.atan2(t.y - pr.y, t.x - pr.x) : p.mdir;
+    const a = w.aimDir(p);
     pr.vx = Math.cos(a) * pr.sp; pr.vy = Math.sin(a) * pr.sp; pr.hits.length = 0; pr.rehit = 0; pr.pierce = s.pierce; pr.homing = 2.5;
     pr.life = s.range / pr.sp;
   };
@@ -248,14 +248,14 @@
   });
   // Bone Lord: the army rises as Bone Knights (wide stunning cleave, a ground slam every S.slam-th swing); shards as Bone Shard.
   ED.addWeapon({
-    id: 'bonelord', name: 'Bone Lord', icon: 'weapon.alt.waraxe', look: 'bone', sig: 'necro', mode: 'nearest', evolved: true, form: true, from: 'boneshard', txt: 'Your dead rise as Bone Knights',
+    id: 'bonelord', name: 'Bone Lord', icon: 'weapon.alt.waraxe', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'Your dead rise as Bone Knights',
     base: base({ dmg: 16, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 1, kind: 1, life: 12, mk: 0.6, marc: 3.0, slam: 3 }),
     refine: [
       { mods: { cap: 2 }, txt: '+2 Bone Knights' },
       { mods: { slam: -1, dmg: 0.25 }, txt: 'Knights slam more often, +25% damage' },
     ],
   }, SHOT);
-  // Plague Field: lobs S.n blight globs at the densest foes (the first on the cluster, the rest around it); pools slow, foes dying in a pool seed a new one; the army as Bone Shard.
+  // Plague Field: lobs S.n blight globs at the densest foes (the first on the cluster, the rest around it; no foe: 90 px out along the cursor dir); pools slow, foes dying in a pool seed a new one; the army as Bone Shard.
   const globEnd = (w, pr) => { if (pr.p && w.alive(pr.p)) { const i = sigSlot(pr.p); if (i >= 0) spill(w, pr.p, pr.wid, w.weaponS(pr.p, i), pr.x, pr.y, 1); } };
   const GLOB = { look: 'glob', speed: 0, dmg: 0, pierce: 999, r: 3, life: 1, knock: 0, onEnd: globEnd };
   ED.addWeapon({
@@ -269,7 +269,7 @@
     fire(w, p, ws, S) {
       const pt = w.target('densest', p, S.range), n = Math.max(1, S.n | 0);
       let cx, cy;
-      if (pt) { cx = pt.x; cy = pt.y; } else { cx = p.x + Math.cos(p.mdir) * 90; cy = p.y + Math.sin(p.mdir) * 90; }
+      if (pt) { cx = pt.x; cy = pt.y; } else { const a = w.aimDir(p); cx = p.x + Math.cos(a) * 90; cy = p.y + Math.sin(a) * 90; }
       for (let i = 0; i < n; i++) {
         const a = i ? w.rng.next() * TAU : 0, d = i ? 26 + 14 * i : 0, x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d;
         const D = Math.hypot(x - p.x, y - p.y + 6);
@@ -283,7 +283,7 @@
   });
   // Lich: the army rises as plague ghouls that rush foes and burst (blast S.gr, damage S.dmg x S.mk), leaving a blight pool; shards as Bone Shard.
   ED.addWeapon({
-    id: 'lich', name: 'Lich', icon: 'weapon.soulscythe', look: 'bone', sig: 'necro', mode: 'nearest', evolved: true, form: true, from: 'boneshard', txt: 'The dead rise as bursting ghouls',
+    id: 'lich', name: 'Lich', icon: 'weapon.soulscythe', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'The dead rise as bursting ghouls',
     base: base({ dmg: 16, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 5, raise: 2, kind: 3, life: 5, mk: 1.15, gr: 34 }),
     refine: [
       { mods: { cap: 2, raise: 1 }, txt: '+2 ghouls, raised faster' },
@@ -292,7 +292,7 @@
   }, SHOT);
   // Ossuary: the army rises as skeleton archers (keep 60-110 px off, loose S.avol homing shards every S.acd s that split as Bone Shard); shards as Bone Shard.
   ED.addWeapon({
-    id: 'ossuary', name: 'Ossuary', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'nearest', evolved: true, form: true, from: 'boneshard', txt: 'Your army takes up bows of bone',
+    id: 'ossuary', name: 'Ossuary', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'Your army takes up bows of bone',
     base: base({ dmg: 14, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 2, kind: 2, life: 12, mk: 0.55, acd: 0.6, avol: 1, apierce: 9 }),
     refine: [
       { mods: { cap: 2 }, txt: '+2 skeleton archers' },

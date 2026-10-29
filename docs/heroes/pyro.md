@@ -6,7 +6,7 @@ Shared rules: every damage source credits the slot's current weapon id. Ground f
 
 ## Weapon: Fire Bolt (root)
 
-dmg 12, cd 1.2 s, 1 bolt, speed 230. A bolt bursts at the first foe hit, or where it lands with no foe: blast 20 px × area (0.5 × dmg, burn 0.3 × dmg/s for 2 s) + fire pool 22 px × area (0.45 × dmg/s, 2.5 s).
+dmg 12, cd 1.2 s, 1 bolt, speed 230, fired along the cursor (bolts and Wildfire seeds; seeds home after launch). A bolt bursts at the first foe hit, or where it lands with no foe: blast 20 px × area (0.5 × dmg, burn 0.3 × dmg/s for 2 s) + fire pool 22 px × area (0.45 × dmg/s, 2.5 s).
 
 | Path | Rank 1 | Rank 2 | Rank 3 | Form |
 |---|---|---|---|---|
@@ -26,7 +26,7 @@ Path effects keep working after any Form (shells only outside Firestorm / Napalm
 | **Pyre** (hybrid) | Blaze 3 + Combustion 3 | Bolts plant pyres that smoulder 1.2 s, then erupt (1.4 r, dmg × (1 + flare/2)) and leave a pool | dmg 14, cd 1.1, 2 bolts, area 1.3 | +1 bolt | Eruptions 30% wider, +2 embers |
 | **Napalm** (hybrid) | Blaze 3 + Mortar 3 | Canisters (2 + shells) on the densest cluster and random foes; each splashes and leaves a fire wall across the throw (90 px × area, 0.45 × dmg/s, 1.3 × dur) | dmg 16, cd 1.4, 2 canisters, area 1.2, dur 3 | +1 canister | Fire walls 25% longer, last longer |
 
-No foe in range: bolts / seeds fly along the facing and burst where they land; Firestorm and Napalm land 120 px ahead.
+Mortar shells, Firestorm and Napalm stay targeted (densest cluster, then random foes). No foe in range: bolts / seeds burst where they land; Firestorm and Napalm land 120 px out along the cursor direction; Mortar shells wait for a foe.
 
 ## Skill (Q): Meteor
 

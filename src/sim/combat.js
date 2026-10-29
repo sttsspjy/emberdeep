@@ -163,7 +163,7 @@
   // Nearest foe to hero p within range inside p's view (skip as nearestFoe), or null.
   W.heroFoe = function (p, range, skip) { const v = this.vclamp; this.vclamp = p; const e = this.nearestFoe(p.x, p.y, range, skip); this.vclamp = v; return e; };
   // mode 'nearest' -> nearest foe within range (default 400) | null; 'random' -> a random foe inside the hero's view rect | null; 'densest' -> densest cluster point within range | null;
-  // 'facing' -> point range ahead along the movement direction ({x, y, a}); 'around' -> the hero's position ({x, y, a}). Points are the shared scratch w.pt. Foes only inside p's view.
+  // else the hero's position ({x, y, a}). Points are the shared scratch w.pt. Foes only inside p's view.
   W.target = function (mode, p, range) {
     range = range || 400;
     if (mode === 'nearest') return this.heroFoe(p, range);
@@ -181,7 +181,6 @@
     }
     if (mode === 'densest') { const v = this.vclamp; this.vclamp = p; const pt = this.densest(p.x, p.y, range); this.vclamp = v; return pt; }
     const pt = this.pt;
-    if (mode === 'facing') { pt.a = p.mdir; pt.x = p.x + Math.cos(p.mdir) * range; pt.y = p.y + Math.sin(p.mdir) * range; return pt; }
     pt.x = p.x; pt.y = p.y; pt.a = p.mdir;
     return pt;
   };

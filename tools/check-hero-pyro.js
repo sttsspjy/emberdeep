@@ -88,7 +88,7 @@ for (const id of ['firebolt'].concat(FORMS.map(f => f.id))) {
   try { for (let i = 0; i < 360; i++) { if (i % 30 === 0) feed(w, p, rng, 80, 2); step(w, p); w.events.length = 0; } } catch (e) { err = e; }
   ok(!err && (p.dealt[id] || 0) > 0, `${id}: deals damage in a crowd (${Math.round(p.dealt[id] || 0)})` + (err ? ': ' + err.stack : ''));
   const v = world(9), q = v.heroes[0]; build(v, q, [3, 3, 3], id === 'firebolt' ? '' : id);
-  q.mdir = 0; v.foes.length = 0;
+  q.mdir = 0; q.in.ax = q.x + 100; q.in.ay = q.y; v.foes.length = 0;
   let shots = 0, made = 0;
   for (let i = 0; i < 120; i++) { step(v, q); for (const ev of v.events) if (ev.t === 'shoot') shots++; v.events.length = 0; made = Math.max(made, v.zones.length + v.projs.length); }
   ok(shots > 0 && made > 0, `${id}: fires with no foe (${shots} shots, ${made} zones / projectiles)`);

@@ -3,10 +3,11 @@
 // Form def: { evolved: true, form: true, from: rootId, refine: [{ mods, txt }] x 2 }. A path at rank 3 unlocks its Form card; a hybrid needs both paths at rank 3; one Form per run.
 // Slot ws = { id (root, then the Form once taken), root, lvl (display: 1 + sum pr + form + fl), pr: [rank x 3], fl (refine 0-2), evo, cd, st (impl state), S (cached numbers) }.
 // Each tick per living hero and slot: impl.tick?(w, p, ws, S, dt); ws.cd -= dt; at <= 0 impl.fire(w, p, ws, S) -> true resets cd = S.cd and emits { t: 'shoot', pid, wid }, false retries in 0.1 s.
-// No-target rule (GAME-DESIGN §3): signatures fire on cooldown with no foe in range, along p.mdir (the last movement direction). Targeting sees only the holder's view (w.vclamp, combat.js).
+// Aim rule (GAME-DESIGN §3): directional patterns fire along w.aimDir(p) (the cursor), foe or no foe; targeted patterns (shells, pillars, globs, minions, the mark) pick foes and fall back to w.aimDir(p).
+// Signatures fire on cooldown with no foe in range. Targeting sees only the holder's view (w.vclamp, combat.js).
 (function (ED) {
   'use strict';
-  const U = ED.U, W = ED.World.prototype;
+  const W = ED.World.prototype;
   ED.WEAPONS = {}; ED.WIMPL = {}; ED.WEAPON_IDS = [];
   ED.MAX_WEAPONS = 1; ED.MAX_PASSIVES = 6; ED.PATH_MAX = 3;
   // impl: { fire, tick?, init?(w, p, ws), kill?(w, p, ws, S, e) (any foe e its holder kills, by any source), draw? }.
@@ -80,30 +81,8 @@
   W.weaponS = function (p, i) { const ws = p.weapons[i]; return ws.S && ws.Sv === p.statsV && ws.Sk === rkey(ws) && ws.Sid === ws.id ? ws.S : ED.Stats.weapon(p, i); };
   ED.weaponKey = rkey;
 
-  // Aim helper for fire(): 'facing' -> facingAim (p.mdir without a foe), 'around' -> p.mdir, else the angle toward the weapon's target (mode as w.target), or null when there is none.
-  W.aimAngle = function (p, mode, range) {
-    if (mode === 'facing') return this.facingAim(p, p.mdir, range);
-    if (mode === 'around') return p.mdir;
-    const t = this.target(mode, p, range);
-    return t ? Math.atan2(t.y - p.y, t.x - p.x) : null;
-  };
-
-  // Facing aim (GAME-DESIGN §3): coneFoe -> angle toward the nearest foe within range and cone rad (default ED.FACING_CONE) of a0, else null;
-  // nearAngle -> angle toward the nearest foe within range, else null; facingAim -> coneFoe, else nearAngle, else a0.
-  ED.FACING_CONE = 1.75;
-  let FA = 0, FC = 0, FX = 0, FY = 0;
-  const offCone = (e) => Math.abs(U.angDiff(FA, Math.atan2(e.y - FY, e.x - FX))) > FC;
-  W.coneFoe = function (p, a0, range, cone) {
-    FA = a0; FC = cone || ED.FACING_CONE; FX = p.x; FY = p.y;
-    const e = this.heroFoe(p, range, offCone);
-    return e ? Math.atan2(e.y - p.y, e.x - p.x) : null;
-  };
-  W.nearAngle = function (p, range) { const e = this.heroFoe(p, range); return e ? Math.atan2(e.y - p.y, e.x - p.x) : null; };
-  W.facingAim = function (p, a0, range, cone) {
-    let a = this.coneFoe(p, a0, range, cone);
-    if (a === null) a = this.nearAngle(p, range);
-    return a === null ? a0 : a;
-  };
+  // Cursor aim (GAME-DESIGN §3): angle from hero p toward its aim point (p.in.ax / ay); p.mdir when that point is within 4 px of the hero.
+  W.aimDir = function (p) { const I = p.in, dx = I.ax - p.x, dy = I.ay - p.y; return dx * dx + dy * dy < 16 ? p.mdir : Math.atan2(dy, dx); };
   // Kill callbacks of every weapon hero p holds (called by killFoe).
   W.weaponKill = function (p, e) {
     for (let i = 0; i < p.weapons.length; i++) { const im = ED.WIMPL[p.weapons[i].id]; if (im && im.kill) im.kill(this, p, p.weapons[i], this.weaponS(p, i), e); }

@@ -89,7 +89,7 @@ for (const f of [{ id: 'cleave' }].concat(FORMS)) {
   const pos = far.concat(near).map(e => [e.x, e.y]);
   for (let i = 0; i < 300; i++) {
     far.concat(near).forEach((e, j) => { e.x = pos[j][0]; e.y = pos[j][1]; e.kbx = e.kby = 0; });
-    p.mdir = i / 300 * U.TAU; w.update(C.TICK); w.events.length = 0;
+    p.mdir = i / 300 * U.TAU; p.in.ax = p.x + Math.cos(p.mdir) * 100; p.in.ay = p.y + Math.sin(p.mdir) * 100; w.update(C.TICK); w.events.length = 0;
   }
   const hurtFar = far.filter(e => e.hp < e.maxHp).length, hurtNear = near.filter(e => e.hp < e.maxHp).length;
   ok(hurtFar === 0 && hurtNear >= 6, `${f.id} 3/3/3: no damage outside the view (far hurt ${hurtFar}, near hurt ${hurtNear}/8)`);

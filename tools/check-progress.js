@@ -1,5 +1,5 @@
 // Headless progression check (exit 1 on failure). Usage: node tools/check-progress.js
-// Offers (count, luck 4th card, card kinds path / form / refine / passive / skill, weights, Form unlock and lock (one Form per run), gold / heal fallback, determinism), reroll / skip / banish,
+// Offers (count, luck 4th card, weapon-card guarantee, card kinds path / form / refine / passive / skill, weights, Form unlock and lock (one Form per run), gold / heal fallback, determinism), reroll / skip / banish,
 // chests (elite: one passive / skill roll or gold; boss: an extra level-up), gems (merge cap, value kept, magnet vacuum), gold with greed, party XP in co-op, holy bomb, damage table.
 'use strict';
 const { load } = require('./sim.js');
@@ -37,6 +37,12 @@ const KINDS = ['path', 'form', 'refine', 'passive', 'plvl', 'skill', 'gold', 'he
   // pool weights
   const pool = w.cardPool(p), wt = (k) => (pool.find(x => x.c.kind === k) || {}).w;
   ok(wt('path') === 4 && wt('passive') === 2 && wt('skill') === 1.5 && pool.filter(x => x.c.kind === 'path').length === 3, 'weights: path 4 (3 paths), new passive 2, skill 1.5');
+  // weapon guarantee: >= 2 weapon cards while party level <= 5, >= 1 after; weapon cards not pinned to slot 1
+  const wpn = (o) => o.filter(c => c.kind === 'path' || c.kind === 'form' || c.kind === 'refine').length;
+  let lo = 99, hi = 99, slot = new Set();
+  for (let i = 0; i < 200; i++) { const o = w.makeOffer(p); lo = Math.min(lo, wpn(o)); o.forEach((c, j) => { if (c.kind !== 'path') slot.add(j); }); }
+  w.level = 6; for (let i = 0; i < 200; i++) hi = Math.min(hi, wpn(w.makeOffer(p))); w.level = 1;
+  ok(lo >= 2 && hi >= 1 && slot.has(0), `weapon guarantee: min ${lo} weapon cards at level <= 5, min ${hi} after; non-weapon cards reach slot 1`);
   // full passive slots: no new passives, levels weighted up
   for (const id of ED.PASSIVE_IDS.slice(0, 6)) p.passives.push({ id, lvl: 1 });
   w.recalc(p, true);

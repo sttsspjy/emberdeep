@@ -96,18 +96,40 @@ for (const [cls, id] of [['cleric', 'boneshard'], ['bell', 'bonestorm']]) {
   ok(!err && p.dealt[id] > 0 && ws.root === 'boneshard', `${cls} carrying ${id}: dealt ${Math.round(p.dealt[id] || 0)}` + (err ? ': ' + err.stack : ''));
   ok(maxMin > 0, `${cls} carrying ${id}: the slain rise (peak ${maxMin} minions)`);
 }
-// Cleave aims at a foe inside the facing cone, falls back to the nearest foe in reach (behind), swings along the facing with no foe in reach.
+// Cleave swings along the cursor: past a foe off the line, away from the only foe (behind), with no foe; a cursor on the hero falls back to the movement direction.
 {
   const w = new ED.World({ seed: 3, stage: 0, players: [{ pid: 'p1', cls: 'knight' }], cheats: { god: true } }), p = w.heroes[0];
-  w.foes.length = 0; p.mdir = 0;
+  w.foes.length = 0; p.mdir = 0.5;
   const ws = p.weapons[0], fire = () => { w.events.length = 0; const r = ED.WIMPL.cleave.fire(w, p, ws, ED.Stats.weapon(p, 0)); const ev = w.events.find(e => e.t === 'swing'); return r ? (ev ? ev.a : NaN) : null; };
   const put = (a) => { for (const e of w.foes) e.dead = true; w.spawnFoe(FODDER, p.x + Math.cos(a) * 40, p.y - 4 + Math.sin(a) * 40); };
-  put(1.2); const a1 = fire();
-  put(Math.PI); const a2 = fire();
-  for (const e of w.foes) e.dead = true; w.spawnFoe(FODDER, p.x + 300, p.y); const a3 = fire();
-  ok(a1 !== null && Math.abs(U.angDiff(a1, 1.2)) < 0.15, `knight: Cleave swings at a foe 69 deg off its facing (a ${a1 && a1.toFixed(2)})`);
-  ok(a2 !== null && Math.abs(U.angDiff(a2, Math.PI)) < 0.15, `knight: Cleave swings at the only foe, behind (a ${a2 && a2.toFixed(2)})`);
-  ok(a3 !== null && Math.abs(U.angDiff(a3, 0)) < 1e-9, `knight: Cleave swings along its facing with no foe in reach (a ${a3 && a3.toFixed(2)})`);
+  const aim = (x, y) => { p.in.ax = p.x + x; p.in.ay = p.y + y; };
+  put(1.2); aim(100, 0); const a1 = fire();
+  put(Math.PI); aim(0, -100); const a2 = fire();
+  for (const e of w.foes) e.dead = true; aim(-60, 60); const a3 = fire();
+  aim(2, 1); const a4 = fire();
+  ok(a1 !== null && Math.abs(U.angDiff(a1, 0)) < 1e-9, `knight: Cleave swings at the cursor, not at a foe 69 deg off it (a ${a1 && a1.toFixed(2)})`);
+  ok(a2 !== null && Math.abs(U.angDiff(a2, -Math.PI / 2)) < 1e-9, `knight: Cleave swings at the cursor with the only foe behind (a ${a2 && a2.toFixed(2)})`);
+  ok(a3 !== null && Math.abs(U.angDiff(a3, 3 * Math.PI / 4)) < 1e-9, `knight: Cleave swings at the cursor with no foe (a ${a3 && a3.toFixed(2)})`);
+  ok(a4 !== null && Math.abs(U.angDiff(a4, 0.5)) < 1e-9, `knight: a cursor on the hero swings along the movement direction (a ${a4 && a4.toFixed(2)})`);
+}
+// Cursor aim: Longbow, Fire Bolt and Bone Shard fire along the cursor with a foe 90 deg off it; Smite's Lance sweep starts
+// SWEEP_ARC / 2 before the cursor dir; Smite pillars with no foe stride out along the cursor dir.
+for (const [cls, wid] of [['ranger', 'longbow'], ['pyro', 'firebolt'], ['necro', 'boneshard']]) {
+  const w = new ED.World({ seed: 3, stage: 0, players: [{ pid: 'p1', cls }], cheats: { god: true } }), p = w.heroes[0], ws = p.weapons[0];
+  w.foes.length = 0; w.updateSpawner = () => {}; const e = w.spawnFoe(FODDER, p.x, p.y + 80); e.spd = 0;
+  p.in.ax = p.x - 70; p.in.ay = p.y - 70; ws.cd = 0; w.update(C.TICK);
+  const q = w.projs.find(x => !x.dead && x.p === p && x.wid === wid);
+  ok(q && Math.abs(U.angDiff(q.a, -3 * Math.PI / 4)) < 1e-6, `${wid}: fires along the cursor, not at the foe 90 deg off (a ${q && q.a.toFixed(2)})`);
+}
+{
+  const w = new ED.World({ seed: 3, stage: 0, players: [{ pid: 'p1', cls: 'cleric' }], cheats: { god: true } }), p = w.heroes[0], ws = p.weapons[0];
+  w.foes.length = 0; w.updateSpawner = () => {}; w.rankPath(p, ws, 2); w.recalc(p, false);
+  p.in.ax = p.x; p.in.ay = p.y + 100; ws.cd = 99;
+  let z = null; for (let i = 0; i < 60 && !z; i++) { w.update(C.TICK); w.events.length = 0; z = w.zones.find(o => !o.dead && o.k === 'beam'); }
+  ok(z && Math.abs(U.angDiff(z.a, Math.PI / 2 - 1.9 / 2)) < 0.15, `smite: the Lance sweep starts centred on the cursor dir with no foe (a ${z && z.a.toFixed(2)})`);
+  p.in.ax = p.x - 100; p.in.ay = p.y; ws.cd = 0; w.update(C.TICK);
+  const pl = w.zones.filter(o => !o.dead && o.wid === 'smite' && o.k !== 'beam');
+  ok(pl.length > 0 && pl.every(o => o.x < p.x - 20 && Math.abs(o.y - p.y) < 2), `smite: with no foe, pillars stride out along the cursor dir (${pl.map(o => Math.round(o.x - p.x) + ',' + Math.round(o.y - p.y)).join(' ')})`);
 }
 // Path shape flags reach the effective numbers (every path at rank 3, no Form).
 {

@@ -1,4 +1,4 @@
-// Pickups, party XP / levels, card offers, banish / reroll / skip, chests, gold and the per-weapon damage table (GAME-DESIGN §6, §9; ARCHITECTURE §8).
+﻿// Pickups, party XP / levels, card offers, banish / reroll / skip, chests, gold and the per-weapon damage table (GAME-DESIGN 짠6, 짠9; ARCHITECTURE 짠8).
 // Pickup k: 'xp1' | 'xp5' | 'xp25' (val = XP) | 'gold' (val coins) | 'food' (val HP) | 'magnet' | 'bomb' | 'chest' (val 1 elite, 2 boss). Gems merge into the nearest gem above GEM_CAP on the ground.
 // Gems and gold are pulled inside the hero's pickup radius; food, magnet, bomb and chests need a touch. Pulled pickups fly to the hero with an accelerating curve.
 // Braziers break on a hero's touch (weapon hits: combat.js) and relight RELIGHT s after breaking, once no living hero is within RELIGHT_R px.
@@ -14,7 +14,7 @@
   W.initHeroProgress = function (p) { p.rerolls = p.stats.rerolls | 0; p.skips = p.stats.skips | 0; p.banishes = p.stats.banishes | 0; p.banned = []; };
   const gemKind = (v) => (v >= 25 ? 'xp25' : v >= 5 ? 'xp5' : 'xp1');
   const isGem = (k) => k === 'xp1' || k === 'xp5' || k === 'xp25';
-  // Gold multiplier of hero p: greed adds fully, luck adds half (GAME-DESIGN §5 Fortune: more gold).
+  // Gold multiplier of hero p: greed adds fully, luck adds half (GAME-DESIGN 짠5 Fortune: more gold).
   W.goldMul = function (p) { return 1 + p.stats.greed + 0.5 * p.stats.luck; };
 
   W.spawnPickup = function (k, x, y, val) {
@@ -162,13 +162,22 @@
     }
     return pool;
   };
+  const isWeapon = (c) => c.kind === 'path' || c.kind === 'form' || c.kind === 'refine';
   // Offer of hero p: 3 cards (a 4th when a luck roll succeeds), weighted draw without repeats; missing cards are filled with Gold, then Meal.
+  // Weapon guarantee: the first draws come from the weapon cards (path rank, Form, refine) - 2 for the offers of levels 2-5, else 1, as far as the pool holds them; the drawn cards are then shuffled.
   W.makeOffer = function (p) {
-    const pool = this.cardPool(p, null), n = 3 + (this.rng.next() < p.stats.luck ? 1 : 0), out = [];
+    const pool = this.cardPool(p, null), n = 3 + (this.rng.next() < p.stats.luck ? 1 : 0), out = [], need = Math.min(n, this.level - p.pend <= 5 ? 2 : 1); // offer's own level: queued offers count back from party level
+    while (out.length < need) {
+      const wp = pool.filter(x => isWeapon(x.c));
+      if (!wp.length) break;
+      const it = this.rng.weighted(wp, x => x.w);
+      pool.splice(pool.indexOf(it), 1); out.push(it.c);
+    }
     while (out.length < n && pool.length) {
       const it = this.rng.weighted(pool, x => x.w);
       pool.splice(pool.indexOf(it), 1); out.push(it.c);
     }
+    for (let i = out.length - 1; i > 0; i--) { const j = this.rng.int(0, i), t = out[i]; out[i] = out[j]; out[j] = t; }
     if (out.length < n) out.push(this.goldCard(p));
     if (out.length < n) out.push(healCard());
     return out;

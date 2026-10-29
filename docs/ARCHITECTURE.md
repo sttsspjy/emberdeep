@@ -29,7 +29,7 @@ src/sim/combat.js           hitFoe (view clamp), hit shapes (arc, blast, chain),
 src/sim/foes.js             foe pool, spawnFoe, updateFoes (steer, brains, contact), killFoe, elites
 src/sim/ai.js               ED.AI brains: chaser, swarm, brute, ranged, exploder, charger, diver, boss
 src/sim/spawner.js          timeline director: rate, cap, density floor, ring spawns, events, elites, boss timers, recycling
-src/sim/weapons.js          weapon runtime: the hero's one slot, auto-fire, facing aim, path ranks, Forms, refine; ED.WEAPONS registry
+src/sim/weapons.js          weapon runtime: the hero's one slot, auto-fire, cursor aim, path ranks, Forms, refine; ED.WEAPONS registry
 src/sim/skills.js           Q dispatch, host cooldowns, skill levels; ED.CAST registry
 src/sim/progress.js         gems, pickups, magnet, XP/levels, card offers, chests, gold
 src/sim/bosses.js           ED.Bosses.lib (runner, telegraph helpers), w.spawnBoss / addBossBody / bossBar
@@ -61,7 +61,7 @@ Browser order (index.html): vendor/peerjs.min.js, the sim list above, src/net.js
 
 ## 3. Registries (how lanes plug in without editing core files)
 
-- `ED.addWeapon(def, impl)` → `ED.WEAPONS[id] = def`, `ED.WIMPL[id] = impl`, appends `ED.WEAPON_IDS` (registration order = wire order, append-only), registers `def.look`; sets `def.icon = 'icon.w.<id>'` (card / HUD icon) and keeps the given icon as `def.held` (sprite in the hero's hand). impl `{fire(w, p, ws, S) → bool, tick?(w, p, ws, S, dt), init?(w, p, ws), kill?(w, p, ws, S, e)}`; `kill` runs (via `w.weaponKill`, before `ED.HOOK[cls].kill`) for every foe its holder kills by any source, e.g. Bone Shard / Bone Storm kill-rise. Facing aim: `w.facingAim(p, a0, range, cone = ED.FACING_CONE 1.75 rad)` → angle to the nearest in-view foe in the cone, else a0; `w.coneFoe` same but null when none; `w.heroFoe(p, range, skip)` nearest in-view foe. Called by `src/heroes/*.js` (root def and its Forms in the hero's file). Passive icons are `icon.p.<id>`.
+- `ED.addWeapon(def, impl)` → `ED.WEAPONS[id] = def`, `ED.WIMPL[id] = impl`, appends `ED.WEAPON_IDS` (registration order = wire order, append-only), registers `def.look`; sets `def.icon = 'icon.w.<id>'` (card / HUD icon) and keeps the given icon as `def.held` (sprite in the hero's hand). impl `{fire(w, p, ws, S) → bool, tick?(w, p, ws, S, dt), init?(w, p, ws), kill?(w, p, ws, S, e)}`; `kill` runs (via `w.weaponKill`, before `ED.HOOK[cls].kill`) for every foe its holder kills by any source, e.g. Bone Shard / Bone Storm kill-rise. Cursor aim: `w.aimDir(p)` → angle from p toward its aim point `p.in.ax / ay` (p.mdir within 4 px); `w.heroFoe(p, range, skip)` nearest in-view foe. Called by `src/heroes/*.js` (root def and its Forms in the hero's file). Passive icons are `icon.p.<id>`.
 - `ED.addHero(def)` → `ED.HEROES[cls]`; def `{id, name, hp, speed, crit, sig, skills:[qId], icon, col, txt}`. `ED.HERO_IDS` = knight, ranger, pyro, necro, cleric, shade, bell (append-only).
 - `ED.addSkill(def, cast)` → `ED.SKILLS[id] = def` (`{id, name, icon, cd, txt, base:{dmg, r, dur, n, ...}, levels:[{mods, txt}] × 3}`; skills go lvl 1..4), `ED.CAST[id] = cast(w, p, x, y, N, sk)`: (x, y) aim point, N = `w.skillN(p, 0)`, sk the slot. Return false to refuse (no cooldown), else an object merged into the `skill` event, or nothing.
 - `ED.addFoe(id, o)` → `ED.FOES[id]`, `ED.FOE_IDS`, `ED.FOE_IDX` (append-only). Defaults `{look:'foe.'+id, dirs:2, ai:'chaser', hp:12, spd:45, dmg:1 (contact multiplier), r:7, xp:1, kb:1}`; optional `brute, split:{id, n}, range, shot:{dmg, speed, look, n, spread (rad or 'ring'), cd, wind}, slam, charge, dive, pack:[min, max], fuse, boom:{r, dmg, look}, scale, boss, noElite, noContact, solo`.
@@ -102,7 +102,7 @@ All entities are plain objects from pools; `dead` marks removal; arrays are comp
 
 Weapon defs (`ED.WEAPONS[id]`), one root per hero plus its Forms:
 ```
-root: { id, name, icon (atlas anim id), look (projectile look), txt, sig: cls, mode: 'nearest'|'facing'|'random'|'around'|'densest',
+root: { id, name, icon (atlas anim id), look (projectile look), txt, sig: cls, mode: 'cursor'|'random'|'around'|'densest' (codex label; aim is per impl, GAME-DESIGN §3),
   base: {dmg, cd, n, pierce, area, speed, dur, knock, range, crit, critMul, ...custom},
   paths: [ {id, name, ranks: [{mods:{...}, txt:'one line'} × 3], form: formId|null} × 3 ],
   hybrids: [ {need: [i, j], form: formId} ] (0–2),
@@ -122,7 +122,7 @@ form: { id, name, icon, look, txt (Form card line), sig, mode, base, evolved: tr
 
 ## 8. Progress
 
-- XP is party-wide (`w.xp`, `w.level`, `w.xpNext`; `ED.World.xpFor(L)` = 5 + 8(L−1) up to L 20, then 157 + 15(L−20)). On level-up, every living hero queues one (`p.pend`) and gets an offer (`p.offer` = 3–4 cards). Solo: `w.paused` until picked. Co-op: no pause; 1 s invulnerability after picking. Input `pick` (1..4), `banish` (1..4, `p.banishes`; replaces that card and adds its key to `p.banned`), `reroll`, `skip` resolve it.
+- XP is party-wide (`w.xp`, `w.level`, `w.xpNext`; `ED.World.xpFor(L)` = round(5 + 20(L−1) + 2.7(L−1)²), GAME-DESIGN §6). On level-up, every living hero queues one (`p.pend`) and gets an offer (`p.offer` = 3–4 cards). Solo: `w.paused` until picked. Co-op: no pause; 1 s invulnerability after picking. Input `pick` (1..4), `banish` (1..4, `p.banishes`; replaces that card and adds its key to `p.banned`), `reroll`, `skip` resolve it.
 - Card: `{kind:'path'|'form'|'refine'|'passive'|'plvl'|'skill'|'gold'|'heal', id (path: root id; form / refine: Form id), path (path index; Form: −1 hybrid), lvl (after the pick), name (path: path name), txt, sub (''), icon, val (gold / heal)}`. `txt` is one line ≤ 40 characters. Banish keys (`w.cardKey`): `r:<root>:<i>`, `f:<form>`, `x:<form>` (refine), `p:<id>`, `s:<id>`. The client shows a Form as `???` / "An unknown form" unless `ED.Meta.seen('weapons', id)`.
 - Chests: `w.openChest(p, val)`: val 1 (elite) levels one random owned passive or skill below max, else gold; val 2 (boss) adds `p.pend++` (one extra offer).
 - Gems merge above 350 on the ground. Magnet radius = stats.pickup. The magnet pickup vacuums all gems.

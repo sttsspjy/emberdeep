@@ -26,7 +26,7 @@
   const stageIcon = (i) => { const b = finalBoss(ED.STAGES[i]); return b ? foeIcon(b.id) : ''; };
   const UNSEEN = 'Not discovered yet';
   const seen = (k, id) => SV.isSeen(App().profile, k, id);
-  const MODE = { facing: 'Toward your facing', nearest: 'Nearest foe', around: 'Around you', random: 'Random foes', densest: 'Densest crowd' };
+  const MODE = { cursor: 'Toward your cursor', around: 'Around you', random: 'Random foes', densest: 'Densest crowd' };
 
   // ---------------- achievements ----------------
   // Unlock rows: { sec, icon, name, rule, k (0..1), txt, done }.

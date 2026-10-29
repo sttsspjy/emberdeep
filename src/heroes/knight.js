@@ -95,18 +95,11 @@
     if (F.full && S.slam && last) slam(w, p, ws, S, cx, cy, R * 1.35, 0.8);
     DK = 1;
   };
-  // Aim: directional strings look for a foe in the facing cone (with back: either way), then the nearest foe in reach, else p.mdir; 360 strings use p.mdir.
-  const aim = (w, p, ws, S) => {
-    if (FORM[ws.id].full) return p.mdir;
-    const R = S.range * S.area + 24 + ((S.wave | 0) ? 90 : 0);
-    let a = w.coneFoe(p, p.mdir, R);
-    if (a === null && S.back) { a = w.coneFoe(p, p.mdir + PI, R); if (a !== null) a += PI; }
-    if (a === null) a = w.nearAngle(p, R);
-    return a === null ? p.mdir : a;
-  };
+  // Aim: directional strings along the cursor (w.aimDir; back strikes mirror it); 360 strings use p.mdir.
+  const aim = (w, p, ws) => (FORM[ws.id].full ? p.mdir : w.aimDir(p));
   const IMPL = {
     fire(w, p, ws, S) {
-      const F = FORM[ws.id], st = ws.st, n = F.one ? 1 : S.n | 0, a = aim(w, p, ws, S);
+      const F = FORM[ws.id], st = ws.st, n = F.one ? 1 : S.n | 0, a = aim(w, p, ws);
       st.k = 0; st.a = a; st.left = n - 1; st.t = F.gap;
       if (F.spiral) spirals(w, p, ws, S, st.q = (st.q | 0) + 1);
       strike(w, p, ws, S, a, 0, n <= 1);
@@ -129,7 +122,7 @@
 
   // ---------------- Cleave and its Forms ----------------
   ED.addWeapon({
-    id: 'cleave', name: 'Cleave', icon: 'weapon.longsword', sig: 'knight', mode: 'facing', txt: 'Sword arc toward your facing',
+    id: 'cleave', name: 'Cleave', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', txt: 'Sword arc toward your cursor',
     base: { dmg: 24, cd: 1.1, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 120, range: 56, arc: 2.0, wave: 0, stag: 0, slam: 0 },
     paths: [
       { id: 'great', name: 'Greatblade', form: 'colossus', ranks: [
@@ -158,7 +151,7 @@
   }, IMPL);
   // Colossus Blade (Greatblade): one huge slow 200 deg sweep that staggers; cracks fan across it and erupt 0.3 s later.
   ED.addWeapon({
-    id: 'colossus', name: 'Colossus Blade', icon: 'weapon.longsword', sig: 'knight', mode: 'facing', evolved: true, form: true, from: 'cleave', txt: 'One giant sweep that cracks the ground',
+    id: 'colossus', name: 'Colossus Blade', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', evolved: true, form: true, from: 'cleave', txt: 'One giant sweep that cracks the ground',
     base: { dmg: 58, cd: 1.8, n: 1, pierce: 0, area: 1.5, speed: 0, dur: 0, knock: 200, range: 60, arc: 3.5, wave: 0, stag: 0.5, slam: 0, cracks: 3 },
     refine: [
       { mods: { cracks: 2 }, txt: '+2 ground cracks' },
@@ -167,7 +160,7 @@
   }, IMPL);
   // Rending Gale (Edge Wave): swings fling big piercing crescents that leave cutting wind lines.
   ED.addWeapon({
-    id: 'gale', name: 'Rending Gale', icon: 'weapon.longsword', sig: 'knight', mode: 'facing', evolved: true, form: true, from: 'cleave', txt: 'Big crescents that leave cutting wind',
+    id: 'gale', name: 'Rending Gale', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', evolved: true, form: true, from: 'cleave', txt: 'Big crescents that leave cutting wind',
     base: { dmg: 20, cd: 1.3, n: 1, pierce: 0, area: 1.15, speed: 0, dur: 0, knock: 80, range: 56, arc: 2.0, wave: 3, stag: 0, slam: 0, cutT: 1.0 },
     refine: [
       { mods: { wave: 2 }, txt: '+2 crescents' },

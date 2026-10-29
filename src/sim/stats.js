@@ -7,7 +7,7 @@
   const St = ED.Stats = {};
   const KEYS = ['maxHp', 'armor', 'regen', 'speed', 'pickup', 'might', 'haste', 'reach', 'velocity', 'duration', 'amount', 'luck', 'growth', 'greed', 'crit', 'critMul', 'revival', 'rerolls', 'skips', 'banishes'];
   St.KEYS = KEYS;
-  St.PICKUP = 36; // base pickup radius (px)
+  St.PICKUP = 48; // base pickup radius (px)
   St.HASTE_CAP = 0.5;
   St.CD_MIN = 0.2;   // weapon cooldown floor (s)
 

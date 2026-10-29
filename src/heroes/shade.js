@@ -1,4 +1,4 @@
-// Shade (assassin): hero data, signature Twin Daggers (rapid narrow stabs toward the facing foe; 3 paths x 3 ranks), Forms Thousand Cuts (path 0), Assassinate (path 1),
+// Shade (assassin): hero data, signature Twin Daggers (rapid narrow stabs toward the cursor; 3 paths x 3 ranks), Forms Thousand Cuts (path 0), Assassinate (path 1),
 // Shadow Fan (path 2), hybrids Death Lotus (paths 0 + 1) and Reaper's Return (paths 1 + 2); Q Shadow Step.
 // Stab: a segment from the hero's hand along the aim, S.len x area long, S.wid x area wide; every foe touching it is hit. Crit is rolled once per stab (a crit stab forces a crit on
 // every foe it touches, others never crit). A strike of S.n stabs is spread evenly over the cooldown (ws.st queue), each stab re-aimed. Visual: one line zone per stab.
@@ -56,11 +56,11 @@
 
   // ---------------- stabs ----------------
   const reach = (S) => S.len * S.area;
-  // Aim of one stab: the mark when within reach + 12 px, else facingAim over reach + 12 px (0.9 rad cone, then the nearest foe, else p.mdir).
+  // Aim of one stab: the cursor dir (w.aimDir); the mark instead when within reach + 12 px and AIM_CONE rad of it.
   function stabAim(w, p, ws, S) {
-    const R = reach(S) + 12, m = S.mark ? markOf(ws.st) : null;
-    if (m && U.dist2(p.x, p.y, m.x, m.y) <= R * R) return Math.atan2(m.y - p.y + HAND, m.x - p.x);
-    return w.facingAim(p, p.mdir, R, AIM_CONE);
+    const R = reach(S) + 12, m = S.mark ? markOf(ws.st) : null, a = w.aimDir(p);
+    if (m && U.dist2(p.x, p.y, m.x, m.y) <= R * R) { const b = Math.atan2(m.y - p.y + HAND, m.x - p.x); if (Math.abs(U.angDiff(a, b)) <= AIM_CONE) return b; }
+    return a;
   }
   // One stab: crit rolled here (crit with S.lunge: length x (1 + lunge), width x 1.4); S.cone (storm): angle jittered within +-cone, length x 0.8..1.15;
   // S.bloom: a crit stab's first foe blooms S.petals blades outward (S.plen x reach long, dmg x S.bloom, not crits).
@@ -81,7 +81,7 @@
   }
 
   // ---------------- thrown daggers ----------------
-  // Every S.tcd s: S.thrown daggers fanned 0.35 rad toward the facing aim, out S.trange x area px and back (dmg x S.tdm, pierce all; each foe hit once out, once back);
+  // Every S.tcd s: S.thrown daggers fanned 0.35 rad along the cursor, out S.trange x area px and back (dmg x S.tdm, pierce all; each foe hit once out, once back);
   // S.hover: they spin 0.4 s at the far end, re-hitting every 0.15 s. S.fan (Shadow Fan): S.fan + S.thrown daggers fanned forward and as many behind; the return leg always crits.
   // S.pin (Reaper's Return): a dagger sticks in the first foe it hits for S.pdur s (strikes on that foe crit), then tears out (a TEAR px cut, forced crits) and flies back as a forced crit.
   // Per-dagger state st { h (hovering), e / id (pinned foe), t (pin time left), ws } from a pool, returned on the dagger's end.
@@ -116,7 +116,7 @@
   }
   const TO = { look: 'rknife', pierce: 999, ret: true, r: 5, speed: TSPEED, dmg: 0, life: 1, st: null, tick: thrownTick, onHit: thrownHit, onEnd: giveSt };
   function throwDaggers(w, p, ws, S) {
-    const fan = S.fan > 0, n = Math.max(1, (S.thrown | 0) + (S.fan | 0)), o = TO, R = S.trange * S.area, a = w.facingAim(p, p.mdir, R + 30, AIM_CONE);
+    const fan = S.fan > 0, n = Math.max(1, (S.thrown | 0) + (S.fan | 0)), o = TO, R = S.trange * S.area, a = w.aimDir(p);
     const spread = fan ? Math.min(0.28, 1.6 / n) : 0.35;
     o.life = 2 * R / TSPEED; o.r = 5 * S.area; o.dmg = S.dmg * S.tdm; o.look = fan ? 'sknife' : S.pin ? 'pknife' : 'rknife'; o.tick = fan ? fanTick : thrownTick;
     for (let side = 0; side < (fan ? 2 : 1); side++) {
@@ -193,7 +193,7 @@
     bloom: 0, petals: 6, plen: 0.6, pin: false, pdur: 1.2 };
   const base = (o) => Object.assign({}, KEYS, o);
   ED.addWeapon({
-    id: 'daggers', name: 'Twin Daggers', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'facing', txt: 'Rapid stabs where you face',
+    id: 'daggers', name: 'Twin Daggers', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', txt: 'Rapid stabs toward your cursor',
     base: base({ dmg: 13, cd: 0.5, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.1 }),
     paths: [
       { id: 'flurry', name: 'Flurry', form: 'thousand', ranks: [
@@ -214,7 +214,7 @@
 
   // Shadow Fan (Return): stabs + a fan of S.fan + S.thrown returning daggers forward and as many behind (registered first: the old evolution id); the return leg always crits.
   ED.addWeapon({
-    id: 'shadowfan', name: 'Shadow Fan', icon: 'weapon.knives', look: 'sknife', sig: 'shade', mode: 'facing', evolved: true, form: true, from: 'daggers', txt: 'Daggers fan out, return and crit',
+    id: 'shadowfan', name: 'Shadow Fan', icon: 'weapon.knives', look: 'sknife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Daggers fan out, return and crit',
     base: base({ dmg: 21, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, fan: 3, tcd: 1, trange: 120, tdm: 0.42 }),
     refine: [
       { mods: { fan: 2 }, txt: '+2 daggers each way' },
@@ -223,7 +223,7 @@
   }, stabImpl);
   // Thousand Cuts (Flurry): the stab storm, each stab jittered within +-S.cone of the aim.
   ED.addWeapon({
-    id: 'thousand', name: 'Thousand Cuts', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'facing', evolved: true, form: true, from: 'daggers', txt: 'A storm of stabs in a narrow cone',
+    id: 'thousand', name: 'Thousand Cuts', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A storm of stabs in a narrow cone',
     base: base({ dmg: 20, cd: 0.4, n: 6, pierce: 0, area: 1, speed: 0, dur: 0, knock: 2, range: 0, crit: 0.1, len: 68, wid: 12, cone: 0.36 }),
     refine: [
       { mods: { n: 2 }, txt: '+2 stabs per storm' },
@@ -232,7 +232,7 @@
   }, stabImpl);
   // Assassinate (Lethality): stabs + the mark and the shadow's X cuts.
   ED.addWeapon({
-    id: 'assassinate', name: 'Assassinate', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'facing', evolved: true, form: true, from: 'daggers', txt: 'A shadow hunts the toughest foe',
+    id: 'assassinate', name: 'Assassinate', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A shadow hunts the toughest foe',
     base: base({ dmg: 17, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.15, mark: true, mk: 1.1, mcd: 0.45, mlen: 64 }),
     refine: [
       { mods: { mcd: -0.2 }, txt: 'The shadow strikes far more often' },
@@ -241,7 +241,7 @@
   }, stabImpl);
   // Death Lotus (Flurry + Lethality): crit stabs bloom into a ring of blades around their first foe.
   ED.addWeapon({
-    id: 'lotus', name: 'Death Lotus', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'facing', evolved: true, form: true, from: 'daggers', txt: 'Crits bloom into a ring of blades',
+    id: 'lotus', name: 'Death Lotus', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Crits bloom into a ring of blades',
     base: base({ dmg: 20, cd: 0.45, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 10, range: 0, crit: 0.15, bloom: 0.32, petals: 6, plen: 0.6 }),
     refine: [
       { mods: { petals: 2 }, txt: '+2 blades per bloom' },
@@ -250,7 +250,7 @@
   }, stabImpl);
   // Reaper's Return (Lethality + Return): stabs + thrown daggers that pin a foe (strikes on it crit), then tear back as crits.
   ED.addWeapon({
-    id: 'reaper', name: "Reaper's Return", icon: 'weapon.knives', look: 'pknife', sig: 'shade', mode: 'facing', evolved: true, form: true, from: 'daggers', txt: 'Daggers pin foes, then tear back',
+    id: 'reaper', name: "Reaper's Return", icon: 'weapon.knives', look: 'pknife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Daggers pin foes, then tear back',
     base: base({ dmg: 18, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, thrown: 3, tcd: 1, trange: 120, tdm: 1, pin: true, pdur: 1.2 }),
     refine: [
       { mods: { thrown: 1 }, txt: '+1 pinning dagger' },

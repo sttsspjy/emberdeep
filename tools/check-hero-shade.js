@@ -11,11 +11,11 @@ const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } 
 const t0 = Date.now();
 const ROOT = 'daggers', FORMS = ['thousand', 'assassinate', 'shadowfan'], HYB = [['lotus', [0, 1]], ['reaper', [1, 2]]];
 
-// World with the spawner and XP silenced; god cheat. Hero at rest facing east.
+// World with the spawner and XP silenced; god cheat. Hero at rest aiming east (mdir 0, cursor 100 px east).
 function world(seed) {
   const w = new ED.World({ seed: seed || 5, stage: 0, players: [{ pid: 'p1', name: 'P', slot: 0, cls: 'shade', meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
   w.updateSpawner = function () {}; w.addXp = function () {};
-  w.heroes[0].mdir = 0;
+  const p = w.heroes[0]; p.mdir = 0; p.in.ax = p.x + 100; p.in.ay = p.y;
   return w;
 }
 const step = (w, s, fn) => { for (let i = 0; i < Math.round(s * 60); i++) { if (fn) fn(i); w.update(C.TICK); w.events.length = 0; } };
@@ -85,6 +85,22 @@ const sp = (w, p, k, dx, dy, o) => { const e = w.spawnFoe(k, p.x + dx, p.y + dy,
   e.hp = Math.ceil(e.maxHp * 0.1) + 5;
   step(w, 1);
   ok(e.dead, `execute: a foe near 10% HP dies to one stab (${e.dead ? 'dead' : e.hp + ' HP left'})`);
+}
+{ // cursor aim: stabs go along the cursor past a foe 46 px north; Assassinate stabs take the mark only within 0.9 rad of the cursor
+  const w = world(), p = w.heroes[0], n = sp(w, p, 'skeleton', 0, -46);
+  step(w, 1);
+  ok(n.hp === n.maxHp, `stabs follow the cursor (east), a foe north is untouched (${n.maxHp - n.hp} dealt)`);
+  const stabs = (dx, dy) => {
+    const w = world(), p = w.heroes[0]; build(w, p, [0, 3, 0], 'assassinate');
+    const el = sp(w, p, 'skelknight', 34, 14); w.promoteElite(el); el.spd = 0;
+    p.in.ax = p.x + dx; p.in.ay = p.y + dy;
+    const as = [], seen = new Set();
+    step(w, 1, () => { for (const z of w.zones) if (!z.dead && (z.k === 'stab' || z.k === 'stabx') && !seen.has(z.id)) { seen.add(z.id); as.push(z.a); } });
+    return { as, m: Math.atan2(el.y - p.y + 6, el.x - p.x), c: Math.atan2(dy, dx) };
+  };
+  const inC = stabs(100, 0), outC = stabs(54, -84);
+  ok(inC.as.length > 0 && inC.as.every(a => Math.abs(U.angDiff(a, inC.m)) < 1e-6), `assassinate: the mark ${(inC.m).toFixed(2)} rad off the cursor draws the stabs (${inC.as.length})`);
+  ok(outC.as.length > 0 && outC.as.every(a => Math.abs(U.angDiff(a, outC.c)) < 1e-6), `assassinate: a mark ${Math.abs(U.angDiff(outC.c, outC.m)).toFixed(2)} rad off the cursor does not; stabs go along the cursor (${outC.as.length})`);
 }
 { // Assassinate: the elite is marked over trash; the shadow's X cuts hit it 150 px away, forced crits
   const w = world(), p = w.heroes[0]; build(w, p, [0, 3, 0], 'assassinate');

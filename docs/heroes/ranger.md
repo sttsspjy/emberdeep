@@ -6,7 +6,7 @@ HP 90, speed 80, crit 8%.
 
 ## Weapon: Longbow (`longbow`)
 
-- **Aim**: the nearest elite or boss within range in view, else the nearest foe, else straight along the facing.
+- **Aim**: exactly along the cursor, foe or no foe (no aim assist).
 - **Arrow**: pierces 8 foes, 300 px range (420 px/s); its first hit deals ×1.5.
 - **Fan**: n arrows 0.18 rad apart; a fan of n deals (1 + 0.25 (n − 1)) × one arrow in total.
 - Base: 20 damage, cooldown 0.55 s, knockback 25. Multishot adds fan arrows.
@@ -15,7 +15,7 @@ HP 90, speed 80, crit 8%.
 
 | Path | Rank 1 | Rank 2 | Rank 3 | Form |
 |---|---|---|---|---|
-| **Spread** (wider) | +2 arrows in a fan (n +2) | The fan splits over two targets (half the arrows at the next nearest foe) | +25% damage, +2 arrows | Hail of Arrows |
+| **Spread** (wider) | +2 arrows in a fan (n +2) | The fan splits over two targets (half the arrows at the nearest foe ≥ 0.35 rad off the cursor line, else 0.35 rad off it) | +25% damage, +2 arrows | Hail of Arrows |
 | **Piercer** (deeper, heavier) | Arrows pierce 4 more, fly farther (pierce +4, range +20%) | Every 3rd shot: a heavy bolt (first arrow ×2 size, ×1.25 damage, always crits, pierce +4) | +25% damage, every 2nd shot heavy | Ballista |
 | **Ricochet** (chains) | Arrows bounce to 2 more foes (after the last pierce, to the nearest unhit foe within 170 px) | Kills loose an arrow at the next foe (from the body, 60% damage, 1 pierce; 2 per volley) | +25% damage, +2 bounces | Seeker |
 
@@ -27,8 +27,8 @@ Path ranks keep applying after a Form; each Form reads the foreign path keys in 
 |---|---|---|---|---|---|
 | **Hail of Arrows** (`hail`) | Spread 3 | Full-damage fan (0.14 rad apart); an arrow's first hit splits off 3 arrows fanning forward (0.8× damage, 2 pierce, no further split). Pierce capped at 3, half the bounces | 22 dmg, 3 arrows / 0.7 s, pierce 1 | +2 arrows | +25% damage, pierce 2 more |
 | **Ballista** (`ballista`) | Piercer 3 | 1 + (n − 1) / 2 giant bolts (12 px radius, 240 px/s) that pierce every foe until they leave the view and always crit; heavy volleys ×1.5 size, ×1.25 damage; bounces become arrows (⅓ damage) loosed from the first foe hit | 44 dmg, 1 bolt / 1.2 s, knockback 70 | +1 bolt | +25% damage, bolts 50% bigger |
-| **Seeker** (`seeker`) | Ricochet 3 | Homing arrows (10 rad/s) launched in a wide fan; a kill does not spend pierce and keeps the arrow hunting (up to 2 kills, life ≥ 0.9 s). Fan factor 0.35, a quarter of the pierce | 38 dmg, 5 arrows / 0.68 s | +2 arrows | +25% damage, +2 bounces |
-| **Gale Barrage** (`galeshot`) | Spread 3 + Piercer 3 (hybrid) | A stream of 1 + n full-damage arrows, one every 0.05 s, each re-aimed (±0.04 rad jitter); two targets: every 2nd arrow goes to the next foe; every (2 × heavy)-th arrow heavy | 26 dmg, 1.2 s cycle, pierce 16, 520 px/s | +2 arrows per stream | +25% damage, pierce 2 more |
+| **Seeker** (`seeker`) | Ricochet 3 | Homing arrows (10 rad/s) launched in a wide fan along the cursor; a kill does not spend pierce and keeps the arrow hunting (up to 2 kills, life ≥ 0.9 s). Fan factor 0.35, a quarter of the pierce | 38 dmg, 5 arrows / 0.68 s | +2 arrows | +25% damage, +2 bounces |
+| **Gale Barrage** (`galeshot`) | Spread 3 + Piercer 3 (hybrid) | A stream of 1 + n full-damage arrows, one every 0.05 s, each re-aimed along the cursor (±0.04 rad jitter); two targets: every 2nd arrow takes the split fan's second aim; every (2 × heavy)-th arrow heavy | 26 dmg, 1.2 s cycle, pierce 16, 520 px/s | +2 arrows per stream | +25% damage, pierce 2 more |
 | **Rebound** (`rebound`) | Piercer 3 + Ricochet 3 (hybrid) | Arrows reaching the view edge turn toward the foe nearest the Ranger (else mirror), forget their hits and regain their pierce, 2 + bounces times (life 3 s); no first-hit bonus | 42 dmg, 1 arrow / 0.9 s, pierce 8 | +2 arrows | +25% damage, 1 more rebound |
 
 Forms show as `???` until discovered; no card line names a Form.

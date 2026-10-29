@@ -1,7 +1,7 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it. Never opens a visible window.
 // Usage: node tools/browse.js [smoke|shots|forms|crowdN|coop|botwatch ...] [--scen=a,b] [--cls=knight,...] [--form=id,...] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1]
 //                             [--software] [--quality=high|low] [--gate] [--ff=480] [--timeout=600]
-//   smoke: for each hero (--cls, default all 7) a solo stage-1 run driven ~--seconds (10) s (circling, Q / E, dash, first card picked); fails on a page or console error,
+//   smoke: for each hero (--cls, default all 7) a solo stage-1 run driven ~--seconds (10) s (circling, aim at the nearest foe, Q / E, dash, first card picked); fails on a page or console error,
 //          a stalled sim, no Q or E cast, or a signature weapon that dealt nothing.
 //   shots: PNGs of title, hero select, stage select, camp, each hero mid-fight at --ff (480) s of sim (ED.Debug.fastForward, god cheat), a level-up overlay, a chest
 //          (evolution), a boss fight and the results screen, into a fresh folder <outdir>/shots-<stamp> (printed).
@@ -119,14 +119,17 @@ function pageBoot(cfg) {
   // ED.Debug: tools-only control of the local solo / host run (no-op and null result without one).
   function installDebug(E) {
     const C = E.CONST, D = {};
-    // Scripted hero for fastForward: circles, Q every 7 s, E every 11 s, dash every 5 s, picks the first card, walks to a chest on the ground.
+    // Scripted hero for fastForward: circles, aims at the nearest foe in view (else ahead of the walk), Q every 7 s, E every 11 s, dash every 5 s, picks the first card,
+    // walks to a chest on the ground.
     const drive = (w, p, tick) => {
       let mx, my;
       let ch = null, bd = Infinity;
       for (const g of w.pickups) if (!g.dead && g.k === 'chest') { const d = (g.x - p.x) ** 2 + (g.y - p.y) ** 2; if (d < bd) { bd = d; ch = g; } }
       if (ch && bd < 700 * 700) { const d = Math.sqrt(bd) || 1; mx = (ch.x - p.x) / d; my = (ch.y - p.y) / d; }
       else { const a = tick / 60 * 0.7 + p.slot * 1.6; mx = Math.cos(a); my = Math.sin(a); }
-      w.input(p.pid, { mx, my, ax: p.x + mx * 80, ay: p.y + my * 80, q: tick % 420 === 30, e: tick % 660 === 60, dash: tick % 300 === 90, pick: p.offer ? 1 : 0 });
+      let t = null, td = Infinity;
+      for (const e of w.foes) if (!e.dead && E.inView(p, e.x, e.y, 0)) { const d = (e.x - p.x) ** 2 + (e.y - p.y) ** 2; if (d < td) { td = d; t = e; } }
+      w.input(p.pid, { mx, my, ax: t ? t.x : p.x + mx * 80, ay: t ? t.y : p.y + my * 80, q: tick % 420 === 30, e: tick % 660 === 60, dash: tick % 300 === 90, pick: p.offer ? 1 : 0 });
     };
     // Steps the sim sec seconds synchronously (all heroes scripted, events discarded except a run end). Returns D.state().
     D.fastForward = (sec) => {
@@ -237,13 +240,22 @@ function pageBoot(cfg) {
           if (!BR.drive) return o;
           const t = performance.now() / 1000, me = E.Game.view && E.Game.view.me;
           o.mx = BR.still ? 0 : Math.cos(t * 0.9); o.my = BR.still ? 0 : Math.sin(t * 0.9);
-          if (!BR.still && me && t % 4 < 1.5) { // every 4 s, 1.5 s walking at the nearest foe (melee weapons swing along the walk)
+          if (!BR.still && me && t % 4 < 1.5) { // every 4 s, 1.5 s walking at the nearest foe (melee closes in)
             let best = null, bd = 1e12; for (const f of E.Game.view.foes) { if (f.dead) continue; const d = (f.x - me.x) ** 2 + (f.y - me.y) ** 2; if (d < bd) { bd = d; best = f; } }
             if (best) { const l = Math.sqrt(bd) || 1; o.mx = (best.x - me.x) / l; o.my = (best.y - me.y) / l; }
           }
           o.q = Math.random() < 0.02; o.dash = Math.random() < 0.01;
           o.pick = BR.autoPick && me && me.offer ? 1 : 0;
           return o;
+        };
+        // scripted aim: the nearest foe in view (else ahead of the walk) while BR.drive is on
+        const AF = E.AimFx, point = AF.point;
+        AF.point = (me, inp) => {
+          if (!BR.drive) return point(me, inp);
+          const V = E.Game.view; let best = null, bd = 1e12;
+          if (V) for (const f of V.foes) { if (f.dead) continue; const d = (f.x - me.x) ** 2 + (f.y - me.y) ** 2; if (d < bd) { bd = d; best = f; } }
+          if (best) { AF.wx = best.x; AF.wy = best.y; } else { AF.wx = me.x + inp.mx * 80; AF.wy = me.y + inp.my * 80; }
+          return AF;
         };
         // sim ms per tick (while measuring) and an event tally (all / the local hero's) for checks
         const G = E.Game, upd = G.update, drain = G.drain;

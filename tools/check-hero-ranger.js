@@ -1,7 +1,7 @@
 // Headless check of the Ranger tree (exit 1 on failure). Usage: node tools/check-hero-ranger.js
 // 1. Every path rank changes the effective numbers or the fired pattern (arrows and foe hits of three volleys); card lines <= 40 chars.
 // 2. Every Form (3 pure + 2 hybrid) is ready only under its rule (its path(s) at rank 3), locks the others once taken, refines twice and deals damage in a foe ring.
-// 3. Mechanics: arrows aim at an elite before a nearer foe; bounces turn arrows to unhit foes; kill shots fire from kills; Ballista bolts pierce a whole line; Rebound arrows turn at the view edge.
+// 3. Mechanics: arrows fly along the cursor past nearer foes and elites; the split fan (two) aims its second half at a foe off the cursor line, else 0.35 rad off it; bounces turn arrows to unhit foes; kill shots fire from kills; Ballista bolts pierce a whole line; Rebound arrows turn at the view edge.
 // 4. Damage only in view: a full 3/3/3 build of the Longbow and every Form never hurts a pinned foe 340 px away (outside the 320 px half view) while hurting a near one.
 // 5. Volley at levels 1..4: casts, damages foes in the rain, cooldown >= 6 s; L2 pins (slows), L3 follows the cursor, L4 adds two flank rains.
 // 6. Determinism: the same seed and inputs give the same digest for every Form; client draw hooks run on a mock batch without non-finite args.
@@ -23,6 +23,7 @@ const ring = (w, x, y, n, r, hpMul) => { for (let i = 0; i < n; i++) { const a =
 const ranks = (w, p, r) => { const ws = p.weapons[0]; for (let i = 0; i < 3; i++) for (let k = 0; k < r[i]; k++) w.rankPath(p, ws, i); w.recalc(p, false); return ws; };
 const form = (w, p, ws, id) => { w.takeForm(p, ws, id); while (w.refineForm(p, ws)); w.recalc(p, false); };
 const step = (w, n) => { for (let i = 0; i < n; i++) { w.update(C.TICK); w.events.length = 0; } };
+const aimAt = (p, a) => { p.mdir = a; p.in.ax = p.x + Math.cos(a) * 100; p.in.ay = p.y + Math.sin(a) * 100; };
 
 // 1. Pattern of three volleys into a still foe grid (20 px apart over the view, 40 px clear around the hero): projectiles made, foe hits (hit records), wide projectiles.
 function pattern(r, fid) {
@@ -81,12 +82,22 @@ for (const f of FORMS) {
 }
 
 // 3. Mechanics.
-{ // elite priority: an elite at 200 px wins over a foe at 60 px
+{ // cursor aim: a foe at 60 px and an elite at 150 px off the line do not pull the arrow
   const w = world(2), p = w.heroes[0], ws = p.weapons[0];
   const near = w.spawnFoe('skeleton', p.x + 60, p.y, { hpMul: 1e4 }), el = w.spawnFoe('skeleton', p.x, p.y + 150, { hpMul: 1e4, elite: true });
-  near.spd = el.spd = 0; ws.cd = 0; w.update(C.TICK);
+  near.spd = el.spd = 0; aimAt(p, 2.4); ws.cd = 0; w.update(C.TICK);
   const q = w.projs.find(x => !x.dead && x.p === p);
-  ok(q && Math.abs(U.angDiff(q.a, Math.atan2(el.y - (p.y - 6), el.x - p.x))) < 0.05, `Longbow aims at the elite before the nearer foe (a ${q && q.a.toFixed(2)})`);
+  ok(q && Math.abs(U.angDiff(q.a, 2.4)) < 1e-6, `Longbow fires along the cursor, not at the nearer foe or the elite (a ${q && q.a.toFixed(2)})`);
+}
+{ // split fan (two): second half at a foe off the cursor line, else 0.35 rad off the line
+  for (const foe of [true, false]) {
+    const w = world(2), p = w.heroes[0], ws = ranks(w, p, [2, 0, 0]);
+    const e = foe ? w.spawnFoe('skeleton', p.x, p.y + 120, { hpMul: 1e4 }) : null; if (e) e.spd = 0;
+    aimAt(p, 0); ws.cd = 0; w.update(C.TICK); ws.cd = 99;
+    const qs = w.projs.filter(x => !x.dead && x.p === p), n = qs.length, b = foe ? Math.atan2(e.y - (p.y - 6), e.x - p.x) : 0.35, S = ED.Stats.weapon(p, 0);
+    const lo = qs.slice(0, (n + 1) >> 1), hi = qs.slice((n + 1) >> 1), mid = (arr) => arr.reduce((s, q) => s + q.a, 0) / arr.length;
+    ok(n === S.n && Math.abs(mid(lo)) < 1e-6 && Math.abs(U.angDiff(mid(hi), b)) < 1e-6, `split fan ${foe ? 'with' : 'without'} a foe off the line: halves at 0 / ${b.toFixed(2)} (${n} arrows, ${mid(lo).toFixed(2)} / ${hi.length ? mid(hi).toFixed(2) : '-'})`);
+  }
 }
 { // bounce: with pierce spent, an arrow turns to another foe
   const w = world(2), p = w.heroes[0], ws = ranks(w, p, [0, 0, 1]);
@@ -111,7 +122,7 @@ for (const f of FORMS) {
 }
 { // Rebound: arrows turn at the view edge and fly back
   const w = world(2), p = w.heroes[0], ws = ranks(w, p, [0, 3, 3]); form(w, p, ws, 'rebound');
-  p.mdir = 0; ws.cd = 0; w.update(C.TICK); ws.cd = 99;
+  aimAt(p, 0); ws.cd = 0; w.update(C.TICK); ws.cd = 99;
   const q = w.projs.find(x => !x.dead && x.p === p), vx0 = q.vx;
   let back = false; for (let i = 0; i < 90 && !q.dead; i++) { w.update(C.TICK); w.events.length = 0; if (q.vx * vx0 < 0) back = true; }
   ok(back && ED.inView(p, q.x, q.y, q.r), `Rebound: an arrow fired with no foe turns back at the view edge (x ${Math.round(q.x - p.x)})`);
@@ -130,7 +141,7 @@ for (const f of [{ id: 'longbow' }].concat(FORMS)) {
   const pos = far.concat(near).map(e => [e.x, e.y]);
   for (let i = 0; i < 300; i++) {
     far.concat(near).forEach((e, j) => { e.x = pos[j][0]; e.y = pos[j][1]; e.kbx = e.kby = 0; });
-    p.mdir = i / 300 * U.TAU; w.update(C.TICK); w.events.length = 0;
+    aimAt(p, i / 300 * U.TAU); w.update(C.TICK); w.events.length = 0;
   }
   const hurtFar = far.filter(e => e.hp < e.maxHp).length, hurtNear = near.filter(e => e.hp < e.maxHp).length;
   ok(hurtFar === 0 && hurtNear >= 1, `${f.id} 3/3/3: no damage outside the view (far hurt ${hurtFar}, near hurt ${hurtNear}/8)`);
