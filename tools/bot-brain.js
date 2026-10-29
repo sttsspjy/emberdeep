@@ -411,9 +411,7 @@
   const SCTX = { hpF: 0, near: 0 };
   const aimAt = (b, x, y) => { b.f.ax = x; b.f.ay = y; return true; };
   const dense = (b, p, range, min) => (b.densest(p.x, p.y, range) >= min ? aimAt(b, b.dx, b.dy) : false);
-  const bossNear = (b, p, range) => { const e = b.boss; return e && !e.dead && Math.hypot(e.x - p.x, e.y - p.y) < range ? e : null; };
   const atDense = (range, min) => (b, w, p) => dense(b, p, range, min);
-  const atBossOrDense = (range, min) => (b, w, p) => { const e = bossNear(b, p, range); return e ? aimAt(b, e.x, e.y) : dense(b, p, range, min); };
   const selfCrowd = (r, min) => (b, w, p, ctx) => {
     const n = countIn(p.x, p.y, r), e = b.boss, near = e && !e.dead && Math.hypot(e.x - p.x, e.y - p.y) < r + e.r;
     return n >= min || near || (ctx.near > 0.4 && n >= 2) ? aimAt(b, p.x + b.mx * 40, p.y + b.my * 40) : false;
@@ -421,15 +419,15 @@
   // Mobility skill used offensively: toward the densest cluster when nothing threatens soon.
   const dashInto = (range) => (b, w, p, ctx) => (ctx.near > 0.2 || ctx.hpF < 0.4 ? false : dense(b, p, range, 4));
   const SKILL = {
-    charge: dashInto(150),
-    volley: atBossOrDense(260, 3),
-    meteor: atBossOrDense(300, 3),
-    corpseblast: (b, w, p, ctx) => (countIn(p.x, p.y, 70) >= 5 || ctx.near > 0.5 || countIn(p.x, p.y, 300) >= 25 ? aimAt(b, p.x, p.y) : false),
+    shove: (b, w, p, ctx) => (ctx.near > 0.3 || ctx.hpF < 0.5) && selfCrowd(120, 6)(b, w, p, ctx), // defensive: a shove clears the knight's own Cleave reach
+    vault: () => false, // escape only (escapeSkill)
+    flashpoint: selfCrowd(140, 6),
+    bonewall: atDense(220, 6),
     sanctuary: (b, w, p, ctx) => (ctx.hpF < 0.8 || countIn(p.x, p.y, 90) >= 6 ? aimAt(b, p.x + b.mx * 30, p.y + b.my * 30) : false),
     step: dashInto(130),
     peal: (b, w, p, ctx) => (countIn(p.x, p.y, 160) >= 15 || ctx.near > 0.5 || (ctx.hpF < 0.5 && countIn(p.x, p.y, 120) >= 4) ? aimAt(b, p.x, p.y) : false),
   };
-  const ESCAPE = { charge: 1, step: 1 };
+  const ESCAPE = { vault: 1, step: 1 };
   const FALLBACK = atDense(250, 3);
 
   // Q skill (slot 0) by its rule.

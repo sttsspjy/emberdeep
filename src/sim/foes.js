@@ -32,7 +32,7 @@
     e.slowT = 0; e.slowK = 0; e.burnT = 0; e.burnDps = 0; e.burnOwner = null; e.burnTick = 0.5; e.stunT = 0; e.freezeT = 0;
     e.hitT = 0; e.vars = null; e.tgt = null; e.cd = 0; e.age = 0; e.invulnT = 0; e.takeMul = def.take || 1; e.scale = def.scale || 1; e.hev = 0; e.hevT = -1;
     e.rushT = 0; e.rx = 0; e.ry = 0; e.acd = 0.6 + (e.id % 7) * 0.2; e.aa = 0; e.tz = null; e.tzId = 0; e.dead = false;
-    e.ovT = 0; e.ovK = 0; e.ovX = 0; e.ovY = 0; e.ovP = null;
+    e.ovT = 0; e.ovK = 0; e.ovX = 0; e.ovY = 0; e.ovP = null; e.brI = 0; e.brT = 0;
     if (opts && opts.rush) { e.rushT = opts.rush[2] || 6; e.rx = opts.rush[0]; e.ry = opts.rush[1]; }
     if (opts && opts.elite) this.promoteElite(e);
     this.foes.push(e);

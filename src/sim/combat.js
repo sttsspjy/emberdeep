@@ -8,6 +8,8 @@
   const HIT_CAP = 200;   // hit events per tick (largest first)
   const FLASH = 0.06;    // hit flash (s)
   const TELE_MIN = 0.6;  // minimum telegraph length for foe / boss attacks
+  // Foe e overlaps hero p's view (true without a hero). invariant: hero damage, knock and statuses land only on foes in the attacker's view.
+  const seen = (p, e) => !p || (Math.abs(e.x - p.x) <= VW.hw + e.r && Math.abs(e.y - p.y + VW.oy) <= VW.hh + e.r);
 
   W.initCombat = function () {
     this.projPool = []; this.zonePool = [];
@@ -30,7 +32,7 @@
   W.hitFoe = function (e, dmg, src) {
     if (e.dead || !(dmg > 0) || e.invulnT > 0) return 0;
     const p = src && src.p;
-    if (p && !(Math.abs(e.x - p.x) <= VW.hw + e.r && Math.abs(e.y - p.y + VW.oy) <= VW.hh + e.r)) return 0; // invariant: a hero only damages foes overlapping its own view
+    if (!seen(p, e)) return 0;
     let crit = !!(src && src.crit);
     if (!crit && p && (!src || src.kind !== 'dot')) { const cc = src && src.critC >= 0 ? src.critC : p.stats.crit; if (cc > 0 && this.rng.next() < cc) crit = true; }
     let d = dmg * (crit ? (p ? p.stats.critMul : 2) : 1) * (e.takeMul || 1);
@@ -124,7 +126,7 @@
   };
   ED.blockTick = (w, z) => w.blockZone(z);
 
-  // Shared status options of arc / blast / zone hits: opt.slow [k, dur], opt.stun s, opt.freeze s, opt.burn [dps, dur].
+  // Shared status options of arc / blast / chain / zone hits: opt.slow [k, dur], opt.stun s, opt.freeze s, opt.burn [dps, dur]. Callers skip foes outside the hero's view (seen).
   const applyOpt = (w, e, opt, p) => {
     if (opt.slow) w.slow(e, opt.slow[0], opt.slow[1]);
     if (opt.stun) w.stun(e, opt.stun);
@@ -146,6 +148,7 @@
       const dx = e.x - x, dy = e.y - y, d = Math.hypot(dx, dy);
       if (d > r + e.r) continue;
       if (!full && d > e.r && Math.abs(U.angDiff(a, Math.atan2(dy, dx))) > half + Math.asin(Math.min(1, e.r / d))) continue;
+      if (!seen(p, e)) continue;
       const s = this.src(p, wid, opt.kind || 'weapon', opt.knock || 0); s.x = x; s.y = y; if (opt.crit) s.crit = true;
       const dealt = this.hitFoe(e, dmg, s); n++;
       if (!e.dead) applyOpt(this, e, opt, p);
@@ -164,7 +167,7 @@
     let n = 0;
     for (let k = 0; k < q.length; k++) {
       const e = q[k]; if (e.dead) continue;
-      const rr = r + e.r; if (U.dist2(x, y, e.x, e.y) > rr * rr) continue;
+      const rr = r + e.r; if (U.dist2(x, y, e.x, e.y) > rr * rr || !seen(p, e)) continue;
       const s = this.src(p, wid, opt.kind || 'weapon', opt.knock || 0); s.x = x; s.y = y; if (opt.crit) s.crit = true;
       const dealt = dmg > 0 ? this.hitFoe(e, dmg, s) : (opt.knock ? (this.knock(e, e.x - x, e.y - y, opt.knock), 0) : 0); n++;
       if (!e.dead) applyOpt(this, e, opt, p);
@@ -179,15 +182,18 @@
   // Chain: hits e, then up to `hops` more foes, each the nearest unhit foe within range of the last. opt: { onHit, look, slow, stun, burn }. Emits 'chain' { pts: [x0, y0, x1, y1, ...] }. Returns hits.
   W.chain = function (p, wid, e, hops, range, dmg, opt) {
     opt = opt || NO;
-    const seen = [], pts = [Math.round(p ? p.x : e.x), Math.round(p ? p.y : e.y)];
+    const done = [], pts = [Math.round(p ? p.x : e.x), Math.round(p ? p.y : e.y)];
     let cur = e, n = 0;
-    const skip = (f) => seen.indexOf(f.id) >= 0;
+    const skip = (f) => done.indexOf(f.id) >= 0;
     while (cur && n <= hops) {
-      seen.push(cur.id); pts.push(Math.round(cur.x), Math.round(cur.y));
+      done.push(cur.id); pts.push(Math.round(cur.x), Math.round(cur.y));
       const s = this.src(p, wid, 'chain', opt.knock || 0); s.x = cur.x; s.y = cur.y;
-      const dealt = this.hitFoe(cur, dmg, s); n++;
-      if (!cur.dead) applyOpt(this, cur, opt, p);
-      if (opt.onHit) opt.onHit(this, cur, dealt);
+      if (seen(p, cur)) {
+        const dealt = this.hitFoe(cur, dmg, s);
+        if (!cur.dead) applyOpt(this, cur, opt, p);
+        if (opt.onHit) opt.onHit(this, cur, dealt);
+      }
+      n++;
       if (n > hops) break;
       cur = this.nearestFoe(cur.x, cur.y, range, skip);
     }
@@ -391,12 +397,13 @@
     if (z.arc > 0 && z.arc < TAU && d > rad) return Math.abs(U.angDiff(z.a, Math.atan2(dy, dx))) <= z.arc / 2 + Math.asin(Math.min(1, rad / d));
     return true;
   };
-  // Foes inside zone z: calls fn(e) for each (scan bounds from the shape).
+  // Foes inside zone z (a hero zone: only those in its owner's view): calls fn(e) for each (scan bounds from the shape).
   W.zoneFoes = function (z, fn) {
     let cx = z.x, cy = z.y, R = z.r;
     if (z.len > 0) { cx = z.x + Math.cos(z.a) * z.len / 2; cy = z.y + Math.sin(z.a) * z.len / 2; R = z.len / 2 + z.w / 2; }
     const q = this.foeScan(cx, cy, R);
-    for (let k = 0; k < q.length; k++) { const e = q[k]; if (!e.dead && this.zoneHas(z, e.x, e.y, e.r)) fn(e); }
+    const p = z.team === 0 ? z.p : null;
+    for (let k = 0; k < q.length; k++) { const e = q[k]; if (!e.dead && this.zoneHas(z, e.x, e.y, e.r) && seen(p, e)) fn(e); }
     this.foeEnd();
   };
   W.updateZones = function (dt) {

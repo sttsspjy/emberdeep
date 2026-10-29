@@ -21,11 +21,12 @@
 
   // ---------------- Censer ----------------
   // Aura (r radius, follows the hero; w swinging censers at angle 3.2 x t): faint fill, 1 px rim, an outgoing pulse line, rim motes, rising smoke; holy: gold, slow light rays.
+  // Canvas2D (any frame) or zone LOD: fill + rim only.
   // Swinging censers: a 1 px chain from the hero, a brass bowl with a glowing coal and a short smoke trail.
   function censer(B, z, t, holy) {
     const R = z.r, x = q(z.x), y = q(z.y - 2), ph = z.id * 0.618, f = Math.min(1, z.t / 0.25);
     const fill = holy ? HOLY[2] : 0xc8a060, rim = holy ? HOLY[3] : 0xe0c080;
-    if (B.zoneLite) { B.zcirc(x, y, R, ca(fill, 22 * f), 0); B.zcirc(x, y, R, ca(rim, 110 * f), 1); }
+    if (B.zoneLite || B.mode !== 'gl') { B.zcirc(x, y, R, ca(fill, 22 * f), 0); B.zcirc(x, y, R, ca(rim, 110 * f), 1); }
     else {
       B.circ(x, y, R, ca(fill, (holy ? 26 : 18) * f), 0);
       if (holy) for (let i = 0; i < 6; i++) { const a = t * 0.6 + i * TAU / 6; B.line(x, y, q(x + Math.cos(a) * R), q(y + Math.sin(a) * R), 2, ca(HOLY[3], 26 * f)); }

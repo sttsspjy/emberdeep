@@ -2,7 +2,7 @@
 // Per hero (god cheat, from 4:00 so the horde is dense): 4 phases of 15 s with skill level 1..4 and 0 / 3 / 6 / 9 path ranks (path 0 first), then 20 s in the path-0 Form, refined twice.
 // Q is held every tick (cast on cooldown), aimed at the nearest foe; fodder rings keep targets near the hero. Each phase: no exception, the skill casts, the weapon deals damage, the skill none.
 // Extras: Bone Shard / Bone Storm on other heroes (the slain rise for them too), Cleave aims inside the facing cone (no foe: along it), path shape flags reach the effective numbers,
-// skills carry no damage, the weapon factor counts path ranks and the Form base, necro minions rise / obey the cap, same seed -> same digest, no NaN positions.
+// skills carry no damage, necro minions rise / obey the cap, same seed -> same digest, no NaN positions.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
@@ -146,13 +146,8 @@ for (const [cls, wid] of [['ranger', 'longbow'], ['pyro', 'firebolt'], ['necro',
   ok(N(r, 0).dist === 220 && N(r, 0).charges === 2 && N(r, 0).caltrops === 1, 'ranger: Vault farther, 2 charges, caltrops');
   ok(Math.abs(N(py, 0).r - 182) < 1e-9 && N(py, 0).flee === 3.5 && N(py, 0).gem === 200, 'pyro: Flashpoint wider, longer flee, gem pull');
   ok(N(n, 0).len === 200 && N(n, 0).ring === 80 && N(n, 0).taunt === 160, 'necro: Bone Wall longer, ring, taunt');
-  // Utility skills: no skill carries a damage number. Weapon factor (Stats.weaponMul): path dmg ranks and the Form base.
+  // Utility skills: no skill carries a damage number.
   ok(Object.keys(ED.SKILLS).every(id => !ED.SKILLS[id].base || ED.SKILLS[id].base.dmg === undefined) && w.heroes.every(p => !(N(p, 0).dmg > 0)), 'skills carry no damage');
-  const q = new ED.World({ seed: 1, stage: 0, players: [{ pid: 'p1', cls: 'pyro' }] }), h = q.heroes[0];
-  for (let i = 0; i < 3; i++) q.rankPath(h, h.weapons[0], 0); q.recalc(h, false); // Blaze rank 3: +20% weapon damage
-  ok(Math.abs(ED.Stats.weaponMul(h) - 1.2) < 1e-9, `weapon factor counts path damage ranks (${ED.Stats.weaponMul(h).toFixed(2)})`);
-  q.setRanks(h, h.weapons[0], 9, true);
-  ok(Math.abs(ED.Stats.weaponMul(h) - ED.Stats.weapon(h, 0).dmg / ED.WEAPONS.firebolt.base.dmg) < 1e-9 && ED.Stats.weaponMul(h) > ED.WEAPONS.inferno.base.dmg / ED.WEAPONS.firebolt.base.dmg, 'Form base counts in the weapon factor (' + ED.Stats.weaponMul(h).toFixed(2) + ')');
   const nn = n; nn.x = nn.y = 1600; w.time = 300;
   // Hard cap: raising 30 leaves at most 24.
   for (let i = 0; i < 30; i++) ED.Necro.raise(w, nn, 1600, 1600, 'boneshard', false, 15);

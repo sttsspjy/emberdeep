@@ -58,11 +58,11 @@
       B.circ(pr.x, pr.y, r + 3, ca(0xd9dfe8, 34), 0);
       disc(B, pr.x, pr.y, r, t * 24 + pr.id, 0x7a8494, 0xd9dfe8, 0xffffff);
     },
-    // Moon glaive: moonlit halo, fading afterimages along its path, a pale spinning disc with a crescent rim.
+    // Moon glaive: moonlit halo, fading afterimages along its path (WebGL only), a pale spinning disc with a crescent rim.
     moon(B, pr, t) {
       const bx = Math.cos(pr.a), by = Math.sin(pr.a), rot = t * 28 + pr.id, r = Math.max(9, pr.r);
       B.circ(pr.x, pr.y, r + 7, ca(0x9fc4ff, 34), 0);
-      for (let i = 3; i >= 1; i--) B.circ(pr.x - bx * i * 7, pr.y - by * i * 7, r * (1 - i * 0.22), ca(0xc9dcff, 100 - i * 25), 0);
+      if (B.mode === 'gl') for (let i = 3; i >= 1; i--) B.circ(pr.x - bx * i * 7, pr.y - by * i * 7, r * (1 - i * 0.22), ca(0xc9dcff, 100 - i * 25), 0);
       disc(B, pr.x, pr.y, r, rot, 0x3a5a9a, 0xc9dcff, 0xffffff);
       B.cone(pr.x, pr.y, r + 3, rot * 0.25, 2.4, ca(0xe8f0ff, 200), 2);
     },

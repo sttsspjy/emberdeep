@@ -7,7 +7,7 @@
   const U = ED.U, TAU = U.TAU;
   const POOL_MAX = 12, INF_R = 95, DQ_MAX = 40, RANGE = 210, SHELL_RANGE = 220;
 
-  ED.regLook('firepool', 'ember', 'meteor', 'crater', 'shell', 'bomblet', 'pyre', 'napalm', 'seed', 'echo', 'flash');
+  ED.regLook('firepool', 'ember', 'shell', 'bomblet', 'pyre', 'napalm', 'seed', 'flash');
   ED.addHero({ id: 'pyro', name: 'Pyro', hp: 85, speed: 74, crit: 0.05, sig: 'firebolt', skills: ['flashpoint'], icon: 'hero.pyro.idle', col: '#ff8a3d', txt: 'Paints the ground with fire.' });
 
   // ---------------- ground fire ----------------

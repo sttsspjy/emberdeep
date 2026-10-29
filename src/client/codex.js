@@ -26,7 +26,7 @@
   const stageIcon = (i) => { const b = finalBoss(ED.STAGES[i]); return b ? foeIcon(b.id) : ''; };
   const UNSEEN = 'Not discovered yet';
   const seen = (k, id) => SV.isSeen(App().profile, k, id);
-  const MODE = { cursor: 'Toward your cursor', around: 'Around you', random: 'Random foes', densest: 'Densest crowd' };
+  const MODE = { cursor: 'Toward your cursor', around: 'Around you', random: 'Random foes', densest: 'Densest crowd', nearest: 'Nearest foe' };
   const ROLE = { horde: 'Horde', control: 'Control', lane: 'Lane' };
   const supportRoots = () => ED.WEAPON_IDS.filter(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved);
 

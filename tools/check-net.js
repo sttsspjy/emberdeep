@@ -30,7 +30,7 @@ const N = ED.Net;
 { const r = U.RNG(4242); Math.random = r.next; } // party codes and pids: same every run
 const GATE = 12 * 1024;
 let fails = 0;
-const okV = N.VERSION === 7 && ED.NET_VERSION === 7;
+const okV = N.VERSION === 8 && ED.NET_VERSION === 8;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
 const t0 = Date.now();
 
@@ -169,7 +169,8 @@ runFor(3.5, { hostTo: () => ({ x: cliHero.x + 12, y: cliHero.y }) });
 ok(!cliHero.downed && !cliHero.dead && !gC.view.me.downed && gC.view.me.hp > 0, `revived on the host and on the client (hp ${Math.round(gC.view.me.hp)})`);
 runFor(18, { compare: true, crowd: 500 });
 const pendLive = cliHero.pend; // queued level-ups while the client still picks (the still phase below picks nothing)
-// settle with no input: prediction must land exactly on the host
+// settle with no input: prediction must land exactly on the host; the client's Q becomes Vault level 3 (2 charges) on the host
+Object.assign(cliHero.skills[0], { id: 'vault', lvl: 3, N: null, cd: 0 });
 runFor(1.5, { still: true });
 const me = gC.view.me;
 errs.sort((a, b) => a - b);
@@ -185,7 +186,9 @@ const atSnap = ring[Math.round(gC.mir.T / C.TICK) % RING];
 ok(atSnap && atSnap.tick === Math.round(gC.mir.T / C.TICK) && Math.abs(me.hp - atSnap.hp) < 0.01 && me.maxHp === cliHero.maxHp && gC.view.level === atSnap.level && gC.view.kills === atSnap.kills && gC.view.gold === atSnap.gold, `vitals / level / kills / gold match the host at the snapshot tick (lv ${w.level}, kills ${w.kills})`);
 const sig = (p) => p.weapons.map(x => x.id + x.lvl + ':' + x.pr.join('') + x.fl + (x.evo ? 'F' : '')).join(',') + '|' + p.passives.map(x => x.id + x.lvl).join(',') + '|' + p.skills.map(x => x.id + x.lvl).join(',');
 ok(sig(me) === sig(cliHero) && me.skills.length === 1 && me.weapons.length >= 1 && me.weapons[0].root === ED.HEROES[me.cls].sig && me.weapons[0].pr.some(r => r > 0), 'client hero weapon (path ranks, refine) / passives / one skill match the host: ' + sig(me));
-ok(okV, 'NET_VERSION 7');
+ok(okV, 'NET_VERSION 8');
+const cq = me.skills[0], hq = cliHero.skills[0];
+ok(cq && hq.chN === 2 && cq.chN === hq.chN && cq.ch === hq.ch && hq.ch === 2, `Q charges on the wire (host ${hq.ch}/${hq.chN}, client ${cq && cq.ch}/${cq && cq.chN})`);
 ok(cliPicks >= 5 && hostPicks >= 5 && !pendLive, `co-op level-ups resolve without pause (client picks ${cliPicks}, host picks ${hostPicks}, client pending ${pendLive} while picking)`);
 ok(gH.rem.get(cliPid).ack > 3000, `host consumed client inputs (ack ${gH.rem.get(cliPid).ack})`);
 const avgB = sumCliBytes / Math.max(1, nSnap);

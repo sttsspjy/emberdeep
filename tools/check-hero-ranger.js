@@ -163,7 +163,7 @@ for (let L = 1; L <= 4; L++) {
   // charges: a second press right after the leap
   const x1 = p.x; w.input(p.pid, { q: true, ax: p.x + 300, ay: p.y }); step(w, 30);
   ok((L >= 3) === (p.x - x1 > N.dist - 4), `vault L${L}: second leap at once ${p.x - x1 > N.dist - 4} (charges ${N.charges | 0})`);
-  const cal = w.zones.find(z => !z.dead && z.k === 'caltrops');
+  const cal = w.zones.filter(z => !z.dead && z.k === 'caltrops').sort((a, b) => U.dist2(p.x, p.y, a.x, a.y) - U.dist2(p.x, p.y, b.x, b.y))[0]; // the latest field (the first lies outside the view)
   if (L === 4) {
     const e = w.spawnFoe('skeleton', cal.x + 10, cal.y, { hpMul: 50 }); step(w, 15);
     ok(e.slowT > 1 && e.slowK >= 0.5 && e.hp === e.maxHp, `vault L4: caltrops slow a foe 50% (${e.slowK}, ${e.slowT.toFixed(1)} s), no damage`);

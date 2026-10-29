@@ -236,6 +236,9 @@
   wpn('ricochet', 0.14,
     (s) => { s.N('bandpass', 1900, 1300, 0.03, 1, 5); s.T('triangle', 760, 520, 0.045, 0.4); s.T('sine', 200, 120, 0.05, 0.3); },
     (s) => { for (let i = 0; i < 4; i++) { s.N('bandpass', rnd(1500, 2400), 1100, 0.03, 0.8, 5, i * 0.05); s.T('triangle', rnd(600, 800), 450, 0.04, 0.3, i * 0.05); } s.N('lowpass', 400, 80, 0.35, 0.6, 1, 0, 0.05); }, { g: 0.42 });
+  wpn('waraxe', 0.3,
+    (s) => { s.N('bandpass', 300, 1100, 0.2, 0.8, 1.3, 0, 0.04); for (let i = 0; i < 3; i++) s.N('bandpass', 900 + i * 150, 600, 0.05, 0.4, 3, 0.04 + i * 0.07); s.T('sine', 130, 60, 0.12, 0.45); s.T('sawtooth', 95, 70, 0.15, 0.08, 0, 0.03); },
+    (s) => { s.N('bandpass', 260, 1000, 0.25, 0.9, 1.2, 0, 0.05); for (let i = 0; i < 4; i++) s.N('bandpass', 800 + i * 140, 550, 0.05, 0.45, 3, 0.04 + i * 0.06); thunk(s, 0.22, 0.7); [0.26, 0.29, 0.32].forEach((x) => clack(s, x, 0.45)); }, { g: 0.38 });
   // generic fallbacks for weapons no keyword matches
   wpn('proj', 0.16, (s) => { s.T('triangle', rnd(800, 950), 300, 0.08, 0.5); s.N('highpass', 3000, 1500, 0.05, 0.3); }, (s) => { s.T('triangle', rnd(700, 850), 250, 0.12, 0.5); s.N('highpass', 2500, 6000, 0.15, 0.4, 0.7); s.T('sine', 140, 70, 0.08, 0.3); });
   wpn('melee', 0.2, (s) => { s.N('bandpass', 700, 2400, 0.12, 1, 1.5, 0, 0.03); s.T('sine', 160, 80, 0.08, 0.3, 0.05); }, (s) => { s.N('bandpass', 500, 2600, 0.18, 1, 1.4, 0, 0.04); s.T('sine', 120, 50, 0.15, 0.5, 0.08); });
@@ -473,7 +476,7 @@
       case 'heal': if (mine && ev.v >= 8) { pp = 0; agg(C.heal, 0.8, 2); } break;
       case 'level': pp = 0; agg(C.level, 1, 3); A.duck(0.5, 0.9); break;
       case 'offer': if (mine) { pp = 0; agg(ev.reroll ? C.reroll : C.offer, 1, 3); } break;
-      case 'pick': if (mine) { pp = 0; const k = ev.kind; agg(C[k === 'form' ? 'pick.weapon' : k === 'path' || k === 'refine' || k === 'plvl' ? 'pick.up' : k === 'passive' ? 'pick.passive' : k === 'skill' ? 'pick.skill' : 'pick.misc'], k === 'skip' ? 0.5 : 1, 3); } break;
+      case 'pick': if (mine) { pp = 0; const k = ev.kind; agg(C[k === 'form' || k === 'support' ? 'pick.weapon' : k === 'path' || k === 'refine' || k === 'plvl' ? 'pick.up' : k === 'passive' ? 'pick.passive' : k === 'skill' ? 'pick.skill' : 'pick.misc'], k === 'skip' ? 0.5 : 1, 3); } break;
       case 'evolve': aggHero(C.evolve, ev.pid, mine, mine ? 1 : 1.6); if (mine) A.duck(0.35, 2); break;
       case 'hurt': if (mine) { pp = 0; agg(C.hurt, Math.min(1.3, 0.7 + (ev.dmg || 5) / 25), 3); } else agg(C.hurt, 0.25 * posGain(ev.x, ev.y), 0); break;
       case 'down': aggHero(C.down, ev.pid, mine, mine ? 1 : 2); break;

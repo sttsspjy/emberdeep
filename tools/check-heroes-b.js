@@ -1,7 +1,7 @@
 // Headless check of heroes Cleric, Shade and Bell (exit 1 on failure). Usage: node tools/check-heroes-b.js
 // 1. Signature weapon at 0..9 path ranks (path 0 first) and its path-0 Form refined twice: 10 s each in a foe ring, no exceptions, damage > 0 (prints dps per rank count).
 // 2. Q at every skill level 1..4: cast on cooldown at the nearest foe, zero damage, foes affected (stunned, slowed, displaced or lured; prints casts).
-// 3. Mechanics: Sanctuary heals an ally, Shadow Step blinks with 2 charges at L4, Great Peal stuns the screen and pulls gems, Toll / Cathedral bell bodies.
+// 3. Mechanics: Sanctuary heals an ally, Shadow Step blinks with 2 charges at L4, Great Peal stuns the screen and pulls gems, blast / arc / chain / zone statuses only in view, Toll / Cathedral bell bodies.
 // 4. 60 s solo run per hero with level-ups and Q spam: no exceptions, same digest twice. 5. Crowd cost at 900 foes (informational).
 // 6. No-target fire: every signature (no ranks) and its Form on its own hero, standing still facing east with no foe alive, breaks a brazier 60 px ahead
 //    within the first fire (0.4 s) + its cooldown + 0.9 s travel; a hero projectile crossing a brazier breaks it and keeps its pierce and its flight.
@@ -121,6 +121,28 @@ const cast = (w, p, slot, x, y) => { w.input(p.pid, { q: true, ax: x, ay: y }); 
   const g = w.pickups.find(x => x.k === 'xp5');
   ok(n > 0 && s === n, `great peal stuns every foe in view within 330 px (${s}/${n})`);
   ok(!g || g.pull === p.pid, 'great peal L4 pulls gems');
+}
+{ // View clamp on statuses: blast, arc, chain and a status zone slow / stun / burn / knock only foes in the hero's view
+  const w = world(['bell']), p = w.heroes[0]; p.weapons.length = 0;
+  const X = p.x + ED.HERO_VIEW.hw + 60, inn = [], out = [];
+  for (let i = 0; i < 4; i++) { inn.push(w.spawnFoe('skeleton', p.x + 100, p.y - 30 + i * 20, { hpMul: 50 })); out.push(w.spawnFoe('skeleton', X, p.y - 30 + i * 20, { hpMul: 50 })); }
+  const O = { slow: [0.5, 2], stun: 1, burn: [5, 2], knock: 200 };
+  w.update(C.TICK); w.events.length = 0; // foes enter the grid
+  const reset = () => { for (const e of inn) e.x = p.x + 100; for (const e of out) e.x = X; for (const e of inn.concat(out)) { e.slowT = e.stunT = e.burnT = 0; e.kbx = e.kby = 0; } };
+  const hit = (e) => e.slowT > 0 || e.stunT > 0 || e.burnT > 0 || Math.abs(e.kbx) + Math.abs(e.kby) > 0;
+  const res = [];
+  const tryOne = (tag, fn) => { reset(); w.vclamp = null; fn(); res.push(tag + ' ' + inn.filter(hit).length + '/' + out.filter(hit).length); return inn.every(hit) && !out.some(hit); };
+  let good = tryOne('blast', () => w.blast(p, 'test', (p.x + 100 + X) / 2, p.y, 200, 5, O));
+  good = tryOne('blast0', () => w.blast(p, 'test', (p.x + 100 + X) / 2, p.y, 200, 0, O)) && good;
+  good = tryOne('arc', () => w.arc(p, 'test', p.x, p.y, 0, X - p.x + 30, 1.2, 5, O)) && good;
+  good = tryOne('chain', () => w.chain(p, 'test', inn[0], 7, 400, 5, O)) && good; // hops reach the off-view foes (vclamp off)
+  reset();
+  w.zone(Object.assign({ team: 0, p, wid: 'test', x: (p.x + 100 + X) / 2, y: p.y, r: 200, dur: 0.3, dps: 5, tick: 0.1, look: 'flash' }, O));
+  for (let i = 0; i < 12; i++) { for (const e of out) e.x = X; w.update(C.TICK); }
+  w.events.length = 0;
+  const zin = inn.filter(e => e.slowT > 0).length, zout = out.filter(e => e.slowT > 0 || e.stunT > 0 || e.burnT > 0).length;
+  res.push('zone ' + zin + '/' + zout);
+  ok(good && zin === inn.length && zout === 0, `statuses only on foes in view, in/out (${res.join(', ')})`);
 }
 { // Toll / Cathedral bell bodies
   const w = world(['bell']), p = w.heroes[0], ws = p.weapons[0];

@@ -77,28 +77,18 @@
     ws.Sv = p.statsV; ws.Sk = ED.weaponKey(ws); ws.Sid = ws.id;
     return S;
   };
-  // Damage factor of hero p's weapon (slot 0) from path / refine dmg mods and the Form base: S.dmg / (root base dmg x (1 + might)); 1 without a weapon.
-  St.weaponMul = (p) => {
-    const ws = p.weapons[0]; if (!ws) return 1;
-    const rb = ED.WEAPONS[ED.weaponRoot(ws)].base.dmg || 0, S = ws.S && ws.Sv === p.statsV && ws.Sk === ED.weaponKey(ws) && ws.Sid === ws.id ? ws.S : St.weapon(p, 0);
-    return rb > 0 ? S.dmg / (rb * (1 + p.stats.might)) : 1;
-  };
-
-  // Effective numbers of hero skill `idx` into sk.N (reused): { cd, dmg, r, dur, n, ...custom } with reach on r, duration on dur, no haste on cd;
-  // dmg = base x (1 + sum lvl dmg) x (1 + might) x weaponMul x (1 + 0.05 x (party level - 1)). plv: party level (default 1).
-  St.skill = (p, idx, plv) => {
-    const wm = St.weaponMul(p); // before sumLevels: weaponMul may recompute weapon numbers, which reuse the SUM scratch
-    const sk = p.skills[idx], def = ED.SKILLS[sk.id], b = def.base || {}, st = p.stats, sum = sumLevels(def, sk.lvl, SUM), L = plv || 1;
+  // Effective numbers of hero skill `idx` into sk.N (reused): { cd, r, dur, n, ...custom } with reach on r, duration on dur, no haste on cd. Skills deal no damage (no dmg key).
+  St.skill = (p, idx) => {
+    const sk = p.skills[idx], def = ED.SKILLS[sk.id], b = def.base || {}, st = p.stats, sum = sumLevels(def, sk.lvl, SUM);
     const N = sk.N || (sk.N = {});
     clear(N);
     for (const k in b) N[k] = b[k];
     for (const k in sum) N[k] = typeof sum[k] === 'number' && typeof b[k] === 'number' ? b[k] + sum[k] : sum[k];
     N.cd = Math.max(1, (def.cd || 10) * (1 + (sum.cd || 0)));
-    if (b.dmg !== undefined) N.dmg = b.dmg * (1 + (sum.dmg || 0)) * (1 + st.might) * wm * (1 + 0.05 * (L - 1));
     if (b.r !== undefined) N.r = b.r * (1 + (sum.r || 0)) * (1 + st.reach);
     if (b.dur !== undefined) N.dur = b.dur * (1 + (sum.dur || 0)) * (1 + st.duration);
     N.crit = st.crit; N.critMul = st.critMul;
-    sk.Nv = p.statsV; sk.Nl = sk.lvl; sk.Np = L;
+    sk.Nv = p.statsV; sk.Nl = sk.lvl;
     return N;
   };
 })(globalThis.ED || (globalThis.ED = {}));

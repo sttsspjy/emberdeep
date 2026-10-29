@@ -1,5 +1,5 @@
 // Pyro visuals (loaded after fx.js): ED.WeaponFx for firebolt / inferno / firestorm / wildfire / pyre / napalm and the Flashpoint skill.
-// Zones dispatch on the look z.k: firepool, crater, pyre (charging fuse), napalm (fire line, z.len / z.w), shell / bomblet (lob from z.a / z.w), flash (Flashpoint).
+// Zones dispatch on the look z.k: firepool, pyre (charging fuse), napalm (fire line, z.len / z.w), shell / bomblet (lob from z.a / z.w), flash (Flashpoint).
 // Projectiles dispatch on pr.k: fireball, ember, seed. Everything derives from render-visible fields and view time; per-zone variation from U.hash3(z.id, i, ...).
 (function (ED) {
   'use strict';
@@ -8,8 +8,6 @@
   const o = (alpha, sc, rot, add) => { O.flip = false; O.flash = 0; O.alpha = alpha; O.rot = rot || 0; O.sx = O.sy = sc || 1; O.tint = 0; O.add = !!add; return O; };
   const H = (a, b, c) => U.hash3(a, b, c) / 4294967296;
   const A = () => ED.Atlas;
-  const nf = (id) => { const r = A().anim(id); return r ? r.n : 1; };
-  const at = (id, k) => Math.max(0, Math.min(nf(id) - 1, Math.floor(k * nf(id))));
   const rgba = (rgb, a) => (((rgb & 0xffffff) << 8) | (U.clamp(Math.round(a), 0, 255))) >>> 0;
   const life = (z, fin, fout) => Math.max(0, Math.min(1, z.t / (fin || 0.12), (z.dur - z.t) / (fout || 0.3)));
   const part = (x, y, vx, vy, l, col, sz) => { if (ED.FX && ED.FX.part) ED.FX.part(x, y, vx, vy, l, col, sz); };
@@ -23,28 +21,20 @@
   };
 
   // ---------------- ground fire ----------------
-  // Fire pool / crater: scorch disc, hot core, thin rim, flickering flames scattered inside (count by area), rising sparks. Crater: an explosion cluster while young.
-  function firePool(B, z, t, crater) {
+  // Fire pool: scorch disc, hot core, thin rim, flickering flames scattered inside (count by area), rising sparks.
+  function firePool(B, z, t) {
     const k = life(z, 0.15, 0.5), r = z.r, lite = B.zoneLite;
     if (r < 1 || k <= 0) return true;
-    if (lite) { B.zcirc(z.x, z.y, r, rgba(crater ? 0x5a1a08 : 0x8a2a0c, 110 * k), 0); B.zcirc(z.x, z.y, r, rgba(0xff8a3d, 150 * k), 1); }
+    if (lite) { B.zcirc(z.x, z.y, r, rgba(0x8a2a0c, 110 * k), 0); B.zcirc(z.x, z.y, r, rgba(0xff8a3d, 150 * k), 1); }
     else {
-      B.circ(z.x, z.y, r, rgba(crater ? 0x2a0c04 : 0x4a1a08, 120 * k), 0);
+      B.circ(z.x, z.y, r, rgba(0x4a1a08, 120 * k), 0);
       B.circ(z.x, z.y, r * 0.7, rgba(0xff6a1a, 46 * k), 0);
       B.circ(z.x, z.y, r, rgba(0xff8a3d, 150 * k), 1);
     }
-    const n = lite ? 0 : U.clamp(Math.round(r * r / 150), 3, crater ? 22 : 18);
+    const n = lite ? 0 : U.clamp(Math.round(r * r / 150), 3, 18);
     for (let i = 0; i < n; i++) {
       const a = H(z.id, i, 1) * TAU, d = Math.sqrt(H(z.id, i, 2)) * r * 0.85;
       B.spr('fx.flame', A().frameAt('fx.flame', t + i * 0.137), z.x + Math.cos(a) * d, z.y + Math.sin(a) * d * 0.9 + 4, o(k, 1 + (H(z.id, i, 3) > 0.6 ? 1 : 0), 0, true));
-    }
-    if (crater && z.t < 0.5) {
-      kick(z, 5);
-      const m = U.clamp(Math.round(r / 10), 2, 6);
-      for (let i = 0; i < m; i++) {
-        const a = H(z.id, i, 5) * TAU, d = (i ? 0.3 + 0.6 * H(z.id, i, 6) : 0) * r, kk = (z.t - i * 0.04) / 0.45;
-        if (kk > 0 && kk < 1) B.spr('fx.explosion', at('fx.explosion', kk), z.x + Math.cos(a) * d, z.y + Math.sin(a) * d - 6, o(1, i ? 1 : 2, 0, true));
-      }
     }
     if (!lite && Math.random() < 0.12 * k) part(z.x + (Math.random() - 0.5) * r, z.y + (Math.random() - 0.5) * r, 0, -30, 0.4, 0xffb04aff, 1);
     return true;
@@ -122,7 +112,7 @@
     return true;
   }
   const ZONE = {
-    firepool: (B, z, t) => firePool(B, z, t, false), crater: (B, z, t) => firePool(B, z, t, true), pyre, napalm,
+    firepool: firePool, pyre, napalm,
     shell: (B, z, t) => lob(B, z, t, true), bomblet: (B, z, t) => lob(B, z, t, false), flash,
   };
 

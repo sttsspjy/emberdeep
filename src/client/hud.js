@@ -184,6 +184,8 @@
     txt(cs('hp', (Math.min(hp, 4095) << 12) | Math.min(me.maxHp | 0, 4095), fmtHp), W / 2, hy + R(3), '#fff1d6', 18, 'center');
     const q = me.skills[0], C = ED.CONST.DASH;
     if (q) dial(0, kx, ky, ds, ED.SKILLS[q.id] ? ED.SKILLS[q.id].icon : 'fx.star.stun', q.cd, q.cdMax, keyLbl.q, '#ffd27a');
+    // Q charge pips (multi-charge skills: chN slots, ch lit), left of the dial
+    if (q && q.chN > 1) { const pw = R(10); for (let i = 0; i < q.chN; i++) { const px = kx - pw - R(6), py = ky + ds - (i + 1) * (pw + R(3)); c.fillStyle = '#000'; c.fillRect(px, py, pw, pw); c.fillStyle = i < q.ch ? '#ffd27a' : '#48382a'; c.fillRect(px + R(2), py + R(2), pw - R(4), pw - R(4)); } }
     const dx = kx + ds + gap, dy = ky + ds - dd;
     dial(2, dx, dy, dd, runIcon(me.cls), me.dashCd, C.cd, keyLbl.dash, '#6ad7ff');
     // dash charge pips (one per charge; C.charges when the sim grows more)

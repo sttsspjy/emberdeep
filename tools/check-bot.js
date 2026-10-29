@@ -108,7 +108,7 @@ ok(a.time >= 89 && a.time <= 91 && a.death === 'timeout' && a.ticks > 0, `maxTim
   const pick = (O) => { p.offer = O; const f = bot.think(w, p); p.offer = null; return f.pick ? O[f.pick - 1] : null; };
   const seq = [];
   for (let k = 0; k < 6; k++) {
-    const O = [0, 1, 2].filter(i => ws.pr[i] < 3).map(path).concat([card('passive', 'might'), card('skill', 'charge', 2)]);
+    const O = [0, 1, 2].filter(i => ws.pr[i] < 3).map(path).concat([card('passive', 'might'), card('skill', 'shove', 2)]);
     const c = pick(O); seq.push(c.kind === 'path' ? 'p' + c.path : c.kind); if (c.kind === 'path') ws.pr[c.path]++;
   }
   ok(seq.join(',') === 'p0,p0,p0,p1,p1,p1', 'one path to rank 3 (the Form path first), then a second: ' + seq.join(','));
@@ -116,7 +116,7 @@ ok(a.time >= 89 && a.time <= 91 && a.death === 'timeout' && a.ticks > 0, `maxTim
   const c2 = pick([path(0), path(1), path(2)]);
   ok(c2 && c2.path === 1, 'the path closest to rank 3 goes first: path ' + (c2 && c2.path));
   const f = pick([path(1), card('refine', 'whirlwind'), card('form', 'whirlwind'), card('passive', 'might')]), r = pick([path(1), card('refine', 'whirlwind'), card('passive', 'might')]);
-  const s = pick([card('passive', 'mending'), card('skill', 'charge', 2), card('passive', 'might', 2)]);
+  const s = pick([card('passive', 'mending'), card('skill', 'shove', 2), card('passive', 'might', 2)]);
   ok(f.kind === 'form' && r.kind === 'refine' && s.kind !== 'skill', `Form first (${f.kind}), then refine (${r.kind}); passives before the skill (${s.kind} ${s.id})`);
   const sid = ED.WEAPON_IDS.find(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved);
   if (sid) {

@@ -1,6 +1,6 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it. Never opens a visible window.
-// Usage: node tools/browse.js [smoke|shots|forms|crowdN|coop|botwatch ...] [--scen=a,b] [--cls=knight,...] [--form=id,...] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1]
-//                             [--software] [--quality=high|low] [--gate] [--ff=480] [--timeout=600]
+// Usage: node tools/browse.js [smoke|shots|forms|crowdN|coop|botwatch ...] [--scen=a,b] [--cls=knight,...] [--form=id,...] [--support=id,...|all] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1]
+//                             [--software] [--quality=high|low] [--gate] [--prof] [--ff=480] [--timeout=600]
 //   smoke: for each hero (--cls, default all 7) a solo stage-1 run driven ~--seconds (10) s (circling, aim at the nearest foe, Q / E, dash, first card picked); fails on a page or console error,
 //          a stalled sim, no Q or E cast, or a signature weapon that dealt nothing.
 //   shots: PNGs of title, hero select, stage select, camp, each hero mid-fight at --ff (480) s of sim (ED.Debug.fastForward, god cheat), a level-up overlay, a chest
@@ -11,8 +11,11 @@
 //   late[a|b|c]: staged late game for the render budget: a hero with its Form, every path at rank 3 and the Form refined (set a: knight whirlwind, b: ranger hail, c: pyro inferno),
 //          six max passives, clock 25:00, the stage boss and 900 last-roster foes held at real HP
 //          (about 1,000 kills/s); measures like crowdN plus own-zone count / coverage. --gate fails when Render.frame p95 > 4 ms on WebGL or > 8 ms on Canvas2D (GAME-DESIGN §13).
+//          --support=id,id: the first two named supports join as Forms, every path at rank 3. --prof (crowdN / late, chromium): a CPU profile over the measured window,
+//          the top 15 functions by self time in the notes.
 //   forms: one PNG per hero (--cls) x Form (--form=id,... filters): every path at rank 3, the Form refined twice, six max passives, clock 15:00, 400 last-roster foes held at
 //          real HP, no boss, --seconds (4) s of play; into a fresh folder <outdir>/forms-<stamp>-<browser>[-soft] (printed). Fails on a page / console error or a Form not taken.
+//          --support=id,... (support root or Form id; all: every support root): one PNG per hero Form x support, the support's Form (a root: its first Form) beside the hero's.
 //   coop: two pages of one browser context on ?net=local (BroadcastChannel transport): host + guest through the ED.Net lobby API (host, join, ready, start), then the real co-op
 //         run on both peers for --seconds (6) s: the guest's mirror shows 2 heroes and foes, snapshots <= 12 KB.
 //   botwatch: ?bot=1&speed=8&seed=--seed with the real tools/bot-brain.js; a knight solo run on stage 0 watched --seconds (20) s: fails on sim time < 3x real time (notes < 6x),
@@ -25,12 +28,12 @@
 const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
 
 // ---------------- arguments ----------------
-const FLAGS = { scen: 's', cls: 's', form: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', json: 'b', help: 'b' };
+const FLAGS = { scen: 's', cls: 's', form: 's', support: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', prof: 'b', json: 'b', help: 'b' };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
 const SCEN_RE = /^(smoke|shots|coop|botwatch|crowd\d{1,4}|late[abc]?|forms)$/;
 function parseArgs(argv) {
-  const o = { scen: '', cls: HEROES.join(','), form: '', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
+  const o = { scen: '', cls: HEROES.join(','), form: '', support: '', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
   const pos = [];
   for (const a of argv) {
     if (!a.startsWith('--')) { pos.push(a); continue; }
@@ -145,15 +148,19 @@ function pageBoot(cfg) {
       if (E.FX && E.FX.clear) E.FX.clear();
       return D.state();
     };
-    // Gives weapon or passive id to the local hero. Weapon: a root replaces the hero's weapon if needed and spends lvl - 1 path ranks (path 0 first; default all 9);
-    // a Form ranks the paths it needs, takes it and refines it fully. Passive: level lvl (default max).
+    // Gives weapon or passive id to the local hero. Weapon: a hero root replaces the hero weapon, a support root takes a free support slot (else replaces the last support);
+    // a root spends lvl - 1 path ranks (path 0 first; default all 9), a Form ranks the paths it needs, takes it and refines it fully. Passive: level lvl (default max).
     D.give = (id, lvl) => {
       const w = run(); if (!w) return null;
       const p = meOf(w);
       if (E.WEAPONS[id]) {
         const rid = E.weaponRoot(id), d = E.WEAPONS[id];
         let ws = p.weapons.find(x => x.root === rid);
-        if (!ws) { p.weapons.length = 0; ws = w.addWeapon(p, rid); }
+        if (!ws && E.WEAPONS[rid].support) {
+          const sup = p.weapons.filter(x => E.WEAPONS[x.root].support);
+          if (sup.length >= E.MAX_WEAPONS - 1) p.weapons.splice(p.weapons.indexOf(sup[sup.length - 1]), 1);
+          ws = w.addWeapon(p, rid);
+        } else if (!ws) { const sup = p.weapons.splice(0).filter(x => E.WEAPONS[x.root].support); ws = w.addWeapon(p, rid); p.weapons.push(...sup); }
         if (!ws) return null;
         if (d.form) {
           const f = E.weaponForms(rid).find(x => x.id === id);
@@ -532,7 +539,7 @@ async function scenCrowd(sc) {
     await call(page, 'start', 'knight', 0, { god: true });
     await call(page, 'hold', n);
     await wait(2000);
-    const m = await call(page, 'measure', secs * 1000);
+    const m = await profiled(page, res, () => call(page, 'measure', secs * 1000));
     res.rows.push(Object.assign({ quality: o.quality }, m));
     const gpu = !o.software && !m.soft && (m.batch !== '2d' || m.usePost);
     if (n >= 900) {
@@ -555,23 +562,25 @@ async function scenLate(sc) {
   try {
     res.notes.push(bootNote(info) + (o.software ? ', launched without GPU' : ''));
     await call(page, 'settings', o.quality);
+    const sups = o.support ? (await supportForms(page, o.support)).slice(0, 2) : [];
     await call(page, 'start', LATE[set][0], 0, { god: true });
     await wait(500);
-    const prep = await page.evaluate((F) => {
+    const prep = await page.evaluate(([F, SF]) => {
       const E = window.ED, D = E.Debug, w = E.Game.w, p = w.heroes[0];
       D.give(F, 1);
       const ws = p.weapons[0];
       if (ws) { for (let i = 0; i < 3; i++) while (w.rankPath(p, ws, i)); }
+      for (const id of SF) { D.give(id); const s = p.weapons.find(x => x.id === id); if (s) for (let i = 0; i < 3; i++) while (w.rankPath(p, s, i)); }
       for (const id of ['might', 'reach', 'duration', 'multishot', 'haste', 'velocity']) D.give(id, 99);
       D.setTime(1500);
       const boss = D.spawnBoss();
-      return { weapons: p.weapons.map(x => x.id + ':' + x.pr.join('') + 'r' + x.fl), form: !!(ws && ws.id === F), passives: p.passives.length, boss };
-    }, LATE[set][1]);
+      return { weapons: p.weapons.map(x => x.id + ':' + x.pr.join('') + 'r' + x.fl), form: !!(ws && ws.id === F), sups: SF.every(id => p.weapons.some(x => x.id === id)), passives: p.passives.length, boss };
+    }, [LATE[set][1], sups]);
     res.notes.push('staged: ' + LATE[set][0] + ' ' + prep.weapons.join(',') + ', ' + prep.passives + ' passives' + (prep.boss ? ', boss' : ', no boss'));
-    if (!prep.form || prep.passives < 6) fail(res, 'staging gave form ' + prep.form + ', ' + prep.passives + ' of 6 passives');
+    if (!prep.form || !prep.sups || prep.passives < 6) fail(res, 'staging gave form ' + prep.form + ', supports ' + prep.sups + ', ' + prep.passives + ' of 6 passives');
     await call(page, 'hold', 900, true);
     await wait(2500);
-    const m = await call(page, 'measure', secs * 1000);
+    const m = await profiled(page, res, () => call(page, 'measure', secs * 1000));
     const z = await page.evaluate(() => { const B = window.ED.Batch; return { n: B.zoneN, load: +B.zoneLoad.toFixed(2), lite: B.zoneLite, union: B.zoneUnion }; });
     res.rows.push(Object.assign({ quality: o.quality }, m));
     const lim = m.batch === 'gl' ? 4 : 8, over = m.render.p95 > lim;
@@ -585,6 +594,29 @@ async function scenLate(sc) {
   return res;
 }
 
+// Runs fn; with --prof on chromium records a CPU profile meanwhile and notes the top 15 functions by self time (ms over the window, file:line).
+async function profiled(page, res, fn) {
+  if (!S.opt.prof || S.opt.browser !== 'chromium') return fn();
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 200 }); await cdp.send('Profiler.start');
+  const out = await fn();
+  const { profile } = await cdp.send('Profiler.stop');
+  const self = new Map(), byId = new Map(profile.nodes.map(n => [n.id, n])), dt = profile.timeDeltas || [];
+  (profile.samples || []).forEach((id, i) => { const n = byId.get(id), f = n.callFrame, k = (f.functionName || '(anon)') + ' ' + (f.url || '').split('/').pop() + ':' + (f.lineNumber + 1); self.set(k, (self.get(k) || 0) + (dt[i] || 0) / 1000); });
+  [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).forEach(([k, ms]) => res.notes.push('prof ' + ms.toFixed(0).padStart(6) + ' ms  ' + k));
+  await cdp.detach();
+  return out;
+}
+// Support Form ids named by spec ('all': every support root; a root: its first Form) on a booted page. Throws when none.
+async function supportForms(page, spec) {
+  const ids = await page.evaluate((a) => {
+    const E = window.ED, roots = a === 'all' ? E.WEAPON_IDS.filter(id => E.WEAPONS[id].support && !E.WEAPONS[id].evolved) : a.split(',').map(x => x.trim());
+    return roots.map(id => (E.WEAPONS[id] && !E.WEAPONS[id].evolved ? (E.weaponForms(id)[0] || {}).id : id)).filter(id => id && E.WEAPONS[id] && E.WEAPONS[id].support);
+  }, spec);
+  if (!ids.length) throw new Fail('--support names no support weapon');
+  return ids;
+}
+
 async function scenForms() {
   const o = S.opt, res = newResult('forms'), secs = o.seconds || 4, only = o.form ? o.form.split(',').map(x => x.trim()) : null;
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
@@ -595,28 +627,32 @@ async function scenForms() {
   try {
     res.notes.push(bootNote(info) + (o.software ? ', launched without GPU' : ''));
     await call(page, 'settings', o.quality);
+    const sups = o.support ? await supportForms(page, o.support) : [''];
     for (const cls of o.classes) {
       const forms = await page.evaluate((c) => { const E = window.ED; return E.weaponForms(E.HEROES[c].sig).map(f => f.id); }, cls);
-      for (const fid of forms) {
+      for (const fid of forms) for (const sid of sups) {
         if (only && !only.includes(fid)) continue;
         await call(page, 'start', cls, 0, { god: true });
         await wait(300);
-        const prep = await page.evaluate((F) => {
+        const prep = await page.evaluate(([F, SF]) => {
           const E = window.ED, D = E.Debug, w = E.Game.w, p = w.heroes[0], ws = p.weapons[0];
           for (let i = 0; i < 3; i++) while (w.rankPath(p, ws, i));
           w.takeForm(p, ws, F);
           for (let i = 0; i < 2; i++) w.refineForm(p, ws);
+          if (SF) D.give(SF);
           for (const id of ['might', 'reach', 'duration', 'multishot', 'haste', 'velocity']) D.give(id, 99);
           D.setTime(900);
           w.recalc(p, false);
-          return { id: ws.id, pr: ws.pr.join(''), fl: ws.fl, passives: p.passives.length };
-        }, fid);
-        if (prep.id !== fid) fail(res, `${cls}: Form ${fid} not taken (holds ${prep.id})`);
+          const s = SF ? p.weapons.find(x => x.id === SF) : null;
+          return { id: ws.id, pr: ws.pr.join(''), fl: ws.fl, passives: p.passives.length, sup: s ? s.id + ':' + s.pr.join('') + 'r' + s.fl : '', first: p.weapons[0] === ws, held: p.weapons.map(x => x.id).join('+') };
+        }, [fid, sid]);
+        if (prep.id !== fid || !prep.first) fail(res, `${cls}: Form ${fid} not taken (holds ${prep.id})`);
+        if (sid && !prep.sup) fail(res, `${cls}: support Form ${sid} not taken`);
         await call(page, 'hold', 400, true);
         await wait(secs * 1000);
-        await shoot(page, res, `${cls}-${fid}`, dir);
+        await shoot(page, res, `${cls}-${fid}` + (sid ? '+' + sid : ''), dir);
         const looks = await page.evaluate(() => { const v = window.ED.Game.view, n = {}; for (const z of v.zones) if (!z.dead) n[z.k] = (n[z.k] || 0) + 1; for (const q of v.projs) if (!q.dead) n['p:' + q.k] = (n['p:' + q.k] || 0) + 1; return Object.entries(n).map(([k, c]) => k + ' ' + c).join(', '); });
-        res.rows.push(Object.assign({ cls, form: fid, pr: prep.pr, fl: prep.fl, passives: prep.passives, looks }, await dbg(page, 'state')));
+        res.rows.push(Object.assign({ cls, form: fid, sup: prep.sup, held: prep.held, pr: prep.pr, fl: prep.fl, passives: prep.passives, looks }, await dbg(page, 'state')));
         await call(page, 'stop');
         await wait(150);
       }

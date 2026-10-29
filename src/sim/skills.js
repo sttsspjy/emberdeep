@@ -13,10 +13,10 @@
   ED.addSkill = (def, cast) => { ED.SKILLS[def.id] = def; ED.CAST[def.id] = cast; return def; };
   ED.skillMaxLvl = (def) => 1 + (def.levels ? def.levels.length : 0);
 
-  // Skill numbers of slot i (cached until stats, skill level or party level change).
-  W.skillN = function (p, i) { const sk = p.skills[i]; return sk.N && sk.Nv === p.statsV && sk.Nl === sk.lvl && sk.Np === this.level ? sk.N : ED.Stats.skill(p, i, this.level); };
+  // Skill numbers of slot i (cached until stats or skill level change).
+  W.skillN = function (p, i) { const sk = p.skills[i]; return sk.N && sk.Nv === p.statsV && sk.Nl === sk.lvl ? sk.N : ED.Stats.skill(p, i); };
 
-  // Charges (N.charges > 1): sk.ch stored casts, sk.rc recharge timer (one charge per N.cd s while not full), sk.gp gap after a cast (GAP s).
+  // Charges (N.charges > 1): sk.chN = N.charges (0 when single), sk.ch stored casts, sk.rc recharge timer (one charge per N.cd s while not full), sk.gp gap after a cast (GAP s).
   // sk.cd / sk.cdMax (wire + HUD dial) = time until the next cast: the gap while a charge is stored, else the recharge. A slot turning multi-charge while ready starts full, else its running cooldown becomes the first recharge.
   const GAP = 0.3;
   const charge = (sk, cd, max, dt) => {
@@ -38,6 +38,7 @@
       this.vclamp = p;
       for (let i = 0; i < p.skills.length; i++) {
         const sk = p.skills[i], N = this.skillN(p, i), max = N.charges | 0;
+        sk.chN = max > 1 ? max : 0;
         if (max > 1) charge(sk, N.cd, max, dt); else if (sk.cd > 0) sk.cd -= dt;
         if (i > 0 || !I.q || sk.cd > 0) continue;
         const fn = ED.CAST[sk.id]; if (!fn) continue;

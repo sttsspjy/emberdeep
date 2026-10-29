@@ -24,16 +24,19 @@ function pickIdx(p) {
   if (k < 0) { let best = -1; O.forEach((c, i) => { if (c.kind === 'path' && c.lvl > best) { best = c.lvl; k = i; } }); }
   return (k < 0 ? 0 : k) + 1;
 }
-// Scripted player: circles, aims 80 px ahead, Q every 7 s, E pressed every 11 s (unbound), dash every 5 s (phase per slot), picks by pickIdx. seek: walks to the nearest chest within 700 px first.
+// Scripted player: circles, aims at the nearest foe in its view (else 80 px ahead), Q every 7 s, E pressed every 11 s (unbound), dash every 5 s (phase per slot), picks by pickIdx. seek: walks to a living boss outside its view, else the nearest chest within 700 px.
 function drive(w, p, tick, seek) {
   const t = tick / 60, a = t * 0.7 + p.slot * 1.6;
   let mx = Math.cos(a), my = Math.sin(a);
   if (seek) {
     let bd = 700 * 700, ch = null;
     for (const g of w.pickups) if (!g.dead && g.k === 'chest') { const d = U.dist2(p.x, p.y, g.x, g.y); if (d < bd) { bd = d; ch = g; } }
-    if (ch) { const d = Math.sqrt(bd) || 1; mx = (ch.x - p.x) / d; my = (ch.y - p.y) / d; }
+    const b = w.bossList.find(x => !x.dead && !ED.inView(p, x.x, x.y, x.r));
+    if (b) ch = b;
+    if (ch) { const d = Math.hypot(ch.x - p.x, ch.y - p.y) || 1; mx = (ch.x - p.x) / d; my = (ch.y - p.y) / d; }
   }
-  w.input(p.pid, { mx, my, ax: p.x + mx * 80, ay: p.y + my * 80, q: tick % 420 === 30 + p.slot * 7, e: tick % 660 === 60 + p.slot * 7, dash: tick % 300 === 90 + p.slot * 13, pick: pickIdx(p) });
+  const e = w.heroFoe(p, 600);
+  w.input(p.pid, { mx, my, ax: e ? e.x : p.x + mx * 80, ay: e ? e.y : p.y + my * 80, q: tick % 420 === 30 + p.slot * 7, e: tick % 660 === 60 + p.slot * 7, dash: tick % 300 === 90 + p.slot * 13, pick: pickIdx(p) });
 }
 // Cheat build for hero p: six passives at max level (the level-up pool is then paths, Forms, refines and the skill); the weapon starts unranked. Returns the weapon's root id.
 function cheatBuild(w, p) {

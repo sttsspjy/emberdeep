@@ -28,7 +28,10 @@ Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with th
 - Weapon ids are wire / save keys: addWeapon throws on a duplicate (Ranger's hybrid once overwrote Knight's gale).
 - One weapon per hero: forms swap ws.id; root via ED.weaponRoot; path mods keep applying after a Form.
 - Hero damage only inside the hero's view (ED.inView in hitFoe + targeting via w.vclamp).
-- Stats.skill computes weaponMul before sumLevels (shared SUM scratch).
+- Q skills are zero damage: no dmg in skill base / levels / N.
+- Hero statuses, knock and zone effects land only on foes in the hero's view (combat.js seen; zoneFoes filters hero zones).
+- Supports are save keys in Save.SEEN_WEAPONS: append only.
+- Support Forms (all 3 paths share one Form): ready when any path in f.any is at rank 3; f.need holds only the first.
 - Sim/data/heroes/weapons/save run in Node: no DOM, no Math.random/Date.now; use w.rng.
 - Script order twice: index.html and tools/sim.js FILES.
 - Pooled entities are reused under new ids: holders keep object + id and compare.
