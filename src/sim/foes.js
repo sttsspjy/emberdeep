@@ -1,7 +1,7 @@
 // Foe pool, spawn, per-tick update (statuses, knockback, brain, contact), kill and drops, elites, off-screen recycling (GAME-DESIGN §7).
 // Foe fields: ARCHITECTURE §4 plus internal ones: tgt (nearest living hero, retargeted every RETARGET ticks staggered by id), cd (contact cooldown), age, invulnT, takeMul (damage taken factor),
 // scale (draw scale), final (final boss), rushT / rx / ry (stampede or closing ring: fixed heading), burnTick, hev / hevT (hit aggregation), enraged,
-// acd (attack cooldown), aa (locked attack angle), tz / tzId (the brain's live telegraph zone; ai.js). No per-foe allocation: pooled objects carry every field.
+// acd (attack cooldown), aa (locked attack angle), tz / tzId (the brain's live telegraph zone; ai.js), ovT / ovK / ovX / ovY / ovP (skill override: flee or lure, ai.js). No per-foe allocation: pooled objects carry every field.
 (function (ED) {
   'use strict';
   const U = ED.U, W = ED.World.prototype;
@@ -14,6 +14,8 @@
   W.foeDmgK = function () { return (1 + 1.2 * Math.min(1, this.time / 900)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
   // Foe HP at the current time: base x (1 + 0.24 x minutes) x party factor x the stage HP factor.
   W.foeHp = function (base) { return base * (1 + 0.24 * this.time / 60) * this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1); };
+  // Walk speed factor of foes spawned now: 0.8 at 0:00 rising to 1 at 4:00; fixed at spawn, bosses exempt, telegraphed dashes keep their own speed.
+  W.foePace = function () { return 0.8 + 0.2 * Math.min(1, this.time / 240); };
   // Boss HP for a boss due at t s (GAME-DESIGN §8): 1500 x (minute / 5)^2.5 (1500 / 8485 / 23383 at 5 / 10 / 15 min) x party factor x the stage HP factor.
   ED.bossHp = (t, k) => Math.round(1500 * Math.pow(t / 300, 2.5) * k); // boss HP at spawn time t s; k = party x stage HP factor (GAME-DESIGN §8)
   W.bossHp = function (t) { return ED.bossHp(t, this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1)); };
@@ -25,20 +27,21 @@
     const e = this.foePool.pop() || {};
     e.id = this.nextId(); e.k = def.idx; e.def = def; e.x = x; e.y = y; e.vx = 0; e.vy = 0; e.r = def.r;
     e.maxHp = e.hp = Math.max(1, Math.round(this.foeHp(def.hp) * ((opts && opts.hpMul) || 1))); e.hpQ = 255;
-    e.dmg = this.contactDmg() * def.dmg; e.spd = def.spd; e.kbx = 0; e.kby = 0; e.face = 1; e.flash = 0; e.st = 0; e.stT = 0;
+    e.dmg = this.contactDmg() * def.dmg; e.spd = def.boss ? def.spd : def.spd * this.foePace(); e.kbx = 0; e.kby = 0; e.face = 1; e.flash = 0; e.st = 0; e.stT = 0;
     e.elite = false; e.boss = !!def.boss; e.final = false; e.enraged = false;
     e.slowT = 0; e.slowK = 0; e.burnT = 0; e.burnDps = 0; e.burnOwner = null; e.burnTick = 0.5; e.stunT = 0; e.freezeT = 0;
     e.hitT = 0; e.vars = null; e.tgt = null; e.cd = 0; e.age = 0; e.invulnT = 0; e.takeMul = def.take || 1; e.scale = def.scale || 1; e.hev = 0; e.hevT = -1;
     e.rushT = 0; e.rx = 0; e.ry = 0; e.acd = 0.6 + (e.id % 7) * 0.2; e.aa = 0; e.tz = null; e.tzId = 0; e.dead = false;
+    e.ovT = 0; e.ovK = 0; e.ovX = 0; e.ovY = 0; e.ovP = null; e.brI = 0; e.brT = 0;
     if (opts && opts.rush) { e.rushT = opts.rush[2] || 6; e.rx = opts.rush[0]; e.ry = opts.rush[1]; }
     if (opts && opts.elite) this.promoteElite(e);
     this.foes.push(e);
     return e;
   };
-  // Elite: 2x size, 25x HP, x1.5 contact damage; drops a chest (GAME-DESIGN §7). Brains widen its attacks (ai.js).
+  // Elite: 2x size, 15x HP, x1.5 contact damage; drops a chest (GAME-DESIGN §7). Brains widen its attacks (ai.js).
   W.promoteElite = function (e) {
     e.elite = true; e.r = e.def.r * 2; e.scale = (e.def.scale || 1) * 2;
-    e.maxHp = e.hp = Math.round(e.hp * 25); e.dmg *= 1.5;
+    e.maxHp = e.hp = Math.round(e.hp * 15); e.dmg *= 1.5;
   };
 
   // Moves e toward (tx, ty) at its speed x mul (slow applied), sliding around obstacles; sets face and vx/vy. Returns the distance to the target before the step.
@@ -96,7 +99,8 @@
         e.x += e.vx * dt; e.y += e.vy * dt; e.face = e.rx < 0 ? -1 : 1;
         if (e.x < -60 || e.y < -60 || e.x > A.size + 60 || e.y > A.size + 60) e.rushT = 0;
         ED.Arena.collide(A, e, e.r);
-      } else if (tg) {
+      } else if (e.ovT > 0) ED.AI.override(this, e, dt);
+      else if (tg) {
         const brain = ED.AI[e.def.ai] || ED.AI.chaser;
         brain(this, e, dt);
       }

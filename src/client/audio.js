@@ -236,6 +236,9 @@
   wpn('ricochet', 0.14,
     (s) => { s.N('bandpass', 1900, 1300, 0.03, 1, 5); s.T('triangle', 760, 520, 0.045, 0.4); s.T('sine', 200, 120, 0.05, 0.3); },
     (s) => { for (let i = 0; i < 4; i++) { s.N('bandpass', rnd(1500, 2400), 1100, 0.03, 0.8, 5, i * 0.05); s.T('triangle', rnd(600, 800), 450, 0.04, 0.3, i * 0.05); } s.N('lowpass', 400, 80, 0.35, 0.6, 1, 0, 0.05); }, { g: 0.42 });
+  wpn('waraxe', 0.3,
+    (s) => { s.N('bandpass', 300, 1100, 0.2, 0.8, 1.3, 0, 0.04); for (let i = 0; i < 3; i++) s.N('bandpass', 900 + i * 150, 600, 0.05, 0.4, 3, 0.04 + i * 0.07); s.T('sine', 130, 60, 0.12, 0.45); s.T('sawtooth', 95, 70, 0.15, 0.08, 0, 0.03); },
+    (s) => { s.N('bandpass', 260, 1000, 0.25, 0.9, 1.2, 0, 0.05); for (let i = 0; i < 4; i++) s.N('bandpass', 800 + i * 140, 550, 0.05, 0.45, 3, 0.04 + i * 0.06); thunk(s, 0.22, 0.7); [0.26, 0.29, 0.32].forEach((x) => clack(s, x, 0.45)); }, { g: 0.38 });
   // generic fallbacks for weapons no keyword matches
   wpn('proj', 0.16, (s) => { s.T('triangle', rnd(800, 950), 300, 0.08, 0.5); s.N('highpass', 3000, 1500, 0.05, 0.3); }, (s) => { s.T('triangle', rnd(700, 850), 250, 0.12, 0.5); s.N('highpass', 2500, 6000, 0.15, 0.4, 0.7); s.T('sine', 140, 70, 0.08, 0.3); });
   wpn('melee', 0.2, (s) => { s.N('bandpass', 700, 2400, 0.12, 1, 1.5, 0, 0.03); s.T('sine', 160, 80, 0.08, 0.3, 0.05); }, (s) => { s.N('bandpass', 500, 2600, 0.18, 1, 1.4, 0, 0.04); s.T('sine', 120, 50, 0.15, 0.5, 0.08); });
@@ -243,17 +246,23 @@
 
   // ---- hero skills: 'k.<id>' (k.q / k.e fallbacks); they must sound huge ----
   const skill = (id, d, f, o) => def('k.' + id, Object.assign({ d, n: 1, g: 0.8, cap: 2, gap: 0.2, pr: 3, rv: 0.35 }, o), f);
-  skill('charge', 0.5, (s) => {
-    s.N('bandpass', 260, 2400, 0.36, 1, 1.1); s.T('sawtooth', 70, 190, 0.32, 0.3); s.T('sine', 120, 48, 0.16, 1);
-    [[1450, 0.03], [1700, 0.11], [1250, 0.19]].forEach(([f, x]) => s.T('square', f, f * 0.7, 0.05, 0.15, x)); s.N('highpass', 3800, 2000, 0.07, 0.3, 0.7, 0.02);
+  skill('shove', 0.6, (s) => {
+    s.T('sine', 120, 40, 0.3, 1); s.N('bandpass', 300, 1400, 0.32, 0.9, 1.1); s.N('lowpass', 1500, 100, 0.45, 0.6, 0.8, 0.03);
+    [[1450, 0.02], [1150, 0.09]].forEach(([f, x]) => s.T('square', f, f * 0.7, 0.06, 0.18, x)); s.N('highpass', 3000, 1800, 0.2, 0.3, 0.7, 0.05);
   });
-  skill('volley', 2.1, (s) => {
-    s.T('triangle', 430, 190, 0.2, 0.4); s.N('bandpass', 700, 300, 0.07, 0.5, 2); s.N('highpass', 2200, 6500, 0.28, 0.6, 0.6); s.T('sine', 150, 70, 0.1, 0.4);
-    for (let i = 0; i < 5; i++) s.N('bandpass', 2600 + i * 400, 1200, 0.1, 0.18, 3, 0.015 * i);
-    s.N('highpass', 3000, 5000, 1.5, 0.25, 0.7, 0.25, 0.3); for (let i = 0; i < 14; i++) s.T('sine', rnd(190, 250), 85, 0.06, rnd(0.15, 0.3), rnd(0.35, 2));
-  }, { g: 1 });
-  skill('meteor', 0.6, (s) => { s.T('sine', 2400, 300, 0.5, 0.4, 0, 0.02); s.N('bandpass', 4000, 300, 0.5, 0.6, 1.4, 0, 0.05); s.N('lowpass', 300, 900, 0.3, 0.5, 1, 0.1, 0.2); }, { rv: 0.2 });
-  skill('corpseblast', 0.8, (s) => { s.T('sine', 160, 35, 0.5, 1); s.N('lowpass', 2000, 80, 0.6, 0.9, 0.8); for (let i = 0; i < 8; i++) s.N('bandpass', rnd(600, 2000), 400, 0.03, 0.5, 2, rnd(0, 0.2)); s.N('bandpass', 600, 200, 0.3, 0.5, 4, 0.02); });
+  skill('vault', 0.7, (s) => {
+    s.N('highpass', 1500, 5000, 0.3, 0.5, 0.7, 0, 0.04); s.T('sine', 300, 900, 0.25, 0.22, 0, 0.03);
+    s.T('sine', 110, 45, 0.25, 0.9, 0.32); s.N('lowpass', 1200, 120, 0.3, 0.6, 0.8, 0.32); s.F(1320, 1.5, 1, 0.3, 0.12, 0.36);
+  });
+  skill('flashpoint', 0.7, (s) => {
+    s.N('bandpass', 4000, 300, 0.5, 0.7, 1.2, 0, 0.01); s.T('sine', 1800, 200, 0.3, 0.35);
+    s.N('lowpass', 400, 80, 0.55, 0.8, 1); s.T('sine', 90, 35, 0.45, 0.8);
+  }, { rv: 0.3 });
+  skill('bonewall', 0.9, (s) => {
+    s.N('lowpass', 300, 900, 0.5, 0.6, 1, 0, 0.1); s.T('sine', 70, 140, 0.45, 0.5, 0, 0.1);
+    for (let i = 0; i < 10; i++) s.N('bandpass', rnd(900, 2400), 600, 0.03, 0.4, 3, rnd(0, 0.45));
+    s.T('sine', 60, 40, 0.3, 0.6, 0.45);
+  });
   skill('sanctuary', 1.4, (s) => { [523, 659, 784, 1046].forEach((f, i) => s.T('sine', f, f * 1.002, 1, 0.25, i * 0.06, 0.15)); s.F(1046, 2, 1, 1, 0.2); s.N('highpass', 6000, 8000, 1, 0.15, 0.8, 0.1, 0.3); s.T('sine', 131, 131, 1, 0.3, 0, 0.2); });
   skill('step', 0.6, (s) => { s.N('highpass', 6000, 1000, 0.08, 0.8, 0.7, 0, 0.12); s.T('sine', 1800, 300, 0.12, 0.3, 0, 0.1); s.N('bandpass', 700, 300, 0.3, 0.4, 1.2, 0.2); s.T('sine', 110, 60, 0.2, 0.6, 0.22); });
   skill('peal', 2.8, (s) => {
@@ -401,7 +410,7 @@
     else c = C['w.' + famOf(wid, d)];
     return (WC[wid] = c || C['w.proj']);
   };
-  const SKEY = [['charge', 'charge'], ['volley', 'volley'], ['rain', 'volley'], ['meteor', 'meteor'], ['corpse', 'corpseblast'], ['sanctu', 'sanctuary'], ['step', 'step'], ['blink', 'step'], ['peal', 'peal']];
+  const SKEY = [['shove', 'shove'], ['bulwark', 'shove'], ['vault', 'vault'], ['leap', 'vault'], ['flash', 'flashpoint'], ['bone', 'bonewall'], ['wall', 'bonewall'], ['sanctu', 'sanctuary'], ['step', 'step'], ['blink', 'step'], ['peal', 'peal']];
   const SC = {};
   const scue = A.scue = (id, slot) => {
     let c = SC[id];
@@ -467,7 +476,7 @@
       case 'heal': if (mine && ev.v >= 8) { pp = 0; agg(C.heal, 0.8, 2); } break;
       case 'level': pp = 0; agg(C.level, 1, 3); A.duck(0.5, 0.9); break;
       case 'offer': if (mine) { pp = 0; agg(ev.reroll ? C.reroll : C.offer, 1, 3); } break;
-      case 'pick': if (mine) { pp = 0; const k = ev.kind; agg(C[k === 'form' ? 'pick.weapon' : k === 'path' || k === 'refine' || k === 'plvl' ? 'pick.up' : k === 'passive' ? 'pick.passive' : k === 'skill' ? 'pick.skill' : 'pick.misc'], k === 'skip' ? 0.5 : 1, 3); } break;
+      case 'pick': if (mine) { pp = 0; const k = ev.kind; agg(C[k === 'form' || k === 'support' ? 'pick.weapon' : k === 'path' || k === 'refine' || k === 'plvl' ? 'pick.up' : k === 'passive' ? 'pick.passive' : k === 'skill' ? 'pick.skill' : 'pick.misc'], k === 'skip' ? 0.5 : 1, 3); } break;
       case 'evolve': aggHero(C.evolve, ev.pid, mine, mine ? 1 : 1.6); if (mine) A.duck(0.35, 2); break;
       case 'hurt': if (mine) { pp = 0; agg(C.hurt, Math.min(1.3, 0.7 + (ev.dmg || 5) / 25), 3); } else agg(C.hurt, 0.25 * posGain(ev.x, ev.y), 0); break;
       case 'down': aggHero(C.down, ev.pid, mine, mine ? 1 : 2); break;

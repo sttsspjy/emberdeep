@@ -3,7 +3,7 @@
 // 2. Every path rank changes the numbers and the pattern it promises (probe scene: a held ring of foes, pillars / leaps / aura / censers / beams counted).
 // 3. Forms: each is ready exactly under its rule (pure: its path at 3; hybrid: both paths at 3; none once one is taken) and fires its own pattern.
 // 4. Healing: the Censer aura heals an ally inside, Consecration ground heals a hero standing in it. 5. View clamp: no damage on foes outside the hero's view.
-// 6. Sanctuary at every level: heal, ward, revive, rain. 7. Determinism: a 30 s maxed run per Form twice gives the same digest.
+// 6. Sanctuary at every level: zero damage; heal, ward, revive, stunning rain. 7. Determinism: a 30 s maxed run per Form twice gives the same digest.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
@@ -140,16 +140,19 @@ function probe(ranks, form) {
   for (let L = 1; L <= 4; L++) {
     const w = world(['cleric', 'knight']), [c, k] = w.heroes;
     k.x = c.x + 100; k.y = c.y; k.hp = 40; ring(w, k.x, k.y, 10, 30, 200);
+    c.weapons.length = 0; k.weapons.length = 0; // skill only
     cast(w, c, k.x, k.y, L);
     const z = w.zones.find(q => q.k === 'sanct');
-    let rain = 0; const seen = new Set();
-    step(w, 1, () => { for (const q of w.zones) if (q.wid === 'sanctuary' && q.k === 'smite' && !seen.has(q.id)) { seen.add(q.id); rain++; } });
+    let rain = 0, stun = 0; const seen = new Set();
+    step(w, 1, () => { for (const q of w.zones) if (q.wid === 'sanctuary' && q.k === 'smite' && !seen.has(q.id)) { seen.add(q.id); rain++; } for (const e of w.foes) if (e.stunT > 0) stun++; });
     step(w, 2);
     let far = 0; for (const e of w.foes) if (!e.dead && U.dist(e.x, e.y, k.x, k.y) > 60) far++;
     if (L === 1) ok(far <= 3, `sanctuary L1: no ward, foes walk back in after the burst (${far}/10 beyond 60 px)`);
     ok(!!z && k.hp >= 44 && c.skills[0].cd >= 6, `sanctuary L${L}: cast, ally healed to ${k.hp.toFixed(0)}, cooldown ${c.skills[0].cd.toFixed(1)} s, r ${z ? z.r.toFixed(0) : '-'}, ${z ? z.dur.toFixed(1) : '-'} s`);
     if (L >= 2) ok(far >= 8, `sanctuary L${L}: wards foes out (${far}/10 beyond 60 px)`);
-    ok(L >= 4 ? rain >= 3 : rain === 0, `sanctuary L${L}: rain pillars ${rain}`);
+    ok(L >= 4 ? rain >= 3 && stun > 0 : rain === 0 && stun === 0, `sanctuary L${L}: rain pillars ${rain}, stun foe-ticks ${stun}`);
+    const hurt = w.foes.filter(e => e.hp < e.maxHp).length;
+    ok(hurt === 0 && !(c.dealt.sanctuary > 0), `sanctuary L${L}: zero damage (hurt ${hurt}, dealt ${c.dealt.sanctuary || 0})`);
   }
   for (const L of [2, 3]) {
     const w = world(['cleric', 'knight'], 5, false), [c, k] = w.heroes;

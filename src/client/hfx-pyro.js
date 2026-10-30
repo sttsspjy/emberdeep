@@ -1,5 +1,5 @@
-// Pyro visuals (loaded after fx.js): ED.WeaponFx for firebolt / inferno / firestorm / wildfire / pyre / napalm and the Meteor skill.
-// Zones dispatch on the look z.k: firepool, crater, pyre (charging fuse), napalm (fire line, z.len / z.w), shell / bomblet (lob from z.a / z.w), meteor / echo (falling rock, core rumble).
+// Pyro visuals (loaded after fx.js): ED.WeaponFx for firebolt / inferno / firestorm / wildfire / pyre / napalm and the Flashpoint skill.
+// Zones dispatch on the look z.k: firepool, pyre (charging fuse), napalm (fire line, z.len / z.w), shell / bomblet (lob from z.a / z.w), flash (Flashpoint).
 // Projectiles dispatch on pr.k: fireball, ember, seed. Everything derives from render-visible fields and view time; per-zone variation from U.hash3(z.id, i, ...).
 (function (ED) {
   'use strict';
@@ -8,8 +8,6 @@
   const o = (alpha, sc, rot, add) => { O.flip = false; O.flash = 0; O.alpha = alpha; O.rot = rot || 0; O.sx = O.sy = sc || 1; O.tint = 0; O.add = !!add; return O; };
   const H = (a, b, c) => U.hash3(a, b, c) / 4294967296;
   const A = () => ED.Atlas;
-  const nf = (id) => { const r = A().anim(id); return r ? r.n : 1; };
-  const at = (id, k) => Math.max(0, Math.min(nf(id) - 1, Math.floor(k * nf(id))));
   const rgba = (rgb, a) => (((rgb & 0xffffff) << 8) | (U.clamp(Math.round(a), 0, 255))) >>> 0;
   const life = (z, fin, fout) => Math.max(0, Math.min(1, z.t / (fin || 0.12), (z.dur - z.t) / (fout || 0.3)));
   const part = (x, y, vx, vy, l, col, sz) => { if (ED.FX && ED.FX.part) ED.FX.part(x, y, vx, vy, l, col, sz); };
@@ -23,28 +21,20 @@
   };
 
   // ---------------- ground fire ----------------
-  // Fire pool / crater: scorch disc, hot core, thin rim, flickering flames scattered inside (count by area), rising sparks. Crater: an explosion cluster while young.
-  function firePool(B, z, t, crater) {
+  // Fire pool: scorch disc, hot core, thin rim, flickering flames scattered inside (count by area), rising sparks.
+  function firePool(B, z, t) {
     const k = life(z, 0.15, 0.5), r = z.r, lite = B.zoneLite;
     if (r < 1 || k <= 0) return true;
-    if (lite) { B.zcirc(z.x, z.y, r, rgba(crater ? 0x5a1a08 : 0x8a2a0c, 110 * k), 0); B.zcirc(z.x, z.y, r, rgba(0xff8a3d, 150 * k), 1); }
+    if (lite) { B.zcirc(z.x, z.y, r, rgba(0x8a2a0c, 110 * k), 0); B.zcirc(z.x, z.y, r, rgba(0xff8a3d, 150 * k), 1); }
     else {
-      B.circ(z.x, z.y, r, rgba(crater ? 0x2a0c04 : 0x4a1a08, 120 * k), 0);
+      B.circ(z.x, z.y, r, rgba(0x4a1a08, 120 * k), 0);
       B.circ(z.x, z.y, r * 0.7, rgba(0xff6a1a, 46 * k), 0);
       B.circ(z.x, z.y, r, rgba(0xff8a3d, 150 * k), 1);
     }
-    const n = lite ? 0 : U.clamp(Math.round(r * r / 150), 3, crater ? 22 : 18);
+    const n = lite ? 0 : U.clamp(Math.round(r * r / 150), 3, 18);
     for (let i = 0; i < n; i++) {
       const a = H(z.id, i, 1) * TAU, d = Math.sqrt(H(z.id, i, 2)) * r * 0.85;
       B.spr('fx.flame', A().frameAt('fx.flame', t + i * 0.137), z.x + Math.cos(a) * d, z.y + Math.sin(a) * d * 0.9 + 4, o(k, 1 + (H(z.id, i, 3) > 0.6 ? 1 : 0), 0, true));
-    }
-    if (crater && z.t < 0.5) {
-      kick(z, 5);
-      const m = U.clamp(Math.round(r / 10), 2, 6);
-      for (let i = 0; i < m; i++) {
-        const a = H(z.id, i, 5) * TAU, d = (i ? 0.3 + 0.6 * H(z.id, i, 6) : 0) * r, kk = (z.t - i * 0.04) / 0.45;
-        if (kk > 0 && kk < 1) B.spr('fx.explosion', at('fx.explosion', kk), z.x + Math.cos(a) * d, z.y + Math.sin(a) * d - 6, o(1, i ? 1 : 2, 0, true));
-      }
     }
     if (!lite && Math.random() < 0.12 * k) part(z.x + (Math.random() - 0.5) * r, z.y + (Math.random() - 0.5) * r, 0, -30, 0.4, 0xffb04aff, 1);
     return true;
@@ -102,31 +92,28 @@
     B.circ(P2[0], P2[1], sz, 0x2e2a28ff, 0);
     return true;
   }
-  // Meteor: a falling rock (fireball sprite, ember trail) over a target disc that darkens as it nears; echo: the core rumbles (cracks of light, shaking flames) before it erupts.
-  function meteor(B, z, t) {
-    const k = U.clamp(z.t / z.dur, 0, 1), fy = (1 - k) * (1 - k) * 220, fx = (1 - k) * 60;
-    B.circ(z.x, z.y, z.r, rgba(0xff6a2a, 30 + 60 * k), 0);
-    B.circ(z.x, z.y, z.r, rgba(0xffb04a, 200), 1);
-    B.circ(z.x, z.y, z.r * 0.4, rgba(0xfff0c0, 120 + 100 * k), 1);
-    B.circ(z.x, z.y, z.r * 0.4 * k, rgba(0x000000, 70), 0);
-    B.spr('proj.fireball', A().frameAt('proj.fireball', t), z.x + fx, z.y - 10 - fy, o(1, 3, PI / 2 + 0.26));
-    if (Math.random() < 0.7) part(z.x + fx + (Math.random() - 0.5) * 10, z.y - 10 - fy, (Math.random() - 0.5) * 20, -40, 0.35, 0xffb04aff, 2);
-    return true;
-  }
-  function echo(B, z, t) {
-    const k = U.clamp(z.t / z.dur, 0, 1), c = z.r * 0.4;
-    B.circ(z.x, z.y, z.r, rgba(0xff6a2a, 20 + 40 * k), 0);
-    B.circ(z.x, z.y, z.r * (1.2 - 0.2 * k), rgba(0xffb04a, 90 + 120 * k), 1);
-    for (let i = 0; i < 6; i++) { const a = H(z.id, i, 1) * TAU, l = c * (0.6 + k); B.line(z.x, z.y, z.x + Math.cos(a) * l, z.y + Math.sin(a) * l * 0.8, 1, rgba(0xffe0a0, 120 + 120 * k)); }
-    if (!B.zoneLite) for (let i = 0; i < 5; i++) {
-      const a = H(z.id, i, 2) * TAU, d = H(z.id, i, 3) * c, j = Math.sin(t * 40 + i) * k;
-      B.spr('fx.flame', A().frameAt('fx.flame', t + i * 0.2), z.x + Math.cos(a) * d + j, z.y + Math.sin(a) * d + 4, o(0.5 + 0.5 * k, 1 + Math.round(k), 0, true));
+  // Flashpoint (Q, zone 'flash', r = flash radius): a white-hot disc that dies in 0.15 s, an orange shock front racing out to z.r, 16 rays, flames flung outward; a light screen flash.
+  function flash(B, z, t) {
+    const k = U.clamp(z.t / z.dur, 0, 1), f = U.easeOut(Math.min(1, z.t / 0.25)), r = Math.max(4, z.r * f), al = 1 - k, core = Math.max(0, 1 - z.t / 0.15);
+    kick(z, 6);
+    if (z.t < 0.05 && ED.FX && ED.FX.screen) ED.FX.screen(0xffe0b000, 0.3, 0.25);
+    if (core > 0) B.circ(z.x, z.y - 6, z.r * 0.6, rgba(0xfff6e0, 200 * core), 0);
+    B.circ(z.x, z.y - 6, r, rgba(0xff8a3d, 40 * al), 0);
+    B.circ(z.x, z.y - 6, r, rgba(0xffb04a, 240 * al), 3);
+    B.circ(z.x, z.y - 6, r + 3, rgba(0xfff0c0, 180 * al), 1);
+    for (let i = 0; i < 16; i++) {
+      const a = (i + H(z.id, i, 1) * 0.5) / 16 * TAU, r0 = r * (0.35 + 0.2 * H(z.id, i, 2)), r1 = r * (0.8 + 0.3 * H(z.id, i, 3));
+      B.line(z.x + Math.cos(a) * r0, z.y - 6 + Math.sin(a) * r0, z.x + Math.cos(a) * r1, z.y - 6 + Math.sin(a) * r1, 1, rgba(0xfff0c0, 220 * al));
+    }
+    if (!B.zoneLite) for (let i = 0; i < 8; i++) {
+      const a = (i + 0.5) / 8 * TAU + z.id, d = r * 0.9;
+      B.spr('fx.flame', A().frameAt('fx.flame', t + i * 0.13), z.x + Math.cos(a) * d, z.y + Math.sin(a) * d * 0.9, o(al, 2, 0, true));
     }
     return true;
   }
   const ZONE = {
-    firepool: (B, z, t) => firePool(B, z, t, false), crater: (B, z, t) => firePool(B, z, t, true), pyre, napalm,
-    shell: (B, z, t) => lob(B, z, t, true), bomblet: (B, z, t) => lob(B, z, t, false), meteor, echo,
+    firepool: firePool, pyre, napalm,
+    shell: (B, z, t) => lob(B, z, t, true), bomblet: (B, z, t) => lob(B, z, t, false), flash,
   };
 
   // ---------------- projectiles ----------------
@@ -151,22 +138,22 @@
     proj(B, pr, t) { const f = PROJ[pr.k]; return f ? f(B, pr, t) : false; },
     zone(B, z, t) { const f = ZONE[z.k]; return f ? f(B, z, t) : false; },
   };
-  for (const id of ['firebolt', 'inferno', 'firestorm', 'wildfire', 'pyre', 'napalm', 'meteor']) ED.WeaponFx[id] = HOOK;
-  ED.SkillFx.meteor = HOOK;
+  for (const id of ['firebolt', 'inferno', 'firestorm', 'wildfire', 'pyre', 'napalm']) ED.WeaponFx[id] = HOOK;
+  ED.SkillFx.flashpoint = HOOK;
 
   // ---------------- explosions ----------------
   // Pyro 'boom' events skip fx.js's generic blast (explosion sprite up to 4x and a filled flash disc up to 90 px, which buried the horde under stacked blasts):
-  // the ring at the true radius, a small core flash, the explosion sprite at whole scale 1 (Meteor 2), sparks; blasts over 200 px keep a light screen flash.
-  const PW = { firebolt: 1, inferno: 1, firestorm: 1, wildfire: 1, pyre: 1, napalm: 1, meteor: 1 };
+  // the ring at the true radius, a small core flash, the explosion sprite at whole scale 1, sparks; blasts over 200 px keep a light screen flash.
+  const PW = { firebolt: 1, inferno: 1, firestorm: 1, wildfire: 1, pyre: 1, napalm: 1 };
   const F = ED.FX;
   if (F && F.handle) {
     const handle = F.handle;
     F.handle = (ev, ctx) => {
       if (ev.t !== 'boom' || !PW[ev.wid] || ev.team) return handle(ev, ctx);
-      const col = ev.look === 'meteor' ? 0xff6a2a00 : 0xff8a3d00, r = ev.r || 20;
+      const col = 0xff8a3d00, r = ev.r || 20;
       F.ring(ev.x, ev.y, r, (col | 0xff) >>> 0, r > 200 ? 0.5 : 0.3, r * 0.4, r > 60 ? 2 : 1);
       F.flash(ev.x, ev.y, Math.min(r * 0.3, 24), col, 0.1, 0.45);
-      if (r >= 24) F.sprite('fx.explosion', ev.x, ev.y, ev.wid === 'meteor' ? 2 : 1, 0, 0, 0.85);
+      if (r >= 24) F.sprite('fx.explosion', ev.x, ev.y, 1, 0, 0, 0.85);
       F.burst(ev.x, ev.y, Math.min(12, 3 + Math.round(r / 12)), col, Math.min(r, 120) * 2.2, 0.45, 2, 10);
       if (r > 200) { F.screen(col, 0.2, 0.25); if (ctx && ev.pid === ctx.me) F.addShake(5, 0); }
     };

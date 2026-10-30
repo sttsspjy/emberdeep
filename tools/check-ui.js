@@ -79,7 +79,8 @@ async function main() {
     await shot(page, 'hero-locked');
     await page.locator('.hero-tile[data-cls="ranger"]').click();
     const hd = await page.locator('#hero-detail').innerText();
-    check(/Longbow/.test(hd) && /Volley/.test(hd) && !/Snare/.test(hd), 'detail lists the weapon and the one Q skill');
+    const rq = await page.evaluate(() => ED.SKILLS[ED.HEROES.ranger.skills[0]].name);
+    check(/Longbow/.test(hd) && hd.includes(rq) && !/Snare/.test(hd), 'detail lists the weapon and the one Q skill (' + rq + ')');
     check(await minFont(page, '#hero-detail span, #hero-detail b, .hero-tile .t-name') >= 20, 'hero select text >= 20 px');
     await shot(page, 'hero');
     await page.keyboard.press('Enter'); // focused tile is the chosen hero: continue
@@ -137,9 +138,9 @@ async function main() {
     check(await vis(page, 'scr-codex'), 'Encyclopedia opens');
     const cxNames = () => page.evaluate(() => [...document.querySelectorAll('#cx-list .cx-item')].map(b => (b.classList.contains('unseen') ? '-' : '+') + b.textContent));
     { const n = await cxNames(); check(n[0] === '+Knight' && n.slice(1).every(x => x === '-???') && n.length === 7, 'heroes: only Knight named, the rest "???" (' + n.join(',') + ')'); }
-    { const t = await page.locator('#cx-detail').innerText(); check(/Shield Charge/.test(t) && !/Bulwark|Evolves/.test(t), 'Knight: one skill, no Form recipe'); }
+    { const t = await page.locator('#cx-detail').innerText(), kq = await page.evaluate(() => ED.SKILLS[ED.HEROES.knight.skills[0]].name); check(t.includes(kq) && !/Evolves/.test(t), 'Knight: one skill (' + kq + '), no Form recipe'); }
     await page.locator('.cx-item[data-key="ranger"]').click();
-    { const t = await page.locator('#cx-detail').innerText(); check(/Not discovered yet/.test(t) && !/Volley|Ranger/.test(t), 'unmet open hero: only "Not discovered yet"'); }
+    { const t = await page.locator('#cx-detail').innerText(); check(/Not discovered yet/.test(t) && !t.includes(await page.evaluate(() => ED.SKILLS[ED.HEROES.ranger.skills[0]].name)) && !/Ranger/.test(t), 'unmet open hero: only "Not discovered yet"'); }
     await page.locator('.cx-item[data-key="necro"]').click();
     { const t = await page.locator('#cx-detail').innerText(); check(/Not discovered yet/.test(t) && /Locked: Survive 10 minutes/.test(t) && !/Lv 4|Necro/.test(t), 'unmet locked hero: unlock line kept, nothing else'); }
     await shot(page, 'codex-unseen');
@@ -165,7 +166,7 @@ async function main() {
     if (await active(page) === 'cx-detail') await page.keyboard.press('ArrowLeft'); // a long detail pane sits under the tab
     check(await page.evaluate(() => document.activeElement.dataset.key) === 'knight', 'arrows reach the first list entry');
     await page.keyboard.press('ArrowDown');
-    check(/Volley/.test(await page.locator('#cx-detail').innerText()), 'keyboard focus selects (Ranger: Volley)');
+    check((await page.locator('#cx-detail').innerText()).includes(await page.evaluate(() => ED.SKILLS[ED.HEROES.ranger.skills[0]].name)), 'keyboard focus selects (Ranger: its Q skill)');
     await page.locator('.cx-item[data-key="necro"]').click();
     check(/Locked: Survive 10 minutes/.test(await page.locator('#cx-detail').innerText()) && /Lv 4/.test(await page.locator('#cx-detail').innerText()), 'locked hero shows unlock line and skill levels');
     check(await minFont(page, '#scr-codex span, #scr-codex b, #scr-codex button') >= 20, 'encyclopedia text >= 20 px');
@@ -256,10 +257,20 @@ async function main() {
     await page.keyboard.press('Digit1');
     await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(!(await vis(page, 'ov-offer')), 'key 1 picks a card');
+    // boss chest with a ready Form: chest popup says so, then a Form offer (header, no reroll / skip / banish foot); key 1 takes it
+    await page.evaluate(() => { const w = ED.Game.w, p = w.heroes[0]; p.offer = null; p.pend = 0; w.setRanks(p, p.weapons[0], 3, false); p.rerolls = 1; w.openChest(p, 2); });
+    await page.waitForFunction(() => !document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
+    check(/Boss chest!/.test(await page.locator('#ov-chest').innerText()) && /Choose a Form/.test(await page.locator('#ov-chest').innerText()), 'boss chest popup: Choose a Form');
+    check(await vis(page, 'ov-offer') && (await page.locator('#offer-title').innerText()) === 'Choose a Form' && (await page.locator('.offer-card.k-form').count()) >= 1 && !(await vis(page, 'offer-foot')), 'Form offer: header, Form cards, no reroll / skip / banish');
+    await shot(page, 'form-offer');
+    await page.keyboard.press('Digit1');
+    await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
+    check(await page.evaluate(() => ED.Game.w.heroes[0].weapons[0].evo), 'key 1 takes the Form');
     // build a kit: every path at rank 3, the Form taken and refined, 5 passives, and a boss
     await page.evaluate(() => {
       const w = ED.Game.w, p = w.heroes[0];
       w.setRanks(p, p.weapons[0], 9, true);
+      if (p.weapons.length < 2) { const sup = ED.WEAPON_IDS.find(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved), s2 = sup && w.addWeapon(p, sup); if (s2) w.setRanks(p, s2, 4, false); } // slot 2 filled, slot 3 empty
       for (const id of ['might', 'haste', 'reach', 'vigor', 'magnet']) if (p.passives.length < 6 && !p.passives.some(x => x.id === id)) p.passives.push({ id, lvl: 2 });
       w.recalc(p, true); p.hp = Math.round(p.maxHp * 0.22); p.skills[0].cd = 6;
       w.spawnBoss({ t: 300, id: 'warden' });
@@ -275,7 +286,7 @@ async function main() {
     await page.keyboard.press('Escape');
     await wait(150);
     check(await vis(page, 'ov-pause'), 'Esc pauses');
-    check(await page.locator('#pause-build .pslot canvas').count() >= 5 && /Colossus Blade .*Greatblade 3/.test(await page.locator('#pause-build .pb-line').innerText()), 'pause shows the build (Form, path ranks, passives)');
+    check(await page.locator('#pause-build .pslot canvas').count() >= 5 && /Colossus Blade .*Greatblade 3/.test(await page.locator('#pause-build .pb-line').first().innerText()) && (await page.locator('#pause-build .pb-line').count()) === (await page.evaluate(() => ED.Game.w.heroes[0].weapons.length)), 'pause shows the build (weapon slots, one line per weapon: Form, path ranks; passives)');
     await shot(page, 'pause');
     await page.locator('#btn-pause-settings').click();
     check(await vis(page, 'ov-settings') && !(await vis(page, 'ov-pause')), 'settings from pause');

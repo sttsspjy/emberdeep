@@ -1,9 +1,9 @@
 // Headless check of the Ranger tree (exit 1 on failure). Usage: node tools/check-hero-ranger.js
 // 1. Every path rank changes the effective numbers or the fired pattern (arrows and foe hits of three volleys); card lines <= 40 chars.
 // 2. Every Form (3 pure + 2 hybrid) is ready only under its rule (its path(s) at rank 3), locks the others once taken, refines twice and deals damage in a foe ring.
-// 3. Mechanics: arrows aim at an elite before a nearer foe; bounces turn arrows to unhit foes; kill shots fire from kills; Ballista bolts pierce a whole line; Rebound arrows turn at the view edge.
+// 3. Mechanics: arrows fly along the cursor past nearer foes and elites; the split fan (two) aims its second half at a foe off the cursor line, else 0.35 rad off it; bounces turn arrows to unhit foes; kill shots fire from kills; Ballista bolts pierce a whole line; Rebound arrows turn at the view edge.
 // 4. Damage only in view: a full 3/3/3 build of the Longbow and every Form never hurts a pinned foe 340 px away (outside the 320 px half view) while hurting a near one.
-// 5. Volley at levels 1..4: casts, damages foes in the rain, cooldown >= 6 s; L2 pins (slows), L3 follows the cursor, L4 adds two flank rains.
+// 5. Vault at levels 1..4: zero damage leap toward the cursor, untouchable, gem pull on landing; L2 farther, L3 2 charges, L4 caltrops; obstacle-safe landing.
 // 6. Determinism: the same seed and inputs give the same digest for every Form; client draw hooks run on a mock batch without non-finite args.
 'use strict';
 const path = require('path'), fs = require('fs'), vm = require('vm');
@@ -23,6 +23,7 @@ const ring = (w, x, y, n, r, hpMul) => { for (let i = 0; i < n; i++) { const a =
 const ranks = (w, p, r) => { const ws = p.weapons[0]; for (let i = 0; i < 3; i++) for (let k = 0; k < r[i]; k++) w.rankPath(p, ws, i); w.recalc(p, false); return ws; };
 const form = (w, p, ws, id) => { w.takeForm(p, ws, id); while (w.refineForm(p, ws)); w.recalc(p, false); };
 const step = (w, n) => { for (let i = 0; i < n; i++) { w.update(C.TICK); w.events.length = 0; } };
+const aimAt = (p, a) => { p.mdir = a; p.in.ax = p.x + Math.cos(a) * 100; p.in.ay = p.y + Math.sin(a) * 100; };
 
 // 1. Pattern of three volleys into a still foe grid (20 px apart over the view, 40 px clear around the hero): projectiles made, foe hits (hit records), wide projectiles.
 function pattern(r, fid) {
@@ -81,12 +82,22 @@ for (const f of FORMS) {
 }
 
 // 3. Mechanics.
-{ // elite priority: an elite at 200 px wins over a foe at 60 px
+{ // cursor aim: a foe at 60 px and an elite at 150 px off the line do not pull the arrow
   const w = world(2), p = w.heroes[0], ws = p.weapons[0];
   const near = w.spawnFoe('skeleton', p.x + 60, p.y, { hpMul: 1e4 }), el = w.spawnFoe('skeleton', p.x, p.y + 150, { hpMul: 1e4, elite: true });
-  near.spd = el.spd = 0; ws.cd = 0; w.update(C.TICK);
+  near.spd = el.spd = 0; aimAt(p, 2.4); ws.cd = 0; w.update(C.TICK);
   const q = w.projs.find(x => !x.dead && x.p === p);
-  ok(q && Math.abs(U.angDiff(q.a, Math.atan2(el.y - (p.y - 6), el.x - p.x))) < 0.05, `Longbow aims at the elite before the nearer foe (a ${q && q.a.toFixed(2)})`);
+  ok(q && Math.abs(U.angDiff(q.a, 2.4)) < 1e-6, `Longbow fires along the cursor, not at the nearer foe or the elite (a ${q && q.a.toFixed(2)})`);
+}
+{ // split fan (two): second half at a foe off the cursor line, else 0.35 rad off the line
+  for (const foe of [true, false]) {
+    const w = world(2), p = w.heroes[0], ws = ranks(w, p, [2, 0, 0]);
+    const e = foe ? w.spawnFoe('skeleton', p.x, p.y + 120, { hpMul: 1e4 }) : null; if (e) e.spd = 0;
+    aimAt(p, 0); ws.cd = 0; w.update(C.TICK); ws.cd = 99;
+    const qs = w.projs.filter(x => !x.dead && x.p === p), n = qs.length, b = foe ? Math.atan2(e.y - (p.y - 6), e.x - p.x) : 0.35, S = ED.Stats.weapon(p, 0);
+    const lo = qs.slice(0, (n + 1) >> 1), hi = qs.slice((n + 1) >> 1), mid = (arr) => arr.reduce((s, q) => s + q.a, 0) / arr.length;
+    ok(n === S.n && Math.abs(mid(lo)) < 1e-6 && Math.abs(U.angDiff(mid(hi), b)) < 1e-6, `split fan ${foe ? 'with' : 'without'} a foe off the line: halves at 0 / ${b.toFixed(2)} (${n} arrows, ${mid(lo).toFixed(2)} / ${hi.length ? mid(hi).toFixed(2) : '-'})`);
+  }
 }
 { // bounce: with pierce spent, an arrow turns to another foe
   const w = world(2), p = w.heroes[0], ws = ranks(w, p, [0, 0, 1]);
@@ -111,7 +122,7 @@ for (const f of FORMS) {
 }
 { // Rebound: arrows turn at the view edge and fly back
   const w = world(2), p = w.heroes[0], ws = ranks(w, p, [0, 3, 3]); form(w, p, ws, 'rebound');
-  p.mdir = 0; ws.cd = 0; w.update(C.TICK); ws.cd = 99;
+  aimAt(p, 0); ws.cd = 0; w.update(C.TICK); ws.cd = 99;
   const q = w.projs.find(x => !x.dead && x.p === p), vx0 = q.vx;
   let back = false; for (let i = 0; i < 90 && !q.dead; i++) { w.update(C.TICK); w.events.length = 0; if (q.vx * vx0 < 0) back = true; }
   ok(back && ED.inView(p, q.x, q.y, q.r), `Rebound: an arrow fired with no foe turns back at the view edge (x ${Math.round(q.x - p.x)})`);
@@ -130,37 +141,39 @@ for (const f of [{ id: 'longbow' }].concat(FORMS)) {
   const pos = far.concat(near).map(e => [e.x, e.y]);
   for (let i = 0; i < 300; i++) {
     far.concat(near).forEach((e, j) => { e.x = pos[j][0]; e.y = pos[j][1]; e.kbx = e.kby = 0; });
-    p.mdir = i / 300 * U.TAU; w.update(C.TICK); w.events.length = 0;
+    aimAt(p, i / 300 * U.TAU); w.update(C.TICK); w.events.length = 0;
   }
   const hurtFar = far.filter(e => e.hp < e.maxHp).length, hurtNear = near.filter(e => e.hp < e.maxHp).length;
   ok(hurtFar === 0 && hurtNear >= 1, `${f.id} 3/3/3: no damage outside the view (far hurt ${hurtFar}, near hurt ${hurtNear}/8)`);
 }
 
-// 5. Volley.
+// 5. Vault (zero damage): leaps N.dist toward the cursor, untouchable, over foes; lands pulling gems within 200 px; L2 +60 px; L3 2 charges; L4 caltrops slow foes at the takeoff.
+ok(ED.SKILLS.vault.cd >= 7 && ED.SKILLS.vault.cd <= 16 && ED.SKILLS.vault.levels.every(l => l.txt.length <= 40) && ED.SKILLS.vault.txt.length <= 40, `vault: cooldown ${ED.SKILLS.vault.cd} s, card lines <= 40 chars`);
 for (let L = 1; L <= 4; L++) {
-  const w = world(6), p = w.heroes[0], sk = p.skills[0]; sk.lvl = L;
-  p.weapons.length = 0;
-  const cx = p.x + 120, cy = p.y;
-  for (let i = 0; i < 12; i++) { const e = w.spawnFoe('skeleton', cx + (i % 4 - 1.5) * 18, cy + ((i >> 2) - 1) * 18, { hpMul: 1e3 }); e.spd = 0; }
-  w.input(p.pid, { q: true, ax: cx, ay: cy });
-  let casts = 0, rains = 0, slowed = 0;
-  for (let i = 0; i < 30; i++) {
-    if (i === 1) rains = w.zones.filter(z => !z.dead && z.wid === 'volley').length;
-    w.update(C.TICK);
-    for (const ev of w.events) if (ev.t === 'skill') casts++;
-    w.events.length = 0;
-    for (const e of w.foes) if (e.slowT > 0) slowed++;
-    w.input(p.pid, { q: false, ax: cx, ay: cy });
-  }
-  step(w, 120);
-  const hurt = w.foes.filter(e => e.hp < e.maxHp).length;
-  ok(casts === 1 && sk.cd >= 6 - 2.5 && w.skillN(p, 0).cd >= 6 && p.dealt.volley > 0 && hurt >= 10, `volley L${L}: cast, ${hurt}/12 foes hurt, dealt ${Math.round(p.dealt.volley || 0)}, cd ${w.skillN(p, 0).cd}`);
-  const v = world(6), q = v.heroes[0]; q.skills[0].lvl = L;
-  v.input(q.pid, { q: true, ax: cx, ay: cy }); v.update(C.TICK);
-  const z = v.zones.find(x => !x.dead && x.wid === 'volley');
-  for (let i = 0; i < 60; i++) { v.input(q.pid, { q: false, ax: cx + 200, ay: cy }); v.update(C.TICK); v.events.length = 0; }
-  const moved = Math.round(z.x - cx);
-  ok((L >= 2) === (slowed > 0) && (L >= 3) === (moved > 20) && rains === (L >= 4 ? 3 : 1), `volley L${L}: pin ${slowed > 0}, follow moved ${moved} px, ${rains} rain(s)`);
+  const w = world(6), p = w.heroes[0], sk = p.skills[0]; sk.lvl = L; p.weapons.length = 0;
+  const N = w.skillN(p, 0), x0 = p.x, y0 = p.y;
+  for (let i = 0; i < 8; i++) { const e = w.spawnFoe('skeleton', x0 + 40 + i * 12, y0 + (i & 1 ? 8 : -8), { hpMul: 50 }); e.spd = 0; }
+  const gNear = w.spawnPickup('xp5', x0 + N.dist + 150, y0, 5), gFar = w.spawnPickup('xp5', x0 + N.dist + 320, y0, 5);
+  w.input(p.pid, { q: true, ax: x0 + 300, ay: y0 }); w.update(C.TICK); w.events.length = 0;
+  const inv = p.invuln > N.t * 0.8;
+  step(w, 30);
+  const moved = p.x - x0, hurt = w.foes.filter(e => e.hp < e.maxHp).length;
+  ok(Math.abs(moved - N.dist) < 4 && inv && hurt === 0 && !(p.dealt.vault > 0), `vault L${L}: leapt ${moved.toFixed(0)} of ${N.dist} px over 8 foes, untouchable ${inv}, zero damage (hurt ${hurt})`);
+  ok(gNear.pull === p.pid && gFar.pull !== p.pid, `vault L${L}: landing pulls the gem at 150 px (${gNear.pull === p.pid}), not the one at 320 px (${gFar.pull === p.pid})`);
+  // charges: a second press right after the leap
+  const x1 = p.x; w.input(p.pid, { q: true, ax: p.x + 300, ay: p.y }); step(w, 30);
+  ok((L >= 3) === (p.x - x1 > N.dist - 4), `vault L${L}: second leap at once ${p.x - x1 > N.dist - 4} (charges ${N.charges | 0})`);
+  const cal = w.zones.filter(z => !z.dead && z.k === 'caltrops').sort((a, b) => U.dist2(p.x, p.y, a.x, a.y) - U.dist2(p.x, p.y, b.x, b.y))[0]; // the latest field (the first lies outside the view)
+  if (L === 4) {
+    const e = w.spawnFoe('skeleton', cal.x + 10, cal.y, { hpMul: 50 }); step(w, 15);
+    ok(e.slowT > 1 && e.slowK >= 0.5 && e.hp === e.maxHp, `vault L4: caltrops slow a foe 50% (${e.slowK}, ${e.slowT.toFixed(1)} s), no damage`);
+  } else ok(!cal, `vault L${L}: no caltrops`);
+}
+{ // obstacle-safe landing: aimed straight at an obstacle centre 160 px away
+  const w = world(6), p = w.heroes[0], o = w.arena.obstacles.find(q => q.r > 10 && q.x > 400 && q.y > 400 && q.x < w.arena.size - 400 && q.y < w.arena.size - 400);
+  p.x = o.x - 160; p.y = o.y; ED.Arena.collide(w.arena, p, p.r);
+  w.input(p.pid, { q: true, ax: o.x, ay: o.y }); step(w, 30);
+  ok(!ED.Arena.blocked(w.arena, p.x, p.y, p.r) && p.x < o.x, `vault: lands clear of an obstacle (${(o.x - p.x).toFixed(0)} px short of its centre, r ${o.r})`);
 }
 
 // 6. Determinism + client hooks on a mock batch.
@@ -183,7 +196,7 @@ function digestRun(fid, draw) {
         for (const z of w.zones) { const f = !z.dead && (ED.WeaponFx[z.wid] || ED.SkillFx[z.wid]); if (f && f.zone) f.zone(mockB, z, w.time); }
         for (const q of w.projs) { const f = !q.dead && ED.WeaponFx[q.wid]; if (f && f.proj) f.proj(mockB, q, w.time); }
       }
-      if (i % 30 === 0) { let s = w.tick + '|' + p.x.toFixed(3) + ',' + p.y.toFixed(3) + '|' + Math.round(p.dealt[fid] || 0) + '|' + Math.round(p.dealt.volley || 0) + '|' + w.kills; for (const e of w.foes) if (!e.dead) s += '|' + e.x.toFixed(2) + ',' + e.hp; d = (Math.imul(d, 31) + U.hashStr(s)) >>> 0; }
+      if (i % 30 === 0) { let s = w.tick + '|' + p.x.toFixed(3) + ',' + p.y.toFixed(3) + '|' + Math.round(p.dealt[fid] || 0) + '|' + Math.round(p.dealt.vault || 0) + '|' + w.kills; for (const e of w.foes) if (!e.dead) s += '|' + e.x.toFixed(2) + ',' + e.hp; d = (Math.imul(d, 31) + U.hashStr(s)) >>> 0; }
     }
   } catch (e) { err = e; }
   return { d, err, dealt: p.dealt[fid] || 0 };

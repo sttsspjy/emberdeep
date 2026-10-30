@@ -11,7 +11,8 @@
 // skill < 1 (a casual player): slower re-plans, shots / zones seen only after a reaction delay,
 // a share of shots and telegraphs never seen (per-id seeded hash), later and unreliable dashes, wandering heading noise; below 0.5 also 8 directions and shot paths read short
 // (velocity x 2 skill: none at 0).
-// Cards: a Form always > refine > path ranks (the path closest to rank 3 first: one path to 3, then a second) > passives by a fixed preference > skill; reroll / banish weak offers.
+// Cards: a Form always (a chest Form offer: the first card) > refine > hero path ranks (the path closest to rank 3 first: one path to 3, then a second) > new support > support path ranks
+// (same order) > passives by a fixed preference > skill; reroll / banish weak offers.
 (function (root) {
   'use strict';
   const NDIR = 16, NC = NDIR + 1, PLAN = 3;
@@ -23,7 +24,7 @@
   // Hit reach (px from the hero centre to the edge of a foe of radius r) of short-reach weapons from their live numbers (ED.World.weaponS); weapons absent here are ranged.
   // Frost rings test the foe centre; auras, arcs, pools and orbiting bodies the foe's edge (orbits: outer edge of the body ring).
   const bell = (S) => S.orbit * Math.sqrt(S.area) + S.r * S.area * 0.5, arc = (S) => S.range * S.area;
-  const REACH = { toll: bell, cathedral: bell, cleave: arc, whirlwind: arc };
+  const REACH = { toll: bell, cathedral: bell, cleave: arc, whirlwind: arc, colossus: arc, earthsplitter: arc, gale: arc, tempest: arc };
   const FOE_TYP = 10; // typical foe radius for the crowd stance
   // Contact band (danger() reads it): gaps below CG px are scored; CK weighs contact at the far horizons (H >= 0.55 s). Ranged stance 30 / 1; short-reach stance narrower.
   let CG = 30, CK = 1;
@@ -67,7 +68,7 @@
     this.jit = 0; this.jitT = 0; this.mix = Math.imul(this.seed, 0x9e3779b1) >>> 0;
 
     this.rs = (this.seed ^ 0x5eed1234) >>> 0 || 1; // LCG state
-    this.n = 0; this.plan = 0; this.dir = -1; this.mx = 0; this.my = 0; this.aimX = 0; this.aimY = 0;
+    this.n = 0; this.plan = 0; this.dir = -1; this.mx = 0; this.my = 0;
     this.tgt = null; this.tgtId = 0; this.tgtT = 0; this.tgtK = 0;
     this.lastX = 0; this.lastY = 0; this.stuckN = 0; this.wander = -1; this.wanderT = 0; this.planT = 0;
     this.castGap = 0; this.zSeen = 0; this.pSeen = 0;
@@ -77,7 +78,7 @@
     this.reach = 0; this.close = false; this.bossFn = null; this.bossS = null; this.bossOn = false; // stance(): main weapon reach to a typical foe's edge (0 = ranged), crowd / boss stance
   }
   Brain.prototype.rnd = function () { this.rs = (Math.imul(this.rs, 1664525) + 1013904223) >>> 0; return this.rs / 4294967296; };
-  Brain.prototype.onStart = function (w, p) { this.lastX = p.x; this.lastY = p.y; this.aimX = p.x + 80; this.aimY = p.y; this.planT = w.time; };
+  Brain.prototype.onStart = function (w, p) { this.lastX = p.x; this.lastY = p.y; this.planT = w.time; };
 
   Brain.prototype.think = function (w, p) {
     const ED = root.ED, f = this.f;
@@ -89,7 +90,7 @@
     const urgent = this.newThreat(w, p);
     if (this.n >= this.plan || (urgent && this.skill >= 1)) { this.plan = this.n + this.planN; this.replan(ED, w, p); }
     f.mx = this.mx; f.my = this.my;
-    if (!f.q) { f.ax = this.aimX; f.ay = this.aimY; }
+    if (!f.q) this.aim(ED, w, p);
     return f;
   };
 
@@ -275,7 +276,6 @@
 
   Brain.prototype.replan = function (ED, w, p) {
     this.gather(ED, w, p);
-    this.nearest(p);
     this.pickTarget(ED, w, p);
     const hpF = p.hp / Math.max(1, p.maxHp), hpMul = 1 + 1.6 * (1 - hpF), S = w.arena.size;
     this.stance(ED, w, p, hpF);
@@ -367,11 +367,20 @@
     this.tgt = best; this.tgtId = best ? best.id : 0; this.tgtK = bk * (1 - 0.6 * danger);
   };
 
-  // Aim point: the nearest local foe, else ahead of the walk (weapons aim themselves; this sets facing and keeps Volley's rain on foes).
-  Brain.prototype.nearest = function (p) {
-    let bd = Infinity, bx = p.x + this.mx * 80, by = p.y + this.my * 80;
-    for (let i = 0; i < FN; i++) { const d = (FX[i] - p.x) * (FX[i] - p.x) + (FY[i] - p.y) * (FY[i] - p.y); if (d < bd) { bd = d; bx = FX[i]; by = FY[i]; } }
-    this.aimX = bx; this.aimY = by;
+  // Aim point (every think; the weapon fires along it): the nearest elite / boss in view within AIM_BIG px (short reach: reach + 60), else the nearest foe in view within AIM_R px,
+  // else 80 px ahead of the walk. Linear scan of w.foes.
+  const AIM_BIG = 300, AIM_R = 360;
+  Brain.prototype.aim = function (ED, w, p) {
+    const es = w.foes, rb = this.reach > 0 ? this.reach + 60 : AIM_BIG, rb2 = rb * rb, r2 = AIM_R * AIM_R, f = this.f;
+    let bd = Infinity, bb = Infinity, n = null, b = null;
+    for (let i = 0; i < es.length; i++) {
+      const e = es[i]; if (e.dead || !ED.inView(p, e.x, e.y, e.r)) continue;
+      const d = (e.x - p.x) * (e.x - p.x) + (e.y - p.y) * (e.y - p.y);
+      if (d < bd && d <= r2) { bd = d; n = e; }
+      if ((e.elite || e.boss) && d < bb && d <= rb2) { bb = d; b = e; }
+    }
+    const t = b || n;
+    if (t) { f.ax = t.x; f.ay = t.y; } else { f.ax = p.x + this.mx * 80; f.ay = p.y + this.my * 80; }
   };
 
   // Densest 64 px cell of local foes within range of (x, y): writes this.dx / this.dy (mean of that cell) and returns its count.
@@ -402,9 +411,7 @@
   const SCTX = { hpF: 0, near: 0 };
   const aimAt = (b, x, y) => { b.f.ax = x; b.f.ay = y; return true; };
   const dense = (b, p, range, min) => (b.densest(p.x, p.y, range) >= min ? aimAt(b, b.dx, b.dy) : false);
-  const bossNear = (b, p, range) => { const e = b.boss; return e && !e.dead && Math.hypot(e.x - p.x, e.y - p.y) < range ? e : null; };
   const atDense = (range, min) => (b, w, p) => dense(b, p, range, min);
-  const atBossOrDense = (range, min) => (b, w, p) => { const e = bossNear(b, p, range); return e ? aimAt(b, e.x, e.y) : dense(b, p, range, min); };
   const selfCrowd = (r, min) => (b, w, p, ctx) => {
     const n = countIn(p.x, p.y, r), e = b.boss, near = e && !e.dead && Math.hypot(e.x - p.x, e.y - p.y) < r + e.r;
     return n >= min || near || (ctx.near > 0.4 && n >= 2) ? aimAt(b, p.x + b.mx * 40, p.y + b.my * 40) : false;
@@ -412,15 +419,15 @@
   // Mobility skill used offensively: toward the densest cluster when nothing threatens soon.
   const dashInto = (range) => (b, w, p, ctx) => (ctx.near > 0.2 || ctx.hpF < 0.4 ? false : dense(b, p, range, 4));
   const SKILL = {
-    charge: dashInto(150),
-    volley: atBossOrDense(260, 3),
-    meteor: atBossOrDense(300, 3),
-    corpseblast: (b, w, p, ctx) => (countIn(p.x, p.y, 70) >= 5 || ctx.near > 0.5 || countIn(p.x, p.y, 300) >= 25 ? aimAt(b, p.x, p.y) : false),
+    shove: (b, w, p, ctx) => (ctx.near > 0.3 || ctx.hpF < 0.5) && selfCrowd(120, 6)(b, w, p, ctx), // defensive: a shove clears the knight's own Cleave reach
+    vault: () => false, // escape only (escapeSkill)
+    flashpoint: selfCrowd(140, 6),
+    bonewall: atDense(220, 6),
     sanctuary: (b, w, p, ctx) => (ctx.hpF < 0.8 || countIn(p.x, p.y, 90) >= 6 ? aimAt(b, p.x + b.mx * 30, p.y + b.my * 30) : false),
     step: dashInto(130),
     peal: (b, w, p, ctx) => (countIn(p.x, p.y, 160) >= 15 || ctx.near > 0.5 || (ctx.hpF < 0.5 && countIn(p.x, p.y, 120) >= 4) ? aimAt(b, p.x, p.y) : false),
   };
-  const ESCAPE = { charge: 1, step: 1 };
+  const ESCAPE = { vault: 1, step: 1 };
   const FALLBACK = atDense(250, 3);
 
   // Q skill (slot 0) by its rule.
@@ -446,10 +453,11 @@
     if (c.kind === 'form') return 2000;
     if (c.kind === 'refine') return 1200;
     if (c.kind === 'path') {
-      // c.lvl - 1 = the path's current rank: the path closest to rank 3 goes first (one path to 3, then a second); ties to the path with a Form, then the lower index.
+      // c.lvl - 1 = the path's current rank: the path closest to rank 3 goes first (one path to 3, then a second); ties to the path with a Form, then the lower index. Support paths below a new support.
       const d = ED.WEAPONS[c.id] || {}, pa = (d.paths || [])[c.path] || {};
-      return 1000 + 30 * (c.lvl - 1) + (pa.form ? 5 : 0) - c.path;
+      return (d.support ? 600 : 1000) + 30 * (c.lvl - 1) + (pa.form ? 5 : 0) - c.path;
     }
+    if (c.kind === 'support') return 800;
     if (c.kind === 'passive' || c.kind === 'plvl') {
       const id = c.id, isNew = c.kind === 'passive';
       let s = (PASSIVE_PREF[id] || 150) * (isNew ? 1 : 0.9);

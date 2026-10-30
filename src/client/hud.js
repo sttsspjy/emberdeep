@@ -1,5 +1,5 @@
 // In-run HUD on the screen canvas (device px). Sizes are CSS px at 1280x720 scaled by k = dpr x clamp(viewport / 1280x720, 1, 2), so text never drops below its CSS size (numbers >= 16 px).
-// Draws: XP bar across the top with the level, timer, kills / gold, the weapon slot (level; Form = gold frame) + 6 passive slots with levels,
+// Draws: XP bar across the top with the level, timer, kills / gold, 3 weapon slots (hero weapon + 2 supports, empty ones dim; level; Form = gold frame) + 6 passive slots with levels,
 // HP bar, Q cooldown dial and the dash dial with charge pips, boss bar, teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
 // low-HP edge glow, banners and the bot-watch tag (view.botTag / view.botPick, bottom-left). No per-frame allocation: strings are cached by value. Font 'Pixel Operator'.
 (function (ED) {
@@ -184,6 +184,8 @@
     txt(cs('hp', (Math.min(hp, 4095) << 12) | Math.min(me.maxHp | 0, 4095), fmtHp), W / 2, hy + R(3), '#fff1d6', 18, 'center');
     const q = me.skills[0], C = ED.CONST.DASH;
     if (q) dial(0, kx, ky, ds, ED.SKILLS[q.id] ? ED.SKILLS[q.id].icon : 'fx.star.stun', q.cd, q.cdMax, keyLbl.q, '#ffd27a');
+    // Q charge pips (multi-charge skills: chN slots, ch lit), left of the dial
+    if (q && q.chN > 1) { const pw = R(10); for (let i = 0; i < q.chN; i++) { const px = kx - pw - R(6), py = ky + ds - (i + 1) * (pw + R(3)); c.fillStyle = '#000'; c.fillRect(px, py, pw, pw); c.fillStyle = i < q.ch ? '#ffd27a' : '#48382a'; c.fillRect(px + R(2), py + R(2), pw - R(4), pw - R(4)); } }
     const dx = kx + ds + gap, dy = ky + ds - dd;
     dial(2, dx, dy, dd, runIcon(me.cls), me.dashCd, C.cd, keyLbl.dash, '#6ad7ff');
     // dash charge pips (one per charge; C.charges when the sim grows more)

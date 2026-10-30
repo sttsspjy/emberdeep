@@ -2,7 +2,7 @@
 // 1. Tree shape: 3 paths x 3 ranks, card lines <= 40 chars naming no Form; every rank changes the effective numbers; 3 pure Forms + 2 hybrids, each with 2 refines.
 // 2. Form rules: each Form is ready only with its path(s) at rank 3, one Form per run; every Form fires and deals damage (10 s ring).
 // 3. Mechanics: stab reach (a foe at 40 px is hit, one at 140 px is not), crit all-or-none per stab, execute, mark on the elite + shadow cuts, bloom blades, returning and fan daggers, pins.
-// 4. View clamp: a foe outside the hero's view takes no weapon or skill damage. 5. Shadow Step at levels 1..4 casts, blinks and deals damage. 6. Determinism digest (60 s run, twice).
+// 4. View clamp: a foe outside the hero's view takes no weapon or skill damage. 5. Shadow Step at levels 1..4: zero damage blink, decoy lure, charges. 6. Determinism digest (60 s run, twice).
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
@@ -11,11 +11,11 @@ const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } 
 const t0 = Date.now();
 const ROOT = 'daggers', FORMS = ['thousand', 'assassinate', 'shadowfan'], HYB = [['lotus', [0, 1]], ['reaper', [1, 2]]];
 
-// World with the spawner and XP silenced; god cheat. Hero at rest facing east.
+// World with the spawner and XP silenced; god cheat. Hero at rest aiming east (mdir 0, cursor 100 px east).
 function world(seed) {
   const w = new ED.World({ seed: seed || 5, stage: 0, players: [{ pid: 'p1', name: 'P', slot: 0, cls: 'shade', meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
   w.updateSpawner = function () {}; w.addXp = function () {};
-  w.heroes[0].mdir = 0;
+  const p = w.heroes[0]; p.mdir = 0; p.in.ax = p.x + 100; p.in.ay = p.y;
   return w;
 }
 const step = (w, s, fn) => { for (let i = 0; i < Math.round(s * 60); i++) { if (fn) fn(i); w.update(C.TICK); w.events.length = 0; } };
@@ -86,6 +86,22 @@ const sp = (w, p, k, dx, dy, o) => { const e = w.spawnFoe(k, p.x + dx, p.y + dy,
   step(w, 1);
   ok(e.dead, `execute: a foe near 10% HP dies to one stab (${e.dead ? 'dead' : e.hp + ' HP left'})`);
 }
+{ // cursor aim: stabs go along the cursor past a foe 46 px north; Assassinate stabs take the mark only within 0.9 rad of the cursor
+  const w = world(), p = w.heroes[0], n = sp(w, p, 'skeleton', 0, -46);
+  step(w, 1);
+  ok(n.hp === n.maxHp, `stabs follow the cursor (east), a foe north is untouched (${n.maxHp - n.hp} dealt)`);
+  const stabs = (dx, dy) => {
+    const w = world(), p = w.heroes[0]; build(w, p, [0, 3, 0], 'assassinate');
+    const el = sp(w, p, 'skelknight', 34, 14); w.promoteElite(el); el.spd = 0;
+    p.in.ax = p.x + dx; p.in.ay = p.y + dy;
+    const as = [], seen = new Set();
+    step(w, 1, () => { for (const z of w.zones) if (!z.dead && (z.k === 'stab' || z.k === 'stabx') && !seen.has(z.id)) { seen.add(z.id); as.push(z.a); } });
+    return { as, m: Math.atan2(el.y - p.y + 6, el.x - p.x), c: Math.atan2(dy, dx) };
+  };
+  const inC = stabs(100, 0), outC = stabs(54, -84);
+  ok(inC.as.length > 0 && inC.as.every(a => Math.abs(U.angDiff(a, inC.m)) < 1e-6), `assassinate: the mark ${(inC.m).toFixed(2)} rad off the cursor draws the stabs (${inC.as.length})`);
+  ok(outC.as.length > 0 && outC.as.every(a => Math.abs(U.angDiff(a, outC.c)) < 1e-6), `assassinate: a mark ${Math.abs(U.angDiff(outC.c, outC.m)).toFixed(2)} rad off the cursor does not; stabs go along the cursor (${outC.as.length})`);
+}
 { // Assassinate: the elite is marked over trash; the shadow's X cuts hit it 150 px away, forced crits
   const w = world(), p = w.heroes[0]; build(w, p, [0, 3, 0], 'assassinate');
   for (let i = 0; i < 6; i++) sp(w, p, 'skeleton', -60 - i * 12, 40);
@@ -130,15 +146,34 @@ for (const id of [null, 'thousand', 'assassinate', 'shadowfan', 'lotus', 'reaper
   ok(out.hp === out.maxHp && inn.hp < inn.maxHp, `${id || 'daggers'}: no damage outside the view (in-view foe dealt ${Math.round(inn.maxHp - inn.hp)})`);
 }
 
-// 5. Shadow Step levels
+// 5. Shadow Step levels (zero damage): blink toward the cursor (L2 +60 px), the afterimage is a decoy that foes inside its view chase for 2 s (L3 3.5 s; bosses ignore it), L4 2 charges.
+ok(ED.SKILLS.step.cd >= 7 && ED.SKILLS.step.cd <= 16 && ED.SKILLS.step.levels.every(l => l.txt.length <= 40) && ED.SKILLS.step.txt.length <= 40, `shadow step: cooldown ${ED.SKILLS.step.cd} s, card lines <= 40 chars`);
 for (let L = 1; L <= 4; L++) {
   const w = world(30 + L), p = w.heroes[0]; p.weapons.length = 0; p.skills[0].lvl = L;
-  ring(w, p.x + 100, p.y, 10, 30, 'skeleton', 20);
-  const x0 = p.x;
+  const N = w.skillN(p, 0), x0 = p.x, y0 = p.y;
+  ring(w, p.x + 60, p.y, 6, 20, 'skeleton', 20);
+  const lure = []; for (let i = 0; i < 8; i++) { const a = Math.PI / 2 + (i - 3.5) * 0.3; lure.push(w.spawnFoe('skeleton', x0 + Math.cos(a) * 150, y0 + Math.sin(a) * 150 * 0.8, HP)); }
+  const far = w.spawnFoe('skeleton', x0 - ED.HERO_VIEW.hw - 60, y0, HP), boss = w.spawnFoe('skeleton', x0, y0 - 120, HP); boss.boss = true;
   w.input(p.pid, { q: true, ax: p.x + 400, ay: p.y }); w.update(C.TICK); w.events.length = 0;
-  const moved = p.x - x0; step(w, 1.2);
-  const N = w.skillN(p, 0);
-  ok(moved > 120 && (p.dealt.step || 0) > 0 && N.cd >= 6, `shadow step L${L}: blinks ${Math.round(moved)} px, dealt ${Math.round(p.dealt.step || 0)}, cd ${N.cd} s`);
+  const moved = p.x - x0, inv = p.invuln > 0.25, z = w.zones.find(q => !q.dead && q.k === 'afterimg');
+  const d0 = lure.map(e => U.dist(x0, y0, e.x, e.y));
+  step(w, 0.3, () => { p.x = x0 + moved; p.y = y0; });
+  const lured = lure.filter(e => e.ovK === 2).length, ign = far.ovT === 0 && boss.ovT === 0;
+  step(w, 1.2, () => { p.x = x0 + moved; p.y = y0; });
+  const closer = lure.filter((e, i) => U.dist(x0, y0, e.x, e.y) < d0[i] - 20).length;
+  step(w, 1.0, () => { p.x = x0 + moved; p.y = y0; });
+  const still = lure.filter(e => e.ovK === 2).length, hurt = w.foes.filter(e => e.hp < e.maxHp).length;
+  ok(Math.abs(moved - N.dist) < 1 && inv && hurt === 0 && !(p.dealt.step > 0) && N.cd >= 7, `shadow step L${L}: blinks ${Math.round(moved)} of ${N.dist} px, invulnerable ${inv}, zero damage (hurt ${hurt})`);
+  ok(!!z && z.dur === N.dur && lured === 8 && closer === 8 && ign && boss.ovT === 0, `shadow step L${L}: decoy ${N.dur} s lures ${lured}/8 in view (${closer} closed in); foe outside its view and boss ignore it`);
+  ok((N.dur > 2.5) === (still === 8) && (N.dur <= 2.5) === (still === 0), `shadow step L${L}: at 2.5 s ${still}/8 still chase the decoy`);
+}
+{ // L4 charges: two blinks at once, a third only after the recharge; one charge back per cooldown
+  const w = world(40), p = w.heroes[0], sk = p.skills[0]; p.weapons.length = 0; sk.lvl = 4;
+  const N = w.skillN(p, 0), cast = () => { const x = p.x; w.input(p.pid, { q: true, ax: p.x + 400, ay: p.y }); step(w, 0.35); return p.x - x > 100; };
+  const a = cast(), b = cast(), c = cast();
+  step(w, N.cd - 0.5);
+  const d = cast();
+  ok(a && b && !c && d && N.charges === 2, `shadow step L4: 2 charges (${a}, ${b}), third refused (${c}), recharged after ${N.cd} s (${d})`);
 }
 
 // 6. determinism: 60 s with level-ups, Q and dash spam, same digest twice

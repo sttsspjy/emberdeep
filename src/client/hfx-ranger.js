@@ -1,4 +1,4 @@
-// Ranger visuals: Longbow and its Forms (ED.WeaponFx: arrow / bolt sprites at whole-number scales, thin streaks) and the Volley arrow rain (ED.SkillFx); loaded after fx.js.
+// Ranger visuals: Longbow and its Forms (ED.WeaponFx: arrow / bolt sprites at whole-number scales, thin streaks) and the Vault leap (ED.SkillFx); loaded after fx.js.
 // Everything derives from render-visible fields (projectiles: x, y, a, r, id, t; zones: x, y, r, t, dur, k, id) and view time.
 (function (ED) {
   'use strict';
@@ -46,20 +46,38 @@
     return true;
   } };
 
-  // Volley: thin rim, arrows dropping in 0.35 s cycles at hashed spots (count by area), dust rings where they land.
-  const rain = (B, z, t) => {
-    if (z.k !== 'arrows') return false;
-    const k = life(z, 0.1, 0.25), n = U.clamp(Math.round(z.r * z.r / 200), 10, 48);
-    kick(z, 2);
-    B.circ(z.x, z.y, z.r, rgba(0xd8d0c0, 22 * k), 0);
-    B.circ(z.x, z.y, z.r, rgba(0xf0e6d0, 110 * k), 1);
+  // ---------------- Q: Vault ----------------
+  // vault (follows the hero during the leap, a = heading): a ground shadow, green speed streaks and a dust wake behind; vland: a dust ring bursting out to z.r plus a gold
+  // gem-pull ring closing in from 200 px; caltrops: a dim rim and hashed iron spikes (2 px crosses) scattered inside, fading out.
+  const LEAF = 0x9fd38a, GOLD = 0xffd27a, DUST = 0xd8c8a8, IRON = 0xb8c0c8;
+  const vault = (B, z, t) => {
+    const k = life(z, 0.04, 0.08), c = Math.cos(z.a), s = Math.sin(z.a), f = U.clamp(z.t / z.dur, 0, 1), h = Math.sin(PI * f) * 18;
+    kick(z, 3);
+    B.circ(z.x, z.y + 2, 9 - h * 0.25, rgba(0x000000, 90 * k), 0);
+    for (let i = -2; i <= 2; i++) {
+      const off = i * 5, len = 26 + 22 * H(z.id, i + 5, Math.floor(t * 30)), bx = z.x - s * off - c * 6, by = z.y - 8 - h + c * off - s * 6;
+      B.line(bx, by, bx - c * len, by - s * len, 1, rgba(i ? LEAF : 0xffffff, (i ? 150 : 230) * k));
+    }
+    for (let i = 1; i <= 3; i++) B.circ(z.x - c * i * 12, z.y - s * i * 12, 3 + i, rgba(DUST, (110 - i * 25) * k), 0);
+    return true;
+  };
+  const vland = (B, z, t) => {
+    const k = U.clamp(z.t / z.dur, 0, 1), r = z.r * U.easeOut(k), al = 1 - k;
+    kick(z, 3);
+    B.circ(z.x, z.y, r, rgba(DUST, 60 * al), 0);
+    B.circ(z.x, z.y, r, rgba(0xfff1d6, 220 * al), 2);
+    B.circ(z.x, z.y, 200 * (1 - U.easeOut(k)), rgba(GOLD, 200 * al), 1);
+    for (let i = 0; i < 10; i++) { const a = (i + H(z.id, i, 1)) / 10 * TAU; B.rect(Math.round(z.x + Math.cos(a) * r), Math.round(z.y + Math.sin(a) * r * 0.8 - 6 * k), 2, 2, rgba(DUST, 230 * al)); }
+    return true;
+  };
+  const caltrops = (B, z, t) => {
+    const k = life(z, 0.1, 0.5), n = B.zoneLite ? 10 : U.clamp(Math.round(z.r * z.r / 120), 12, 40);
+    B.circ(z.x, z.y, z.r, rgba(IRON, 40 * k), 1);
     for (let i = 0; i < n; i++) {
-      const ph = H(z.id, i, 0), c = t / 0.35 + ph, cyc = Math.floor(c), f = c - cyc;
-      const a = H(z.id, i, cyc) * TAU, d = Math.sqrt(H(z.id, i + 77, cyc)) * z.r, x = z.x + Math.cos(a) * d, y = z.y + Math.sin(a) * d;
-      if (f < 0.8) B.spr('proj.arrow', 0, x + (1 - f) * 10, y - (1 - f / 0.8) * 70, o(k, 1, PI / 2 - 0.15));
-      else B.circ(x, y, 2 + (f - 0.8) * 20, rgba(0xe8dcc0, 160 * k * (1 - f) * 5), 1);
+      const a = H(z.id, i, 2) * TAU, d = Math.sqrt(H(z.id, i, 3)) * z.r * 0.95, x = Math.round(z.x + Math.cos(a) * d), y = Math.round(z.y + Math.sin(a) * d), gl = (Math.floor(t * 4 + i) % 9) === 0;
+      B.rect(x - 1, y, 3, 1, rgba(IRON, 220 * k)); B.rect(x, y - 1, 1, 3, rgba(gl ? 0xffffff : IRON, 220 * k));
     }
     return true;
   };
-  ED.SkillFx.volley = { zone: rain };
+  ED.SkillFx.vault = { zone: (B, z, t) => (z.k === 'vault' ? vault(B, z, t) : z.k === 'vland' ? vland(B, z, t) : z.k === 'caltrops' ? caltrops(B, z, t) : false) };
 })(globalThis.ED || (globalThis.ED = {}));

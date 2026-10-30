@@ -8,7 +8,7 @@
   const N = ED.Net = {};
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const PREFIX = 'wickdeep-sv-';
-  N.VERSION = ED.NET_VERSION = 6; // bump on any wire change: mixed versions would desync
+  N.VERSION = ED.NET_VERSION = 8; // bump on any wire change: mixed versions would desync
   // Heartbeat: PeerJS 'close' does not fire when a tab crashes or a network drops, so both ends ping and
   // treat a few seconds of silence as a disconnect (longer in the lobby, where little else is sent).
   const PING_MS = 2000, TIMEOUT_RUN = 6000, TIMEOUT_LOBBY = 10000;
@@ -382,7 +382,7 @@
       w16(ms16(p.dashCd)); w16(ms16(p.invuln)); w16(ms16(p.hurtT)); w16(ms16(p.bleed)); w8(q8(p.revive || 0, 255));
       if (dashing) { w16(ms16(p.dashT)); wf32(p.dashDx); wf32(p.dashDy); }
       w8(p.rerolls | 0); w8(p.skips | 0); w8(p.banishes | 0); wv(p.kills | 0);
-      w8(p.skills.length); for (const sk of p.skills) { wstr(T.Sm, sk.id); w8(sk.lvl); w16(ms16(sk.cd)); w16(ms16(sk.cdMax)); }
+      w8(p.skills.length); for (const sk of p.skills) { wstr(T.Sm, sk.id); w8(sk.lvl); w16(ms16(sk.cd)); w16(ms16(sk.cdMax)); w8(sk.chN > 1 ? (Math.min(15, sk.chN) << 4) | U.clamp(sk.ch | 0, 0, 15) : 0); }
       w8(p.weapons.length); for (const ws of p.weapons) { wstr(T.Wm, ws.id); w8((ws.lvl & 127) | (ws.evo ? 128 : 0)); const R = ws.pr || NOPR; w8((R[0] & 3) | (R[1] & 3) << 2 | (R[2] & 3) << 4 | (ws.fl & 3) << 6); }
       w8(p.passives.length); for (const ps of p.passives) { wstr(T.Pm, ps.id); w8(ps.lvl); }
       if (hasFx(p)) { w16(p.fxf | 0); wf32(p.fxv || 0); }
@@ -638,7 +638,7 @@
       if (fl & 8) { dashT = r16() / 1000; ddx = rf32(); ddy = rf32(); }
       h.rerolls = r8(); h.skips = r8(); h.banishes = r8(); h.kills = rv();
       h.downed = !!(fl & 2); h.dead = !!(fl & 4);
-      let n = r8(); const S = h.skills; for (let i = 0; i < n; i++) { const s = S[i] || (S[i] = { id: '', lvl: 1, cd: 0, cdMax: 1 }); s.id = rstr(TBL.S); s.lvl = r8(); s.cd = r16() / 1000; s.cdMax = r16() / 1000; } S.length = n;
+      let n = r8(); const S = h.skills; for (let i = 0; i < n; i++) { const s = S[i] || (S[i] = { id: '', lvl: 1, cd: 0, cdMax: 1, ch: 0, chN: 0 }); s.id = rstr(TBL.S); s.lvl = r8(); s.cd = r16() / 1000; s.cdMax = r16() / 1000; const c = r8(); s.chN = c >> 4; s.ch = c & 15; } S.length = n;
       n = r8(); const Wp = h.weapons; for (let i = 0; i < n; i++) { const s = Wp[i] || (Wp[i] = { id: '', root: '', lvl: 1, evo: false, pr: [0, 0, 0], fl: 0 }); s.id = rstr(TBL.W); s.root = ED.weaponRoot(s.id); const l = r8(); s.lvl = l & 127; s.evo = !!(l & 128); const r = r8(); s.pr[0] = r & 3; s.pr[1] = r >> 2 & 3; s.pr[2] = r >> 4 & 3; s.fl = r >> 6 & 3; } Wp.length = n;
       n = r8(); const Ps = h.passives; for (let i = 0; i < n; i++) { const s = Ps[i] || (Ps[i] = { id: '', lvl: 1 }); s.id = rstr(TBL.P); s.lvl = r8(); } Ps.length = n;
       if (fl & 16) { h.fxf = r16(); h.fxv = rf32(); } else { h.fxf = 0; h.fxv = 0; }

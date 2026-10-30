@@ -1,4 +1,4 @@
-# Wickdeep — Kanban (agents)
+﻿# Wickdeep ??Kanban (agents)
 
 Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with the code). Legacy: tag `legacy-wickdeep`.
 
@@ -19,29 +19,32 @@ Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with th
 ## Done
 - Foundation: core sim, solo playable.
 - 15 lanes merged; co-op runs start from the lobby UI.
-- Fix round 2026-10-28: facing aim cone + weapon kill callbacks; stronger evolutions (stormcrown, twinmoons, choir, barrage); density floor; stage 3 bosses weaver + wickeater; spawn-once zones (NET_VERSION 4); hit-flash throttle, zone fade + Canvas2D zone LOD, hero markers, co-op slot palettes; phase banner number. Density floor refill (0.1 × deficit per tick, max 40). Canvas2D render gate 8 ms (WebGL 4 ms).
+- Fix round 2026-10-28: facing aim cone + weapon kill callbacks; stronger evolutions (stormcrown, twinmoons, choir, barrage); density floor; stage 3 bosses weaver + wickeater; spawn-once zones (NET_VERSION 4); hit-flash throttle, zone fade + Canvas2D zone LOD, hero markers, co-op slot palettes; phase banner number. Density floor refill (0.1 횞 deficit per tick, max 40). Canvas2D render gate 8 ms (WebGL 4 ms).
 - Playtest prep 2026-10-28: facing aim falls back to the nearest foe in range (Cleave, Daggers, Shadow Fan, Bone Spear, Impaler; Bramble stays path-bound); dash 80 px, Shield Charge 110 (+40), Shadow Step 130 (+50); Achievements + Encyclopedia screens (src/client/codex.js).
-- Bot bench 2026-10-28: bot-brain/bot/bench(+report, fake), seed-paired bootstrap Δ, skill tiers 1 / 0.3, weapon-aware stance, ?bot watch mode (no save).
+- Bot bench 2026-10-28: bot-brain/bot/bench(+report, fake), seed-paired bootstrap ?, skill tiers 1 / 0.3, weapon-aware stance, ?bot watch mode (no save).
 - Hero redesign 2026-10-29: one weapon per hero (3 paths x 3 ranks, 5 Forms incl. 2 hybrids, one Form per run, 2 refines), general weapons deleted, one Q skill (scales with weapon factor and party level), view clamp (ED.inView), hero/foe pace x0.8, roster tiers at 5:00/10:00 + 6 new foes, benchmark surge 12:00, XP curve 10+50(L-1)+1.5(L-1)^2, stage gold x1/1.5/2 + boss/win gold + kill bounty, pixel-true Batch shapes, per-hero hfx-<cls>.js + check-hero-<cls>.js + docs/heroes/<cls>.md, tools/dps.js yardstick, NET_VERSION 6.
 
 ## Known traps
 - Weapon ids are wire / save keys: addWeapon throws on a duplicate (Ranger's hybrid once overwrote Knight's gale).
 - One weapon per hero: forms swap ws.id; root via ED.weaponRoot; path mods keep applying after a Form.
 - Hero damage only inside the hero's view (ED.inView in hitFoe + targeting via w.vclamp).
-- Stats.skill computes weaponMul before sumLevels (shared SUM scratch).
+- Q skills are zero damage: no dmg in skill base / levels / N.
+- Hero statuses, knock and zone effects land only on foes in the hero's view (combat.js seen; zoneFoes filters hero zones).
+- Supports are save keys in Save.SEEN_WEAPONS: append only.
+- Support Forms (all 3 paths share one Form): ready when any path in f.any is at rank 3; f.need holds only the first.
 - Sim/data/heroes/weapons/save run in Node: no DOM, no Math.random/Date.now; use w.rng.
 - Script order twice: index.html and tools/sim.js FILES.
 - Pooled entities are reused under new ids: holders keep object + id and compare.
-- w.target facing/around/densest return the shared scratch w.pt: copy before the next call.
-- Foe telegraphs: team 1 warn zones, dur ≥ 0.6 s (forced).
-- 1 art px = 1 world px (Atlas K = 1); view 640×360 integer-scaled.
+- w.target around/densest return the shared scratch w.pt: copy before the next call.
+- Foe telegraphs: team 1 warn zones, dur ??0.6 s (forced).
+- 1 art px = 1 world px (Atlas K = 1); view 640횞360 integer-scaled.
 - Weapon def.icon is forced to icon.w.<id> (cards / HUD); def.held keeps the in-hand sprite.
 - Wire change (snapshot, input, look / weapon registration order) bumps ED.NET_VERSION.
 - Zones are spawn-once per client (cc.zc): every encoded snapshot must reach that client's Mirror.
 - Boss draw hooks read ED.Actors.hitFlash(e), not e.flash; headless checks stub ED.Actors.
 - Kill effects tied to a weapon go in impl.kill (any holder), not ED.HOOK[cls].kill.
-- Facing weapons aim with w.facingAim / w.coneFoe (ED.FACING_CONE).
-- tools/dps.js is the hero power yardstick (bands in GAME-DESIGN §4).
+- Directional weapons aim with w.aimDir(p) (cursor, p.in.ax/ay); bots and browse.js drive must send ax/ay.
+- tools/dps.js is the hero power yardstick (bands in GAME-DESIGN 짠4).
 
 ## Logs
 - 2026-10-27 foundation committed on feat/survivors.

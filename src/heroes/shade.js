@@ -1,9 +1,9 @@
-// Shade (assassin): hero data, signature Twin Daggers (rapid narrow stabs toward the facing foe; 3 paths x 3 ranks), Forms Thousand Cuts (path 0), Assassinate (path 1),
+// Shade (assassin): hero data, signature Twin Daggers (rapid narrow stabs toward the cursor; 3 paths x 3 ranks), Forms Thousand Cuts (path 0), Assassinate (path 1),
 // Shadow Fan (path 2), hybrids Death Lotus (paths 0 + 1) and Reaper's Return (paths 1 + 2); Q Shadow Step.
 // Stab: a segment from the hero's hand along the aim, S.len x area long, S.wid x area wide; every foe touching it is hit. Crit is rolled once per stab (a crit stab forces a crit on
 // every foe it touches, others never crit). A strike of S.n stabs is spread evenly over the cooldown (ws.st queue), each stab re-aimed. Visual: one line zone per stab.
 // Zone looks: stab / stabx (crit) / tcut (storm stab) line zones 0.12 s; smark (mark on a foe), mcut (shadow X cut, w = cut length), petal (bloom, w = blade count), sexec (execute pop,
-// w = 1 with a burst), stepcut (blink slash), afterimg (afterimage). Projectile looks: rknife (returning dagger), sknife (Shadow Fan), pknife (pinning dagger), knife (afterimage knives).
+// w = 1 with a burst), stepcut (blink slash), afterimg (Shadow Step decoy). Projectile looks: rknife (returning dagger), sknife (Shadow Fan), pknife (pinning dagger).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU;
@@ -56,11 +56,11 @@
 
   // ---------------- stabs ----------------
   const reach = (S) => S.len * S.area;
-  // Aim of one stab: the mark when within reach + 12 px, else facingAim over reach + 12 px (0.9 rad cone, then the nearest foe, else p.mdir).
+  // Aim of one stab: the cursor dir (w.aimDir); the mark instead when within reach + 12 px and AIM_CONE rad of it.
   function stabAim(w, p, ws, S) {
-    const R = reach(S) + 12, m = S.mark ? markOf(ws.st) : null;
-    if (m && U.dist2(p.x, p.y, m.x, m.y) <= R * R) return Math.atan2(m.y - p.y + HAND, m.x - p.x);
-    return w.facingAim(p, p.mdir, R, AIM_CONE);
+    const R = reach(S) + 12, m = S.mark ? markOf(ws.st) : null, a = w.aimDir(p);
+    if (m && U.dist2(p.x, p.y, m.x, m.y) <= R * R) { const b = Math.atan2(m.y - p.y + HAND, m.x - p.x); if (Math.abs(U.angDiff(a, b)) <= AIM_CONE) return b; }
+    return a;
   }
   // One stab: crit rolled here (crit with S.lunge: length x (1 + lunge), width x 1.4); S.cone (storm): angle jittered within +-cone, length x 0.8..1.15;
   // S.bloom: a crit stab's first foe blooms S.petals blades outward (S.plen x reach long, dmg x S.bloom, not crits).
@@ -81,7 +81,7 @@
   }
 
   // ---------------- thrown daggers ----------------
-  // Every S.tcd s: S.thrown daggers fanned 0.35 rad toward the facing aim, out S.trange x area px and back (dmg x S.tdm, pierce all; each foe hit once out, once back);
+  // Every S.tcd s: S.thrown daggers fanned 0.35 rad along the cursor, out S.trange x area px and back (dmg x S.tdm, pierce all; each foe hit once out, once back);
   // S.hover: they spin 0.4 s at the far end, re-hitting every 0.15 s. S.fan (Shadow Fan): S.fan + S.thrown daggers fanned forward and as many behind; the return leg always crits.
   // S.pin (Reaper's Return): a dagger sticks in the first foe it hits for S.pdur s (strikes on that foe crit), then tears out (a TEAR px cut, forced crits) and flies back as a forced crit.
   // Per-dagger state st { h (hovering), e / id (pinned foe), t (pin time left), ws } from a pool, returned on the dagger's end.
@@ -116,7 +116,7 @@
   }
   const TO = { look: 'rknife', pierce: 999, ret: true, r: 5, speed: TSPEED, dmg: 0, life: 1, st: null, tick: thrownTick, onHit: thrownHit, onEnd: giveSt };
   function throwDaggers(w, p, ws, S) {
-    const fan = S.fan > 0, n = Math.max(1, (S.thrown | 0) + (S.fan | 0)), o = TO, R = S.trange * S.area, a = w.facingAim(p, p.mdir, R + 30, AIM_CONE);
+    const fan = S.fan > 0, n = Math.max(1, (S.thrown | 0) + (S.fan | 0)), o = TO, R = S.trange * S.area, a = w.aimDir(p);
     const spread = fan ? Math.min(0.28, 1.6 / n) : 0.35;
     o.life = 2 * R / TSPEED; o.r = 5 * S.area; o.dmg = S.dmg * S.tdm; o.look = fan ? 'sknife' : S.pin ? 'pknife' : 'rknife'; o.tick = fan ? fanTick : thrownTick;
     for (let side = 0; side < (fan ? 2 : 1); side++) {
@@ -193,7 +193,7 @@
     bloom: 0, petals: 6, plen: 0.6, pin: false, pdur: 1.2 };
   const base = (o) => Object.assign({}, KEYS, o);
   ED.addWeapon({
-    id: 'daggers', name: 'Twin Daggers', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'facing', txt: 'Rapid stabs where you face',
+    id: 'daggers', name: 'Twin Daggers', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', txt: 'Rapid stabs toward your cursor',
     base: base({ dmg: 13, cd: 0.5, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.1 }),
     paths: [
       { id: 'flurry', name: 'Flurry', form: 'thousand', ranks: [
@@ -214,7 +214,7 @@
 
   // Shadow Fan (Return): stabs + a fan of S.fan + S.thrown returning daggers forward and as many behind (registered first: the old evolution id); the return leg always crits.
   ED.addWeapon({
-    id: 'shadowfan', name: 'Shadow Fan', icon: 'weapon.knives', look: 'sknife', sig: 'shade', mode: 'facing', evolved: true, form: true, from: 'daggers', txt: 'Daggers fan out, return and crit',
+    id: 'shadowfan', name: 'Shadow Fan', icon: 'weapon.knives', look: 'sknife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Daggers fan out, return and crit',
     base: base({ dmg: 21, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, fan: 3, tcd: 1, trange: 120, tdm: 0.42 }),
     refine: [
       { mods: { fan: 2 }, txt: '+2 daggers each way' },
@@ -223,7 +223,7 @@
   }, stabImpl);
   // Thousand Cuts (Flurry): the stab storm, each stab jittered within +-S.cone of the aim.
   ED.addWeapon({
-    id: 'thousand', name: 'Thousand Cuts', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'facing', evolved: true, form: true, from: 'daggers', txt: 'A storm of stabs in a narrow cone',
+    id: 'thousand', name: 'Thousand Cuts', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A storm of stabs in a narrow cone',
     base: base({ dmg: 20, cd: 0.4, n: 6, pierce: 0, area: 1, speed: 0, dur: 0, knock: 2, range: 0, crit: 0.1, len: 68, wid: 12, cone: 0.36 }),
     refine: [
       { mods: { n: 2 }, txt: '+2 stabs per storm' },
@@ -232,8 +232,8 @@
   }, stabImpl);
   // Assassinate (Lethality): stabs + the mark and the shadow's X cuts.
   ED.addWeapon({
-    id: 'assassinate', name: 'Assassinate', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'facing', evolved: true, form: true, from: 'daggers', txt: 'A shadow hunts the toughest foe',
-    base: base({ dmg: 17, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.15, mark: true, mk: 1.1, mcd: 0.45, mlen: 64 }),
+    id: 'assassinate', name: 'Assassinate', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A shadow hunts the toughest foe',
+    base: base({ dmg: 18, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.15, mark: true, mk: 1.1, mcd: 0.45, mlen: 64 }),
     refine: [
       { mods: { mcd: -0.2 }, txt: 'The shadow strikes far more often' },
       { mods: { mlen: 40 }, txt: 'Shadow cuts reach twice as far' },
@@ -241,8 +241,8 @@
   }, stabImpl);
   // Death Lotus (Flurry + Lethality): crit stabs bloom into a ring of blades around their first foe.
   ED.addWeapon({
-    id: 'lotus', name: 'Death Lotus', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'facing', evolved: true, form: true, from: 'daggers', txt: 'Crits bloom into a ring of blades',
-    base: base({ dmg: 20, cd: 0.45, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 10, range: 0, crit: 0.15, bloom: 0.32, petals: 6, plen: 0.6 }),
+    id: 'lotus', name: 'Death Lotus', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Crits bloom into a ring of blades',
+    base: base({ dmg: 19, cd: 0.45, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 10, range: 0, crit: 0.15, bloom: 0.32, petals: 6, plen: 0.6 }),
     refine: [
       { mods: { petals: 2 }, txt: '+2 blades per bloom' },
       { mods: { crit: 0.1, plen: 0.4 }, txt: '+10% crit, blades reach farther' },
@@ -250,7 +250,7 @@
   }, stabImpl);
   // Reaper's Return (Lethality + Return): stabs + thrown daggers that pin a foe (strikes on it crit), then tear back as crits.
   ED.addWeapon({
-    id: 'reaper', name: "Reaper's Return", icon: 'weapon.knives', look: 'pknife', sig: 'shade', mode: 'facing', evolved: true, form: true, from: 'daggers', txt: 'Daggers pin foes, then tear back',
+    id: 'reaper', name: "Reaper's Return", icon: 'weapon.knives', look: 'pknife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Daggers pin foes, then tear back',
     base: base({ dmg: 18, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, thrown: 3, tcd: 1, trange: 120, tdm: 1, pin: true, pdur: 1.2 }),
     refine: [
       { mods: { thrown: 1 }, txt: '+1 pinning dagger' },
@@ -259,16 +259,17 @@
   }, stabImpl);
 
   // ---------------- Shadow Step ----------------
-  // Blinks toward the cursor (40..N.dist px, through foes and over obstacles), cutting every foe within N.w / 2 of the path (forced crit, shoved aside, stunned 0.4 s), invulnerable 0.35 s.
-  // The afterimage left at the start detonates after N.dur s (N.r radius, N.dmg x 1.5); knives: it throws 3 knives at random foes in view every 0.2 s until then.
-  // recast: the first cast opens a 2.5 s window in which Q blinks again at no cost (hook tick; the cooldown resumes if unused).
+  // Zero damage. Blinks toward the cursor (40..N.dist px, through foes and over obstacles), invulnerable 0.35 s. The afterimage left at the start is a decoy for N.dur s:
+  // every 0.25 s each non-boss foe inside the decoy's view rect is lured to it (W.foeLure, 0.4 s, refreshed). charges (L4): 2 casts stored.
+  // Zones: 'stepcut' (blink streak), 'afterimg' (the decoy).
+  const DV = ED.HERO_VIEW;
   ED.addSkill({
-    id: 'step', name: 'Shadow Step', icon: 'fx.smoke', cd: 8, txt: 'Blink, cut the path, leave a decoy',
-    base: { dmg: 11, r: 44, dur: 0.8, dist: 130, w: 26 },
+    id: 'step', name: 'Shadow Step', icon: 'fx.smoke', cd: 8, txt: 'Blink and leave a decoy foes chase',
+    base: { dur: 2, dist: 130, charges: 1 },
     levels: [
-      { mods: { knives: true }, txt: 'Afterimage throws knives' },
-      { mods: { dist: 50, w: 18, r: 0.3 }, txt: 'Blink farther, cut a wider path' },
-      { mods: { recast: true }, txt: 'Recast once within 2.5 s' },
+      { mods: { dist: 60 }, txt: 'Blink 60 px farther' },
+      { mods: { dur: 0.75 }, txt: 'The decoy lasts 3.5 s' },
+      { mods: { charges: 1 }, txt: '2 charges' },
     ],
   }, (w, p, x, y, N) => {
     let a = Math.atan2(y - p.y, x - p.x), d = Math.hypot(x - p.x, y - p.y);
@@ -278,46 +279,16 @@
     p.x += Math.cos(a) * d; p.y += Math.sin(a) * d; ED.Arena.collide(w.arena, p, p.r);
     p.invuln = Math.max(p.invuln, 0.35); p.mdir = a;
     const len = Math.hypot(p.x - ox, p.y - oy) || 1;
-    cut(w, p, ox, oy, p.x, p.y, N.w / 2, N.dmg, a);
-    w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, a, len, w: N.w, dur: 0.3, look: 'stepcut' });
-    w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, r: N.r, a, dur: N.dur, warn: true, dmg: N.dmg * 1.5, knock: 240, look: 'afterimg',
-      st: N.knives ? { kt: 0, dmg: N.dmg * 0.35 } : null, onTick: N.knives ? afterKnives : null });
-    w.hitBraziers(p.x, p.y, 24, p);
-    if (N.recast) { if (p.stepRe > 0) p.stepRe = 0; else { p.stepRe = 2.5; p.stepArm = true; } }
+    w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, a, len, w: 26, dur: 0.3, look: 'stepcut' });
+    w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, r: 24, a, dur: N.dur, look: 'afterimg', st: { nt: 0 }, onTick: decoyTick });
     return { x0: Math.round(ox), y0: Math.round(oy), a, shake: 4 };
   });
-  // Segment cut (x0, y0) -> (x1, y1) of half width hw: every foe touching it takes dmg as a forced crit, shoved perpendicular away from the path.
-  function cut(w, p, x0, y0, x1, y1, hw, dmg, a) {
-    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, R = Math.hypot(x1 - x0, y1 - y0) / 2 + hw + 24, q = w.foeScan(mx, my, R);
-    for (let k = 0; k < q.length; k++) {
-      const e = q[k]; if (e.dead) continue;
-      const m = hw + e.r; if (U.segDist2(e.x, e.y, x0, y0, x1, y1) > m * m) continue;
-      const side = U.angDiff(a, Math.atan2(e.y - y0, e.x - x0)) > 0 ? 1 : -1, s = w.src(p, 'step', 'skill', 220);
-      s.crit = true; s.kx = -Math.sin(a) * side; s.ky = Math.cos(a) * side;
-      w.hitFoe(e, dmg, s);
-      if (!e.dead) w.stun(e, 0.4);
-    }
+  // Decoy: lures every non-boss foe inside its view rect (centred on the afterimage), every 0.25 s.
+  function decoyTick(w, z) {
+    if (z.t < z.st.nt) return;
+    z.st.nt = z.t + 0.25;
+    const q = w.foeScan(z.x, z.y, Math.hypot(DV.hw, DV.hh)), T = Math.min(0.4, z.dur - z.t + 0.05);
+    for (let k = 0; k < q.length; k++) { const e = q[k]; if (!e.dead && Math.abs(e.x - z.x) <= DV.hw && Math.abs(e.y - z.y) <= DV.hh) w.foeLure(e, z.x, z.y, T); }
     w.foeEnd();
   }
-  const KNIFE = { look: 'knife', dmg: 0, speed: 420, pierce: 1, life: 0.6, knock: 20 };
-  function afterKnives(w, z) {
-    const st = z.st;
-    for (st.kt += 1 / 60; st.kt >= 0.2; st.kt -= 0.2) {
-      KNIFE.dmg = st.dmg;
-      for (let i = 0; i < 3; i++) {
-        const t = w.target('random', z.p, 220);
-        const a = t ? Math.atan2(t.y - z.y, t.x - z.x) : w.rng.next() * TAU;
-        w.shoot(z.p, 'step', z.x, z.y - 8, a, null, KNIFE);
-      }
-    }
-  }
-
-  ED.HOOK.shade = {
-    init(w, p) { p.stepRe = 0; p.stepArm = false; p.stepRest = 0; },
-    tick(w, p, dt) {
-      const sk = p.skills[0];
-      if (p.stepArm) { p.stepArm = false; p.stepRest = sk.cd; sk.cd = 0; }
-      else if (p.stepRe > 0) { p.stepRe -= dt; p.stepRest -= dt; if (p.stepRe <= 0) sk.cd = Math.max(0, p.stepRest); }
-    },
-  };
 })(globalThis.ED || (globalThis.ED = {}));

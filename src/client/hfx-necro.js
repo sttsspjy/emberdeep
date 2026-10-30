@@ -1,5 +1,5 @@
 // Necro visuals (ED.WeaponFx / ED.SkillFx / ED.ZoneActor hooks; loaded after fx.js): bone shards and splinters, blight globs, minion ground rings and bodies
-// (skeleton, Bone Knight, archer, ghoul; y-sorted by render.js), Bone Knight slams, blight / plague pools, Corpse Blast detonations.
+// (skeleton, Bone Knight, archer, ghoul; y-sorted by render.js), Bone Knight slams, blight / plague pools, the Bone Wall.
 // Everything derives from render-visible fields (zones: x, y, r, a, w, t, dur, k, id; projectiles: x, y, a, k, id) and view time; pixel art only (atlas sprites, thin rings).
 (function (ED) {
   'use strict';
@@ -70,15 +70,6 @@
       B.spr('fx.smoke.ring', at('fx.smoke.ring', q), z.x, z.y, o(0.8 * (1 - q), U.clamp(z.r / 24, 1, 3)));
       return true;
     }
-    if (k === 'corpse') { // purple detonation with a skull flash
-      const q = U.clamp(z.t / z.dur, 0, 1);
-      kick(z, 2.5);
-      B.circ(z.x, z.y, z.r * (0.4 + 0.6 * U.easeOut(q)), rgba(0x8a5ad8, 120 * (1 - q)), 0);
-      B.circ(z.x, z.y, z.r * (0.4 + 0.6 * U.easeOut(q)), rgba(0xe0c8ff, 230 * (1 - q)), 1);
-      B.spr('fx.blast.blue', at('fx.blast.blue', q), z.x, z.y - 4, o(1 - q * 0.5, U.clamp(z.r / 18, 1, 2.5), 0, true));
-      if (q < 0.4) B.spr('fx.sigil.skull', 0, z.x, z.y - 12 - q * 20, o(1 - q * 2, 2));
-      return true;
-    }
     return false;
   };
 
@@ -102,12 +93,42 @@
   };
 
   for (const id of ['boneshard', 'bonestorm', 'bonelord', 'plaguefield', 'lich', 'ossuary']) ED.WeaponFx[id] = { proj: boneProj, zone: necroZone };
-  ED.SkillFx.corpseblast = ED.WeaponFx.corpseblast = { zone: necroZone, proj: boneProj };
+  // Bone Wall (Q, zone 'bonewall': circle x, y, r; arc 0 = full ring, else its span around a; w = thickness): a violet-black band under two staggered rows of bones laid along the
+  // curve (a 2x skull every 5th) that grow out of the ground over 0.3 s, a violet glow, pale bone rims on both edges, dust while it rises; it crumbles (sinks and fades) over its last 0.4 s.
+  const WP = new Float32Array(130);
+  const boneWall = (B, z, t) => {
+    if (z.k !== 'bonewall') return false;
+    const full = !(z.arc > 0), span = full ? TAU : z.arc, rise = Math.min(1, z.t / 0.3), fade = Math.min(1, (z.dur - z.t) / 0.4), al = Math.max(0, Math.min(rise * 2, fade)), hw = Math.max(4, z.w / 2);
+    if (al <= 0) return true;
+    kick(z, 4);
+    const m = U.clamp(Math.ceil(span * z.r / 12) + 1, 3, 64), a0 = z.a - (full ? 0 : span / 2), step = span / (m - (full ? 0 : 1));
+    for (let i = 0; i < m; i++) { const b = a0 + i * step; WP[i * 2] = z.x + Math.cos(b) * z.r; WP[i * 2 + 1] = z.y + Math.sin(b) * z.r; }
+    const n = full ? m + 1 : m;
+    if (full) { WP[m * 2] = WP[0]; WP[m * 2 + 1] = WP[1]; }
+    B.poly(WP, n, z.w + 6, rgba(0x8a5ad8, 60 * al));
+    B.poly(WP, n, z.w, rgba(0x2e2240, 220 * al));
+    for (let i = 0; i < m; i++) { const b = a0 + i * step; WP[i * 2] = z.x + Math.cos(b) * (z.r - hw); WP[i * 2 + 1] = z.y + Math.sin(b) * (z.r - hw); }
+    if (full) { WP[m * 2] = WP[0]; WP[m * 2 + 1] = WP[1]; }
+    B.poly(WP, n, 2, rgba(0xe8dcc8, 200 * al));
+    for (let i = 0; i < m; i++) { const b = a0 + i * step; WP[i * 2] = z.x + Math.cos(b) * (z.r + hw); WP[i * 2 + 1] = z.y + Math.sin(b) * (z.r + hw); }
+    if (full) { WP[m * 2] = WP[0]; WP[m * 2 + 1] = WP[1]; }
+    B.poly(WP, n, 2, rgba(0xe8dcc8, 200 * al));
+    for (let row = 0; row < 2; row++) for (let i = 0; i < m; i++) {
+      const b = a0 + (i + row * 0.5) * step; if (!full && i + row * 0.5 > m - 1) continue;
+      const rr = z.r + (row ? hw * 0.45 : -hw * 0.45), x = z.x + Math.cos(b) * rr, y = z.y + Math.sin(b) * rr, skull = !row && i % 5 === 2;
+      o(al, skull ? 2 : 1, skull ? 0 : b + Math.PI / 2 + (U.hash3(z.id, i, row) & 1 ? 0.5 : -0.5)); O.sy *= rise * fade;
+      B.spr(skull ? 'proj.skull' : 'proj.bone', 0, x, y - 3 * rise * fade, O);
+    }
+    if (rise < 1 && Math.random() < 0.6) { const i = (Math.random() * m) | 0; spark(WP[i * 2], WP[i * 2 + 1], 0x9a8a70ff, 1, 30); }
+    if (fade < 1 && Math.random() < 0.5) { const i = (Math.random() * m) | 0; spark(WP[i * 2], WP[i * 2 + 1], 0xe8dcc8ff, 1, 20); }
+    return true;
+  };
+  ED.SkillFx.bonewall = { zone: boneWall };
   const ZA = ED.ZoneActor = ED.ZoneActor || {};
   ZA.minion = ZA.boneknight = ZA.bonearcher = ZA.ghoul = minionBody;
 
   // Necro weapon 'boom' events (ghoul bursts, blight pops) skip fx.js's generic blast, whose cream 0.6-alpha flash disc (up to 90 px; ghoul / blight have no look colour)
-  // stacked into white blots: a ring in the look colour at the true radius, a small core flash, a few sparks. Corpse Blast (skill) keeps the generic blast.
+  // stacked into white blots: a ring in the look colour at the true radius, a small core flash, a few sparks.
   const NW = { boneshard: 1, bonestorm: 1, bonelord: 1, plaguefield: 1, lich: 1, ossuary: 1 }, NCOL = { ghoul: 0x7fe34a00, blight: 0xa8e07000 };
   const F = ED.FX;
   if (F && F.handle) {

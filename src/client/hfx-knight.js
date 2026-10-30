@@ -1,5 +1,5 @@
-// Knight visuals (pixel only: atlas sprites + Batch primitives): crescent outlines, gale crescents and spiral blades (projectiles), crack / cut / shock / charge zones,
-// a blade glint orbiting a knight holding a spin Form (HeroFx). Everything derives from render-visible fields and view time; per-zone variation from U.hash3(z.id, i, ...).
+// Knight visuals (pixel only: atlas sprites + Batch primitives): crescent outlines, gale crescents and spiral blades (projectiles), crack / cut zones, Q shove / bulwark zones,
+// spin fans (full-spin swing events), big slam rims (quake booms), a blade glint orbiting a knight holding a spin Form (HeroFx). Everything derives from render-visible fields and view time; per-zone variation from U.hash3(z.id, i, ...).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU, PI = Math.PI;
@@ -42,7 +42,6 @@
     for (let i = 1; i <= 3; i++) B.rect(Math.round(pr.x - c * i * 9 + ((pr.id + i) % 3 - 1) * 4), Math.round(pr.y - s * i * 9), 2, 1, rgba(WIND, 200 - i * 50));
     return true;
   };
-  const shieldProj = (B, pr, t) => { B.spr('proj.shield', 0, pr.x, pr.y, o(1, 1, (t * 18 + pr.id) % TAU)); return true; };
   const knightProj = (B, pr, t) => (pr.k === 'gale' ? galeProj(B, pr, t) : crescent(B, pr));
 
   // ---------------- zones ----------------
@@ -82,41 +81,50 @@
     }
     return true;
   };
-  // Shock (charge impact / quake): thin expanding ring + shock sprite at the centre.
-  const shockZone = (B, z) => {
-    const k = U.clamp(z.t / z.dur, 0, 1), r = z.r * (0.25 + 0.75 * U.easeOut(k));
-    kick(z, z.r > 80 ? 4 : 2);
-    B.circ(z.x, z.y, r, rgba(STEEL, 40 * (1 - k)), 0);
-    B.circ(z.x, z.y, r, rgba(STEEL, 230 * (1 - k)), 2);
-    if (k < 0.5) B.spr('fx.ring.shock', at('fx.ring.shock', k * 2), z.x, z.y - 6, o(1 - k, z.r > 80 ? 2 : 1, 0, true));
-    return true;
-  };
-  // Charge: speed streaks behind the hero, shield glow ahead.
-  const chargeZone = (B, z, t) => {
-    const c = Math.cos(z.a), s = Math.sin(z.a), k = life(z, 0.05, 0.1);
-    kick(z, 3);
-    for (let i = -3; i <= 3; i++) {
-      const off = i * z.r * 0.28, len = 40 + 30 * H(z.id, i + 9, Math.floor(t * 30)), bx = z.x - s * off - c * 8, by = z.y - 8 + c * off - s * 8;
-      B.line(bx, by, bx - c * len, by - s * len, 1, rgba(STEEL, (i ? 120 : 220) * k));
+  // ---------------- Q: Bulwark Shove ----------------
+  // Shove: a shield wave expanding from the hero to the shove edge (z.r) in 0.3 s: a thick steel front with a white leading line, a pale wash behind it, a big shield flash at the hero,
+  // dust kicked up along the front. Bulwark: the ring at the shove edge (band z.w): dark band, steel rims, shields standing on it every ~44 px, a slow pulse; fades out over its last 0.4 s.
+  const shoveZone = (B, z, t) => {
+    const k = U.clamp(z.t / z.dur, 0, 1), f = U.easeOut(Math.min(1, z.t / 0.3)), r = Math.max(4, z.r * (0.15 + 0.85 * f)), al = 1 - Math.max(0, (k - 0.55) / 0.45);
+    kick(z, 6);
+    B.circ(z.x, z.y - 4, r, rgba(0xfff1d6, 34 * al), 0);
+    B.circ(z.x, z.y - 4, r, rgba(STEEL, 230 * al), 4);
+    B.circ(z.x, z.y - 4, r + 3, rgba(0xffffff, 200 * al), 1);
+    B.circ(z.x, z.y - 4, r * 0.7, rgba(STEEL, 90 * al), 1);
+    if (k < 0.5) B.spr('proj.shield', 0, z.x, z.y - 12, o(1 - k * 2, 3, 0, true));
+    if (k < 0.4) B.spr('fx.ring.shock', at('fx.ring.shock', k / 0.4), z.x, z.y - 6, o(1 - k / 0.4, 3, 0, true));
+    const n = B.zoneLite ? 8 : 16;
+    for (let i = 0; i < n; i++) {
+      const a = (i + H(z.id, i, 1) * 0.6) / n * TAU, x = z.x + Math.cos(a) * r, y = z.y - 4 + Math.sin(a) * r * 0.9;
+      if (i & 1) B.spr('fx.puff', at('fx.puff', k), x, y, o(al * 0.8, 1));
+      else B.rect(Math.round(x), Math.round(y - 3 * f), 2, 2, rgba(DUST, 220 * al));
     }
-    B.cone(z.x + c * 4, z.y - 8 + s * 4, z.r + 6, z.a, 1.6, rgba(0xfff1d6, 60 * k), 0);
-    B.cone(z.x + c * 4, z.y - 8 + s * 4, z.r + 6, z.a, 1.6, rgba(0xffffff, 210 * k), 1);
     return true;
   };
+  const bulwarkZone = (B, z, t) => {
+    const k = life(z, 0.15, 0.4), r = z.r, bw = Math.max(4, z.w), pulse = 0.5 + 0.5 * Math.sin(t * 5 + z.id);
+    if (k <= 0) return true;
+    B.circ(z.x, z.y, r, rgba(0x1a2230, 120 * k), bw);
+    B.circ(z.x, z.y, r - bw / 2, rgba(STEEL, (150 + 60 * pulse) * k), 2);
+    B.circ(z.x, z.y, r + bw / 2, rgba(STEEL, (150 + 60 * pulse) * k), 2);
+    B.circ(z.x, z.y, r + bw / 2 + 2, rgba(0xffffff, 70 * pulse * k), 1);
+    const n = U.clamp(Math.round(TAU * r / (B.zoneLite ? 88 : 44)), 6, 40);
+    for (let i = 0; i < n; i++) { const a = i / n * TAU + z.id * 0.37; B.spr('proj.shield', 0, z.x + Math.cos(a) * r, z.y + Math.sin(a) * r - 4, o(k, 1, 0)); }
+    return true;
+  };
+  const shoveFx = (B, z, t) => (z.k === 'shove' ? shoveZone(B, z, t) : z.k === 'bulwark' ? bulwarkZone(B, z, t) : false);
   const knightZone = (B, z, t) => {
     if (z.k === 'crack') return crackZone(B, z, t);
     if (z.k === 'cut') return cutZone(B, z, t);
-    if (z.k === 'shock') return shockZone(B, z, t);
-    if (z.k === 'charge') return chargeZone(B, z, t);
     return false;
   };
   for (const id of ['cleave', 'whirlwind', 'colossus', 'gale', 'earthsplitter', 'tempest']) ED.WeaponFx[id] = { proj: knightProj, zone: knightZone };
-  // render.js looks zones up as WeaponFx[wid] || SkillFx[wid] and projectiles as WeaponFx[wid]: skills that also shoot share one entry in both tables.
-  ED.SkillFx.charge = ED.WeaponFx.charge = { zone: knightZone, proj: shieldProj };
+  ED.SkillFx.shove = { zone: shoveFx };
 
   // ---------------- swings ----------------
-  // Knight 'swing' events skip fx.js's filled slash cone (stacked strings at full reach washed the view): outline arcs at the reach (2 px steel) and 2/3 reach (1 px white),
-  // a ring pair for full spins, fading over SW_LIFE s of FX time; drawn in the FX layer after ED.FX.draw. The hero's swing pose still goes through ED.Actors.event.
+  // Knight 'swing' events skip fx.js's filled slash cone (stacked strings at full reach washed the view): directional swings draw outline arcs at the reach (2 px steel) and 2/3 reach
+  // (1 px white), fading over SW_LIFE s of FX time. Full spins (arc >= 6.2) drive a fan per hero instead (see spin fan). Drawn in the FX layer after ED.FX.draw;
+  // the hero's swing pose still goes through ED.Actors.event.
   const KW = { cleave: 1, whirlwind: 1, colossus: 1, gale: 1, earthsplitter: 1, tempest: 1 };
   const SW_LIFE = 0.18, SWN = 24, SWS = [];
   for (let i = 0; i < SWN; i++) SWS.push({ x: 0, y: 0, a: 0, r: 0, arc: 0, t0: -1e9 });
@@ -128,12 +136,73 @@
     for (let i = 0; i < n; i++) { const b = a + (i / (n - 1) - 0.5) * arc; SP[i * 2] = x + Math.cos(b) * r; SP[i * 2 + 1] = y + Math.sin(b) * r; }
     B.poly(SP, n, lw, col);
   };
+
+  // ---------------- spin fan ----------------
+  // A full spin is a ceiling fan photographed spinning: FAN[wid].n paddle blades (lines bw x radius wide, at most lw px, from the hub ring R0 px out to the hit radius) turning FAN.w rad/s clockwise on screen.
+  // Each blade is smeared into a wedge of SMEAR stepped-alpha copies trailing behind it, brightest at the leading copy, which also carries a 1 px edge line and a tip glint.
+  // Trailing copies start where consecutive copies stop overlapping (lw / step px out, at most half the radius): any foe sits under at most ~1 body copy (leading copy al / 255 <= 0.3).
+  // A hub ring sits at the hero. One fan per hero follows it (view hero by pid): every spin event of a string keeps it turning; it holds FAN_HOLD s after the last spin,
+  // then fades over FAN_FADE s. Crowded Canvas2D: half the copies.
+  const FAN = {
+    whirlwind: { n: 4, w: 15.7, bw: 0.19, lw: 13, col: 0xe8d8c0, edge: 0xfff6e6, al: 72 },
+    cleave: { n: 4, w: 15.7, bw: 0.19, lw: 13, col: 0xe8d8c0, edge: 0xfff6e6, al: 64 },
+    earthsplitter: { n: 3, w: 10.5, bw: 0.27, lw: 17, col: 0xc89e74, edge: 0xffe8c8, al: 76 },
+    tempest: { n: 5, w: 18.8, bw: 0.12, lw: 8, col: 0xc8d8f4, edge: 0xffffff, al: 72 },
+  };
+  const SMEAR = 7, STEP = 0.13, R0 = 8, FAN_HOLD = 0.14, FAN_FADE = 0.16, FANN = 8, FANS = [];
+  for (let i = 0; i < FANN; i++) FANS.push({ pid: '', wid: '', x: 0, y: 0, r: 0, a0: 0, t0: -1e9, tl: -1e9 });
+  const fanLive = (f, now) => now - f.tl < FAN_HOLD + FAN_FADE;
+  const fanEvent = (ev, now) => {
+    let f = null;
+    for (let i = 0; i < FANN; i++) { const g = FANS[i]; if (g.pid === ev.pid && fanLive(g, now)) { f = g; break; } }
+    if (!f) { f = FANS[0]; for (let i = 1; i < FANN; i++) if (FANS[i].tl < f.tl) f = FANS[i]; f.pid = ev.pid; f.t0 = now; f.a0 = ev.a; }
+    f.wid = FAN[ev.wid] ? ev.wid : 'whirlwind'; f.x = ev.x; f.y = ev.y; f.r = ev.r; f.tl = now;
+  };
+  const heroAt = (pid) => { const v = ED.Game && ED.Game.view; if (v) for (const p of v.heroes) if (p.pid === pid) return p.dead ? null : p; return null; };
+  const drawFan = (B, f, now) => {
+    const D = FAN[f.wid], age = now - f.t0, k = Math.min(1, age / 0.05, (FAN_HOLD + FAN_FADE - (now - f.tl)) / FAN_FADE);
+    if (k <= 0 || f.r < R0 + 4) return;
+    const h = heroAt(f.pid), x = h ? h.x : f.x, y = h ? h.y - 4 : f.y, R = f.r * (0.88 + 0.12 * Math.min(1, age / 0.08));
+    const lw = U.clamp(Math.round(R * D.bw), 3, D.lw), m = B.mode !== 'gl' && B.crowd > 300 ? (SMEAR + 1) >> 1 : SMEAR, st = STEP * SMEAR / m;
+    const th = f.a0 + age * D.w, rs = Math.min(lw / st, R * 0.5);
+    for (let j = 0; j < D.n; j++) {
+      const b = th + j * TAU / D.n;
+      for (let i = m - 1; i >= 0; i--) { // trailing copies first (start past the overlap radius rs: the smear widens into a wedge outward); the leading copy lands on top
+        const c = b - i * st, q = 1 - i / m, cs = Math.cos(c), sn = Math.sin(c), r0 = i ? Math.max(rs, R0 + (R - R0) * 0.4 * i / m) : R0;
+        B.line(x + cs * r0, y + sn * r0, x + cs * R, y + sn * R, lw, rgba(D.col, D.al * k * q * q));
+      }
+      const cs = Math.cos(b + D.bw * 0.5), sn = Math.sin(b + D.bw * 0.5), ex = x + Math.cos(b) * R, ey = y + Math.sin(b) * R;
+      B.line(x + cs * R0, y + sn * R0, x + cs * R, y + sn * R, 1, rgba(D.edge, 230 * k));
+      B.rect(Math.round(ex) - 1, Math.round(ey) - 1, 2, 2, rgba(0xffffff, 240 * k));
+    }
+    B.circ(x, y, R0, rgba(D.edge, 200 * k), 2);
+  };
+  // ---------------- big slams ----------------
+  // Knight 'quake' booms wider than SL_MIN px (spin-string slams, Earthsplitter quakes) skip fx.js's boom (full-alpha ring, flash disc, screen flash): a 1 px dust rim
+  // opens 0.85 -> 1 x r over SL_LIFE s with stepped alpha, 12 dust flecks kicked up along it. Smaller slams keep the default boom.
+  const SL_MIN = 100, SL_LIFE = 0.3, SLN = 8, SLS = [];
+  for (let i = 0; i < SLN; i++) SLS.push({ x: 0, y: 0, r: 0, id: 0, t0: -1e9 });
+  let slI = 0, slId = 0;
+  const drawSlam = (B, s, age) => {
+    const e = age / SL_LIFE, k = Math.ceil((1 - e) * 4) / 4, r = s.r * (0.85 + 0.15 * U.easeOut(e));
+    B.circ(s.x, s.y, r, rgba(DUST, 120 * k), 1);
+    for (let i = 0; i < 12; i++) {
+      const a = (i + H(s.id, i, 7) * 0.7) / 12 * TAU, d = r - 2 * H(s.id, i, 8);
+      B.rect(Math.round(s.x + Math.cos(a) * d), Math.round(s.y + Math.sin(a) * d * 0.9 - 6 * e * H(s.id, i, 9)), 2, 1, rgba(DUST, 180 * k));
+    }
+  };
   const F = ED.FX;
   if (F && F.handle && F.draw) {
     const handle = F.handle, draw = F.draw;
     F.handle = (ev, ctx) => {
+      if (ev.t === 'boom' && ev.look === 'quake' && KW[ev.wid] && ev.r > SL_MIN) {
+        const s = SLS[slI = (slI + 1) % SLN]; s.x = ev.x; s.y = ev.y; s.r = ev.r; s.id = ++slId; s.t0 = F.now;
+        if (ev.pid === ctx.me) F.addShake(1.5, ctx.crowd);
+        return;
+      }
       if (ev.t !== 'swing' || !KW[ev.wid]) return handle(ev, ctx);
       if (ED.Actors) ED.Actors.event(ev);
+      if (ev.arc >= 6.2) { fanEvent(ev, F.now); return; }
       const s = SWS[swI = (swI + 1) % SWN];
       s.x = ev.x; s.y = ev.y; s.a = ev.a; s.r = ev.r; s.arc = ev.arc; s.t0 = F.now;
     };
@@ -143,9 +212,10 @@
         const s = SWS[i], age = F.now - s.t0;
         if (age < 0 || age >= SW_LIFE || s.r < 2) continue;
         const k = 1 - age / SW_LIFE, r = s.r * (0.94 + 0.06 * (1 - k));
-        if (s.arc >= 6.2) { B.circ(s.x, s.y, r, rgba(STEEL, 210 * k), 2); B.circ(s.x, s.y, r * 0.66, rgba(0xffffff, 100 * k), 1); }
-        else { sweep(B, s.x, s.y, r, s.a, s.arc, 2, rgba(STEEL, 210 * k)); sweep(B, s.x, s.y, r * 0.66, s.a, s.arc * 0.85, 1, rgba(0xffffff, 100 * k)); }
+        sweep(B, s.x, s.y, r, s.a, s.arc, 2, rgba(STEEL, 210 * k)); sweep(B, s.x, s.y, r * 0.66, s.a, s.arc * 0.85, 1, rgba(0xffffff, 100 * k));
       }
+      for (let i = 0; i < SLN; i++) { const age = F.now - SLS[i].t0; if (age >= 0 && age < SL_LIFE) drawSlam(B, SLS[i], age); }
+      for (let i = 0; i < FANN; i++) if (fanLive(FANS[i], F.now)) drawFan(B, FANS[i], F.now);
     };
   }
 

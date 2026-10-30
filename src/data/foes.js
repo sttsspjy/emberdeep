@@ -20,27 +20,27 @@
   const DIVE = (o) => Object.assign({ hover: 120, range: 200, speed: 240, dur: 0.5, cd: 4.4, wind: 0.65 }, o);
 
   // ---- stage 1: Ossuary ----
-  add('bat', { name: 'Crypt Bat', dirs: 4, ai: 'swarm', hp: 15, spd: 64, dmg: 0.8, r: 6 });
-  add('skeleton', { name: 'Skeleton', hp: 36, spd: 37, r: 7 });
-  add('slime', { name: 'Grave Slime', dirs: 4, hp: 60, spd: 30, r: 8, split: { id: 'slimelet', n: [2, 3] } });
-  add('slimelet', { name: 'Slimelet', dirs: 2, ai: 'swarm', hp: 18, spd: 50, dmg: 0.8, r: 5, solo: true });
+  add('bat', { name: 'Crypt Bat', dirs: 4, ai: 'swarm', hp: 24, spd: 52, dmg: 0.8, r: 6 });
+  add('skeleton', { name: 'Skeleton', hp: 54, spd: 33, r: 7 });
+  add('slime', { name: 'Grave Slime', dirs: 4, hp: 90, spd: 27, r: 8, split: { id: 'slimelet', n: [2, 3] } });
+  add('slimelet', { name: 'Slimelet', dirs: 2, ai: 'swarm', hp: 29, spd: 41, dmg: 0.8, r: 5, solo: true });
   add('bonearcher', { name: 'Bone Archer', ai: 'ranged', hp: 42, spd: 32, r: 7, range: 160, shot: { dmg: 5, speed: 128, look: 'bone', n: 1, spread: 0, cd: 3, wind: 0.7 } });
   add('sporepuff', { name: 'Spore Puff', ai: 'exploder', hp: 30, spd: 46, r: 7, fuse: 0.7, boom: { r: 46, dmg: 11, look: 'poison' } });
   add('skelknight', { name: 'Skeleton Knight', ai: 'brute', hp: 300, spd: 24, dmg: 1.5, r: 12, xp: 5, kb: 0, brute: true, slam: SLAM(52) });
 
   // ---- stage 2: Glowmire ----
-  add('glowlet', { name: 'Glowlet', ai: 'swarm', hp: 18, spd: 61, dmg: 0.8, r: 5 });
-  add('myconid', { name: 'Myconid', dirs: 4, hp: 36, spd: 35, r: 7 });
-  add('glowslime', { name: 'Glow Slime', dirs: 4, hp: 60, spd: 30, r: 8, split: { id: 'glowlet', n: [2, 3] } });
+  add('glowlet', { name: 'Glowlet', ai: 'swarm', hp: 29, spd: 50, dmg: 0.8, r: 5 });
+  add('myconid', { name: 'Myconid', dirs: 4, hp: 54, spd: 32, r: 7 });
+  add('glowslime', { name: 'Glow Slime', dirs: 4, hp: 90, spd: 27, r: 8, split: { id: 'glowlet', n: [2, 3] } });
   add('spitter', { name: 'Spitcap', dirs: 4, ai: 'ranged', hp: 48, spd: 27, r: 7, range: 180, shot: { dmg: 4, speed: 119, look: 'poison', n: 3, spread: 0.24, cd: 3.4, wind: 0.75 } });
   add('cavespider', { name: 'Cave Spider', dirs: 8, ai: 'charger', pack: [2, 3], hp: 42, spd: 46, r: 8, charge: CHARGE({ range: 230, speed: 270, dur: 0.5, cd: 3.9, wind: 0.7 }) });
   add('shroomhulk', { name: 'Shroom Hulk', ai: 'brute', hp: 360, spd: 22, dmg: 1.5, r: 13, xp: 5, kb: 0, brute: true, slam: SLAM(58, { cd: 3.4 }) });
 
   // ---- stage 3: Abyss ----
-  add('starspawn', { name: 'Starspawn', ai: 'swarm', hp: 18, spd: 67, dmg: 0.8, r: 6 });
-  add('shade', { name: 'Shade', dirs: 4, hp: 42, spd: 42, r: 7 });
-  add('jelly', { name: 'Lantern Jelly', hp: 72, spd: 32, r: 8, split: { id: 'jellet', n: [2, 3] } });
-  add('jellet', { name: 'Jellet', ai: 'swarm', hp: 21, spd: 56, dmg: 0.8, r: 5, solo: true });
+  add('starspawn', { name: 'Starspawn', ai: 'swarm', hp: 29, spd: 55, dmg: 0.8, r: 6 });
+  add('shade', { name: 'Shade', dirs: 4, hp: 63, spd: 38, r: 7 });
+  add('jelly', { name: 'Lantern Jelly', hp: 108, spd: 29, r: 8, split: { id: 'jellet', n: [2, 3] } });
+  add('jellet', { name: 'Jellet', ai: 'swarm', hp: 34, spd: 46, dmg: 0.8, r: 5, solo: true });
   add('voidwraith', { name: 'Void Wraith', ai: 'ranged', hp: 54, spd: 34, r: 7, range: 190, shot: { dmg: 5, speed: 140, look: 'skull', n: 1, spread: 0, cd: 2.6, wind: 0.7 } });
   add('horror', { name: 'Abyssal Horror', ai: 'brute', hp: 420, spd: 24, dmg: 1.6, r: 14, xp: 5, kb: 0, brute: true, slam: SLAM(60, { ring: { n: 10, speed: 102, look: 'skull', dmg: 5 } }) });
 

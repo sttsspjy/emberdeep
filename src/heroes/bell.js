@@ -63,7 +63,7 @@
       // knock decays at 10/s, so travel ~ force / 10: a push carries a foe at most to the ring's rim (+6 px); a pull drags it toward radius s.pull
       if (s.pull > 0) { const d = Math.sqrt(d2); src.knock = d > s.pull ? (d - s.pull) * 9 : 0; src.kx = z.x - e.x; src.ky = z.y - e.y; }
       else if (s.knock > 0) src.knock = Math.min(s.knock, Math.max(0, s.R + 6 - Math.sqrt(d2)) * 10);
-      w.hitFoe(e, s.dmg * m, src);
+      if (s.dmg > 0) w.hitFoe(e, s.dmg * m, src); else if (src.knock > 0) w.knock(e, src.kx || e.x - z.x, src.ky || e.y - z.y, src.knock); // zero-damage waves (Great Peal) still push
       if (shat) { e.freezeT = 0; burst(w, z, s, e); continue; }
       if (e.dead) { if (s.shard) burst(w, z, s, e); continue; }
       if (s.stun) w.stun(e, s.stun);
@@ -157,7 +157,7 @@
   // Cathedral: great bells; each fire peals them in sequence 0.18 s apart, then S.great great rings (S.r x area x 2, 75% damage, 0.35 s apart) burst from the hero.
   ED.addWeapon({
     id: 'cathedral', name: 'Cathedral', icon: 'weapon.greatbell', sig: 'bell', mode: 'around', evolved: true, form: true, from: 'toll', txt: 'Great bells peal in sequence',
-    base: { dmg: 18, cd: 1.6, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 300, range: 0, r: 84, orbit: 62, spin: 1.7, body: 0.8, stun: 0.2, great: 1 },
+    base: { dmg: 15, cd: 1.6, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 300, range: 0, r: 84, orbit: 62, spin: 1.7, body: 0.8, stun: 0.2, great: 1 },
     refine: [
       { mods: { great: 1 }, txt: 'The great ring tolls twice' },
       { mods: { area: 0.25 }, txt: '+25% ring size' },
@@ -180,23 +180,23 @@
   });
 
   // ---------------- Great Peal ----------------
-  // A ring from the hero out to N.r (about the screen's half diagonal) in N.t s: N.dmg, N.stun s and a push to every foe it reaches; echo: a second ring, 25% wider, 0.55 s later;
+  // Zero damage. A ring from the hero out to N.r (about the screen's half diagonal) in N.t s: N.stun s and a push to every foe it reaches; echo: a second ring, 25% wider, 0.55 s later;
   // ward: every living hero within N.r is invulnerable for N.ward s; gems: every xp gem within N.r flies to the hero.
   ED.addSkill({
     id: 'peal', name: 'Great Peal', icon: 'weapon.greatbell', cd: 16, txt: 'Stun every foe on screen',
-    base: { dmg: 10, r: 370, t: 0.5, stun: 1.2, knock: 180 },
+    base: { r: 370, t: 0.5, stun: 1.2, knock: 180 },
     levels: [
       { mods: { echo: true }, txt: 'A second, wider peal follows' },
       { mods: { ward: 1.5 }, txt: 'Shields you and allies for 1.5 s' },
       { mods: { gems: true, stun: 0.5 }, txt: 'Pulls gems; stuns 0.5 s longer' },
     ],
   }, (w, p, x, y, N) => {
-    let o = wopt(0, N.r, N.t, N.dmg); o.stun = N.stun; o.knock = N.knock; o.res = 0.5;
+    let o = wopt(0, N.r, N.t, 0); o.stun = N.stun; o.knock = N.knock;
     wave(w, p, 'peal', p.x, p.y - 6, 'pealw', 'skill');
-    if (N.echo) { o = wopt(0, N.r * 1.25, N.t * 1.2, N.dmg * 0.75); o.stun = N.stun * 0.75; o.knock = N.knock; o.res = 0.5; o.delay = 0.55; wave(w, p, 'peal', p.x, p.y - 6, 'pealw', 'skill'); }
+    if (N.echo) { o = wopt(0, N.r * 1.25, N.t * 1.2, 0); o.stun = N.stun * 0.75; o.knock = N.knock; o.delay = 0.55; wave(w, p, 'peal', p.x, p.y - 6, 'pealw', 'skill'); }
     const r2 = N.r * N.r;
     if (N.ward > 0) for (const h of w.living) if (U.dist2(p.x, p.y, h.x, h.y) <= r2) h.invuln = Math.max(h.invuln, N.ward);
-    if (N.gems) for (const g of w.pickups) if (!g.dead && g.k.charCodeAt(0) === 120 && U.dist2(p.x, p.y, g.x, g.y) <= r2) { g.pull = p.pid; g.t = 0; } // 120 'x': xp gems
+    if (N.gems) w.pullGems(p, p.x, p.y, N.r);
     return { shake: 7 };
   });
 
@@ -204,7 +204,7 @@
   // Frost bells; every cd each peals a slow frost ring (0.45 s) that freezes foes S.freeze s; a frozen foe a later ring reaches takes +S.shatter damage, bursts in shards and thaws.
   ED.addWeapon({
     id: 'glaciertoll', name: 'Glacier Toll', icon: 'weapon.bronzebell', sig: 'bell', mode: 'around', evolved: true, form: true, from: 'toll', txt: 'Peals freeze foes solid',
-    base: { dmg: 12, cd: 1.4, n: 3, pierce: 0, area: 1, speed: 0, dur: 0, knock: 40, range: 0, r: 78, orbit: 50, spin: 2.0, body: 0.6, freeze: 1.1, shatter: 0.6 },
+    base: { dmg: 6, cd: 1.4, n: 3, pierce: 0, area: 1, speed: 0, dur: 0, knock: 40, range: 0, r: 78, orbit: 50, spin: 2.0, body: 0.6, freeze: 1.1, shatter: 0.6 },
     refine: [
       { mods: { n: 1 }, txt: '+1 frost bell' },
       { mods: { area: 0.2, freeze: 0.5 }, txt: '+20% ring size, freeze 0.5 s longer' },
@@ -219,7 +219,7 @@
   // then the wheel swells from 0.6x to (0.6 + S.swell)x its orbit and back over 0.8 s.
   ED.addWeapon({
     id: 'carillon', name: 'Carillon', icon: 'weapon.handbells', sig: 'bell', mode: 'around', evolved: true, form: true, from: 'toll', txt: 'A wheel of bells sweeps out and back',
-    base: { dmg: 16, cd: 1.3, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 160, range: 0, r: 40, orbit: 40, spin: 3.2, body: 2, swell: 0.9 },
+    base: { dmg: 6, cd: 1.3, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 160, range: 0, r: 40, orbit: 40, spin: 3.2, body: 2, swell: 0.9 },
     refine: [
       { mods: { n: 2 }, txt: '+2 bells' },
       { mods: { spin: 1.2, swell: 0.35 }, txt: 'Bells whirl faster and swing wider' },
@@ -239,7 +239,7 @@
   // toward the bells' orbit; then a clap ring from the hero out to the orbit + 26 px (60% damage) stuns them S.stun + 0.4 s.
   ED.addWeapon({
     id: 'undertow', name: 'Undertow', icon: 'weapon.greatbell', sig: 'bell', mode: 'around', evolved: true, form: true, from: 'toll', txt: 'Peals drag the horde onto your bells',
-    base: { dmg: 14, cd: 1.6, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 60, range: 0, r: 80, orbit: 44, spin: 2.6, body: 1, stun: 0 },
+    base: { dmg: 7, cd: 1.6, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 60, range: 0, r: 80, orbit: 44, spin: 2.6, body: 1, stun: 0 },
     refine: [
       { mods: { n: 1 }, txt: '+1 bell' },
       { mods: { area: 0.25 }, txt: 'Drags from 25% farther' },
@@ -271,7 +271,7 @@
   function chimeEnd(w, z) { CHS.push(z.st); z.st = null; }
   ED.addWeapon({
     id: 'windchime', name: 'Windchime', icon: 'weapon.handbells', sig: 'bell', mode: 'around', evolved: true, form: true, from: 'toll', txt: 'Bells leave chimes that keep ringing',
-    base: { dmg: 16, cd: 1.3, n: 1, pierce: 0, area: 1, speed: 0, dur: 4, knock: 60, range: 0, r: 44, orbit: 46, spin: 2.4, body: 1 },
+    base: { dmg: 8, cd: 1.3, n: 1, pierce: 0, area: 1, speed: 0, dur: 4, knock: 60, range: 0, r: 44, orbit: 46, spin: 2.4, body: 1 },
     refine: [
       { mods: { n: 1 }, txt: '+1 bell, one more chime' },
       { mods: { dur: 0.5 }, txt: 'Chimes ring 50% longer' },

@@ -62,8 +62,8 @@
   }
 
   // Volley: S.n pillars on distinct random foes within S.range inside the hero's view (partial shuffle of a reused candidate list); pillars beyond the foe count fall again on random
-  // picks, 0.1 s apart. With no such foe, n pillars stride ahead along
-  // p.mdir (step max(60, 2.5 r), squeezed so the last stays within S.range and STRIDE_IN px of the view edge). Riders per Form kind. Always fires.
+  // picks, 0.1 s apart. With no such foe, n pillars stride out along
+  // the cursor dir (w.aimDir; step max(60, 2.5 r), squeezed so the last stays within S.range and STRIDE_IN px of the view edge). Riders per Form kind. Always fires.
   const cand = [], STRIDE_IN = 16, HW = ED.CONST.VIEW_W / 2 - STRIDE_IN, HH = ED.CONST.VIEW_H / 2 - STRIDE_IN;
   function volley(w, p, ws, S, kind) {
     const n = Math.max(1, S.n | 0), r = S.r * S.area, big = kind === 'wrath', hop = big ? S.hop | 0 : 0, jump = S.jump | 0, gd = kind === 'hallow' ? S.dmg * S.groundK : 0;
@@ -79,7 +79,7 @@
     }
     cand.length = 0;
     if (m) return true;
-    const c = Math.cos(p.mdir), s = Math.sin(p.mdir);
+    const a = w.aimDir(p), c = Math.cos(a), s = Math.sin(a);
     const reach = Math.min(S.range, Math.abs(c) > 1e-6 ? HW / Math.abs(c) : Infinity, Math.abs(s) > 1e-6 ? HH / Math.abs(s) : Infinity);
     const step = Math.min(Math.max(60, 2.5 * r), reach / n);
     for (let i = 1; i <= n; i++) pillar(w, p, ws.id, p.x + c * step * i, p.y + s * step * i, r, S.dmg, S.knock, FALL, null, big);
@@ -91,7 +91,7 @@
   // inside S.heal HP/s x PULSE. Censers (S.swing): orbit at 0.8 x radius (angle SW_W x zone age), each a 12 x area blast every SW_T s for dmg x swingK.
   // Halo: radius HALO_R x (1 + hr) x area; the ring band [R - 14, R + 10] hits every BAND_T s for dmg x bandK, slows and shoves foes outward; censers orbit on the ring.
   // Render zone (look aura / halo) follows the hero: z.r radius, z.w censer count; its dur is topped up rarely (snapshot-friendly).
-  const PULSE = 0.5, SW_T = 0.2, SW_W = 3, HALO_R = 76, BAND_T = 0.25, BAND_IN = 14, BAND_OUT = 10, BAND_KNOCK = 80;
+  const PULSE = 0.5, SW_T = 0.2, SW_W = 3, HALO_R = 60, BAND_T = 0.25, BAND_IN = 14, BAND_OUT = 10, BAND_KNOCK = 140;
   const AURA = { noEv: true, knock: 0 }, SWING = { noEv: true, knock: 60 }, BAND_SLOW = [0.4, 0.4];
   const LOOK_OWN = { aura: 1, halo: 1, beam: 1, ray: 1 };
   function auraTick(w, p, ws, S, dt, halo) {
@@ -144,16 +144,14 @@
     const c = Math.cos(a1), sn = Math.sin(a1);
     for (let i = 1; i <= 3; i++) w.hitBraziers(cx + c * len * i / 3, cy + sn * len * i / 3, 10, p);
   }
-  // Lance sweep (S.beam ranks): every S.bcd s (x haste) toward the densest foe cluster within the beam length (BEAM_L x (1 + blen) x area), 1 + S.beams beams spread evenly sweep
+  // Lance sweep (S.beam ranks): every S.bcd s (x haste), centred on the cursor dir (w.aimDir; beam length BEAM_L x (1 + blen) x area), 1 + S.beams beams spread evenly sweep
   // SWEEP_ARC rad in PASS_T s, 1 + S.pass passes (alternating). Each crossing: dmg x beamK and a 0.2 s stun. Verdict: a pillar falls along each beam every VP_T s (distance cycles VP_F).
   const BEAM_L = 130, SWEEP_ARC = 1.9, PASS_T = 0.4, BEAM_W = 12, VP_T = 0.06, VP_F = [0.5, 0.78, 1.0];
   function beamTick(w, p, ws, S, dt, verdict) {
     const st = ws.st, L = BEAM_L * (1 + (S.blen || 0)) * S.area, nb = 1 + (S.beams | 0), np = 1 + (S.pass | 0), T = PASS_T * np;
     if (!st.bOn) {
       if ((st.bT -= dt) > 0) return;
-      const pt = w.target('densest', p, L);
-      if (!pt) { st.bT = 0.2; return; }
-      st.bOn = true; st.bt = 0; st.vT = 0; st.ba = Math.atan2(pt.y - p.y, pt.x - p.x) - SWEEP_ARC / 2;
+      st.bOn = true; st.bt = 0; st.vT = 0; st.ba = w.aimDir(p) - SWEEP_ARC / 2;
       for (let i = 0; i < nb && i < 4; i++) {
         const a = st.ba + i * TAU / nb;
         st.bz[i] = w.zone({ team: 0, p, wid: ws.id, x: p.x, y: p.y, a, len: L, w: BEAM_W, dur: T + 0.05, look: 'beam', follow: p.pid }); st.bzid[i] = st.bz[i].id; st.bp[i] = a;
@@ -174,7 +172,7 @@
     if (st.bt >= T) { st.bOn = false; st.bT = S.bcd * (1 - p.stats.haste); }
   }
   // Judgment Ray: 1 + rays + beams + pass beams turn around the hero at RAY_W rad/s (RAY_L x (1 + blen) x area long); each crossing deals dmg x rayK. Render zones (look ray) kept per beam.
-  const RAY_L = 150, RAY_W = 2.4, RAY_MAX = 6;
+  const RAY_L = 60, RAY_W = 2.4, RAY_MAX = 6;
   function rayTick(w, p, ws, S, dt) {
     const st = ws.st, L = RAY_L * (1 + (S.blen || 0)) * S.area, nb = Math.min(RAY_MAX, 1 + (S.rays | 0) + (S.beams | 0) + (S.pass | 0)), dmg = S.dmg * S.rayK;
     const a0 = st.ra; st.ra = (st.ra + RAY_W * dt) % TAU;
@@ -259,7 +257,7 @@
   // Halo: the aura becomes a ring wall that burns, slows and shoves out foes crossing it.
   ED.addWeapon({
     id: 'halo', name: 'Halo', icon: 'weapon.lantern', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'A ring of light walls foes out',
-    base: base({ dmg: 30, cd: 1.0, n: 2, hr: 0, bandK: 0.35, heal: 0.6, swing: 1, auraK: 0.8 }),
+    base: base({ dmg: 24, cd: 1.0, n: 2, hr: 0, bandK: 0.35, heal: 0.6, swing: 1, auraK: 0.8 }),
     refine: [
       { mods: { hr: 0.3 }, txt: 'The ring is 30% wider' },
       { mods: { swing: 2, dmg: 0.2 }, txt: '+2 censers, +20% damage' },
@@ -268,7 +266,7 @@
   // Judgment Ray: holy beams turn around the hero without pause.
   ED.addWeapon({
     id: 'jray', name: 'Judgment Ray', icon: 'weapon.glaive', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Holy beams turn around you',
-    base: base({ dmg: 30, cd: 1.0, n: 3, rays: 1, rayK: 0.35 }),
+    base: base({ dmg: 23, cd: 1.0, n: 3, rays: 1, rayK: 0.35 }),
     refine: [
       { mods: { blen: 0.3 }, txt: 'Beams reach 30% farther' },
       { mods: { rays: 1, dmg: 0.2 }, txt: '+1 beam, +20% damage' },
@@ -294,26 +292,28 @@
   }, impl('verdict'));
 
   // ---------------- Sanctuary ----------------
-  // Holy ground at the cursor: a burst (N.dmg x 3, knock out), then for N.dur s every ST s: foes inside slowed 45% (ward: shoved out from the centre), every living hero inside
-  // healed N.heal HP/s, downed heroes inside gain REV_K revive progress per s (revive); rain: a pillar (N.dmg x 3) falls on a random point inside every RAIN_T s.
-  // The ground itself deals no damage (support skill: the burst and the rain do).
-  const SANCT_SLOW = 0.45, WARD = 90, REV_K = 1.2, RAIN_T = 0.25, ST = 0.25;
+  // Zero damage. Holy ground at the cursor: a burst that knocks foes out (knock 320), then for N.dur s every ST s: foes inside slowed 45% (ward: shoved out from the centre), every living
+  // hero inside healed N.heal HP/s, downed heroes inside gain REV_K revive progress per s (revive); rain: a holy pillar (look 'smite', 0.18 s fall) lands on a random point inside every
+  // RAIN_T s and stuns the foes it covers RAIN_STUN s.
+  const SANCT_SLOW = 0.45, WARD = 90, REV_K = 1.2, RAIN_T = 0.25, ST = 0.25, RAIN_R = 20, RAIN_STUN = 0.6;
   ED.addSkill({
     id: 'sanctuary', name: 'Sanctuary', icon: 'fx.shield.gold', cd: 14, txt: 'Holy ground heals allies',
-    base: { dmg: 4, r: 80, dur: 4, heal: 5 },
+    base: { r: 80, dur: 4, heal: 5 },
     levels: [
       { mods: { r: 0.35, ward: true }, txt: '+35% area, wards foes out' },
       { mods: { dur: 0.5, revive: true }, txt: 'Lasts 50% longer, revives allies' },
-      { mods: { rain: true }, txt: 'Holy pillars rain inside' },
+      { mods: { rain: true }, txt: 'Holy pillars rain inside and stun' },
     ],
   }, (w, p, x, y, N) => {
-    w.blast(p, 'sanctuary', x, y, N.r, N.dmg * 3, { knock: 320, look: 'holy', kind: 'skill' });
+    w.blast(p, 'sanctuary', x, y, N.r, 0, { knock: 320, look: 'holy', kind: 'skill' });
     w.zone({ team: 0, p, wid: 'sanctuary', x, y, r: N.r, dur: N.dur, look: 'sanct',
-      st: { heal: N.heal, ward: !!N.ward, rev: !!N.revive, rain: !!N.rain, tt: -1, rainT: 0, pd: N.dmg * 3 }, onTick: sanctTick });
+      st: { heal: N.heal, ward: !!N.ward, rev: !!N.revive, rain: !!N.rain, tt: -1, rainT: 0 }, onTick: sanctTick });
     return { shake: 4 };
   });
   let SW = null, SZ = null;
   const sanctFoe = (e) => { SW.slow(e, SANCT_SLOW, ST * 1.6); if (SZ.st.ward) SW.knock(e, e.x - SZ.x, e.y - SZ.y, WARD); };
+  const rainFoe = (e) => SW.stun(e, RAIN_STUN);
+  const rainEnd = (w, z) => { SW = w; w.zoneFoes(z, rainFoe); SW = null; w.zone({ team: 0, p: z.p, wid: z.wid, x: z.x, y: z.y, r: z.r, dur: 0.25, look: 'pglow' }); };
   function sanctTick(w, z) {
     const st = z.st, r2 = z.r * z.r;
     if (st.tt >= 0 && z.t - st.tt < ST - 1e-6) return;
@@ -324,7 +324,7 @@
     if (!st.rain) return;
     for (st.rainT += ST; st.rainT >= RAIN_T; st.rainT -= RAIN_T) {
       const a = w.rng.next() * TAU, d = Math.sqrt(w.rng.next()) * z.r * 0.9;
-      pillar(w, z.p, 'sanctuary', z.x + Math.cos(a) * d, z.y + Math.sin(a) * d, 20, st.pd, 60, 0.18, null, false);
+      w.zone({ team: 0, p: z.p, wid: 'sanctuary', x: z.x + Math.cos(a) * d, y: z.y + Math.sin(a) * d, r: RAIN_R, dur: 0.18, warn: true, look: 'smite', onEnd: rainEnd });
     }
   }
 })(globalThis.ED || (globalThis.ED = {}));

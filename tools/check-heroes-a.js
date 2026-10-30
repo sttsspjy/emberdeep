@@ -1,8 +1,8 @@
 // Headless check for heroes Knight, Ranger, Pyro, Necro (exit 1 on failure). Usage: node tools/check-heroes-a.js
 // Per hero (god cheat, from 4:00 so the horde is dense): 4 phases of 15 s with skill level 1..4 and 0 / 3 / 6 / 9 path ranks (path 0 first), then 20 s in the path-0 Form, refined twice.
-// Q is held every tick (cast on cooldown), aimed at the nearest foe; fodder rings keep targets near the hero. Each phase: no exception, the skill casts, the weapon and the skill deal damage.
+// Q is held every tick (cast on cooldown), aimed at the nearest foe; fodder rings keep targets near the hero. Each phase: no exception, the skill casts, the weapon deals damage, the skill none.
 // Extras: Bone Shard / Bone Storm on other heroes (the slain rise for them too), Cleave aims inside the facing cone (no foe: along it), path shape flags reach the effective numbers,
-// skill damage scales with the weapon and the party level, necro minions rise / obey the cap and Corpse Blast detonates, same seed -> same digest, no NaN positions.
+// skills carry no damage, necro minions rise / obey the cap, same seed -> same digest, no NaN positions.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
@@ -55,7 +55,7 @@ function phase(w, p, secs, tag, out) {
   const h = ED.HEROES[p.cls], wid = p.weapons[0].id, q = h.skills[0];
   ok(!err && !nan, `${p.cls} ${tag}: no exception, finite positions` + (err ? ': ' + err.stack : ''));
   ok((casts[q] || 0) > 0 && Object.keys(casts).length === 1, `${p.cls} ${tag}: casts ${q} ${casts[q] || 0} (only Q)`);
-  ok(d(wid) > 0 && d(q) > 0, `${p.cls} ${tag}: dealt ${wid} ${d(wid)}, ${q} ${d(q)}`);
+  ok(d(wid) > 0 && d(q) === 0, `${p.cls} ${tag}: dealt ${wid} ${d(wid)}, ${q} ${d(q)} (utility Q)`);
   out.maxMin = Math.max(out.maxMin, maxMin);
 }
 function runHero(cls, seed) {
@@ -96,18 +96,40 @@ for (const [cls, id] of [['cleric', 'boneshard'], ['bell', 'bonestorm']]) {
   ok(!err && p.dealt[id] > 0 && ws.root === 'boneshard', `${cls} carrying ${id}: dealt ${Math.round(p.dealt[id] || 0)}` + (err ? ': ' + err.stack : ''));
   ok(maxMin > 0, `${cls} carrying ${id}: the slain rise (peak ${maxMin} minions)`);
 }
-// Cleave aims at a foe inside the facing cone, falls back to the nearest foe in reach (behind), swings along the facing with no foe in reach.
+// Cleave swings along the cursor: past a foe off the line, away from the only foe (behind), with no foe; a cursor on the hero falls back to the movement direction.
 {
   const w = new ED.World({ seed: 3, stage: 0, players: [{ pid: 'p1', cls: 'knight' }], cheats: { god: true } }), p = w.heroes[0];
-  w.foes.length = 0; p.mdir = 0;
+  w.foes.length = 0; p.mdir = 0.5;
   const ws = p.weapons[0], fire = () => { w.events.length = 0; const r = ED.WIMPL.cleave.fire(w, p, ws, ED.Stats.weapon(p, 0)); const ev = w.events.find(e => e.t === 'swing'); return r ? (ev ? ev.a : NaN) : null; };
   const put = (a) => { for (const e of w.foes) e.dead = true; w.spawnFoe(FODDER, p.x + Math.cos(a) * 40, p.y - 4 + Math.sin(a) * 40); };
-  put(1.2); const a1 = fire();
-  put(Math.PI); const a2 = fire();
-  for (const e of w.foes) e.dead = true; w.spawnFoe(FODDER, p.x + 300, p.y); const a3 = fire();
-  ok(a1 !== null && Math.abs(U.angDiff(a1, 1.2)) < 0.15, `knight: Cleave swings at a foe 69 deg off its facing (a ${a1 && a1.toFixed(2)})`);
-  ok(a2 !== null && Math.abs(U.angDiff(a2, Math.PI)) < 0.15, `knight: Cleave swings at the only foe, behind (a ${a2 && a2.toFixed(2)})`);
-  ok(a3 !== null && Math.abs(U.angDiff(a3, 0)) < 1e-9, `knight: Cleave swings along its facing with no foe in reach (a ${a3 && a3.toFixed(2)})`);
+  const aim = (x, y) => { p.in.ax = p.x + x; p.in.ay = p.y + y; };
+  put(1.2); aim(100, 0); const a1 = fire();
+  put(Math.PI); aim(0, -100); const a2 = fire();
+  for (const e of w.foes) e.dead = true; aim(-60, 60); const a3 = fire();
+  aim(2, 1); const a4 = fire();
+  ok(a1 !== null && Math.abs(U.angDiff(a1, 0)) < 1e-9, `knight: Cleave swings at the cursor, not at a foe 69 deg off it (a ${a1 && a1.toFixed(2)})`);
+  ok(a2 !== null && Math.abs(U.angDiff(a2, -Math.PI / 2)) < 1e-9, `knight: Cleave swings at the cursor with the only foe behind (a ${a2 && a2.toFixed(2)})`);
+  ok(a3 !== null && Math.abs(U.angDiff(a3, 3 * Math.PI / 4)) < 1e-9, `knight: Cleave swings at the cursor with no foe (a ${a3 && a3.toFixed(2)})`);
+  ok(a4 !== null && Math.abs(U.angDiff(a4, 0.5)) < 1e-9, `knight: a cursor on the hero swings along the movement direction (a ${a4 && a4.toFixed(2)})`);
+}
+// Cursor aim: Longbow, Fire Bolt and Bone Shard fire along the cursor with a foe 90 deg off it; Smite's Lance sweep starts
+// SWEEP_ARC / 2 before the cursor dir; Smite pillars with no foe stride out along the cursor dir.
+for (const [cls, wid] of [['ranger', 'longbow'], ['pyro', 'firebolt'], ['necro', 'boneshard']]) {
+  const w = new ED.World({ seed: 3, stage: 0, players: [{ pid: 'p1', cls }], cheats: { god: true } }), p = w.heroes[0], ws = p.weapons[0];
+  w.foes.length = 0; w.updateSpawner = () => {}; const e = w.spawnFoe(FODDER, p.x, p.y + 80); e.spd = 0;
+  p.in.ax = p.x - 70; p.in.ay = p.y - 70; ws.cd = 0; w.update(C.TICK);
+  const q = w.projs.find(x => !x.dead && x.p === p && x.wid === wid);
+  ok(q && Math.abs(U.angDiff(q.a, -3 * Math.PI / 4)) < 1e-6, `${wid}: fires along the cursor, not at the foe 90 deg off (a ${q && q.a.toFixed(2)})`);
+}
+{
+  const w = new ED.World({ seed: 3, stage: 0, players: [{ pid: 'p1', cls: 'cleric' }], cheats: { god: true } }), p = w.heroes[0], ws = p.weapons[0];
+  w.foes.length = 0; w.updateSpawner = () => {}; w.rankPath(p, ws, 2); w.recalc(p, false);
+  p.in.ax = p.x; p.in.ay = p.y + 100; ws.cd = 99;
+  let z = null; for (let i = 0; i < 60 && !z; i++) { w.update(C.TICK); w.events.length = 0; z = w.zones.find(o => !o.dead && o.k === 'beam'); }
+  ok(z && Math.abs(U.angDiff(z.a, Math.PI / 2 - 1.9 / 2)) < 0.15, `smite: the Lance sweep starts centred on the cursor dir with no foe (a ${z && z.a.toFixed(2)})`);
+  p.in.ax = p.x - 100; p.in.ay = p.y; ws.cd = 0; w.update(C.TICK);
+  const pl = w.zones.filter(o => !o.dead && o.wid === 'smite' && o.k !== 'beam');
+  ok(pl.length > 0 && pl.every(o => o.x < p.x - 20 && Math.abs(o.y - p.y) < 2), `smite: with no foe, pillars stride out along the cursor dir (${pl.map(o => Math.round(o.x - p.x) + ',' + Math.round(o.y - p.y)).join(' ')})`);
 }
 // Path shape flags reach the effective numbers (every path at rank 3, no Form).
 {
@@ -120,25 +142,13 @@ for (const [cls, id] of [['cleric', 'boneshard'], ['bell', 'bonestorm']]) {
   ok(S(py).shells === 2 && S(py).cluster === 4 && S(py).combust === 3 && S(py).cemb === 3 && S(py).spread === 1 && S(py).flare > 0, 'pyro: Fire Bolt 333 shells 2, bomblets 4, death blasts, embers 3, leaps, flare');
   ok(S(n).cap === 5 && S(n).raise === 2 && S(n).over === 4 && S(n).split === 3 && S(n).homing === 3 && S(n).n === 4 && S(n).pools === 2 && S(n).pburst === 1,
     'necro: Bone Shard 333 cap 5, raise 2, 4 over the cap, 4 homing shards splitting in 3, 2 pools that burst');
-  ok(N(k, 0).shards === 8 && N(k, 0).quake && N(k, 0).dist === 180, 'knight: Charge longer, quake + shards');
-  ok(N(r, 0).pin && N(r, 0).follow && N(r, 0).flank === 2, 'ranger: Volley pin + follow + flank');
-  ok(N(py, 0).echo === 1 && N(py, 0).extra === 2, 'pyro: Meteor echo + extra');
-  ok(N(n, 0).shards && N(n, 0).rerise, 'necro: Corpse Blast shards + rerise');
-  // Skill damage: base x levels x might x weapon factor x (1 + 0.05 (party level - 1)).
-  const q = new ED.World({ seed: 1, stage: 0, players: [{ pid: 'p1', cls: 'pyro' }] }), h = q.heroes[0], base = ED.SKILLS.meteor.base.dmg;
-  const n1 = q.skillN(h, 0).dmg;
-  q.level = 11; const n11 = q.skillN(h, 0).dmg;
-  for (let i = 0; i < 3; i++) q.rankPath(h, h.weapons[0], 0); q.recalc(h, false); const nw = q.skillN(h, 0).dmg; // Blaze rank 3: +20% weapon damage
-  ok(Math.abs(n1 - base) < 1e-9 && Math.abs(n11 / n1 - 1.5) < 1e-9 && Math.abs(nw / n11 - 1.2) < 1e-9 && Math.abs(ED.Stats.weaponMul(h) - 1.2) < 1e-9,
-    `skill damage scales: level 1 ${n1}, party level 11 x${(n11 / n1).toFixed(2)}, +20% weapon dmg x${(nw / n11).toFixed(2)}`);
-  q.setRanks(h, h.weapons[0], 9, true);
-  ok(Math.abs(ED.Stats.weaponMul(h) - ED.Stats.weapon(h, 0).dmg / ED.WEAPONS.firebolt.base.dmg) < 1e-9 && ED.Stats.weaponMul(h) > ED.WEAPONS.inferno.base.dmg / ED.WEAPONS.firebolt.base.dmg, 'Form base counts in the weapon factor (' + ED.Stats.weaponMul(h).toFixed(2) + ')');
-  // Corpse Blast detonates minions in view.
+  ok(N(k, 0).stun === 1 && N(k, 0).ring === 3 && Math.abs(N(k, 0).r - 156) < 1e-9, 'knight: Bulwark Shove wider, stuns, leaves a ring');
+  ok(N(r, 0).dist === 220 && N(r, 0).charges === 2 && N(r, 0).caltrops === 1, 'ranger: Vault farther, 2 charges, caltrops');
+  ok(Math.abs(N(py, 0).r - 182) < 1e-9 && N(py, 0).flee === 3.5 && N(py, 0).gem === 200, 'pyro: Flashpoint wider, longer flee, gem pull');
+  ok(N(n, 0).len === 200 && N(n, 0).ring === 80 && N(n, 0).taunt === 160, 'necro: Bone Wall longer, ring, taunt');
+  // Utility skills: no skill carries a damage number.
+  ok(Object.keys(ED.SKILLS).every(id => !ED.SKILLS[id].base || ED.SKILLS[id].base.dmg === undefined) && w.heroes.every(p => !(N(p, 0).dmg > 0)), 'skills carry no damage');
   const nn = n; nn.x = nn.y = 1600; w.time = 300;
-  for (let i = 0; i < 6; i++) ED.Necro.raise(w, nn, 1600 + i * 10, 1620, 'boneshard', false, 15);
-  const before = ED.Necro.liveMinions(nn);
-  const res = ED.CAST.corpseblast(w, nn, 1600, 1600, ED.Stats.skill(nn, 0), nn.skills[0]);
-  ok(before === 6 && res.n >= 6, `necro: Corpse Blast detonates ${res.n} (minions before ${before}), rerise keeps ${ED.Necro.liveMinions(nn)}`);
   // Hard cap: raising 30 leaves at most 24.
   for (let i = 0; i < 30; i++) ED.Necro.raise(w, nn, 1600, 1600, 'boneshard', false, 15);
   ok(ED.Necro.liveMinions(nn) === 24, 'necro: minion hard cap 24 (oldest fall)');

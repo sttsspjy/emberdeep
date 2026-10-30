@@ -4,9 +4,9 @@
 // 2. 4 heroes (knight, ranger, pyro, cleric), same script, god cheat: no exceptions, reaches the final boss; run twice -> same digest.
 // 3. Victory runs (full: all 7 heroes, stages 1 / 2 / 3 in turn; quick: knight on stage 1): a cheat build (six passives at max, weapon unranked) with { god, might: 40 }, walking to chests:
 //    3 bosses met, the stage's final boss dies (state 'won', one 'end' event, summary), the hero reaches a Form through its own picks; the stage 3 ranger run twice -> same digest.
-//    Quick mode adds a 240 s Form reach run per hero ({ god, might: 40, xp: 4 }, same build): every hero takes a Form.
+//    Quick mode adds a Form reach run per hero up to 420 s ({ god, might: 40, xp: 4 }, same build; Forms come from boss chest Form offers, the first at 5:00): every hero takes a Form.
 // 4. Mortal solo knight run until it ends (no cheats): state 'lost' with one 'end' event, or survives.
-// 5. Every hero x every stage, 75 s, god cheat: no exceptions, Q casts (E is unbound: never cast), the signature weapon deals damage, foes die; combined digest printed.
+// 5. Every hero x every stage, 90 s, god cheat: no exceptions, Q casts (E is unbound: never cast), the signature weapon deals damage, foes die; combined digest printed.
 // 6. Invariants on every run: hit events <= 200 per tick, foe telegraphs >= 0.6 s, alive cap respected.
 // 7. Save: code round trip, applyRun unlocks and gold.
 'use strict';
@@ -24,16 +24,19 @@ function pickIdx(p) {
   if (k < 0) { let best = -1; O.forEach((c, i) => { if (c.kind === 'path' && c.lvl > best) { best = c.lvl; k = i; } }); }
   return (k < 0 ? 0 : k) + 1;
 }
-// Scripted player: circles, aims 80 px ahead, Q every 7 s, E pressed every 11 s (unbound), dash every 5 s (phase per slot), picks by pickIdx. seek: walks to the nearest chest within 700 px first.
+// Scripted player: circles, aims at the nearest foe in its view (else 80 px ahead), Q every 7 s, E pressed every 11 s (unbound), dash every 5 s (phase per slot), picks by pickIdx. seek: walks to a living boss outside its view, else the nearest chest within 700 px.
 function drive(w, p, tick, seek) {
   const t = tick / 60, a = t * 0.7 + p.slot * 1.6;
   let mx = Math.cos(a), my = Math.sin(a);
   if (seek) {
     let bd = 700 * 700, ch = null;
     for (const g of w.pickups) if (!g.dead && g.k === 'chest') { const d = U.dist2(p.x, p.y, g.x, g.y); if (d < bd) { bd = d; ch = g; } }
-    if (ch) { const d = Math.sqrt(bd) || 1; mx = (ch.x - p.x) / d; my = (ch.y - p.y) / d; }
+    const b = w.bossList.find(x => !x.dead && !ED.inView(p, x.x, x.y, x.r));
+    if (b) ch = b;
+    if (ch) { const d = Math.hypot(ch.x - p.x, ch.y - p.y) || 1; mx = (ch.x - p.x) / d; my = (ch.y - p.y) / d; }
   }
-  w.input(p.pid, { mx, my, ax: p.x + mx * 80, ay: p.y + my * 80, q: tick % 420 === 30 + p.slot * 7, e: tick % 660 === 60 + p.slot * 7, dash: tick % 300 === 90 + p.slot * 13, pick: pickIdx(p) });
+  const e = w.heroFoe(p, 600);
+  w.input(p.pid, { mx, my, ax: e ? e.x : p.x + mx * 80, ay: e ? e.y : p.y + my * 80, q: tick % 420 === 30 + p.slot * 7, e: tick % 660 === 60 + p.slot * 7, dash: tick % 300 === 90 + p.slot * 13, pick: pickIdx(p) });
 }
 // Cheat build for hero p: six passives at max level (the level-up pool is then paths, Forms, refines and the skill); the weapon starts unranked. Returns the weapon's root id.
 function cheatBuild(w, p) {
@@ -120,7 +123,7 @@ for (const [cls, st, seed] of VICTORY) {
   ok(v.bosses.length >= 3, `${tag}: meets ${v.bosses.length} bosses`);
   const f = formOf(v);
   if (f) formed.add(cls);
-  ok(!!f && v.evolved.length === 1, `${tag}: reaches one Form through its picks (${v.evolved.join(',') || 'none'}; build ${build(v)})`);
+  ok(!!f && v.evolved.filter(e => e.startsWith(v.w.heroes[0].weapons[0].root + '>')).length === 1, `${tag}: reaches one hero-weapon Form through its picks (${v.evolved.join(',') || 'none'}; build ${build(v)})`);
   invariants(v, tag);
   if (st === 0 && !sum) {
     sum = v.w.summary();
@@ -131,7 +134,7 @@ for (const [cls, st, seed] of VICTORY) {
 }
 if (QUICK) for (const cls of ED.HERO_IDS) {
   if (formed.has(cls)) continue;
-  const v = run(vcfg(cls, 0, 20 + ED.HERO_IDS.indexOf(cls), 4), 240, Object.assign({}, vopt, { stopAt: (w) => w.heroes[0].weapons[0].evo }));
+  const v = run(vcfg(cls, 0, 20 + ED.HERO_IDS.indexOf(cls), 4), 420, Object.assign({}, vopt, { stopAt: (w) => w.heroes[0].weapons[0].evo }));
   if (formOf(v)) formed.add(cls);
   ok(!v.err && !!formOf(v), `${cls}: reaches a Form by ${v.w.time.toFixed(0)} s (level ${v.w.level}; build ${build(v)})` + errOf(v));
 }
@@ -143,10 +146,10 @@ ok(m.w.state !== 'lost' || m.ends === 1, 'a lost run emits one end event');
 // 5. every hero x every stage
 let mdig = 0;
 for (let st = 0; st < ED.STAGES.length; st++) for (const cls of ED.HERO_IDS) {
-  const r = run({ seed: 11 + st, stage: st, players: players([cls]), cheats: { god: true } }, 75);
+  const r = run({ seed: 11 + st, stage: st, players: players([cls]), cheats: { god: true } }, 90);
   const h = ED.HEROES[cls], dealt = r.w.heroes[0].dealt[h.sig] || 0, q = r.casts[h.skills[0]] || 0, other = Object.keys(r.casts).filter(id => id !== h.skills[0]);
   mdig = (Math.imul(mdig, 31) + r.digest) >>> 0;
-  ok(!r.err && q > 0 && !other.length && dealt > 0 && r.w.kills > 0, `stage ${st + 1} ${cls}: 75 s, Q ${q}${other.length ? ' other ' + other.join(',') : ''}, ${h.sig} dealt ${Math.round(dealt)}, kills ${r.w.kills}, level ${r.w.level}` + errOf(r));
+  ok(!r.err && q > 0 && !other.length && dealt > 0 && r.w.kills > 0, `stage ${st + 1} ${cls}: 90 s, Q ${q}${other.length ? ' other ' + other.join(',') : ''}, ${h.sig} dealt ${Math.round(dealt)}, kills ${r.w.kills}, level ${r.w.level}` + errOf(r));
   if (r.maxHits > 200 || r.overCap || !(r.minTele === Infinity || r.minTele >= 0.6)) invariants(r, `stage ${st + 1} ${cls}`);
 }
 console.log('     hero x stage digest ' + mdig);

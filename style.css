@@ -197,6 +197,7 @@ h1.logo {
 @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .bar-v { text-align: right; }
 .bar-p { text-align: right; color: var(--mut); }
+#res-build { white-space: pre-line; }
 .res-party { display: flex; gap: 0.6em; flex-wrap: wrap; justify-content: center; }
 .res-party .pm { display: flex; align-items: center; gap: 0.4em; background: var(--plate); border: 3px solid var(--edge); padding: 0.2em 0.6em 0.2em 0.2em; }
 .res-party .pm canvas { width: calc(var(--u) * 2.2); height: calc(var(--u) * 2.2); }
@@ -249,7 +250,7 @@ input[type="range"]::-moz-range-thumb { width: 0.9em; height: 1.4em; background:
 .offer-card .badge.sk { color: var(--violet); }
 .offer-card .card-txt { font-size: calc(var(--u) * 1.1); line-height: 1.2; color: #fff; }
 .offer-card .pips { margin-top: auto; }
-.offer-card.k-path, .offer-card.k-form, .offer-card.k-refine { border-color: #a0603a; }
+.offer-card.k-path, .offer-card.k-support, .offer-card.k-form, .offer-card.k-refine { border-color: #a0603a; }
 .offer-card.k-passive, .offer-card.k-plvl { border-color: #3a7a8a; }
 .offer-card.k-skill { border-color: #6a5ad0; }
 .offer-card.k-gold, .offer-card.k-heal { border-color: #6a5020; }

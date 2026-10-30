@@ -1,7 +1,7 @@
 // Headless check for the Necro tree (exit 1 on failure). Usage: node tools/check-hero-necro.js
 // 1. Every path rank changes the effective numbers; card lines <= 40 chars. 2. Forms: each pure Form is ready only with its path at rank 3, each hybrid only with both
 // paths at rank 3; one Form per run; every Form fires and deals damage in a crowd. 3. Pattern checks: army cap / kill-rise extras, splinters, pools (cap, burst, spread),
-// Bone Knight slams, ghoul bursts leave pools, archers shoot. 4. Damage lands only on foes inside the hero's view. 5. Corpse Blast casts at levels 1-4 (shards, rerise, pools).
+// Bone Knight slams, ghoul bursts leave pools, archers shoot. 4. Damage lands only on foes inside the hero's view. 5. Bone Wall at levels 1-4 (block, ring, taunt, zero damage).
 // 6. Same seed -> same digest.
 'use strict';
 const { load } = require('./sim.js');
@@ -47,8 +47,8 @@ const runCrowd = (ranks, form, secs, opt) => {
     w.events.length = 0;
     digest = (Math.imul(digest, 31) + U.hashStr(w.kills + '|' + w.zones.length + '|' + w.projs.length + '|' + ED.Necro.liveMinions(p))) >>> 0;
   }
-  let wd = 0; for (const k in p.dealt) if (k !== 'corpseblast') wd += p.dealt[k];
-  return { w, p, dealt: wd, q: p.dealt.corpseblast || 0, digest };
+  let wd = 0; for (const k in p.dealt) if (k !== 'bonewall') wd += p.dealt[k];
+  return { w, p, dealt: wd, q: p.dealt.bonewall || 0, digest };
 };
 
 // 1. ranks change the numbers; card lines
@@ -61,7 +61,7 @@ const runCrowd = (ranks, form, secs, opt) => {
       ok(a !== b, `path ${ROOT.paths[i].id} rank ${r + 1} changes the numbers ("${ROOT.paths[i].ranks[r].txt}")`);
     }
   }
-  const lines = [ROOT.txt].concat(...ROOT.paths.map(pa => pa.ranks.map(l => l.txt)), ...FORMS.map(f => [ED.WEAPONS[f].txt].concat(ED.WEAPONS[f].refine.map(l => l.txt))), ED.SKILLS.corpseblast.levels.map(l => l.txt));
+  const lines = [ROOT.txt].concat(...ROOT.paths.map(pa => pa.ranks.map(l => l.txt)), ...FORMS.map(f => [ED.WEAPONS[f].txt].concat(ED.WEAPONS[f].refine.map(l => l.txt))), ED.SKILLS.bonewall.levels.map(l => l.txt));
   const names = FORMS.map(f => ED.WEAPONS[f].name.toLowerCase());
   ok(lines.every(s => s.length <= 40), 'every card line <= 40 chars');
   ok(ROOT.paths.every(pa => pa.ranks.every(l => names.every(n => l.txt.toLowerCase().indexOf(n) < 0))), 'rank lines never name a Form');
@@ -140,19 +140,55 @@ const runCrowd = (ranks, form, secs, opt) => {
   ok(inn > 0 && out === 0, `damage lands only inside the view (in ${inn}, out ${out})`);
 }
 
-// 5. Corpse Blast at levels 1-4
+// 5. Bone Wall at levels 1-4 (zero damage): an arc wall at the cursor that walking foes cannot cross (bosses can); L2 longer; L3 a ring that holds foes inside and out; L4 taunts foes within 160 px.
 {
-  for (let L = 1; L <= 4; L++) {
-    const w = world(), p = w.heroes[0];
-    build(w, p, [0, 0, 3], '');
-    p.skills[0].lvl = L;
-    const rng = U.RNG(4);
-    for (let i = 0; i < 240; i++) { crowd(w, p, rng, 120); p.offer = null; p.pend = 0; w.update(C.TICK); w.events.length = 0; }
-    const before = ED.Necro.liveMinions(p);
-    const N = ED.Stats.skill(p, 0), res = ED.CAST.corpseblast(w, p, p.x, p.y, N, p.skills[0]);
-    const after = ED.Necro.liveMinions(p), shards = w.projs.filter(pr => !pr.dead && pr.wid === 'corpseblast').length, pools = p.pools.filter(z => !z.dead).length;
-    ok(res && res.n > before && before === 3 && (L >= 3) === (shards > 0) && (L >= 4 ? after === before : after === 0) && pools === 0,
-      `Corpse Blast lvl ${L}: ${res && res.n} blasts (minions ${before} -> ${after}, shards ${shards}, pools left ${pools}, r ${Math.round(N.r)})`);
+  const def = ED.SKILLS.bonewall;
+  ok(def.cd >= 7 && def.cd <= 16 && def.levels.length === 3 && def.levels.every(l => l.txt.length <= 40) && def.txt.length <= 40, `Bone Wall: cooldown ${def.cd} s, 3 level cards, lines <= 40 chars`);
+  const setup = (L) => { const w = world(), p = w.heroes[0]; p.weapons.length = 0; p.skills[0].lvl = L; return { w, p, N: w.skillN(p, 0), cx: p.x, cy: p.y }; };
+  const tick = (w, p, cx, cy, n, each) => { for (let i = 0; i < n; i++) { p.x = cx; p.y = cy; p.offer = null; p.pend = 0; w.update(C.TICK); w.events.length = 0; if (each) each(); } };
+  // walkers: 8 foes 70 px beyond the cursor (on the hero-cursor axis, +-30 px) walking at the hero; counts foes ever inside the wall's arc (radius < R - 2, within the span)
+  const walk = (L, wall) => {
+    const { w, p, N, cx, cy } = setup(L);
+    const fs = []; for (let i = 0; i < 8; i++) { const e = w.spawnFoe('skeleton', cx + 220 + (i & 1) * 14, cy + (i - 3.5) * 8, { hpMul: 50 }); e.spd = 60; fs.push(e); }
+    const boss = w.spawnFoe('skeleton', cx + 230, cy + 2, { hpMul: 50 }); boss.boss = true; boss.spd = 60;
+    if (wall) { p.in.q = true; p.in.ax = cx + 150; p.in.ay = cy; }
+    tick(w, p, cx, cy, 1); p.in.q = false;
+    const z = w.zones.find(q => !q.dead && q.k === 'bonewall');
+    let crossed = 0;
+    const cx0 = z ? z.x : cx + 30, cy0 = z ? z.y : cy, R = z ? z.r : 120, half = z ? z.arc / 2 : 0.58;
+    tick(w, p, cx, cy, 90, () => { for (const e of fs) if (!e.dead && U.dist(cx0, cy0, e.x, e.y) < R - 2 && Math.abs(U.angDiff(0, Math.atan2(e.y - cy0, e.x - cx0))) < half) crossed++; });
+    const hurt = w.foes.filter(e => e.hp < e.maxHp).length;
+    return { w, p, N, z, crossed, hurt, bossIn: U.dist(cx0, cy0, boss.x, boss.y) < R - 10 };
+  };
+  const ctl = walk(1, false);
+  ok(ctl.crossed > 0, `Bone Wall control: without a wall the walkers pass the wall's spot (${ctl.crossed} foe-ticks)`);
+  for (const L of [1, 2]) {
+    const r = walk(L, true), len = r.z ? r.z.arc * r.z.r : 0;
+    ok(!!r.z && Math.abs(len - (L >= 2 ? 200 : 140)) < 1e-6 && Math.abs(r.z.x + r.z.r - (r.p.x + 150)) < 1e-6 && r.crossed === 0 && r.hurt === 0 && !(r.p.dealt.bonewall > 0) && r.bossIn,
+      `Bone Wall L${L}: ${len.toFixed(0)} px arc through the cursor, 0 walkers crossed (${r.crossed}), boss walks through ${r.bossIn}, zero damage (hurt ${r.hurt})`);
+    tick(r.w, r.p, r.p.x, r.p.y, Math.round(r.N.dur * 60));
+    ok(!r.w.zones.some(q => !q.dead && q.k === 'bonewall'), `Bone Wall L${L}: gone after ${r.N.dur} s`);
+  }
+  { // L3 ring: foes inside stay inside, foes outside stay outside
+    const { w, p, N, cx, cy } = setup(3), mx = cx + 150;
+    const ins = [], outs = [];
+    for (let i = 0; i < 6; i++) { const a = i / 6 * U.TAU; ins.push(w.spawnFoe('skeleton', mx + Math.cos(a) * 30, cy + Math.sin(a) * 30, { hpMul: 50 })); outs.push(w.spawnFoe('skeleton', mx + 140 + Math.cos(a) * 20, cy + Math.sin(a) * 20, { hpMul: 50 })); }
+    for (const e of w.foes) e.spd = 60;
+    p.in.q = true; p.in.ax = mx; p.in.ay = cy; tick(w, p, cx, cy, 1); p.in.q = false;
+    const z = w.zones.find(q => !q.dead && q.k === 'bonewall');
+    let bad = 0;
+    tick(w, p, cx, cy, 150, () => { for (const e of ins) if (U.dist(mx, cy, e.x, e.y) > N.ring) bad++; for (const e of outs) if (U.dist(mx, cy, e.x, e.y) < N.ring) bad++; });
+    ok(!!z && z.arc === 0 && z.r === N.ring && z.x === mx && bad === 0, `Bone Wall L3: ring r ${N.ring} around the cursor holds 6 foes in and 6 out for 2.5 s (${bad} breaches)`);
+  }
+  { // L4 taunt: a foe 120 px off the ring walks to it, a boss does not
+    const { w, p, N, cx, cy } = setup(4), mx = cx + 150;
+    const e = w.spawnFoe('skeleton', mx, cy + N.ring + 120, { hpMul: 50 }), boss = w.spawnFoe('skeleton', mx, cy - N.ring - 120, { hpMul: 50 }); boss.boss = true;
+    p.in.q = true; p.in.ax = mx; p.in.ay = cy; tick(w, p, cx, cy, 1); p.in.q = false;
+    tick(w, p, cx, cy, 20);
+    const lured = e.ovK === 2;
+    tick(w, p, cx, cy, 300);
+    const gap = U.dist(mx, cy, e.x, e.y) - N.ring;
+    ok(lured && gap < 30 && boss.ovT === 0, `Bone Wall L4: foe 120 px off the ring lured (${lured}), now ${gap.toFixed(0)} px from it; boss never lured`);
   }
 }
 

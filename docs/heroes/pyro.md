@@ -6,7 +6,7 @@ Shared rules: every damage source credits the slot's current weapon id. Ground f
 
 ## Weapon: Fire Bolt (root)
 
-dmg 12, cd 1.2 s, 1 bolt, speed 230. A bolt bursts at the first foe hit, or where it lands with no foe: blast 20 px × area (0.5 × dmg, burn 0.3 × dmg/s for 2 s) + fire pool 22 px × area (0.45 × dmg/s, 2.5 s).
+dmg 12, cd 1.2 s, 1 bolt, speed 230, fired along the cursor (bolts and Wildfire seeds; seeds home after launch). A bolt bursts at the first foe hit, or where it lands with no foe: blast 20 px × area (0.5 × dmg, burn 0.3 × dmg/s for 2 s) + fire pool 22 px × area (0.45 × dmg/s, 2.5 s).
 
 | Path | Rank 1 | Rank 2 | Rank 3 | Form |
 |---|---|---|---|---|
@@ -26,34 +26,36 @@ Path effects keep working after any Form (shells only outside Firestorm / Napalm
 | **Pyre** (hybrid) | Blaze 3 + Combustion 3 | Bolts plant pyres that smoulder 1.2 s, then erupt (1.4 r, dmg × (1 + flare/2)) and leave a pool | dmg 14, cd 1.1, 2 bolts, area 1.3 | +1 bolt | Eruptions 30% wider, +2 embers |
 | **Napalm** (hybrid) | Blaze 3 + Mortar 3 | Canisters (2 + shells) on the densest cluster and random foes; each splashes and leaves a fire wall across the throw (90 px × area, 0.45 × dmg/s, 1.3 × dur) | dmg 16, cd 1.4, 2 canisters, area 1.2, dur 3 | +1 canister | Fire walls 25% longer, last longer |
 
-No foe in range: bolts / seeds fly along the facing and burst where they land; Firestorm and Napalm land 120 px ahead.
+Mortar shells, Firestorm and Napalm stay targeted (densest cluster, then random foes). No foe in range: bolts / seeds burst where they land; Firestorm and Napalm land 120 px out along the cursor direction; Mortar shells wait for a foe.
 
-## Skill (Q): Meteor
+## Skill (Q): Flashpoint (`flashpoint`)
 
-cd 11 s. Falls 0.6 s onto the cursor. Impact radius 55: whole radius takes 0.12 × dmg, knockback 320, short burn; core (0.4 r) takes 0.88 × more; a burning crater stays on the core (0.15 × dmg/s, 3 s). Base dmg 75 (scales with weapon factor and party level). Role: boss burst + crowd shove.
+Zero damage. cd 10 s. A flash at the pyro: every foe within 140 px (r, scales with reach) is knocked 120 px back (elites 60; bosses and knockback-immune foes stay) and flees from the pyro for 2 s (bosses never flee). Role: a breathing gap when the horde closes in.
 
 | Level | Card | Effect |
 |---|---|---|
-| 2 | +40% impact size | r × 1.4 |
-| 3 | The crater erupts again 1 s later | second impact, 0.5 × dmg, 1.2 r |
-| 4 | +2 meteors land around it | two 0.6 × dmg, 0.7 r meteors |
+| 2 | +30% flash radius | r 182 |
+| 3 | Foes flee 1.5 s longer | flee 3.5 s |
+| 4 | The flash pulls in gems | xp gems within 200 px fly to the pyro |
 
-## dps.js (pyro, XP off)
+## dps.js (`node tools/dps.js pyro`: weapon only, no Q casts, build fixed, no level-ups)
 
-| build | form | crowd wpn | crowd q | kills/s | single wpn | single q |
-|---|---|---|---|---|---|---|
-| base | - | 525 | 160 | 4.7 | 34 | 12 |
-| p0 | - | 1300 | 199 | 11.2 | 54 | 19 |
-| p1 | - | 1432 | 185 | 11.2 | 63 | 16 |
-| p2 | - | 1409 | 190 | 11.9 | 37 | 17 |
-| all | - | 3437 | 136 | 27.1 | 116 | 26 |
-| f0 | inferno | 4281 | 61 | 32.3 | 142 | 32 |
-| f1 | firestorm | 4976 | 154 | 39.0 | 144 | 41 |
-| f2 | wildfire | 4673 | 114 | 37.0 | 137 | 29 |
-| h0 | pyre | 5174 | 37 | 40.0 | 174 | 30 |
-| h1 | napalm | 4770 | 129 | 36.4 | 255 | 31 |
-| F0 | inferno | 6641 | 66 | 50.5 | 252 | 49 |
-| F1 | firestorm | 7653 | 153 | 59.3 | 246 | 94 |
-| F2 | wildfire | 6607 | 55 | 51.1 | 251 | 50 |
-| H0 | pyre | 5900 | 82 | 45.1 | 240 | 44 |
-| H1 | napalm | 5815 | 131 | 43.5 | 302 | 49 |
+| build | form | kind | crowd wpn | kills/s | single wpn |
+|---|---|---|---|---|---|
+| base | - |  | 481 | 1.9 | 34 |
+| p0 | - |  | 1,246 | 5.8 | 51 |
+| p1 | - |  | 1,393 | 5.1 | 62 |
+| p2 | - |  | 1,224 | 5.5 | 35 |
+| all | - |  | 3,483 | 17.3 | 112 |
+| f0 | inferno | dir | 4,296 | 20.8 | 141 |
+| f1 | firestorm | dir | 5,066 | 24.9 | 139 |
+| f2 | wildfire | dir | 4,930 | 25.0 | 136 |
+| h0 | pyre | dir | 5,025 | 24.9 | 174 |
+| h1 | napalm | dir | 4,976 | 22.7 | 248 |
+| F0 | inferno | dir | 6,909 | 34.1 | 245 |
+| F1 | firestorm | dir | 8,279 | 41.0 | 229 |
+| F2 | wildfire | dir | 6,995 | 35.0 | 248 |
+| H0 | pyre | dir | 6,044 | 29.6 | 234 |
+| H1 | napalm | dir | 5,916 | 28.1 | 290 |
+
+All Forms directional; f / h rows within ±25% of their mean.
