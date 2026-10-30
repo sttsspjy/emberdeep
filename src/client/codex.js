@@ -164,7 +164,7 @@
     chips(box, [['HP', d.hp], ['Speed', d.spd], ['XP', d.xp], d.kb === 0 ? ['Knockback', 'immune'] : null]);
     const L = [];
     if (d.split && ED.FOES[d.split.id]) L.push('Splits into ' + d.split.n[0] + '-' + d.split.n[1] + ' ' + ED.FOES[d.split.id].name);
-    if (d.shot) L.push('Shoots ' + (d.shot.spread === 'ring' ? 'a ring of ' + d.shot.n + ' bolts' : d.shot.n > 1 ? 'a fan of ' + d.shot.n + ' bolts' : 'a bolt') + ' (' + d.shot.dmg + ' damage) every ' + d.shot.cd + ' s');
+    if (d.shot) L.push((d.shot.lob ? 'Lobs a blast at your spot' : 'Shoots ' + (d.shot.spread === 'ring' ? 'a ring of ' + d.shot.n + ' bolts' : d.shot.n > 1 ? 'a stream of ' + d.shot.n + ' bolts' : 'a bolt')) + ' (' + d.shot.dmg + ' damage) every ' + d.shot.cd + ' s');
     if (d.boom) L.push('Bursts after ' + d.fuse + ' s: ' + d.boom.dmg + ' damage');
     if (d.slam) L.push('Slam: ' + d.slam.mul + 'x contact damage every ' + d.slam.cd + ' s' + (d.slam.ring ? ', plus a ring of ' + d.slam.ring.n + ' shots' : ''));
     if (d.charge) L.push('Dashes at you every ' + d.charge.cd + ' s');

@@ -50,7 +50,7 @@
       pid: pd.pid, slot, cls: h.id, name: pd.name || 'Hero', meta: pd.meta || { shop: {}, sigs: [] },
       x: c + (slot % 2 ? 24 : -24) * (slot > 0 ? 1 : 0), y: c + (slot >= 2 ? 24 : 0), vx: 0, vy: 0, face: 0, mdir: 0, mvx: 0, mvy: 0, moving: false, r: C.HERO_R,
       hp: 1, maxHp: 1, stats: null, statsV: 0, weapons: [], passives: [], skills: [],
-      dashCd: 0, dashT: 0, dashDx: 1, dashDy: 0, invuln: 0, hurtT: 0, dr: 0, slowT: 0, slowK: 0, downed: false, bleed: 0, revive: 0, dead: false, revUsed: 0,
+      dashCd: 0, dashT: 0, dashDx: 1, dashDy: 0, invuln: 0, hurtT: 0, dr: 0, slowT: 0, slowK: 0, downed: false, bleed: 0, revive: 0, dead: false, revUsed: 0, shotTok: 1,
       kills: 0, dealt: {}, offer: null, pend: 0, rerolls: 0, skips: 0, pickInv: 0,
       in: { mx: 0, my: 0, ax: c + 100, ay: c, dash: false, q: false, e: false, pick: 0, reroll: false, skip: false },
     };

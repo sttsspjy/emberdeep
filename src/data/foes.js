@@ -1,7 +1,8 @@
 // Foe roster. ED.addFoe(id, def) registers ED.FOES[id]; registration order is the wire index (ED.FOE_IDS / ED.FOE_IDX): append only.
 // def: { id, name, look (atlas anim prefix), dirs (2: look.walk + flip | 4: look.walk.d/u/l/r | 8: look.walk.0-7), ai (ED.AI brain; a missing brain falls back to 'chaser'),
 //   hp (at 0:00, solo), spd (px/s), dmg (contact multiplier on the time curve), r (collision radius), xp (gem value: 1 | 5 | 25), kb (knockback taken, 0 immune),
-//   brute, split {id, n:[min,max]}, range (ranged: stop distance), shot {dmg, speed, look, n, spread (rad between shots; ring: full circle), cd, wind} (ranged),
+//   brute, split {id, n:[min,max]}, range (ranged: hold distance), shot {dmg, speed, look, n (shots in one stream along the aim line), spread ('ring': n shots around), lob (no shot:
+//   blast circle radius at the target's spot), cd, wind} (ranged),
 //   fuse (exploder wind-up s), boom {r, dmg, look} (exploder), charge {range, speed, dur, cd, wind} (charger), dive {hover, range, speed, dur, cd, wind} (diver),
 //   slam {r, mul (x contact damage), cd, wind, ring {n, speed, look, dmg}, pull {r, str (px/s)}} (brute), pack [min, max] (spawns as a group; swarmers use the spawner PACK size by minute), scale (draw scale), boss, noElite,
 //   take (damage taken factor, armour), guard {open (s), take} (charger: shield up except after a dash), summon {ids, n, r, cd, wind} (summoner), wall (march pack: spawns as a line, px between members),
@@ -32,7 +33,7 @@
   add('glowlet', { name: 'Glowlet', ai: 'swarm', hp: 29, spd: 50, dmg: 0.8, r: 5 });
   add('myconid', { name: 'Myconid', dirs: 4, hp: 54, spd: 32, r: 7 });
   add('glowslime', { name: 'Glow Slime', dirs: 4, hp: 90, spd: 27, r: 8, split: { id: 'glowlet', n: [2, 3] } });
-  add('spitter', { name: 'Spitcap', dirs: 4, ai: 'ranged', hp: 48, spd: 27, r: 7, range: 180, shot: { dmg: 4, speed: 119, look: 'poison', n: 3, spread: 0.24, cd: 3.4, wind: 0.75 } });
+  add('spitter', { name: 'Spitcap', dirs: 4, ai: 'ranged', hp: 48, spd: 27, r: 7, range: 180, shot: { dmg: 5, look: 'poison', lob: 30, cd: 3.4, wind: 0.9 } });
   add('cavespider', { name: 'Cave Spider', dirs: 8, ai: 'charger', pack: [2, 3], hp: 42, spd: 46, r: 8, charge: CHARGE({ range: 230, speed: 270, dur: 0.5, cd: 3.9, wind: 0.7 }) });
   add('shroomhulk', { name: 'Shroom Hulk', ai: 'brute', hp: 360, spd: 22, dmg: 1.5, r: 13, xp: 5, kb: 0, brute: true, slam: SLAM(58, { cd: 3.4 }) });
 

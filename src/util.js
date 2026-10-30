@@ -137,5 +137,5 @@
   // Look registry: projectile / zone look names -> wire index. Files register their looks at load time (fixed script order keeps the index identical on every peer).
   ED.LOOKS = []; ED.LOOK_IDX = {};
   ED.regLook = (...names) => { for (const n of names) if (ED.LOOK_IDX[n] === undefined) { ED.LOOK_IDX[n] = ED.LOOKS.length; ED.LOOKS.push(n); } };
-  ED.regLook('dot', 'arrow', 'bolt', 'knife', 'fireball', 'bone', 'skull', 'thorn', 'hammer', 'shield', 'trident', 'web', 'orb', 'tele', 'fire', 'poison', 'holy', 'frost');
+  ED.regLook('dot', 'arrow', 'bolt', 'knife', 'fireball', 'bone', 'skull', 'thorn', 'hammer', 'shield', 'trident', 'web', 'orb', 'tele', 'fire', 'poison', 'holy', 'frost', 'aim');
 })(globalThis.ED || (globalThis.ED = {}));

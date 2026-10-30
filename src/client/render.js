@@ -95,6 +95,7 @@
     const zf = ED.ZoneFx && ED.ZoneFx[z.k]; if (zf && zf(B, z, t)) return; // look-keyed draw (boss zones carry no weapon id)
     const k = z.dur > 0 ? U.clamp(z.t / z.dur, 0, 1) : 0;
     if (hostile(z)) {
+      if (z.k === 'aim') return; // ranged aim line: drawn only by drawTele (no ground fill)
       const pulse = 0.5 + 0.5 * Math.sin(t * 18), fill = (0xff302000 | Math.round(60 + 70 * k + 30 * pulse)) >>> 0, prog = (0xff8a5a00 | Math.round(90 + 60 * k)) >>> 0;
       if (z.len > 0) {
         const ex = z.x + Math.cos(z.a) * z.len, ey = z.y + Math.sin(z.a) * z.len;
@@ -110,8 +111,16 @@
     else { B.circ(z.x, z.y, z.r, ((col << 8) | a) >>> 0, 0); B.circ(z.x, z.y, z.r, ((col << 8) | 140) >>> 0, 1); }
   }
   // Top pass for hostile telegraphs, over the horde: a pulsing translucent fill and a bright 2 px outline, so the area reads through hundreds of foes.
+  // Look 'aim' (ranged foe lane): a steady 1 px line from the shooter along z.a, growing 35% -> 100% of z.len over the wind-up, alpha 120 -> 170, a 3 px tick at its tip.
   function drawTele(B, z, t) {
-    const k = z.dur > 0 ? U.clamp(z.t / z.dur, 0, 1) : 0, pulse = 0.5 + 0.5 * Math.sin(t * 18);
+    const k = z.dur > 0 ? U.clamp(z.t / z.dur, 0, 1) : 0;
+    if (z.k === 'aim') {
+      const L = z.len * (0.35 + 0.65 * k), ex = z.x + Math.cos(z.a) * L, ey = z.y + Math.sin(z.a) * L;
+      B.line(z.x, z.y, ex, ey, 1, (0xff6a4a00 | Math.round(120 + 50 * k)) >>> 0);
+      B.rect(Math.round(ex) - 1, Math.round(ey) - 1, 3, 3, (0xffa08a00 | Math.round(150 + 60 * k)) >>> 0);
+      return;
+    }
+    const pulse = 0.5 + 0.5 * Math.sin(t * 18);
     const veil = (0xff402800 | Math.round(28 + 34 * pulse + 30 * k)) >>> 0, edge = (0xff6a4a00 | Math.round(200 + 55 * pulse)) >>> 0, lw = 2 + k;
     if (z.len > 0) {
       const c = Math.cos(z.a), s = Math.sin(z.a), ex = z.x + c * z.len, ey = z.y + s * z.len, nx = -s * z.w / 2, ny = c * z.w / 2;

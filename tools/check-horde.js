@@ -2,6 +2,7 @@
 // 1. Data: every roster / event / split id exists, has a brain and atlas art; timelines have 16 rows, caps 80 / 150 / 220 at 0:00-2:00 then 300 -> 700, rates rising into the mid-game, density floors (none at 0:00); roster tiers (5:00 and 10:00 add kinds,
 //    early kinds fade out); boss ids per stage; foe wire order (tier foes after the boss bodies); the XP curve.
 // 2. Brains: each attack kind (ranged, exploder, charger, diver, brute, blinker) shows a warn zone >= 0.6 s before it deals damage; a stun cancels a wind-up and drops its telegraph;
+//    ranged streams (one lane, 'aim' look, shot life), lobs (a fixed circle at the hero's spot, then a blast there; killing the caster cancels it), the per-hero shot budget, no retreat;
 //    guard (shield up, open after the bash), summoner (summons after its ring), pull slam (drags a still hero in), wall packs (a line across the approach).
 // 3. Spawner: a weaponless god hero per stage reaches the alive cap by the mid-game, sees swarm events every 120 s from 2:00, elites every 60 s from 2:30, bosses at 5/10/15 min; a missing boss script spawns a stand-in;
 //    from an empty field at 6:00 / 8:00 (solo and a party of 4) the alive count refills to the density floor within 0.5 s without passing the cap; at the floor the rate is x1.
@@ -80,10 +81,52 @@ function watch(w, p, e, secs, still) {
   const { w, p, e } = lab('priest', 200), r = watch(w, p, e, 5, true);
   ok(r.warnT > 0 && r.warnDur >= 0.6 && r.shots > 0, `ranged: telegraph ${r.warnDur.toFixed(2)} s at ${r.warnT.toFixed(2)} s, then ${r.shots} shots`);
 }
-{ // fan + elite: more shots
-  const a = lab('spitter', 200), ra = watch(a.w, a.p, a.e, 2.5, true);
-  const b = lab('spitter', 200, { elite: true }), rb = watch(b.w, b.p, b.e, 2.5, true);
-  ok(ra.shots === 3 && rb.shots === 5, `fan: ${ra.shots} shots, elite ${rb.shots} shots`);
+const still = (w, p) => w.input('p1', { mx: 0, my: 0, ax: p.x + 50, ay: p.y });
+{ // stream: an elite bolt caster fires shot.n + 2 shots down one locked lane, shot i at speed x (1 - 0.12 i), each living (d + 160) / speed s; its telegraph is an 'aim' line
+  const { w, p, e } = lab('priest', 150, { elite: true }), S = e.def.shot;
+  let look = '', pr = [], d = 0;
+  for (let i = 0; i < 300 && !pr.length; i++) {
+    still(w, p); d = Math.hypot(e.x - p.x, e.y - p.y); w.update(C.TICK); w.events.length = 0;
+    for (const z of w.zones) if (z.warn && z.srcId === e.id && !look) look = z.k + (z.len > 0 ? ' line' : '');
+    pr = w.projs.filter(q => !q.dead && q.team === 1 && q.owner === e.id);
+  }
+  const sp = pr.map(q => q.sp).sort((a, b) => b - a);
+  ok(look === 'aim line' && pr.length === S.n + 2 && pr.every(q => Math.abs(q.a - pr[0].a) < 1e-9) && sp.every((v, i) => Math.abs(v - S.speed * (1 - 0.12 * i)) < 1e-6)
+    && pr.every(q => Math.abs(q.life + q.t - Math.min(4, (d + 160) / q.sp)) < 0.02), `stream: elite ${pr.length} shots in one lane at ${sp.map(Math.round).join('/')} px/s, life ${pr.map(q => (q.life + q.t).toFixed(2)).join('/')} s, telegraph ${look}`);
+}
+{ // lob: a warned circle (>= 0.6 s, fixed) at the still hero's spot, then a team-1 blast there that hurts; a hero that walks off is missed; killing the caster in the wind-up cancels it
+  const lob = (move, kill) => {
+    const { w, p, e } = lab('spitter', 150), o = { zx: 0, zy: 0, zr: 0, dur: 0, moved: 0, boom: null, hurt: false, hx: 0, hy: 0 };
+    let z = null, hp0 = 0;
+    for (let i = 0; i < 400 && !o.boom; i++) {
+      w.input('p1', { mx: z && move ? -1 : 0, my: 0, ax: p.x - 50, ay: p.y });
+      w.update(C.TICK);
+      if (!z) { z = w.zones.find(q => q.warn && q.srcId === e.id && !q.dead) || null; if (z) { o.zx = z.x; o.zy = z.y; o.zr = z.r; o.dur = z.dur; o.hx = p.x; o.hy = p.y; hp0 = p.hp; } }
+      else if (!z.dead) o.moved = Math.max(o.moved, Math.hypot(z.x - o.zx, z.y - o.zy));
+      if (z && kill && !e.dead) w.hitFoe(e, 1e6, w.src(p, 'test', 'weapon'));
+      for (const ev of w.events) if (ev.t === 'boom' && ev.team === 1) o.boom = ev;
+      w.events.length = 0;
+    }
+    o.hurt = !!z && p.hp < hp0; o.away = Math.hypot(p.x - o.zx, p.y - o.zy);
+    return o;
+  };
+  const a = lob(false), b = lob(true), c = lob(false, true);
+  ok(a.boom && a.dur >= 0.6 && Math.hypot(a.zx - a.hx, a.zy - a.hy) < 1 && a.moved === 0 && a.zr === 30 && Math.hypot(a.boom.x - a.zx, a.boom.y - a.zy) <= 1 && a.hurt,
+    `lob: ${a.dur.toFixed(2)} s circle r ${a.zr} on the hero's spot, blast there hurts a still hero`);
+  ok(b.boom && !b.hurt && b.away > b.zr, `lob: a hero that walked ${Math.round(b.away)} px off is missed`);
+  ok(!c.boom, 'lob: killing the spitter in its wind-up cancels the blast');
+}
+{ // shot budget: 8 bolt casters around a still hero at 0:00 start at most 1 + 0.5 x 10 attacks in 10 s (tokens start at 1, refill 0.5 / s)
+  const { w, p } = lab('priest', 150);
+  for (let k = 1; k < 8; k++) { const a = k * U.TAU / 8; w.spawnFoe('priest', p.x + Math.cos(a) * 150, p.y + Math.sin(a) * 150); }
+  const seen = new Set();
+  for (let i = 0; i < 600; i++) { still(w, p); w.update(C.TICK); w.events.length = 0; for (const z of w.zones) if (z.warn && z.team === 1) seen.add(z.id); }
+  ok(seen.size >= 5 && seen.size <= 6, `shot budget: 8 casters start ${seen.size} attacks in 10 s`);
+}
+{ // no retreat: a bolt caster 60 px from a still hero (inside range - 50) strafes, never backs off
+  const { w, p, e } = lab('priest', 60); let dMax = 0;
+  for (let i = 0; i < 120; i++) { still(w, p); w.update(C.TICK); w.events.length = 0; dMax = Math.max(dMax, Math.hypot(e.x - p.x, e.y - p.y)); }
+  ok(dMax < 70, `no retreat: a caster 60 px away stays within ${dMax.toFixed(1)} px over 2 s`);
 }
 { // exploder: telegraph, blast hurts after >= 0.6 s, the foe is gone
   const { w, p, e } = lab('imp', 120), r = watch(w, p, e, 4, true);
@@ -231,6 +274,27 @@ for (const st of [0, 1, 2]) {
   const r = spawnRun(0, 302, (w) => { w.sdef = Object.assign({}, w.sdef, { bosses: [{ t: 300, id: 'nobody' }] }); });
   const e = r.w.boss;
   ok(e && e.boss && e.elite && e.def.brute && e.maxHp === 1500, `missing boss script: stand-in ${e && e.def.id} (hp ${e && e.maxHp})`);
+}
+
+{ // shooter caps: round(min(8, 3 + 0.4 x minute) x party) ranged alive, round(2 x party) summoners; a weaponless god hero never sees more (bosses off)
+  const cw = new ED.World({ seed: 77, stage: 0, players: players(['knight']) }), c4 = new ED.World({ seed: 77, stage: 0, players: players(['knight', 'knight', 'knight', 'knight']) });
+  const caps = [0, 300, 600, 720].map(t => (cw.time = t, cw.shooterCap())).join('/');
+  ok(caps === '3/5/7/8' && c4.shooterCap() === 5 && cw.summonerCap() === 2 && c4.summonerCap() === 4, `shooter cap ${caps} at 0:00/5:00/10:00/12:00 solo, ${c4.shooterCap()} at 0:00 x4; summoners ${cw.summonerCap()} / ${c4.summonerCap()}`);
+  const capRun = (stage, t0, t1, ai, capFn) => {
+    const w = new ED.World({ seed: 77, stage, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];
+    p.weapons.length = 0; p.skills.length = 0; w.time = t0; w.sp.bossI = 99; w.sp.swarmT = Infinity; w.sp.eliteT = t0 + 30;
+    let over = 0, peak = 0;
+    for (let i = 0; w.time < t1; i++) {
+      const a = i / 60 * 0.4; w.input('p1', { mx: Math.cos(a) * 0.6, my: Math.sin(a) * 0.6, ax: p.x + 50, ay: p.y, pick: p.offer ? 1 : 0 });
+      w.update(C.TICK); w.events.length = 0;
+      let n = 0; for (const e of w.foes) if (!e.dead && !e.boss && e.def.ai === ai) n++;
+      peak = Math.max(peak, n); if (n > w[capFn]()) over++;
+    }
+    return { over, peak };
+  };
+  const r = capRun(1, 180, 420, 'ranged', 'shooterCap'), s = capRun(0, 600, 690, 'summoner', 'summonerCap');
+  ok(r.over === 0 && r.peak >= 4, `Glowmire 3:00-7:00: ranged alive peak ${r.peak}, ${r.over} ticks over the cap`);
+  ok(s.over === 0 && s.peak >= 1, `Ossuary 10:00-11:30: summoners alive peak ${s.peak}, ${s.over} ticks over the cap`);
 }
 
 // ---------------- 4. recycling ----------------

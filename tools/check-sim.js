@@ -109,7 +109,7 @@ ok(q1.digest === q2.digest, `4-hero digest equal (${q1.digest} / ${q2.digest})`)
 ok(QUICK || q1.w.bossList.some(e => e.final), `4-hero reaches the final boss (bosses ${q1.bosses.join(', ')}; kills ${q1.w.kills}, level ${q1.w.level}, peak cap ${q1.w.aliveCap()})`);
 invariants(q1, '4-hero');
 // 3. victory with a cheat build; every hero reaches a Form
-const VICTORY = [['knight', 0, 7], ['ranger', 1, 8], ['pyro', 2, 9], ['necro', 0, 10], ['cleric', 1, 11], ['shade', 2, 12], ['bell', 0, 13]].slice(0, QUICK ? 1 : 7);
+const VICTORY = [['knight', 0, 7], ['ranger', 1, 8], ['pyro', 2, 9], ['necro', 0, 10], ['cleric', 1, 13], ['shade', 2, 12], ['bell', 0, 13]].slice(0, QUICK ? 1 : 7);
 const vcfg = (cls, st, seed, xp) => ({ seed, stage: st, players: players([cls]), cheats: { god: true, might: 40, xp: xp || 1 } });
 const vopt = { seek: true, setup: (w) => cheatBuild(w, w.heroes[0]) };
 const formOf = (v) => { const ws = v.w.heroes[0].weapons[0]; return ws.evo && v.evolved.some(e => e === ws.root + '>' + ws.id) ? ws.id : ''; };

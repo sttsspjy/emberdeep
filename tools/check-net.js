@@ -30,7 +30,7 @@ const N = ED.Net;
 { const r = U.RNG(4242); Math.random = r.next; } // party codes and pids: same every run
 const GATE = 12 * 1024;
 let fails = 0;
-const okV = N.VERSION === 8 && ED.NET_VERSION === 8;
+const okV = N.VERSION === 9 && ED.NET_VERSION === 9;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
 const t0 = Date.now();
 
@@ -186,7 +186,7 @@ const atSnap = ring[Math.round(gC.mir.T / C.TICK) % RING];
 ok(atSnap && atSnap.tick === Math.round(gC.mir.T / C.TICK) && Math.abs(me.hp - atSnap.hp) < 0.01 && me.maxHp === cliHero.maxHp && gC.view.level === atSnap.level && gC.view.kills === atSnap.kills && gC.view.gold === atSnap.gold, `vitals / level / kills / gold match the host at the snapshot tick (lv ${w.level}, kills ${w.kills})`);
 const sig = (p) => p.weapons.map(x => x.id + x.lvl + ':' + x.pr.join('') + x.fl + (x.evo ? 'F' : '')).join(',') + '|' + p.passives.map(x => x.id + x.lvl).join(',') + '|' + p.skills.map(x => x.id + x.lvl).join(',');
 ok(sig(me) === sig(cliHero) && me.skills.length === 1 && me.weapons.length >= 1 && me.weapons[0].root === ED.HEROES[me.cls].sig && me.weapons[0].pr.some(r => r > 0), 'client hero weapon (path ranks, refine) / passives / one skill match the host: ' + sig(me));
-ok(okV, 'NET_VERSION 8');
+ok(okV, 'NET_VERSION 9');
 const cq = me.skills[0], hq = cliHero.skills[0];
 ok(cq && hq.chN === 2 && cq.chN === hq.chN && cq.ch === hq.ch && hq.ch === 2, `Q charges on the wire (host ${hq.ch}/${hq.chN}, client ${cq && cq.ch}/${cq && cq.chN})`);
 ok(cliPicks >= 5 && hostPicks >= 5 && !pendLive, `co-op level-ups resolve without pause (client picks ${cliPicks}, host picks ${hostPicks}, client pending ${pendLive} while picking)`);

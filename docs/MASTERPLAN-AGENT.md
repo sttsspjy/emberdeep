@@ -51,3 +51,4 @@ Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with th
 - 2026-10-28 all lanes merged; integration fixes; fix round committed (6 commits); all Node checks, art --check, browse smoke/shots/coop/crowd900 (GPU + software), late gates GPU pass; late gates software fail.
 - 2026-10-28 playtest prep (aim fallback, mobility nerf, codex) + bot bench; dual review (Opus + Sonnet) and fix round; all checks pass; merged to main.
 - 2026-10-29 hero redesign: phase 1 (core / horde / render) + phase 2 (7 hero trees) + Form icons + readability pass; all checks pass; merged to main.
+- 2026-10-31 ranged pressure fix (fix/ranged-pressure): shooter cap 3→8, per-hero shot budget, no retreat, fans → lane streams, Spitcap lob, short shot life, calm 'aim' line (NET 9). Open: gem merge (>350 gems) can strand XP outside the hero's path; boss adds and splitter children skip the shooter cap.
