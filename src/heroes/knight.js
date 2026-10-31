@@ -1,5 +1,5 @@
-// Knight (brawler): hero data, signature Cleave (3 paths x 3 shape ranks), 5 Forms (Greatblade: Colossus Blade, Earthsplitter; Whirl: Whirlwind; Edge Wave: Rending Gale, Blade Tempest), Q Bulwark Shove.
-// Zones (networked, drawn by hfx-knight.js): 'shove' / 'bulwark' (Q); 'crack' team-0 warn lines that erupt at dur; 'cut' lingering wind lines (len = full length, drawn growing).
+// Knight (brawler): hero data, signature Cleave (3 paths x 3 shape ranks), 5 Forms (Greatblade: Colossus Blade, Earthsplitter; Whirl: Whirlwind; Edge Wave: Rending Gale, Blade Tempest), Q Aegis Ward.
+// Zones (networked, drawn by hfx-knight.js): 'shove' (Q cast wave) / 'bulwark' (Q ward); 'crack' team-0 warn lines that erupt at dur; 'cut' lingering wind lines (len = full length, drawn growing).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU, PI = Math.PI;
@@ -204,33 +204,48 @@
     ], noAmount: true,
   }, IMPL);
 
-  // ---------------- Q: Bulwark Shove ----------------
-  // Zero damage. Every foe within N.r px of the hero (inside its view) slides out to N.r x OUT px from it (W.push: elites half the way, bosses and knockback-immune foes stay)
-  // and is slowed N.slow for N.slowT s; stun (L3): also stunned N.stun s first. ring (L4): a ring at the shove edge holds N.ring s at the cast point; foes cannot cross it inward
-  // (W.blockZone with st.out). Zones: 'shove' (visual wave, r = shove edge), 'bulwark' (the ring, w = band width).
-  const OUT = 5 / 3;
+  // ---------------- Q: Aegis Ward ----------------
+  // Zero damage. A ward of radius N.r at the hero for N.dur s: no non-boss foe stays within N.r + its radius of the centre (each tick one inside is put on the edge and loses its inward
+  // knockback; the exclusion radius grows from 0 to N.r over SLIDE s while the cast push slides foes out: W.push, elites half, bosses and knockback-immune foes stay). Projectiles pass.
+  // follow (L5): the ward centre tracks the hero every tick (walking shoulders foes aside). Zones: 'shove' (cast wave, r = N.r), 'bulwark' (the ward, r = N.r, drawn growing over SLIDE s).
+  const SLIDE = 0.25;
+  const wardTick = (w, z) => {
+    const R = z.r * Math.min(1, z.t / SLIDE), A = w.arena, q = w.foeScan(z.x, z.y, R + 32);
+    for (let k = 0; k < q.length; k++) {
+      const e = q[k]; if (e.dead || e.boss) continue;
+      const m = R + e.r, dx = e.x - z.x, dy = e.y - z.y, d = Math.hypot(dx, dy);
+      if (d >= m) continue;
+      let ux = dx / d, uy = dy / d;
+      if (!(d > 1e-3)) { const a = e.id * 2.39996; ux = Math.cos(a); uy = Math.sin(a); }
+      e.x = z.x + ux * m; e.y = z.y + uy * m;
+      const kr = e.kbx * ux + e.kby * uy; if (kr < 0) { e.kbx -= kr * ux; e.kby -= kr * uy; }
+      ED.Arena.collide(A, e, e.r);
+    }
+    w.foeEnd();
+  };
+  // Base r 50: foes held on the edge (centre distance 50 + their radius) stay inside base Cleave reach (56 + radius from 4 px above the hero).
   ED.addSkill({
-    id: 'shove', name: 'Bulwark Shove', icon: 'shield.kite', cd: 9, txt: 'Shove the crowd away and slow it',
-    base: { r: 120, slow: 0.5, slowT: 3, stun: 0, ring: 0 },
+    id: 'shove', name: 'Aegis Ward', icon: 'shield.kite', cd: 25, txt: 'A ward the horde cannot step into',
+    base: { r: 50, dur: 6.5, follow: false },
     levels: [
-      { mods: { r: 0.3 }, txt: '+30% shove radius' },
-      { mods: { stun: 1 }, txt: 'Shoved foes are stunned 1 s' },
-      { mods: { ring: 3 }, txt: 'Leaves a ring foes cannot cross' },
+      { mods: { r: 0.2 }, txt: '+20% ward radius' },
+      { mods: { dur: 1.5 / 6.5 }, txt: 'The ward holds 1.5 s longer' },
+      { mods: { cd: -0.2 }, txt: 'Ward cooldown 25 s to 20 s' },
+      { mods: { follow: true }, txt: 'The ward moves with you' },
     ],
   }, (w, p, x, y, N) => {
-    const R = N.r, to = R * OUT, q = w.foeScan(p.x, p.y, R);
+    const R = N.r, q = w.foeScan(p.x, p.y, R + 32);
     let n = 0;
     for (let k = 0; k < q.length; k++) {
-      const e = q[k], d = Math.hypot(e.x - p.x, e.y - p.y);
-      if (e.dead || d > R + e.r || !ED.inView(p, e.x, e.y, e.r)) continue;
-      w.push(e, p.x, p.y, to - d);
-      w.slow(e, N.slow, N.slowT);
-      if (N.stun > 0) w.stun(e, N.stun);
+      const e = q[k]; if (e.dead) continue;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d >= R + e.r) continue;
+      w.push(e, p.x, p.y, R + e.r - d + 2);
       n++;
     }
     w.foeEnd();
-    w.zone({ team: 0, p, wid: 'shove', x: p.x, y: p.y, r: to, dur: 0.45, look: 'shove' });
-    if (N.ring > 0) w.zone({ team: 0, p, wid: 'shove', x: p.x, y: p.y, r: to, w: 14, dur: N.ring, look: 'bulwark', st: { out: true, lure: 0, lt: 0 }, onTick: ED.blockTick });
-    return { r: Math.round(to), n, shake: 6, stop: 0.06 };
+    w.zone({ team: 0, p, wid: 'shove', x: p.x, y: p.y, r: R, dur: 0.35, look: 'shove' });
+    w.zone({ team: 0, p, wid: 'shove', x: p.x, y: p.y, r: R, dur: N.dur, look: 'bulwark', follow: N.follow ? p.pid : '', onTick: wardTick });
+    return { r: Math.round(R), n, shake: 4, stop: 0.04 };
   });
 })(globalThis.ED || (globalThis.ED = {}));

@@ -1,4 +1,4 @@
-// Pyro: hero data, signature Fire Bolt (3 paths x 3 ranks: Blaze, Mortar, Combustion), Forms Inferno (Blaze), Firestorm + Napalm (Mortar), Wildfire + Pyre (Combustion), Q Flashpoint (3 skill levels).
+// Pyro: hero data, signature Fire Bolt (3 paths x 3 ranks: Blaze, Mortar, Combustion), Forms Inferno (Blaze), Firestorm + Napalm (Mortar), Wildfire + Pyre (Combustion), Q Flashpoint (4 skill levels).
 // Role: area denial. Instant hits are weak; fire pools, burns and death blasts carry the damage. Every damage source credits the slot's current id (ws.id).
 // Ground fire (pools 'firepool', pyres 'pyre', fire lines 'napalm') lives in ws.st.pools (ring of live zones, refs checked by id), at most POOL_MAX + S.pools per hero; a new one past the cap ends the oldest.
 // Shared by the root and every Form (impl.tick / impl.kill): Mortar shells (S.shells, Forms with def.shellForm lob their own), death blasts of burning foes (S.combust) and fire leaps (S.spread).
@@ -346,16 +346,10 @@
 
   // ---------------- Q: Flashpoint ----------------
   // Zero damage. A flash at the hero: every foe within N.r px (inside its view) slides N.push px away (W.push: elites half, bosses and knockback-immune foes stay) and flees from
-  // the hero for N.flee s (W.foeFlee; bosses never); gems (L4): every xp gem within N.gem px flies to the hero. Zone 'flash' (visual, r = flash radius).
-  ED.addSkill({
-    id: 'flashpoint', name: 'Flashpoint', icon: 'fx.blast.red', cd: 10, txt: 'A flash that sends the horde fleeing',
-    base: { r: 140, push: 120, flee: 2, gem: 0 },
-    levels: [
-      { mods: { r: 0.3 }, txt: '+30% flash radius' },
-      { mods: { flee: 1.5 }, txt: 'Foes flee 1.5 s longer' },
-      { mods: { gem: 200 }, txt: 'The flash pulls in gems' },
-    ],
-  }, (w, p, x, y, N) => {
+  // the hero for N.flee s (W.foeFlee; bosses never); gems (L4): every xp gem within N.gem px flies to the hero. again (L5): a second flash bursts AGAIN s later wherever the hero
+  // stands (p.fl2 = its sim time, fired by HOOK.pyro; dropped if the hero is down then). Zone 'flash' (visual, r = flash radius).
+  const AGAIN = 1;
+  const flash = (w, p, N) => {
     const R = N.r, q = w.foeScan(p.x, p.y, R);
     let n = 0;
     for (let k = 0; k < q.length; k++) {
@@ -368,6 +362,30 @@
     w.foeEnd();
     if (N.gem > 0) w.pullGems(p, p.x, p.y, N.gem);
     w.zone({ team: 0, p, wid: 'flashpoint', x: p.x, y: p.y, r: R, dur: 0.5, look: 'flash' });
-    return { r: Math.round(R), n, shake: 6, stop: 0.05 };
+    return n;
+  };
+  ED.addSkill({
+    id: 'flashpoint', name: 'Flashpoint', icon: 'fx.blast.red', cd: 10, txt: 'A flash that sends the horde fleeing',
+    base: { r: 140, push: 120, flee: 2, gem: 0, again: false },
+    levels: [
+      { mods: { r: 0.3 }, txt: '+30% flash radius' },
+      { mods: { flee: 1.5 }, txt: 'Foes flee 1.5 s longer' },
+      { mods: { gem: 200 }, txt: 'The flash pulls in gems' },
+      { mods: { again: true }, txt: 'A second flash bursts 1 s later' },
+    ],
+  }, (w, p, x, y, N) => {
+    const n = flash(w, p, N);
+    if (N.again) p.fl2 = w.time + AGAIN;
+    return { r: Math.round(N.r), n, shake: 6, stop: 0.05 };
   });
+  ED.HOOK.pyro = {
+    init(w, p) { p.fl2 = 0; },
+    tick(w, p) {
+      if (!(p.fl2 > 0) || w.time < p.fl2) return;
+      const late = w.time - p.fl2; p.fl2 = 0;
+      if (late > 0.1 || !w.alive(p)) return;
+      const i = p.skills.findIndex(sk => sk.id === 'flashpoint'); if (i < 0) return;
+      w.vclamp = p; flash(w, p, w.skillN(p, i)); w.vclamp = null;
+    },
+  };
 })(globalThis.ED || (globalThis.ED = {}));

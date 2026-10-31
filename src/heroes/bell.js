@@ -188,7 +188,7 @@
 
   // ---------------- Great Peal ----------------
   // Zero damage. A ring from the hero out to N.r (about the screen's half diagonal) in N.t s: N.stun s and a push to every foe it reaches; echo: a second ring, 25% wider, 0.55 s later;
-  // ward: every living hero within N.r is invulnerable for N.ward s; gems: every xp gem within N.r flies to the hero.
+  // ward: every living hero within N.r is invulnerable for N.ward s; gems: every xp gem within N.r flies to the hero. clear (L5): every foe projectile inside the hero's view is erased.
   ED.addSkill({
     id: 'peal', name: 'Great Peal', icon: 'weapon.greatbell', cd: 16, txt: 'Stun every foe on screen',
     base: { r: 370, t: 0.5, stun: 1.2, knock: 180 },
@@ -196,6 +196,7 @@
       { mods: { echo: true }, txt: 'A second, wider peal follows' },
       { mods: { ward: 1.5 }, txt: 'Shields you and allies for 1.5 s' },
       { mods: { gems: true, stun: 0.5 }, txt: 'Pulls gems; stuns 0.5 s longer' },
+      { mods: { clear: true }, txt: 'Each peal erases foe shots on screen' },
     ],
   }, (w, p, x, y, N) => {
     let o = wopt(0, N.r, N.t, 0); o.stun = N.stun; o.knock = N.knock;
@@ -204,6 +205,7 @@
     const r2 = N.r * N.r;
     if (N.ward > 0) for (const h of w.living) if (U.dist2(p.x, p.y, h.x, h.y) <= r2) h.invuln = Math.max(h.invuln, N.ward);
     if (N.gems) w.pullGems(p, p.x, p.y, N.r);
+    if (N.clear) for (const pr of w.projs) if (!pr.dead && pr.team === 1 && ED.inView(p, pr.x, pr.y, pr.r)) pr.dead = true;
     return { shake: 7 };
   });
 

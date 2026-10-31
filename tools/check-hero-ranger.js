@@ -3,7 +3,7 @@
 // 2. Every Form (1-2 per path) is ready only with its own path at rank 5, locks the others once taken, refines twice and deals damage in a foe ring.
 // 3. Mechanics: arrows fly along the cursor past nearer foes and elites; the split fan (two) aims its second half at a foe off the cursor line, else 0.35 rad off it; bounces turn arrows to unhit foes; kill shots fire from kills; Ballista bolts pierce a whole line; Rebound arrows turn at the view edge.
 // 4. Damage only in view: every Longbow path at rank 5 and every refined Form never hurts a pinned foe 340 px away (outside the 320 px half view) while hurting a near one.
-// 5. Vault at levels 1..4: zero damage leap toward the cursor, untouchable, gem pull on landing; L2 farther, L3 2 charges, L4 caltrops; obstacle-safe landing.
+// 5. Vault at levels 1..5: zero damage leap toward the cursor, untouchable, gem pull on landing; L2 farther, L3 2 charges, L4 caltrops, L5 pulls every gem in view; obstacle-safe landing.
 // 6. Determinism: the same seed and inputs give the same digest for every Form; client draw hooks run on a mock batch without non-finite args.
 'use strict';
 const path = require('path'), fs = require('fs'), vm = require('vm');
@@ -143,26 +143,26 @@ for (const f of [0, 1, 2].map(i => ({ id: 'longbow', r: top(i) })).concat(FORMS)
   ok(hurtFar === 0 && hurtNear >= 1, `${f.id} ${f.r ? f.r.join('') : 'refined'}: no damage outside the view (far hurt ${hurtFar}, near hurt ${hurtNear}/8)`);
 }
 
-// 5. Vault (zero damage): leaps N.dist toward the cursor, untouchable, over foes; lands pulling gems within 200 px; L2 +60 px; L3 2 charges; L4 caltrops slow foes at the takeoff.
+// 5. Vault (zero damage): leaps N.dist toward the cursor, untouchable, over foes; lands pulling gems within 200 px (L5: every gem in view); L2 +60 px; L3 2 charges; L4 caltrops slow foes at the takeoff.
 ok(ED.SKILLS.vault.cd >= 7 && ED.SKILLS.vault.cd <= 16 && ED.SKILLS.vault.levels.every(l => l.txt.length <= 40) && ED.SKILLS.vault.txt.length <= 40, `vault: cooldown ${ED.SKILLS.vault.cd} s, card lines <= 40 chars`);
-for (let L = 1; L <= 4; L++) {
+for (let L = 1; L <= 5; L++) {
   const w = world(6), p = w.heroes[0], sk = p.skills[0]; sk.lvl = L; p.weapons.length = 0;
   const N = w.skillN(p, 0), x0 = p.x, y0 = p.y;
   for (let i = 0; i < 8; i++) { const e = w.spawnFoe('skeleton', x0 + 40 + i * 12, y0 + (i & 1 ? 8 : -8), { hpMul: 50 }); e.spd = 0; }
-  const gNear = w.spawnPickup('xp5', x0 + N.dist + 150, y0, 5), gFar = w.spawnPickup('xp5', x0 + N.dist + 320, y0, 5);
+  const gNear = w.spawnPickup('xp5', x0 + N.dist + 150, y0, 5), gFar = w.spawnPickup('xp5', x0 + N.dist + 280, y0, 5), gOut = w.spawnPickup('xp5', x0 + N.dist + 420, y0, 5);
   w.input(p.pid, { q: true, ax: x0 + 300, ay: y0 }); w.update(C.TICK); w.events.length = 0;
   const inv = p.invuln > N.t * 0.8;
   step(w, 30);
   const moved = p.x - x0, hurt = w.foes.filter(e => e.hp < e.maxHp).length;
   ok(Math.abs(moved - N.dist) < 4 && inv && hurt === 0 && !(p.dealt.vault > 0), `vault L${L}: leapt ${moved.toFixed(0)} of ${N.dist} px over 8 foes, untouchable ${inv}, zero damage (hurt ${hurt})`);
-  ok(gNear.pull === p.pid && gFar.pull !== p.pid, `vault L${L}: landing pulls the gem at 150 px (${gNear.pull === p.pid}), not the one at 320 px (${gFar.pull === p.pid})`);
+  ok(gNear.pull === p.pid && (gFar.pull === p.pid) === (L >= 5) && gOut.pull !== p.pid, `vault L${L}: landing pulls the gem at 150 px (${gNear.pull === p.pid}), at 280 px in view ${gFar.pull === p.pid}, never at 420 px out of view (${gOut.pull === p.pid})`);
   // charges: a second press right after the leap
   const x1 = p.x; w.input(p.pid, { q: true, ax: p.x + 300, ay: p.y }); step(w, 30);
   ok((L >= 3) === (p.x - x1 > N.dist - 4), `vault L${L}: second leap at once ${p.x - x1 > N.dist - 4} (charges ${N.charges | 0})`);
   const cal = w.zones.filter(z => !z.dead && z.k === 'caltrops').sort((a, b) => U.dist2(p.x, p.y, a.x, a.y) - U.dist2(p.x, p.y, b.x, b.y))[0]; // the latest field (the first lies outside the view)
-  if (L === 4) {
+  if (L >= 4) {
     const e = w.spawnFoe('skeleton', cal.x + 10, cal.y, { hpMul: 50 }); step(w, 15);
-    ok(e.slowT > 1 && e.slowK >= 0.5 && e.hp === e.maxHp, `vault L4: caltrops slow a foe 50% (${e.slowK}, ${e.slowT.toFixed(1)} s), no damage`);
+    ok(e.slowT > 1 && e.slowK >= 0.5 && e.hp === e.maxHp, `vault L${L}: caltrops slow a foe 50% (${e.slowK}, ${e.slowT.toFixed(1)} s), no damage`);
   } else ok(!cal, `vault L${L}: no caltrops`);
 }
 { // obstacle-safe landing: aimed straight at an obstacle centre 160 px away
@@ -179,7 +179,7 @@ ED.Atlas = { ok: true, has: () => true, anim: () => ({ n: 6 }), frameAt: () => 0
 vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'hfx-ranger.js'), 'utf8'), { filename: 'hfx-ranger.js' });
 function digestRun(fid, draw) {
   const w = world(12), p = w.heroes[0], ws = fid === 'longbow' ? ranks(w, p, top(0)) : form(w, p, p.weapons[0], fid);
-  p.skills[0].lvl = 4;
+  p.skills[0].lvl = 5;
   let d = 0, err = null;
   try {
     for (let i = 0; i < 360; i++) {

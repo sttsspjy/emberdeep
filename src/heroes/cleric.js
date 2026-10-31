@@ -293,32 +293,38 @@
   // ---------------- Sanctuary ----------------
   // Zero damage. Holy ground at the cursor: a burst that knocks foes out (knock 320), then for N.dur s every ST s: foes inside slowed 45% (ward: shoved out from the centre), every living
   // hero inside healed N.heal HP/s, downed heroes inside gain REV_K revive progress per s (revive); rain: a holy pillar (look 'smite', 0.18 s fall) lands on a random point inside every
-  // RAIN_T s and stuns the foes it covers RAIN_STUN s.
+  // RAIN_T s and stuns the foes it covers RAIN_STUN s. shield (L5): every living hero inside takes N.shield less damage (h.dr, owned by the zone that set it: h.drZ = z.id; cleared
+  // when the hero is outside at a tick or the zone ends).
   const SANCT_SLOW = 0.45, WARD = 90, REV_K = 1.2, RAIN_T = 0.25, ST = 0.25, RAIN_R = 20, RAIN_STUN = 0.6;
   ED.addSkill({
     id: 'sanctuary', name: 'Sanctuary', icon: 'fx.shield.gold', cd: 14, txt: 'Holy ground heals allies',
-    base: { r: 80, dur: 4, heal: 5 },
+    base: { r: 80, dur: 4, heal: 5, shield: 0 },
     levels: [
       { mods: { r: 0.35, ward: true }, txt: '+35% area, wards foes out' },
       { mods: { dur: 0.5, revive: true }, txt: 'Lasts 50% longer, revives allies' },
       { mods: { rain: true }, txt: 'Holy pillars rain inside and stun' },
+      { mods: { shield: 0.4 }, txt: 'Allies inside take 40% less damage' },
     ],
   }, (w, p, x, y, N) => {
     w.blast(p, 'sanctuary', x, y, N.r, 0, { knock: 320, look: 'holy', kind: 'skill' });
     w.zone({ team: 0, p, wid: 'sanctuary', x, y, r: N.r, dur: N.dur, look: 'sanct',
-      st: { heal: N.heal, ward: !!N.ward, rev: !!N.revive, rain: !!N.rain, tt: -1, rainT: 0 }, onTick: sanctTick });
+      st: { heal: N.heal, ward: !!N.ward, rev: !!N.revive, rain: !!N.rain, shield: N.shield || 0, tt: -1, rainT: 0 }, onTick: sanctTick, onEnd: N.shield > 0 ? sanctEnd : null });
     return { shake: 4 };
   });
   let SW = null, SZ = null;
   const sanctFoe = (e) => { SW.slow(e, SANCT_SLOW, ST * 1.6); if (SZ.st.ward) SW.knock(e, e.x - SZ.x, e.y - SZ.y, WARD); };
   const rainFoe = (e) => SW.stun(e, RAIN_STUN);
   const rainEnd = (w, z) => { SW = w; w.zoneFoes(z, rainFoe); SW = null; w.zone({ team: 0, p: z.p, wid: z.wid, x: z.x, y: z.y, r: z.r, dur: 0.25, look: 'pglow' }); };
+  function sanctEnd(w, z) { for (const h of w.heroes) if (h.drZ === z.id) { h.dr = 0; h.drZ = 0; } }
   function sanctTick(w, z) {
     const st = z.st, r2 = z.r * z.r;
     if (st.tt >= 0 && z.t - st.tt < ST - 1e-6) return;
     st.tt = z.t;
     SW = w; SZ = z; w.zoneFoes(z, sanctFoe); SW = null; SZ = null;
     for (const h of w.living) if (U.dist2(h.x, h.y, z.x, z.y) <= r2) w.heal(h, st.heal * ST);
+    if (st.shield > 0) for (const h of w.heroes) {
+      if (w.alive(h) && U.dist2(h.x, h.y, z.x, z.y) <= r2) { h.dr = st.shield; h.drZ = z.id; } else if (h.drZ === z.id) { h.dr = 0; h.drZ = 0; }
+    }
     if (st.rev) for (const h of w.heroes) if (h.downed && !h.dead && U.dist2(h.x, h.y, z.x, z.y) <= r2) h.revive += REV_K * ST; // >= 1 revives at the next hero update
     if (!st.rain) return;
     for (st.rainT += ST; st.rainT >= RAIN_T; st.rainT -= RAIN_T) {

@@ -1,5 +1,6 @@
 ﻿// Pickups, party XP / levels, card offers, banish / reroll / skip, chests, gold and the per-weapon damage table (GAME-DESIGN §6, §9; ARCHITECTURE §8).
-// Pickup k: 'xp1' | 'xp5' | 'xp25' (val = XP) | 'gold' (val coins) | 'food' (val HP) | 'magnet' | 'bomb' | 'chest' (val 1 elite, 2 boss). Gems merge into the nearest gem above GEM_CAP on the ground.
+// Pickup k: 'xp1' | 'xp5' | 'xp25' (val = XP) | 'gold' (val coins) | 'food' (val HP) | 'magnet' | 'bomb' | 'chest' (val 1 elite, 2 boss). At GEM_CAP gems on the ground a drop merges (see dropGem).
+// Magnets drop from hero kills of non-boss foes (rollMagnet): MAG_P per kill from MAG_FIRST s on, MAG_GAP s after the last magnet drop; a new one replaces an uncollected one.
 // Gems and gold are pulled inside the hero's pickup radius; food, magnet, bomb and chests need a touch. Pulled pickups fly to the hero with an accelerating curve.
 // Braziers break on a hero's touch (weapon hits: combat.js) and relight RELIGHT s after breaking, once no living hero is within RELIGHT_R px.
 // Card: { kind: 'tune'|'path'|'pathpick'|'support'|'form'|'refine'|'passive'|'plvl'|'skill'|'gold'|'heal', id (tune / path / pathpick / support: root weapon id; form / refine: form id),
@@ -11,9 +12,9 @@
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST, W = ED.World.prototype;
-  const FORM_T = 600, GEM_CAP = 350, TOUCH = 6, GOLD_CARD = 25, HEAL_CARD = 30, RELIGHT = 60, RELIGHT_R = 700;
+  const FORM_T = 600, GEM_CAP = 350, MERGE_R = 80, MAG_FIRST = 140, MAG_GAP = 100, MAG_P = 0.003, TOUCH = 6, GOLD_CARD = 25, HEAL_CARD = 30, RELIGHT = 60, RELIGHT_R = 700;
 
-  W.initProgress = function () { this.pickPool = []; this.gemCount = 0; };
+  W.initProgress = function () { this.pickPool = []; this.gemCount = 0; this.magT = MAG_FIRST - MAG_GAP; this.magG = null; this.magId = 0; };
   W.initHeroProgress = function (p) { p.rerolls = p.stats.rerolls | 0; p.skips = p.stats.skips | 0; p.banishes = p.stats.banishes | 0; p.banned = []; p.pendPath = 0; p.pendForm = 0; };
   const gemKind = (v) => (v >= 25 ? 'xp25' : v >= 5 ? 'xp5' : 'xp1');
   const isGem = (k) => k === 'xp1' || k === 'xp5' || k === 'xp25';
@@ -27,15 +28,35 @@
     if (isGem(k)) this.gemCount++;
     return g;
   };
-  // XP gem of value v at (x, y); with GEM_CAP or more gems on the ground it merges into the nearest gem not being vacuumed. Returns the gem.
+  // XP gem of value v at (x, y); returns the gem holding v. At GEM_CAP gems on the ground (one pass over pickups): merges into the nearest non-pulled gem within MERGE_R px;
+  // else removes the non-pulled gem farthest from every living hero and spawns one at (x, y) carrying both values; else (every gem pulled) merges into the nearest pulled gem.
   W.dropGem = function (x, y, v) {
     if (this.gemCount >= GEM_CAP) {
-      let best = null, bd = Infinity;
-      const list = this.pickups;
-      for (let i = 0; i < list.length; i++) { const g = list[i]; if (g.dead || g.pull || !isGem(g.k)) continue; const d = U.dist2(x, y, g.x, g.y); if (d < bd) { bd = d; best = g; } }
-      if (best) { best.val += v; best.k = gemKind(best.val); return best; }
+      let near = null, nd = MERGE_R * MERGE_R, far = null, fd = -1, pul = null, pd = Infinity;
+      const list = this.pickups, L = this.living, nl = L.length;
+      for (let i = 0; i < list.length; i++) {
+        const g = list[i];
+        if (g.dead || !isGem(g.k)) continue;
+        const d = U.dist2(x, y, g.x, g.y);
+        if (g.pull) { if (d < pd) { pd = d; pul = g; } continue; }
+        if (d <= nd) { nd = d; near = g; }
+        if (near) continue;
+        let hd = Infinity;
+        for (let h = 0; h < nl; h++) { const q = L[h], e = U.dist2(q.x, q.y, g.x, g.y); if (e < hd) hd = e; }
+        if (hd > fd) { fd = hd; far = g; }
+      }
+      const into = near || (!far && pul);
+      if (into) { into.val += v; into.k = gemKind(into.val); return into; }
+      if (far) { far.dead = true; this.gemCount--; v += far.val; }
     }
     return this.spawnPickup(gemKind(v), x, y, v);
+  };
+  // Hero kill of a non-boss foe at (x, y): from MAG_FIRST s on and MAG_GAP s after the last magnet drop (magT), drops a magnet with chance MAG_P; it replaces an uncollected one (at most one on the ground).
+  W.rollMagnet = function (x, y) {
+    if (this.time - this.magT < MAG_GAP || !this.rng.chance(MAG_P)) return;
+    const m = this.magG;
+    if (m && !m.dead && m.id === this.magId && !m.pull) m.dead = true;
+    this.magG = this.spawnPickup('magnet', x, y, 1); this.magId = this.magG.id; this.magT = this.time;
   };
 
   W.updatePickups = function (dt) {

@@ -39,6 +39,7 @@ Zero damage. cd 10 s. A flash at the pyro: every foe within 140 px (r, scales wi
 | 2 | +30% flash radius | r 182 |
 | 3 | Foes flee 1.5 s longer | flee 3.5 s |
 | 4 | The flash pulls in gems | xp gems within 200 px fly to the pyro |
+| 5 | A second flash bursts 1 s later | the same flash again 1 s after the cast, wherever the pyro stands (none if downed) |
 
 ## dps.js (`node tools/dps.js pyro`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 

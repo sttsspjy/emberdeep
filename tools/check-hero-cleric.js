@@ -135,7 +135,7 @@ function probe(ranks, form) {
 // ---------------- 6. Sanctuary ----------------
 {
   const cast = (w, p, x, y, lvl) => { p.skills[0].lvl = lvl; w.input(p.pid, { q: true, ax: x, ay: y }); w.update(C.TICK); w.events.length = 0; };
-  for (let L = 1; L <= 4; L++) {
+  for (let L = 1; L <= 5; L++) {
     const w = world(['cleric', 'knight']), [c, k] = w.heroes;
     k.x = c.x + 100; k.y = c.y; k.hp = 40; ring(w, k.x, k.y, 10, 30, 200);
     c.weapons.length = 0; k.weapons.length = 0; // skill only
@@ -162,7 +162,7 @@ function probe(ranks, form) {
 
 // ---------------- 7. determinism ----------------
 function digestRun(form, seed) {
-  const w = world(['cleric'], seed), p = w.heroes[0]; build(w, p, [], form); p.skills[0].lvl = 4;
+  const w = world(['cleric'], seed), p = w.heroes[0]; build(w, p, [], form); p.skills[0].lvl = 5;
   let d = 0;
   for (let tick = 0; tick < 1800; tick++) {
     if (tick % 30 === 0 && w.foes.length < 120) ring(w, p.x, p.y, 20, 80 + (tick % 7) * 20, 40);

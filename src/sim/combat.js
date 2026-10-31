@@ -102,7 +102,7 @@
   };
   // Blocker zone tick (zone onTick; zero damage): non-boss foes cannot cross the band of half width z.w / 2 on the circle (z.x, z.y, z.r): a full ring (z.arc 0) or an arc of z.arc rad
   // centred on angle z.a (foes pass around its ends). A foe touching the band is put back on its side (z.st.out: always the outside) and loses its knockback into the band.
-  // z.st.lure > 0: every 0.25 s every non-boss foe within st.lure px of the band is lured to the band's nearest point on its side (0.4 s, refreshed). z.st: { out, lure, lt }.
+  // z.st.lure > 0: every 0.25 s every non-boss foe within st.lure px of the band is lured to the band's nearest point on its side (0.4 s, refreshed). z.st.slow > 0: a foe touching the band (within 6 px, so foes lured to it count) is slowed that much for 0.5 s. z.st: { out, lure, lt, slow }.
   W.blockZone = function (z) {
     const s = z.st, R = z.r, h = z.w / 2, part = z.arc > 0 && z.arc < TAU - 1e-3, half = z.arc / 2, A = this.arena;
     const lure = s.lure > 0 && z.t >= s.lt, L = lure ? s.lure : 0;
@@ -112,6 +112,7 @@
       const e = q[k]; if (e.dead || e.boss) continue;
       const dx = e.x - z.x, dy = e.y - z.y, d = Math.hypot(dx, dy) || 1e-3, m = h + e.r, ux = dx / d, uy = dy / d;
       const off = part ? U.angDiff(z.a, Math.atan2(dy, dx)) : 0, inArc = !part || Math.abs(off) <= half + e.r / R;
+      if (s.slow > 0 && inArc && Math.abs(d - R) < m + 6) this.slow(e, s.slow, 0.5);
       if (inArc && Math.abs(d - R) < m) {
         const outS = s.out || d >= R, td = outS ? R + m : R - m, kr = e.kbx * ux + e.kby * uy;
         e.x = z.x + ux * td; e.y = z.y + uy * td;
@@ -464,14 +465,13 @@
     const B = this.arena.braziers;
     for (let i = 0; i < B.length; i++) { const b = B[i]; if (!b.broken && U.dist2(x, y, b.x, b.y) <= (r + b.r) * (r + b.r) && (!p || ED.inView(p, b.x, b.y, b.r))) this.breakBrazier(b, p); }
   };
-  // Drops: food 20%, magnet 5%, holy bomb 2%, else 1-5 gold (GAME-DESIGN §9). b.t = the sim time it broke (relight: progress.js).
+  // Drops: food 20%, holy bomb 2%, else 1-5 gold (GAME-DESIGN §9). b.t = the sim time it broke (relight: progress.js).
   W.breakBrazier = function (b, p) {
     if (b.broken) return;
     b.broken = true; b.hp = 0; b.t = this.time;
     const r = this.rng.next();
     if (r < 0.2) this.spawnPickup('food', b.x, b.y, 30);
-    else if (r < 0.25) this.spawnPickup('magnet', b.x, b.y, 1);
-    else if (r < 0.27) this.spawnPickup('bomb', b.x, b.y, 1);
+    else if (r < 0.22) this.spawnPickup('bomb', b.x, b.y, 1);
     else this.spawnPickup('gold', b.x, b.y, this.rng.int(1, 5));
     this.emit({ t: 'brazier', id: b.id, x: b.x, y: b.y, pid: p ? p.pid : '' });
   };

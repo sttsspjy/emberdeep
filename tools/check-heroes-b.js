@@ -1,7 +1,8 @@
 // Headless check of heroes Cleric, Shade and Bell (exit 1 on failure). Usage: node tools/check-heroes-b.js
 // 1. Signature weapon at 0..10 steps (tune 1-5, then path 0 ranks 1-5) and path 0's first Form refined twice: 10 s each in a foe ring, no exceptions, damage > 0 (prints dps per step).
-// 2. Q at every skill level 1..4: cast on cooldown at the nearest foe, zero damage, foes affected (stunned, slowed, displaced or lured; prints casts).
-// 3. Mechanics: Sanctuary heals an ally, Shadow Step blinks with 2 charges at L4, Great Peal stuns the screen and pulls gems, blast / arc / chain / zone statuses only in view, Toll / Cathedral bell bodies.
+// 2. Q at every skill level 1..5: cast on cooldown at the nearest foe, zero damage, foes affected (stunned, slowed, displaced or lured; prints casts).
+// 3. Mechanics: Sanctuary heals an ally (L5: allies inside take 40% less damage), Shadow Step blinks with 2 charges at L4 (L5: foes chasing the Shade turn to the decoy),
+//    Great Peal stuns the screen and pulls gems (L5: erases foe shots in view), blast / arc / chain / zone statuses only in view, Toll / Cathedral bell bodies.
 // 4. 60 s solo run per hero with level-ups and Q spam: no exceptions, same digest twice. 5. Crowd cost at 900 foes (informational).
 // 6. No-target fire: every signature (no ranks) and its Form on its own hero, standing still facing east with no foe alive, breaks a brazier 60 px ahead
 //    within the first fire (0.4 s) + its cooldown + 0.9 s travel; a hero projectile crossing a brazier breaks it and keeps its pierce and its flight.
@@ -69,8 +70,8 @@ for (const cls of HEROES) {
   ok(h.skills.length === 1, `${cls}: one skill (${h.skills[0]})`);
   for (let si = 0; si < 1; si++) {
     const id = h.skills[si], def = ED.SKILLS[id], line = [];
-    ok(def.levels.length === 3 && def.levels.every(l => l.txt.length <= 40), `${id}: 3 levels, card lines <= 40 chars`);
-    for (let L = 1; L <= 4; L++) {
+    ok(def.levels.length === 4 && def.levels.every(l => l.txt.length <= 40), `${id}: 4 levels, card lines <= 40 chars`);
+    for (let L = 1; L <= 5; L++) {
       const w = world([cls], 30 + L), p = w.heroes[0];
       p.skills[si].lvl = L; p.weapons.length = 0; // skill damage only
       let casts = 0, hit = 0;
@@ -93,6 +94,13 @@ const cast = (w, p, slot, x, y) => { w.input(p.pid, { q: true, ax: x, ay: y }); 
   k.x = c.x + 100; k.y = c.y; r.x = c.x - 300; r.y = c.y; k.hp = 40; r.hp = 40;
   cast(w, c, 0, k.x, k.y); step(w, 2);
   ok(k.hp >= 48 && r.hp === 40, `sanctuary heals the ally inside (${k.hp.toFixed(0)}) and not the one outside (${r.hp.toFixed(0)})`);
+  // L5: the ally inside takes 40% less damage while inside, full damage once the ward has ended
+  const w5 = world(['cleric', 'knight', 'ranger']), [c5, k5, r5] = w5.heroes; c5.skills[0].lvl = 5; w5.cheats.god = false;
+  k5.x = c5.x + 60; k5.y = c5.y; r5.x = c5.x - 300; r5.y = c5.y;
+  cast(w5, c5, 0, k5.x, k5.y); step(w5, 0.3);
+  const hit = (h) => { h.invuln = 0; const hp = h.hp; w5.hurtHero(h, 50, null); return hp - h.hp; };
+  const dIn = hit(k5), dOut = hit(r5); step(w5, 7); const dAfter = hit(k5);
+  ok(dIn === 30 && dOut === 50 && dAfter === 50 && !(k5.dr > 0), `sanctuary L5: a 50 hit deals ${dIn} inside, ${dOut} outside, ${dAfter} after it ends`);
 }
 { // E is unbound: an E press casts nothing
   const w = world(['cleric']), p = w.heroes[0], sk = p.skills[0];
@@ -111,6 +119,16 @@ const cast = (w, p, slot, x, y) => { w.input(p.pid, { q: true, ax: x, ay: y }); 
   cast(w2, p2, 0, p2.x + 160, p2.y); step(w2, 0.35);
   const x1 = p2.x; cast(w2, p2, 0, p2.x + 160, p2.y);
   ok(p2.x - x1 > 150 && sk2.cd > 6, `L4: the second charge blinks again, then the recharge runs (${sk2.cd.toFixed(1)} s)`);
+  // L5: a foe chasing the Shade from far outside the decoy's view turns to the decoy for 1.5 s, then chases again (L4: it keeps chasing)
+  for (const L of [4, 5]) {
+    const w3 = world(['shade']), p3 = w3.heroes[0]; p3.skills[0].lvl = L; p3.weapons.length = 0;
+    const far = w3.spawnFoe('skeleton', p3.x - 500, p3.y, { hpMul: 50 }); step(w3, 0.2);
+    cast(w3, p3, 0, p3.x + 40, p3.y); const ox = p3.x - 40;
+    step(w3, 1); const lured = far.ovK === 2 && Math.abs(far.ovX - ox) < 1;
+    step(w3, 0.8); const back = far.ovK === 0;
+    if (L === 5) ok(lured && back, `shadow step L5: a foe 500 px away chasing the Shade turns to the decoy (${lured}), then loses it after 1.5 s (${back})`);
+    else ok(!lured, 'shadow step L4: a foe outside the decoy view keeps chasing the Shade');
+  }
 }
 
 { // Great Peal: stuns the screen, pulls gems at L4
@@ -122,6 +140,15 @@ const cast = (w, p, slot, x, y) => { w.input(p.pid, { q: true, ax: x, ay: y }); 
   const g = w.pickups.find(x => x.k === 'xp5');
   ok(n > 0 && s === n, `great peal stuns every foe in view within 330 px (${s}/${n})`);
   ok(!g || g.pull === p.pid, 'great peal L4 pulls gems');
+  // L5: foe shots in view are erased, ones outside fly on (L4: none erased)
+  for (const L of [4, 5]) {
+    const w2 = world(['bell']), p2 = w2.heroes[0]; p2.weapons.length = 0; p2.skills[0].lvl = L;
+    const src = w2.spawnFoe('skeleton', p2.x + 200, p2.y, { hpMul: 50 }), sIn = w2.foeShoot(src, Math.PI, 60, 'bolt', 5), sOut = w2.foeShoot(src, Math.PI, 60, 'bolt', 5);
+    sOut.x = p2.x + ED.HERO_VIEW.hw + 80; sOut.vx = 0; sIn.vx = 0;
+    cast(w2, p2, 0, p2.x, p2.y);
+    if (L === 5) ok(sIn.dead && !sOut.dead, `great peal L5 erases the foe shot in view (${sIn.dead}), not the one outside (${!sOut.dead})`);
+    else ok(!sIn.dead, 'great peal L4 leaves foe shots');
+  }
 }
 { // View clamp on statuses: blast, arc, chain and a status zone slow / stun / burn / knock only foes in the hero's view
   const w = world(['bell']), p = w.heroes[0]; p.weapons.length = 0;
@@ -177,11 +204,11 @@ for (const cls of HEROES) {
   ok(a.digest === b.digest, `${cls}: same digest twice (${a.digest})`);
 }
 
-// 5. crowd cost: maxed Form + skill L4 cast on cooldown inside a held 900-foe crowd, 10 s. Informational (shared CPU); fails only above 8 ms/tick average.
+// 5. crowd cost: maxed Form + skill L5 cast on cooldown inside a held 900-foe crowd, 10 s. Informational (shared CPU); fails only above 8 ms/tick average.
 for (const cls of HEROES) {
   const w = world([cls], 9), p = w.heroes[0];
   p.passives.push({ id: 'reach', lvl: 5 }, { id: 'multishot', lvl: 5 }, { id: 'duration', lvl: 5 }); w.setForm(p, p.weapons[0], ED.WEAPONS[p.weapons[0].root].paths[0].forms[0], 2);
-  for (const sk of p.skills) sk.lvl = 4;
+  for (const sk of p.skills) sk.lvl = 5;
   const rng = U.RNG(3);
   let tot = 0, worst = 0, n = 0, err = null;
   try {
@@ -197,7 +224,7 @@ for (const cls of HEROES) {
       if (tick >= 60) { tot += ms; n++; if (ms > worst) worst = ms; }
     }
   } catch (e) { err = e; }
-  ok(!err && tot / n < 8, `${cls} crowd 900 (${p.weapons[0].id}, skills L4): ${(tot / n).toFixed(2)} ms/tick avg, worst ${worst.toFixed(1)} ms, zones ${w.zones.length}, projs ${w.projs.length}` + (err ? ': ' + err.stack : ''));
+  ok(!err && tot / n < 8, `${cls} crowd 900 (${p.weapons[0].id}, skills L5): ${(tot / n).toFixed(2)} ms/tick avg, worst ${worst.toFixed(1)} ms, zones ${w.zones.length}, projs ${w.projs.length}` + (err ? ': ' + err.stack : ''));
 }
 
 // 6. no-target fire, braziers

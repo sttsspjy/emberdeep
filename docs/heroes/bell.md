@@ -33,6 +33,7 @@ Zero damage. Cooldown 16 s at every level. A ring from the hero to 370 px (about
 - L2: A second, wider peal follows (×1.25 radius, 75% stun, 0.55 s later).
 - L3: Shields you and allies for 1.5 s (every living hero inside the ring is invulnerable).
 - L4: Pulls gems; stuns 0.5 s longer.
+- L5: Each peal erases foe shots on screen (every foe projectile inside the hero's view).
 
 ## dps.js (`node tools/dps.js bell`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 

@@ -16,6 +16,7 @@
     F[id] = Object.assign({ id, idx: IDX[id], name: id, look: 'foe.' + id, dirs: 2, ai: 'chaser', hp: 36, spd: 36, dmg: 1, r: 7, xp: 1, kb: 1 }, o);
     return F[id];
   };
+  // Slam r = 34 + def.r: a base-reach Knight cleave (56 px from 4 px above the hero, + foe radius) hits the brute with its hitbox (C.HERO_R) 12 px outside the slam circle.
   const SLAM = (r, o) => Object.assign({ r, mul: 1.6, cd: 3.2, wind: 0.9 }, o);
   const CHARGE = (o) => Object.assign({ range: 220, speed: 255, dur: 0.55, cd: 3.9, wind: 0.7, rest: 0.8 }, o);
   const DIVE = (o) => Object.assign({ range: 200, speed: 240, dur: 0.5, cd: 4.4, wind: 0.65, rest: 0.8 }, o);
@@ -27,7 +28,7 @@
   add('slimelet', { name: 'Slimelet', dirs: 2, ai: 'swarm', hp: 10, spd: 41, dmg: 0.8, r: 5, solo: true });
   add('bonearcher', { name: 'Bone Archer', ai: 'ranged', hp: 16, spd: 29, r: 7, range: 160, shot: { dmg: 5, speed: 128, look: 'bone', n: 1, spread: 0, cd: 3, wind: 0.7 } });
   add('sporepuff', { name: 'Spore Puff', ai: 'exploder', hp: 11, spd: 41, r: 7, fuse: 0.7, boom: { r: 46, dmg: 11, look: 'poison' } });
-  add('skelknight', { name: 'Skeleton Knight', ai: 'brute', hp: 111, spd: 22, dmg: 1.5, r: 12, xp: 5, kb: 0, brute: true, slam: SLAM(52) });
+  add('skelknight', { name: 'Skeleton Knight', ai: 'brute', hp: 111, spd: 22, dmg: 1.5, r: 12, xp: 5, kb: 0, brute: true, slam: SLAM(46) });
 
   // ---- stage 2: Glowmire ----
   add('glowlet', { name: 'Glowlet', ai: 'swarm', hp: 10, spd: 50, dmg: 0.8, r: 5 });
@@ -35,7 +36,7 @@
   add('glowslime', { name: 'Glow Slime', dirs: 4, hp: 33, spd: 24, r: 8, split: { id: 'glowlet', n: [2, 3] } });
   add('spitter', { name: 'Spitcap', dirs: 4, ai: 'ranged', hp: 18, spd: 24, r: 7, range: 180, shot: { dmg: 5, look: 'poison', lob: 30, cd: 3.4, wind: 0.9 } });
   add('cavespider', { name: 'Cave Spider', dirs: 8, ai: 'charger', pack: [2, 3], hp: 16, spd: 41, r: 8, charge: CHARGE({ range: 230, speed: 270, dur: 0.5, cd: 3.9, wind: 0.7 }) });
-  add('shroomhulk', { name: 'Shroom Hulk', ai: 'brute', hp: 133, spd: 20, dmg: 1.5, r: 13, xp: 5, kb: 0, brute: true, slam: SLAM(58, { cd: 3.4 }) });
+  add('shroomhulk', { name: 'Shroom Hulk', ai: 'brute', hp: 133, spd: 20, dmg: 1.5, r: 13, xp: 5, kb: 0, brute: true, slam: SLAM(47, { cd: 3.4 }) });
 
   // ---- stage 3: Abyss ----
   add('starspawn', { name: 'Starspawn', ai: 'swarm', hp: 11, spd: 55, dmg: 0.8, r: 6 });
@@ -43,7 +44,7 @@
   add('jelly', { name: 'Lantern Jelly', hp: 40, spd: 26, r: 8, split: { id: 'jellet', n: [2, 3] } });
   add('jellet', { name: 'Jellet', ai: 'swarm', hp: 11, spd: 46, dmg: 0.8, r: 5, solo: true });
   add('voidwraith', { name: 'Void Wraith', ai: 'ranged', hp: 20, spd: 31, r: 7, range: 190, shot: { dmg: 5, speed: 140, look: 'skull', n: 1, spread: 0, cd: 2.6, wind: 0.7 } });
-  add('horror', { name: 'Abyssal Horror', ai: 'brute', hp: 155, spd: 22, dmg: 1.6, r: 14, xp: 5, kb: 0, brute: true, slam: SLAM(60, { ring: { n: 10, speed: 102, look: 'skull', dmg: 5 } }) });
+  add('horror', { name: 'Abyssal Horror', ai: 'brute', hp: 155, spd: 22, dmg: 1.6, r: 14, xp: 5, kb: 0, brute: true, slam: SLAM(48, { ring: { n: 10, speed: 102, look: 'skull', dmg: 5 } }) });
 
   // ---- bosses (ai 'boss' dispatches ED.Bosses[id]; HP from GAME-DESIGN §8, hp here is unused) ----
   const boss = (id, name, look, r, spd) => add(id, { name, look, ai: 'boss', boss: true, hp: 0, spd, dmg: 2, r, xp: 25, kb: 0, noElite: true });
@@ -79,5 +80,5 @@
   add('bloatling', { name: 'Bloatling', hp: 13, spd: 31, r: 7, solo: true, split: { id: 'glowlet', n: [2, 3] } });
   add('mirecrab', { name: 'Mire Crab', ai: 'march', hp: 96, spd: 18, dmg: 1.4, r: 11, xp: 5, kb: 0, take: 0.7, pack: [3, 4], wall: 26, scale: 1.5 });
   add('stalker', { name: 'Rift Stalker', ai: 'blinker', pack: [1, 2], hp: 22, spd: 38, r: 7, blink: { range: 230, side: 36, wind: 0.7, slash: 0.6, r: 34, mul: 1, cd: 5.5 } });
-  add('colossus', { name: 'Void Colossus', ai: 'brute', hp: 192, spd: 18, dmg: 1.6, r: 15, xp: 5, kb: 0, take: 0.8, brute: true, slam: SLAM(64, { wind: 1.2, cd: 4.2, pull: { r: 150, str: 45 } }) });
+  add('colossus', { name: 'Void Colossus', ai: 'brute', hp: 192, spd: 18, dmg: 1.6, r: 15, xp: 5, kb: 0, take: 0.8, brute: true, slam: SLAM(49, { wind: 1.2, cd: 4.2, pull: { r: 150, str: 45 } }) });
 })(globalThis.ED || (globalThis.ED = {}));

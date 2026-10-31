@@ -1,5 +1,5 @@
 // Headless check for heroes Knight, Ranger, Pyro, Necro (exit 1 on failure). Usage: node tools/check-heroes-a.js
-// Per hero (god cheat, from 4:00 so the horde is dense): 4 phases of 15 s with skill level 1..4 and no tune / path 0 at rank 1 / 3 / 5 (tune full), then 20 s in path 0's first Form, refined twice.
+// Per hero (god cheat, from 4:00 so the horde is dense): 5 phases of 15 s with skill level 1..5 and no tune / path 0 at rank 1 / 3 / 5 / 5 (tune full), then 20 s in path 0's first Form, refined twice.
 // Q is held every tick (cast on cooldown), aimed at the nearest foe; fodder rings keep targets near the hero. Each phase: no exception, the skill casts, the weapon deals damage, the skill none.
 // Extras: Bone Shard / Bone Storm on other heroes (the slain rise for them too), Cleave aims inside the facing cone (no foe: along it), each path's shape flags reach the effective numbers,
 // skills carry no damage, necro minions rise / obey the cap, same seed -> same digest, no NaN positions.
@@ -16,9 +16,9 @@ function drive(w, p, tick) {
   p.offer = null; p.pend = 0; // no card picks: the phase setup owns the build
   w.input(p.pid, { mx: Math.cos(a) * 0.6, my: Math.sin(a) * 0.6, ax: e ? e.x : p.x + 80, ay: e ? e.y : p.y, q: true });
 }
-// Sets skill levels to L and path 0 to rank `rank` (tune full; 0: no change); form: takes path 0's first Form and refines it twice.
+// Sets skill levels to L (cooldown ready) and path 0 to rank `rank` (tune full; 0: no change); form: takes path 0's first Form and refines it twice.
 function setup(w, p, L, rank, form) {
-  for (const sk of p.skills) sk.lvl = L;
+  for (const sk of p.skills) { sk.lvl = L; sk.cd = 0; }
   const ws = p.weapons[0], def = ED.WEAPONS[ED.HEROES[p.cls].sig], fid = def.paths[0].forms[0];
   if (form) {
     const ready = w.formsReady(p, ws).map(f => f.id);
@@ -62,8 +62,8 @@ function runHero(cls, seed) {
   const w = new ED.World({ seed, stage: 0, players: [{ pid: 'p1', name: 'T', slot: 0, cls, meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
   w.time = 240;
   const p = w.heroes[0], out = { digest: 0, maxMin: 0, w, p };
-  for (let L = 1; L <= 4; L++) { setup(w, p, L, [0, 1, 3, 5][L - 1], false); phase(w, p, 15, `skill lvl ${L}, ${p.weapons[0].id} tune ${p.weapons[0].tune} ranks ${p.weapons[0].pr.join('')}`, out); }
-  setup(w, p, 4, 0, true);
+  for (let L = 1; L <= 5; L++) { setup(w, p, L, [0, 1, 3, 5, 5][L - 1], false); phase(w, p, 15, `skill lvl ${L}, ${p.weapons[0].id} tune ${p.weapons[0].tune} ranks ${p.weapons[0].pr.join('')}`, out); }
+  setup(w, p, 5, 0, true);
   phase(w, p, 20, `Form ${p.weapons[0].id} refine ${p.weapons[0].fl}`, out);
   return out;
 }
@@ -76,7 +76,7 @@ for (const cls of HEROES) {
     `${cls}: ${def.id} has 3 paths x 3 rank cards, lines <= 40 chars, no levels / pair / evo`);
   ok(fd.form && fd.evolved && fd.from === def.id && fd.refine.length === 2 && fd.refine.every(l => l.txt.length <= 40) && fd.txt.length <= 40, `${cls}: Form ${fd.id} from ${def.id}, 2 refine cards`);
   ok(h.skills.length === 1, `${cls}: one skill (${h.skills[0]})`);
-  for (const id of h.skills) { const s = ED.SKILLS[id]; ok(s.levels.length === 3 && s.levels.every(l => l.txt.length <= 40), `${cls}: ${id} has 3 level cards, lines <= 40 chars`); }
+  for (const id of h.skills) { const s = ED.SKILLS[id]; ok(s.levels.length === 4 && s.levels.every(l => l.txt.length <= 40), `${cls}: ${id} has 4 level cards, lines <= 40 chars`); }
   if (cls === 'necro') {
     ok(r.maxMin > 0 && r.maxMin <= 24, `necro: minions rose (peak ${r.maxMin}, hard cap 24)`);
     ok((r.p.dealt.boneshard || 0) + (r.p.dealt.bonestorm || 0) > 0, 'necro: kill-rise minions credit the signature');
@@ -131,11 +131,11 @@ for (const [cls, wid] of [['ranger', 'longbow'], ['pyro', 'firebolt'], ['necro',
   const pl = w.zones.filter(o => !o.dead && o.wid === 'smite' && o.k !== 'beam');
   ok(pl.length > 0 && pl.every(o => o.x < p.x - 20 && Math.abs(o.y - p.y) < 2), `smite: with no foe, pillars stride out along the cursor dir (${pl.map(o => Math.round(o.x - p.x) + ',' + Math.round(o.y - p.y)).join(' ')})`);
 }
-// Path shape flags reach the effective numbers (each path at rank 5 in its own world, no Form); skills at level 4.
+// Path shape flags reach the effective numbers (each path at rank 5 in its own world, no Form); skills at level 5.
 {
   const four = (i) => {
     const v = new ED.World({ seed: 1, stage: 0, players: [{ pid: 'p1', cls: 'knight' }, { pid: 'p2', cls: 'ranger', slot: 1 }, { pid: 'p3', cls: 'pyro', slot: 2 }, { pid: 'p4', cls: 'necro', slot: 3 }], cheats: { god: true } });
-    for (const p of v.heroes) { if (i >= 0) v.setRanks(p, p.weapons[0], ED.TUNE_MAX, i, ED.PATH_MAX); for (const sk of p.skills) sk.lvl = 4; }
+    for (const p of v.heroes) { if (i >= 0) v.setRanks(p, p.weapons[0], ED.TUNE_MAX, i, ED.PATH_MAX); for (const sk of p.skills) sk.lvl = 5; }
     return v;
   };
   const w = four(-1), [k, r, py, n] = w.heroes, P = [0, 1, 2].map(i => four(i).heroes);
@@ -148,10 +148,10 @@ for (const [cls, wid] of [['ranger', 'longbow'], ['pyro', 'firebolt'], ['necro',
     'pyro: Blaze 5 flare; Mortar 5 shells 2, bomblets 4; Combustion 5 death blasts, embers 3, leaps');
   ok(S(P[0][3]).cap === S(n).cap + 2 && S(P[0][3]).raise === 2 && S(P[0][3]).over === 4 && S(P[1][3]).split === 3 && S(P[1][3]).homing === 3 && S(P[1][3]).n === 4 && S(P[2][3]).pools === 2 && S(P[2][3]).pburst === 1,
     'necro: Legion 5 cap +2, raise 2, 4 over the cap; Shards 5 4 homing shards splitting in 3; Plague 5 2 pools that burst');
-  ok(N(k, 0).stun === 1 && N(k, 0).ring === 3 && Math.abs(N(k, 0).r - 156) < 1e-9, 'knight: Bulwark Shove wider, stuns, leaves a ring');
-  ok(N(r, 0).dist === 220 && N(r, 0).charges === 2 && N(r, 0).caltrops === 1, 'ranger: Vault farther, 2 charges, caltrops');
-  ok(Math.abs(N(py, 0).r - 182) < 1e-9 && N(py, 0).flee === 3.5 && N(py, 0).gem === 200, 'pyro: Flashpoint wider, longer flee, gem pull');
-  ok(N(n, 0).len === 200 && N(n, 0).ring === 80 && N(n, 0).taunt === 160, 'necro: Bone Wall longer, ring, taunt');
+  ok(Math.abs(N(k, 0).r - 60) < 1e-9 && Math.abs(N(k, 0).dur - 8) < 1e-9 && Math.abs(N(k, 0).cd - 20) < 1e-9 && N(k, 0).follow === true, 'knight: Aegis Ward wider, longer, cooldown 20 s, follows (L5)');
+  ok(N(r, 0).dist === 220 && N(r, 0).charges === 2 && N(r, 0).caltrops === 1 && N(r, 0).gemAll === true, 'ranger: Vault farther, 2 charges, caltrops, pulls every gem on screen (L5)');
+  ok(Math.abs(N(py, 0).r - 182) < 1e-9 && N(py, 0).flee === 3.5 && N(py, 0).gem === 200 && N(py, 0).again === true, 'pyro: Flashpoint wider, longer flee, gem pull, second flash (L5)');
+  ok(N(n, 0).len === 200 && N(n, 0).ring === 80 && N(n, 0).taunt === 160 && Math.abs(N(n, 0).dur - 10) < 1e-9 && N(n, 0).mire === 0.5, 'necro: Bone Wall longer, ring, taunt, 2x duration + 50% slow (L5)');
   // Utility skills: no skill carries a damage number.
   ok(Object.keys(ED.SKILLS).every(id => !ED.SKILLS[id].base || ED.SKILLS[id].base.dmg === undefined) && w.heroes.every(p => !(N(p, 0).dmg > 0)), 'skills carry no damage');
   const nn = n; nn.x = nn.y = 1600; w.time = 300;

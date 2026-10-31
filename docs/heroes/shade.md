@@ -44,6 +44,7 @@ Zero damage. Blink toward the cursor (40–130 px, through foes and over obstacl
 | 2 | Blink 60 px farther | 190 px |
 | 3 | The decoy lasts 3.5 s | decoy 3.5 s |
 | 4 | 2 charges | two blinks stored, one recharge per 8 s |
+| 5 | Foes lose you for 1.5 s after a step | for 1.5 s every non-boss foe chasing the shade walks to the decoy, wherever it is |
 
 ## dps.js (`node tools/dps.js shade`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 

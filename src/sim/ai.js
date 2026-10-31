@@ -4,7 +4,7 @@
 // the zone itself carries no damage, dies with its caster and is dropped when a stun or freeze cancels the attack (w.foeCancel). Ranged attacks start only on the target's screen
 // Attack budget: ranged, charge, dive and blink starts spend one of the target's attack tokens (p.atkTok, refilled in updateFoes; none: the attack waits). Ranged / summoner foes never back away from the target.
 // Charge / dive lanes (look 'dash') start only when the lane (speed x dur + r) reaches 12 px past the target's spot; after the dash the foe stands still in st 3 for rest s.
-// Elites widen attacks (shape, not numbers): ranged +2 shots in the stream (ring x1.5, lob x1.5 radius), charge / dive x1.35 longer, slam x1.5 radius plus a shot ring, summons +3, blink slash x1.5 radius. Kinds: GAME-DESIGN §7.
+// Elites widen attacks (shape, not numbers): ranged +2 shots in the stream (ring x1.5, lob x1.5 radius), charge / dive x1.35 longer, slam x1.35 radius plus a shot ring, summons +3, blink slash x1.5 radius. Kinds: GAME-DESIGN §7.
 // Options: charge.guard (shield up outside a vulnerable window after the bash), slam.pull (the wind-up drags heroes in), summoner, march (wall packs), blinker.
 (function (ED) {
   'use strict';
@@ -56,7 +56,7 @@
   AI.brute = (w, e, dt) => {
     const S = e.def.slam, t = e.tgt;
     if (!S) { AI.chaser(w, e, dt); return; }
-    const R = S.r * (e.elite ? 1.5 : 1);
+    const R = S.r * (e.elite ? 1.35 : 1);
     if (e.st === 1) {
       e.stT += dt; e.vx = e.vy = 0;
       if (e.stT >= W6(S.wind)) {

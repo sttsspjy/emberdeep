@@ -163,7 +163,7 @@ for (const form of ['', 'cathedral']) {
     const hurt = w.foes.filter(e => e.hp < e.maxHp).length, pushed = w.foes.filter((e, i) => U.dist(p.x, p.y, e.x, e.y) > d0[i] + 3).length;
     return { w, p, cast: ev.some(e => e.t === 'skill' && e.id === 'peal'), dealt: p.dealt.peal || 0, hurt, pushed, maxP, inv, gem: !g || g.pull === p.pid, stun, cd: p.skills[0].cdMax };
   };
-  const L = [1, 2, 3, 4].map(lvl);
+  const L = [1, 2, 3, 4, 5].map(lvl);
   L.forEach((r, i) => ok(r.cast && r.dealt === 0 && r.hurt === 0 && r.stun === 20 && r.pushed >= 15 && r.cd >= 7, `great peal L${i + 1}: cast, zero damage (hurt ${r.hurt}), ${r.stun}/20 stunned, ${r.pushed}/20 pushed, cd ${r.cd}`));
   ok(L[0].maxP === 1 && L[1].maxP === 2, `great peal L2: a second ring (${L[0].maxP} -> ${L[1].maxP})`);
   ok(L[1].inv < 0.1 && L[2].inv > 0.8, `great peal L3: shields the hero (${L[2].inv.toFixed(2)} s left at 0.6 s)`);
@@ -173,7 +173,7 @@ for (const form of ['', 'cathedral']) {
 // 5. determinism: 20 s with Q spam per Form (refined), twice
 const digest = (form) => {
   const { w, p } = build([3, 3, 3], form, 21);
-  p.skills[0].lvl = 4;
+  p.skills[0].lvl = 5;
   let d = 0;
   const rng = U.RNG(4);
   const err = run(w, 20, (i) => {

@@ -26,15 +26,16 @@ Tables give the 3 shape ranks at path ranks 1 / 3 / 5; path ranks 2 and 4 are ge
 
 Path keys in Forms: dmg / area / cd / stagger / slam / waves / return apply to every Form; back mirrors Colossus sweeps and doubles Tempest rings; Gale ignores back and arc beyond its cone; extra swings repeat spins (Colossus: +2 cracks each); spin applies to Cleave only. Velocity does not grow spin reach (area does).
 
-## Q: Bulwark Shove (`shove`, cd 9 s)
+## Q: Aegis Ward (`shove`, cd 25 s)
 
-Zero damage. Every foe within 120 px of the knight (r, scales with reach) slides out to r × 5/3 (200 px) from it and is slowed 50% for 3 s. Elites slide half the way; bosses and knockback-immune foes are not moved.
+Zero damage. A ward of radius 50 (r, scales with reach) at the knight for 6.5 s (scales with duration). Foes inside slide out to its edge; while it holds, no non-boss foe stands within r + its radius of the centre (elites and knockback-immune foes included; bosses ignore it). Projectiles pass. r 50 keeps foes on the edge inside base Cleave reach (56 + foe radius from 4 px above the knight).
 
 | Level | Card | Change |
 |---|---|---|
-| 2 | +30% shove radius | r 156, foes pushed out to 260 px |
-| 3 | Shoved foes are stunned 1 s | stun 1 s, then the slow |
-| 4 | Leaves a ring foes cannot cross | a ring at the shove edge holds 3 s at the cast point; non-boss foes cannot enter it (they can leave) |
+| 2 | +20% ward radius | r 60 |
+| 3 | The ward holds 1.5 s longer | 8 s |
+| 4 | Ward cooldown 25 s to 20 s | cd 20 s |
+| 5 | The ward moves with you | the ward centre follows the knight every tick: walking shoulders foes aside |
 
 ## dps.js (`node tools/dps.js knight`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 

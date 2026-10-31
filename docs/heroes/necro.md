@@ -37,6 +37,7 @@ Zero damage. A curved bone wall at the cursor for 5 s (scales with duration): a 
 | 2 | A longer wall | 200 px arc |
 | 3 | The wall closes into a ring | a full ring of radius 80 around the cursor: foes inside stay in, foes outside stay out |
 | 4 | Nearby foes target the wall | non-boss foes within 160 px of the wall walk to it and hold there instead of chasing the hero |
+| 5 | Walls last 2x as long, slow 50% | 10 s; foes touching the wall (or held at it) slowed 50% |
 
 ## dps.js (`node tools/dps.js necro`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 

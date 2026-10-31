@@ -428,7 +428,7 @@
   // Mobility skill used offensively: toward the densest cluster when nothing threatens soon.
   const dashInto = (range) => (b, w, p, ctx) => (ctx.near > 0.2 || ctx.hpF < 0.4 ? false : dense(b, p, range, 4));
   const SKILL = {
-    shove: (b, w, p, ctx) => (ctx.near > 0.3 || ctx.hpF < 0.5) && selfCrowd(120, 6)(b, w, p, ctx), // defensive: a shove clears the knight's own Cleave reach
+    shove: selfCrowd(90, 6), // Aegis Ward: raised when the crowd closes in (6+ foes within 90 px)
     vault: () => false, // escape only (escapeSkill)
     flashpoint: selfCrowd(140, 6),
     bonewall: atDense(220, 6),

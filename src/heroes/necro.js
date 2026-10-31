@@ -1,5 +1,5 @@
 // Necro (summoner): hero data, signature Bone Shard (3 paths x 3 ranks: Legion / Shards / Plague), Forms Bone Lord + Ossuary (Legion), Bone Storm (Shards),
-// Plague Field + Lich (Plague), Q Bone Wall (3 skill levels).
+// Plague Field + Lich (Plague), Q Bone Wall (4 skill levels).
 // Army: every volley raises S.raise minions while fewer than S.cap live (at the freshest corpse in view, else beside the holder); kill-rise (S.rise) adds short-lived extras up to
 // cap + S.over. Minions are zones (look by kind: 'minion' skeleton, 'boneknight', 'bonearcher', 'ghoul'; z.a facing, z.w swing flash 1..0, wid = credited weapon or skill) driven by
 // minTick (targets only inside the owner's view: w.vclamp is the zone's hero). Hit damage = S.dmg x S.mk at raise time. Owner lists p.minions / p.minIds (refs checked by id).
@@ -303,18 +303,20 @@
   // ---------------- Q: Bone Wall ----------------
   // Zero damage. A curved bone wall at the cursor for N.dur s that non-boss foes cannot cross (W.blockZone): an arc N.len px long on a circle of radius ARC_R centred ARC_R px from the
   // cursor toward the hero (its middle sits on the cursor, square to the hero-cursor line, ends curving toward the hero). ring (L3): a full ring of radius N.ring around the cursor instead.
-  // taunt (L4): non-boss foes within N.taunt px of the wall walk to it and hold there (st.lure). Zone 'bonewall' (circle x, y, r; arc 0 = full ring, else span around a; w = thickness).
+  // taunt (L4): non-boss foes within N.taunt px of the wall walk to it and hold there (st.lure).
+  // mire (L5): walls last twice as long (dur +100%) and slow foes touching them N.mire (st.slow). Zone 'bonewall' (circle x, y, r; arc 0 = full ring, else span around a; w = thickness).
   const ARC_R = 120, WALL_W = 16;
   ED.addSkill({
     id: 'bonewall', name: 'Bone Wall', icon: 'prop.bonepile', cd: 12, txt: 'A bone wall the horde cannot cross',
-    base: { len: 140, dur: 5, ring: 0, taunt: 0 },
+    base: { len: 140, dur: 5, ring: 0, taunt: 0, mire: 0 },
     levels: [
       { mods: { len: 60 }, txt: 'A longer wall' },
       { mods: { ring: 80 }, txt: 'The wall closes into a ring' },
       { mods: { taunt: 160 }, txt: 'Nearby foes target the wall' },
+      { mods: { dur: 1, mire: 0.5 }, txt: 'Walls last 2x as long, slow 50%' },
     ],
   }, (w, p, x, y, N) => {
-    const a = Math.hypot(x - p.x, y - p.y) < 1 ? p.mdir : Math.atan2(y - p.y, x - p.x), st = { out: false, lure: N.taunt || 0, lt: 0 };
+    const a = Math.hypot(x - p.x, y - p.y) < 1 ? p.mdir : Math.atan2(y - p.y, x - p.x), st = { out: false, lure: N.taunt || 0, lt: 0, slow: N.mire || 0 };
     if (N.ring > 0) w.zone({ team: 0, p, wid: 'bonewall', x, y, r: N.ring, w: WALL_W, arc: 0, a, dur: N.dur, look: 'bonewall', st, onTick: ED.blockTick });
     else w.zone({ team: 0, p, wid: 'bonewall', x: x - Math.cos(a) * ARC_R, y: y - Math.sin(a) * ARC_R, r: ARC_R, w: WALL_W, arc: N.len / ARC_R, a, dur: N.dur, look: 'bonewall', st, onTick: ED.blockTick });
     return { shake: 5, stop: 0.05 };

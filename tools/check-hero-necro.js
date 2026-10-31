@@ -137,10 +137,11 @@ const runCrowd = (ranks, form, secs, opt) => {
   ok(inn > 0 && out === 0, `damage lands only inside the view (in ${inn}, out ${out})`);
 }
 
-// 5. Bone Wall at levels 1-4 (zero damage): an arc wall at the cursor that walking foes cannot cross (bosses can); L2 longer; L3 a ring that holds foes inside and out; L4 taunts foes within 160 px.
+// 5. Bone Wall at levels 1-5 (zero damage): an arc wall at the cursor that walking foes cannot cross (bosses can); L2 longer; L3 a ring that holds foes inside and out; L4 taunts foes within 160 px;
+//    L5 walls last 2x as long and slow foes touching them 50%.
 {
   const def = ED.SKILLS.bonewall;
-  ok(def.cd >= 7 && def.cd <= 16 && def.levels.length === 3 && def.levels.every(l => l.txt.length <= 40) && def.txt.length <= 40, `Bone Wall: cooldown ${def.cd} s, 3 level cards, lines <= 40 chars`);
+  ok(def.cd >= 7 && def.cd <= 16 && def.levels.length === 4 && def.levels.every(l => l.txt.length <= 40) && def.txt.length <= 40, `Bone Wall: cooldown ${def.cd} s, 4 level cards, lines <= 40 chars`);
   const setup = (L) => { const w = world(), p = w.heroes[0]; p.weapons.length = 0; p.skills[0].lvl = L; return { w, p, N: w.skillN(p, 0), cx: p.x, cy: p.y }; };
   const tick = (w, p, cx, cy, n, each) => { for (let i = 0; i < n; i++) { p.x = cx; p.y = cy; p.offer = null; p.pend = 0; w.update(C.TICK); w.events.length = 0; if (each) each(); } };
   // walkers: 8 foes 70 px beyond the cursor (on the hero-cursor axis, +-30 px) walking at the hero; counts foes ever inside the wall's arc (radius < R - 2, within the span)
@@ -187,11 +188,20 @@ const runCrowd = (ranks, form, secs, opt) => {
     const gap = U.dist(mx, cy, e.x, e.y) - N.ring;
     ok(lured && gap < 30 && boss.ovT === 0, `Bone Wall L4: foe 120 px off the ring lured (${lured}), now ${gap.toFixed(0)} px from it; boss never lured`);
   }
+  for (const L of [4, 5]) { // L5: the ring lasts 2x and slows the foe pressed against it 50%; a foe away from it is not slowed
+    const { w, p, N, cx, cy } = setup(L), mx = cx + 150;
+    const e = w.spawnFoe('skeleton', mx + N.ring + 40, cy, { hpMul: 50 }), off = w.spawnFoe('skeleton', mx + 400, cy, { hpMul: 50 }); off.spd = 0;
+    p.in.q = true; p.in.ax = mx; p.in.ay = cy; tick(w, p, cx, cy, 1); p.in.q = false;
+    let slowed = 0; tick(w, p, cx, cy, 240, () => { if (e.slowT > 0 && e.slowK >= 0.5) slowed++; });
+    const z = w.zones.find(q => !q.dead && q.k === 'bonewall'), dur = z ? z.dur : 0;
+    if (L === 5) ok(Math.abs(dur - 10) < 1e-9 && slowed > 60 && off.slowT <= 0 && e.hp === e.maxHp, `Bone Wall L5: lasts ${dur} s, the foe at the ring slowed 50% for ${slowed} ticks, zero damage`);
+    else ok(Math.abs(dur - 5) < 1e-9 && slowed === 0, `Bone Wall L4: lasts ${dur} s, no slow`);
+  }
 }
 
 // 6. determinism
 {
-  const a = runCrowd([3, 3, 3], 'lich', 5, { q: true, lvl: 4, seed: 21 }), b = runCrowd([3, 3, 3], 'lich', 5, { q: true, lvl: 4, seed: 21 });
+  const a = runCrowd([3, 3, 3], 'lich', 5, { q: true, lvl: 5, seed: 21 }), b = runCrowd([3, 3, 3], 'lich', 5, { q: true, lvl: 5, seed: 21 });
   ok(a.digest === b.digest && a.dealt === b.dealt, `same seed -> same digest (${a.digest} / ${b.digest})`);
 }
 console.log(`check-hero-necro: ${fails ? fails + ' failure(s)' : 'all passed'} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);

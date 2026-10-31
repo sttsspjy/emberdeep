@@ -1,5 +1,5 @@
 // Ranger (marksman): hero data, signature Longbow (paths Spread / Piercer / Ricochet) and its Forms Hail of Arrows + Gale Barrage (Spread), Ballista (Piercer),
-// Seeker + Rebound (Ricochet); Q Vault (leap toward the cursor, 3 skill levels).
+// Seeker + Rebound (Ricochet); Q Vault (leap toward the cursor, 4 skill levels).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU;
@@ -236,7 +236,8 @@
   // ---------------- Q: Vault ----------------
   // Zero damage. Leaps N.dist px toward the cursor over N.t s, over foes and obstacles, untouchable (the landing steps back along the line to the first free spot); on landing every
   // xp gem within N.gem px flies to the hero. charges (L3): 2 casts stored. caltrops (L4): a caltrop field (CALT_R px, CALT_T s) at the takeoff slows foes inside 50% for 2 s.
-  // State p.vault { t, T, end (sim time), x0, y0, x1, y1, gem } (HOOK.ranger moves the hero). Zones: 'vault' (follows the hero during the leap, a = heading), 'vland' (landing dust), 'caltrops'.
+  // gemAll (L5): every landing pulls every xp gem inside the hero's view.
+  // State p.vault { t, T, end (sim time), x0, y0, x1, y1, gem (px; -1 the whole view) } (HOOK.ranger moves the hero). Zones: 'vault' (follows the hero during the leap, a = heading), 'vland' (landing dust), 'caltrops'.
   const CALT_R = 56, CALT_T = 3;
   let CW = null;
   const caltFoe = (e) => CW.slow(e, 0.5, 2);
@@ -248,6 +249,7 @@
       { mods: { dist: 60 }, txt: 'Leap 60 px farther' },
       { mods: { charges: 1 }, txt: '2 charges' },
       { mods: { caltrops: 1 }, txt: 'Caltrops at takeoff slow pursuers' },
+      { mods: { gemAll: true }, txt: 'Each vault pulls every gem on screen' },
     ],
   }, (w, p, x, y, N) => {
     const a = Math.hypot(x - p.x, y - p.y) < 1 ? p.mdir : Math.atan2(y - p.y, x - p.x), c = Math.cos(a), s = Math.sin(a);
@@ -255,7 +257,7 @@
     while (d > 0 && ED.Arena.blocked(w.arena, p.x + c * d, p.y + s * d, ED.CONST.HERO_BODY)) d -= 8;
     d = Math.max(0, d);
     const v = p.vault || (p.vault = { t: 0, T: 0, end: 0, x0: 0, y0: 0, x1: 0, y1: 0, gem: 0 });
-    v.T = v.t = N.t; v.end = w.time + N.t; v.x0 = p.x; v.y0 = p.y; v.x1 = p.x + c * d; v.y1 = p.y + s * d; v.gem = N.gem;
+    v.T = v.t = N.t; v.end = w.time + N.t; v.x0 = p.x; v.y0 = p.y; v.x1 = p.x + c * d; v.y1 = p.y + s * d; v.gem = N.gemAll ? -1 : N.gem;
     p.invuln = Math.max(p.invuln, N.t + 0.15); p.mdir = a;
     w.zone({ team: 0, p, wid: 'vault', x: p.x, y: p.y, r: 14, a, dur: N.t, follow: p.pid, look: 'vault' });
     if (N.caltrops > 0) w.zone({ team: 0, p, wid: 'vault', x: p.x, y: p.y, r: CALT_R, dur: CALT_T, look: 'caltrops', st: { nt: 0 }, onTick: caltTick });

@@ -44,6 +44,7 @@ Zero damage. Leap 160 px toward the cursor over 0.34 s, over foes and obstacles,
 | 2 | Leap 60 px farther | 220 px |
 | 3 | 2 charges | two leaps stored, one recharge per 9 s |
 | 4 | Caltrops at takeoff slow pursuers | a 56 px caltrop field at the takeoff for 3 s: foes inside slowed 50% for 2 s |
+| 5 | Each vault pulls every gem on screen | landing pulls every xp gem inside the ranger's view |
 
 ## dps.js (`node tools/dps.js ranger`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 

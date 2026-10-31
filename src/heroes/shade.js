@@ -260,15 +260,17 @@
   // ---------------- Shadow Step ----------------
   // Zero damage. Blinks toward the cursor (40..N.dist px, through foes and over obstacles), invulnerable 0.35 s. The afterimage left at the start is a decoy for N.dur s:
   // every 0.25 s each non-boss foe inside the decoy's view rect is lured to it (W.foeLure, 0.4 s, refreshed). charges (L4): 2 casts stored.
+  // lose (L5): for N.lose s after the step every non-boss foe targeting the Shade is lured to the decoy too, wherever it is (at the cast and on each decoy tick).
   // Zones: 'stepcut' (blink streak), 'afterimg' (the decoy).
   const DV = ED.HERO_VIEW;
   ED.addSkill({
     id: 'step', name: 'Shadow Step', icon: 'fx.smoke', cd: 8, txt: 'Blink and leave a decoy foes chase',
-    base: { dur: 2, dist: 130, charges: 1 },
+    base: { dur: 2, dist: 130, charges: 1, lose: 0 },
     levels: [
       { mods: { dist: 60 }, txt: 'Blink 60 px farther' },
       { mods: { dur: 0.75 }, txt: 'The decoy lasts 3.5 s' },
       { mods: { charges: 1 }, txt: '2 charges' },
+      { mods: { lose: 1.5 }, txt: 'Foes lose you for 1.5 s after a step' },
     ],
   }, (w, p, x, y, N) => {
     let a = Math.atan2(y - p.y, x - p.x), d = Math.hypot(x - p.x, y - p.y);
@@ -279,13 +281,21 @@
     p.invuln = Math.max(p.invuln, 0.35); p.mdir = a;
     const len = Math.hypot(p.x - ox, p.y - oy) || 1;
     w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, a, len, w: 26, dur: 0.3, look: 'stepcut' });
-    w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, r: 24, a, dur: N.dur, look: 'afterimg', st: { nt: 0 }, onTick: decoyTick });
+    const z = w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, r: 24, a, dur: N.dur, look: 'afterimg', st: { nt: 0, lose: N.lose || 0 }, onTick: decoyTick });
+    if (N.lose > 0) loseTrack(w, z);
     return { x0: Math.round(ox), y0: Math.round(oy), a, shake: 4 };
   });
+  // Every non-boss foe targeting the decoy's hero is lured to the decoy until st.lose.
+  function loseTrack(w, z) {
+    const T = Math.min(z.st.lose, z.dur) - z.t;
+    if (!(T > 0)) return;
+    for (const e of w.foes) if (!e.dead && e.tgt === z.p) w.foeLure(e, z.x, z.y, T);
+  }
   // Decoy: lures every non-boss foe inside its view rect (centred on the afterimage), every 0.25 s.
   function decoyTick(w, z) {
     if (z.t < z.st.nt) return;
     z.st.nt = z.t + 0.25;
+    if (z.st.lose > z.t) loseTrack(w, z);
     const q = w.foeScan(z.x, z.y, Math.hypot(DV.hw, DV.hh)), T = Math.min(0.4, z.dur - z.t + 0.05);
     for (let k = 0; k < q.length; k++) { const e = q[k]; if (!e.dead && Math.abs(e.x - z.x) <= DV.hw && Math.abs(e.y - z.y) <= DV.hh) w.foeLure(e, z.x, z.y, T); }
     w.foeEnd();

@@ -7,6 +7,7 @@
   'use strict';
   const U = ED.U, W = ED.World.prototype;
   const CONTACT_CD = 1.0, FAR = 900, FAR_ELITE = 1300, RETARGET = 20, ATK_TOK = 2, FLY_OUT = 360, VW = ED.HERO_VIEW;
+  const ELITE_FLOOR = 60; // elite HP counts a def.hp below this as this much
   const SPLIT_ARC = 70 * Math.PI / 180, SPLIT_JIT = 0.08; // splitter children: half-arc half width, angle jitter (rad); sum < 90 deg
 
   W.initFoes = function () { this.foePool = []; };
@@ -16,8 +17,8 @@
   W.contactDmg = function () { return (3 + 6 * early(this.time) + 2 * late(this.time)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
   // Shot / blast damage factor at the current time: x1 at 0:00 rising to x1.8 at 15:00 and x2.1 at 20:00 (shots 4-9 per hit at 15:00), x the stage damage factor.
   W.foeDmgK = function () { return (1 + 0.8 * early(this.time) + 0.3 * late(this.time)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
-  // HP of foe def spawned now: def.hp x (1 + g x minutes) x party factor x the stage HP factor; g 0.06 swarm brain, 0.24 boss parts, else 0.15 (GAME-DESIGN §7).
-  W.foeHp = function (def) { return def.hp * (1 + (def.ai === 'swarm' ? 0.06 : def.boss ? 0.24 : 0.15) * this.time / 60) * this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1); };
+  // HP of foe def spawned now: def.hp x (1 + g x minutes) x party factor x the stage HP factor; g 0.06 swarm brain, 0.24 boss parts, else 0.11 (GAME-DESIGN §7).
+  W.foeHp = function (def) { return def.hp * (1 + (def.ai === 'swarm' ? 0.06 : def.boss ? 0.24 : 0.11) * this.time / 60) * this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1); };
   // Walk speed factor of foes spawned now: 0.8 at 0:00 rising to 1 at 4:00; fixed at spawn, bosses exempt, telegraphed dashes keep their own speed.
   W.foePace = function () { return 0.8 + 0.2 * Math.min(1, this.time / 240); };
   // Boss HP for a boss due at t s (GAME-DESIGN §8): 1500 x (t / 300)^2 (1500 / 6000 / 13500 / 24000 at 5 / 10 / 15 / 20 min) x k (party factor x the stage HP factor).
@@ -42,10 +43,10 @@
     this.foes.push(e);
     return e;
   };
-  // Elite: 2x size, 15x HP, x1.5 contact damage; drops a chest (GAME-DESIGN §7). Brains widen its attacks (ai.js).
+  // Elite: 2x size, 15 x max(1, ELITE_FLOOR / def.hp) x its spawned HP, x1.5 contact damage; drops a chest (GAME-DESIGN §7). Brains widen its attacks (ai.js).
   W.promoteElite = function (e) {
     e.elite = true; e.r = e.def.r * 2; e.scale = (e.def.scale || 1) * 2;
-    e.maxHp = e.hp = Math.round(e.hp * 15); e.dmg *= 1.5;
+    e.maxHp = e.hp = Math.round(e.hp * 15 * Math.max(1, ELITE_FLOOR / (e.def.hp || ELITE_FLOOR))); e.dmg *= 1.5;
   };
 
   // Moves e toward (tx, ty) at its speed x mul (slow applied), sliding around obstacles; sets face and vx/vy. Returns the distance to the target before the step.
@@ -140,7 +141,7 @@
     }
   };
 
-  // Foe e dies: kill credit, 'die' event, drops (gem by def.xp; elites a chest, 1-5 gold x stage gold, a large gem and food at 50%; bosses via onBossKilled), splitter children, the killer's weapon kill callbacks, then its hero kill hook.
+  // Foe e dies: kill credit, 'die' event, drops (gem by def.xp; elites a chest, 1-5 gold x stage gold, a large gem and food at 50%; bosses via onBossKilled; a hero kill of a non-boss rolls a magnet), splitter children, the killer's weapon kill callbacks, then its hero kill hook.
   W.killFoe = function (e, src) {
     if (e.dead) return;
     e.dead = true; e.hp = 0; e.hpQ = 0;
@@ -151,6 +152,7 @@
     if (e.boss) this.onBossKilled(e, p);
     else if (e.elite) { this.spawnPickup('chest', e.x, e.y, 1); this.spawnPickup('gold', e.x + 8, e.y, Math.round(this.rng.int(1, 5) * (this.sdef.gold || 1))); this.dropGem(e.x - 8, e.y, 25); if (this.rng.chance(0.5)) this.spawnPickup('food', e.x, e.y + 10, 30); }
     else this.dropGem(e.x, e.y, e.def.xp || 1);
+    if (p && !e.boss) this.rollMagnet(e.x, e.y);
     const sp = e.def.split;
     if (sp && !e.boss) {
       const n = Math.min(this.rng.int(sp.n[0], sp.n[1]) + (e.elite ? 3 : 0), this.HARD_CAP - this.foes.length + 1); // the dying parent still counts in foes

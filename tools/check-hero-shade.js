@@ -140,15 +140,16 @@ const sp = (w, p, k, dx, dy, o) => { const e = w.spawnFoe(k, p.x + dx, p.y + dy,
 // 4. view clamp: a foe outside the view takes nothing (weapon Forms + Q)
 for (const id of [null, 'thousand', 'assassinate', 'shadowfan', 'lotus', 'reaper']) {
   const w = world(9), p = w.heroes[0]; build(w, p, [3, 3, 3], id);
-  p.skills[0].lvl = 4;
+  p.skills[0].lvl = 5;
   const out = sp(w, p, 'skelknight', 0, ED.HERO_VIEW.hh + 40), inn = sp(w, p, 'skelknight', 40, -6);
   step(w, 4, (i) => { out.x = p.x; out.y = p.y + ED.HERO_VIEW.hh + 40; if (i % 60 === 0) w.input(p.pid, { q: true, ax: p.x + 30, ay: p.y }); });
   ok(out.hp === out.maxHp && inn.hp < inn.maxHp, `${id || 'daggers'}: no damage outside the view (in-view foe dealt ${Math.round(inn.maxHp - inn.hp)})`);
 }
 
-// 5. Shadow Step levels (zero damage): blink toward the cursor (L2 +60 px), the afterimage is a decoy that foes inside its view chase for 2 s (L3 3.5 s; bosses ignore it), L4 2 charges.
+// 5. Shadow Step levels (zero damage): blink toward the cursor (L2 +60 px), the afterimage is a decoy that foes inside its view chase for 2 s (L3 3.5 s; bosses ignore it), L4 2 charges,
+//    L5 foes outside the decoy's view chasing the Shade turn to it too.
 ok(ED.SKILLS.step.cd >= 7 && ED.SKILLS.step.cd <= 16 && ED.SKILLS.step.levels.every(l => l.txt.length <= 40) && ED.SKILLS.step.txt.length <= 40, `shadow step: cooldown ${ED.SKILLS.step.cd} s, card lines <= 40 chars`);
-for (let L = 1; L <= 4; L++) {
+for (let L = 1; L <= 5; L++) {
   const w = world(30 + L), p = w.heroes[0]; p.weapons.length = 0; p.skills[0].lvl = L;
   const N = w.skillN(p, 0), x0 = p.x, y0 = p.y;
   ring(w, p.x + 60, p.y, 6, 20, 'skeleton', 20);
@@ -158,13 +159,13 @@ for (let L = 1; L <= 4; L++) {
   const moved = p.x - x0, inv = p.invuln > 0.25, z = w.zones.find(q => !q.dead && q.k === 'afterimg');
   const d0 = lure.map(e => U.dist(x0, y0, e.x, e.y));
   step(w, 0.3, () => { p.x = x0 + moved; p.y = y0; });
-  const lured = lure.filter(e => e.ovK === 2).length, ign = far.ovT === 0 && boss.ovT === 0;
+  const lured = lure.filter(e => e.ovK === 2).length, ign = (L >= 5 ? far.ovK === 2 : far.ovT === 0) && boss.ovT === 0;
   step(w, 1.2, () => { p.x = x0 + moved; p.y = y0; });
   const closer = lure.filter((e, i) => U.dist(x0, y0, e.x, e.y) < d0[i] - 20).length;
   step(w, 1.0, () => { p.x = x0 + moved; p.y = y0; });
   const still = lure.filter(e => e.ovK === 2).length, hurt = w.foes.filter(e => e.hp < e.maxHp).length;
   ok(Math.abs(moved - N.dist) < 1 && inv && hurt === 0 && !(p.dealt.step > 0) && N.cd >= 7, `shadow step L${L}: blinks ${Math.round(moved)} of ${N.dist} px, invulnerable ${inv}, zero damage (hurt ${hurt})`);
-  ok(!!z && z.dur === N.dur && lured === 8 && closer === 8 && ign && boss.ovT === 0, `shadow step L${L}: decoy ${N.dur} s lures ${lured}/8 in view (${closer} closed in); foe outside its view and boss ignore it`);
+  ok(!!z && z.dur === N.dur && lured === 8 && closer === 8 && ign && boss.ovT === 0, `shadow step L${L}: decoy ${N.dur} s lures ${lured}/8 in view (${closer} closed in); foe outside its view ${L >= 5 ? 'lured (L5)' : 'ignores it'}, boss ignores it`);
   ok((N.dur > 2.5) === (still === 8) && (N.dur <= 2.5) === (still === 0), `shadow step L${L}: at 2.5 s ${still}/8 still chase the decoy`);
 }
 { // L4 charges: two blinks at once, a third only after the recharge; one charge back per cooldown

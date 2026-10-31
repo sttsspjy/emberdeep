@@ -139,10 +139,10 @@ for (const id of ['firebolt'].concat(FORMS.map(f => f.id))) {
 }
 
 // 8. Flashpoint levels (zero damage): foes within r slide 120 px away (elites half, bosses / knockback-immune stay) and flee from the hero for 2 s (L3 3.5 s), then return;
-// L2 +30% radius; L4 pulls gems within 200 px; a foe in wind-up loses its telegraph.
+// L2 +30% radius; L4 pulls gems within 200 px; a foe in wind-up loses its telegraph; L5 a second flash 1 s later wherever the hero stands.
 {
   const def = ED.SKILLS.flashpoint, U2 = U.dist;
-  ok(def.cd >= 7 && def.cd <= 16 && def.levels.length === 3 && def.levels.every(l => l.txt.length <= 40) && def.txt.length <= 40, `Flashpoint: cooldown ${def.cd} s, 3 level cards, lines <= 40 chars`);
+  ok(def.cd >= 7 && def.cd <= 16 && def.levels.length === 4 && def.levels.every(l => l.txt.length <= 40) && def.txt.length <= 40, `Flashpoint: cooldown ${def.cd} s, 4 level cards, lines <= 40 chars`);
   for (let L = 1; L <= 4; L++) {
     const w = world(3), p = w.heroes[0]; p.skills[0].lvl = L; p.weapons.length = 0;
     const N = w.skillN(p, 0), cx = p.x, cy = p.y;
@@ -171,6 +171,21 @@ for (const id of ['firebolt'].concat(FORMS.map(f => f.id))) {
       `Flashpoint L${L}: 12/12 pushed >= 110 px (${pushed}), elite ${de.toFixed(0)} px (half), immune foe moved ${Math.abs(U2(cx, cy, im.x, im.y) - di0).toFixed(0)} px, boss ${Math.abs(U2(cx, cy, boss.x, boss.y) - db0).toFixed(0)} px, boss flee ${boss.ovT}`);
     ok(kept >= 10 && back >= 10 && cancelled, `Flashpoint L${L}: foes keep fleeing (${kept}/12) then come back (${back}/12); wind-up telegraph cancelled ${cancelled}`);
     ok((L >= 4) === (gem.pull === p.pid), `Flashpoint L${L}: gem pull ${gem.pull === p.pid}`);
+  }
+  for (const L of [4, 5]) { // L5: a second flash 1 s later at the hero's new spot sends a foe that walked up fleeing; none at L4
+    const w = world(3), p = w.heroes[0]; p.skills[0].lvl = L; p.weapons.length = 0;
+    const cx = p.x, cy = p.y;
+    p.in.q = true; p.in.ax = cx + 60; p.in.ay = cy; step(w, p); p.in.q = false; w.events.length = 0;
+    let late = null, flashes = [];
+    for (let i = 0; i < 70; i++) {
+      p.x = cx + 100; p.y = cy;
+      if (i === 30) { late = w.spawnFoe('skeleton', cx + 140, cy, { hpMul: 50 }); late.spd = 0; }
+      step(w, p); w.events.length = 0;
+      for (const z of w.zones) if (!z.dead && z.k === 'flash' && z.t < 0.02) flashes.push(Math.round(z.x - cx));
+    }
+    const ok5 = late.ovK === 1 && flashes.length === 1 && flashes[0] === 100 && late.hp === late.maxHp;
+    if (L === 5) ok(ok5, `Flashpoint L5: second flash at the hero's new spot (+${flashes.join(',')} px), a foe that walked up flees (${late.ovK === 1}), zero damage`);
+    else ok(flashes.length === 0 && late.ovK === 0, `Flashpoint L4: no second flash (${flashes.length})`);
   }
 }
 

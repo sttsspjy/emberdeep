@@ -3,7 +3,7 @@
 // 2. Every Form (1-2 per path) is ready only with its own path at rank 5, locks the others once taken, refines twice and deals damage in a foe ring.
 // 3. Damage only in view: every path at rank 5 and every refined Form never hurts a pinned foe 340 px away (outside the 320 px half view) while hurting near ones.
 // 3b. Rending Gale stays in a +-30 deg cone (refined): at >= 120 px only rays within 30 deg of the aim are hit; nothing past 45 deg at any distance (crescent bodies near the hero).
-// 4. Bulwark Shove at levels 1..4: zero damage; pushes foes out to the shove edge (elites half, immune foes stay), slows (L3 stuns); L4 ring blocks a foe walking in.
+// 4. Aegis Ward at levels 1..5: zero damage; foes inside slide out to the edge and cannot walk back in for dur s; level numbers; L5 the ward follows the knight; bosses stay.
 // 5. Determinism: the same seed and inputs give the same digest (hero, foes, damage) for every Form; client draw hooks run on a mock batch without non-finite args.
 'use strict';
 const path = require('path'), fs = require('fs'), vm = require('vm');
@@ -107,36 +107,64 @@ for (const f of [{ id: 'cleave', r: [5, 0, 0] }, { id: 'cleave', r: [0, 5, 0] },
   ok(far <= 30 && any <= 45 && hit[120] >= 20 && hit[240] >= 20, `gale cone: widest ray hit by distance ${Object.keys(hit).map(d => d + ' px ' + hit[d] + ' deg').join(', ')}`);
 }
 
-// 4. Bulwark Shove (zero damage): foes within r slide out to r x 5/3 and are slowed (L3: stunned), elites half the way, bosses / knockback-immune foes stay; L2 +30% radius; L4 ring foes cannot cross.
+// 4. Aegis Ward (zero damage): foes inside r slide out to the edge (elites, knockback-immune foes too; bosses stay) and cannot walk back in for dur s; cd 25 (L4 20);
+// L2 +20% radius; L3 +1.5 s; L5 the ward follows the knight. Edge foes stay inside base Cleave reach.
 const qWorld = (L) => { const w = world(6), p = w.heroes[0]; p.weapons.length = 0; p.skills[0].lvl = L; return { w, p, N: w.skillN(p, 0) }; };
 const qCast = (w, p, x, y) => { w.input(p.pid, { q: true, ax: x, ay: y }); w.update(C.TICK); w.events.length = 0; };
 const qRun = (w, n, each) => { for (let i = 0; i < n; i++) { if (each) each(i); w.update(C.TICK); w.events.length = 0; } };
-ok(ED.SKILLS.shove.cd >= 7 && ED.SKILLS.shove.cd <= 16 && ED.SKILLS.shove.levels.every(l => l.txt.length <= 40) && ED.SKILLS.shove.txt.length <= 40, `shove: cooldown ${ED.SKILLS.shove.cd} s, card lines <= 40 chars`);
-for (let L = 1; L <= 4; L++) {
-  const { w, p, N } = qWorld(L), cx = p.x, cy = p.y, to = N.r * 5 / 3;
-  const foes = []; for (let i = 0; i < 12; i++) { const a = i / 12 * U.TAU, d = 20 + (i % 4) * (N.r - 30) / 3; foes.push(w.spawnFoe('skeleton', cx + Math.cos(a) * d, cy + Math.sin(a) * d, { hpMul: 50 })); }
-  const out = w.spawnFoe('skeleton', cx + to + 60, cy, { hpMul: 50 });
+const QD = ED.SKILLS.shove;
+ok(QD.name === 'Aegis Ward' && QD.cd === 25 && QD.levels.length === 4 && QD.levels.every(l => l.txt.length <= 40) && QD.txt.length <= 40, `ward: ${QD.name}, cooldown ${QD.cd} s, 4 level cards, lines <= 40 chars`);
+{
+  const want = [[50, 6.5, 25, false], [60, 6.5, 25, false], [60, 8, 25, false], [60, 8, 20, false], [60, 8, 20, true]];
+  const got = [1, 2, 3, 4, 5].map(L => { const N = qWorld(L).N; return [N.r, N.dur, N.cd, !!N.follow]; });
+  ok(got.every((g, i) => Math.abs(g[0] - want[i][0]) < 1e-6 && Math.abs(g[1] - want[i][1]) < 1e-6 && Math.abs(g[2] - want[i][2]) < 1e-6 && g[3] === want[i][3]),
+    `ward levels r / dur / cd / follow: ${got.map(g => g[0].toFixed(0) + '/' + g[1].toFixed(1) + '/' + g[2].toFixed(0) + (g[3] ? '/F' : '')).join(', ')}`);
+  ok(QD.base.r + 4 <= ED.WEAPONS.cleave.base.range, `ward edge (r ${QD.base.r} + foe radius, hero 4 px below the swing centre) inside base Cleave reach ${ED.WEAPONS.cleave.base.range} + foe radius`);
+}
+for (let L = 1; L <= 5; L++) {
+  const { w, p, N } = qWorld(L), cx = p.x, cy = p.y;
+  const foes = []; for (let i = 0; i < 12; i++) { const a = i / 12 * U.TAU, d = 6 + (i % 4) * (N.r - 10) / 3; foes.push(w.spawnFoe('skeleton', cx + Math.cos(a) * d, cy + Math.sin(a) * d, { hpMul: 50 })); }
+  const el = w.spawnFoe('skeleton', cx + 10, cy + 5, { elite: true, hpMul: 50 }), im = w.spawnFoe('skelknight', cx - 12, cy - 8, { hpMul: 50 });
+  const walk = []; for (let i = 0; i < 8; i++) { const a = (i + 0.5) / 8 * U.TAU; walk.push(w.spawnFoe('skeleton', cx + Math.cos(a) * (N.r + 50), cy + Math.sin(a) * (N.r + 50), { hpMul: 50 })); }
   for (const e of w.foes) e.spd = 0;
   qCast(w, p, cx + 100, cy);
-  const slowed = foes.filter(e => e.slowT > 2).length, stunned = foes.filter(e => e.stunT > 0.5).length;
-  qRun(w, 45, () => { p.x = cx; p.y = cy; });
-  const dmin = Math.min(...foes.map(e => U.dist(cx, cy, e.x, e.y))), hurt = w.foes.filter(e => e.hp < e.maxHp).length;
-  ok(dmin >= to - 6 && slowed === 12 && (L >= 3) === (stunned === 12) && hurt === 0 && !(p.dealt.shove > 0) && p.skills[0].cd > 6,
-    `shove L${L}: r ${N.r.toFixed(0)}, 12 foes pushed to >= ${dmin.toFixed(0)} of ${to.toFixed(0)} px, slowed ${slowed}, stunned ${stunned}, zero damage (hurt ${hurt})`);
-  const ring = w.zones.find(z => !z.dead && z.k === 'bulwark');
-  if (L === 4) {
-    out.spd = 60; out.slowT = 0; out.slowK = 0; out.x = cx + Math.cos(U.TAU / 24) * (to + 60); out.y = cy + Math.sin(U.TAU / 24) * (to + 60); // between the pushed foes
-    let inside = 0; qRun(w, 100, () => { p.x = cx; p.y = cy; if (U.dist(cx, cy, out.x, out.y) < to - 4) inside++; });
-    ok(!!ring && inside === 0 && U.dist(cx, cy, out.x, out.y) < to + 30, `shove L4: ring r ${ring ? ring.r.toFixed(0) : '-'} holds; a foe walking in stays outside (${U.dist(cx, cy, out.x, out.y).toFixed(0)} px)`);
-  } else ok(!ring, `shove L${L}: no ring`);
+  const cd0 = p.skills[0].cd;
+  qRun(w, 30, () => { p.x = cx; p.y = cy; });
+  const inner = foes.concat([el, im]), dmin = Math.min(...inner.map(e => U.dist(cx, cy, e.x, e.y) - e.r));
+  const ward = w.zones.find(z => !z.dead && z.k === 'bulwark');
+  ok(!!ward && dmin >= N.r - 1 && w.foes.every(e => e.hp === e.maxHp) && !(p.dealt.shove > 0) && Math.abs(cd0 - N.cd) < 0.05,
+    `ward L${L}: r ${N.r.toFixed(0)}, 14 foes (elite, knockback-immune) out to >= r (${dmin.toFixed(1)}), zero damage, cooldown ${cd0.toFixed(1)} s`);
+  for (const e of walk) { e.spd = 50; e.slowT = 0; e.slowK = 0; }
+  let inside = 0, reachOk = true;
+  qRun(w, Math.round((N.dur - 0.8) / C.TICK), () => {
+    p.x = cx; p.y = cy;
+    for (const e of w.foes) if (!e.dead && U.dist(cx, cy, e.x, e.y) < N.r + e.r - 0.5) inside++;
+  });
+  const near = walk.map(e => U.dist(cx, cy, e.x, e.y));
+  if (L === 1) for (const e of walk) if (Math.hypot(e.x - cx, e.y - (cy - 4)) > ED.WEAPONS.cleave.base.range + e.r) reachOk = false;
+  ok(inside === 0 && Math.max(...near) < N.r + 20 && reachOk, `ward L${L}: 8 foes walking in stay outside for ${(N.dur - 0.8).toFixed(1)} s (closest ${Math.min(...near).toFixed(0)}, farthest ${Math.max(...near).toFixed(0)} px)` + (L === 1 ? `, all within Cleave reach (${reachOk})` : ''));
+  qRun(w, 60, () => { p.x = cx; p.y = cy; });
+  ok(!w.zones.some(z => !z.dead && z.k === 'bulwark'), `ward L${L}: gone after ${N.dur.toFixed(1)} s`);
 }
-{
-  const { w, p, N } = qWorld(1), cx = p.x, cy = p.y, to = N.r * 5 / 3;
-  const el = w.spawnFoe('skeleton', cx + 40, cy, { elite: true, hpMul: 5 }), im = w.spawnFoe('skelknight', cx - 50, cy, { hpMul: 50 });
-  for (const e of w.foes) e.spd = 0;
-  qCast(w, p, cx + 100, cy); qRun(w, 45, () => { p.x = cx; p.y = cy; });
-  const de = U.dist(cx, cy, el.x, el.y), di = U.dist(cx, cy, im.x, im.y), want = 40 + (to - 40) / 2;
-  ok(Math.abs(de - want) < 12 && Math.abs(di - 50) < 3 && el.hp === el.maxHp, `shove: elite pushed half the way (${de.toFixed(0)} px, want ~${want.toFixed(0)}), knockback-immune foe stays (${di.toFixed(0)} px)`);
+{ // a boss inside stays put; L5: the ward follows the walking knight and shoulders foes aside, stationary below L5
+  for (const L of [4, 5]) {
+    const { w, p, N } = qWorld(L), cx = p.x, cy = p.y;
+    const boss = w.spawnFoe('skeleton', cx + 20, cy, { hpMul: 50 }); boss.boss = true;
+    const lane = []; for (let i = 0; i < 6; i++) lane.push(w.spawnFoe('skeleton', cx + 100 + i * 30, cy + (i % 2 ? 8 : -8), { hpMul: 50 }));
+    for (const e of w.foes) e.spd = 0;
+    qCast(w, p, cx + 100, cy); qRun(w, 30, () => { p.x = cx; p.y = cy; });
+    const bx = boss.x; boss.x = 1e5; boss.y = 1e5; boss.dead = true; // out of the way for the walk
+    let maxOff = 0, inside = 0;
+    qRun(w, 180, () => {
+      w.input(p.pid, { mx: 1, my: 0, ax: p.x + 100, ay: p.y });
+      const z = w.zones.find(q => !q.dead && q.k === 'bulwark');
+      if (z) maxOff = Math.max(maxOff, U.dist(z.x, z.y, p.x, p.y));
+      for (const e of lane) if (z && U.dist(z.x, z.y, e.x, e.y) < z.r + e.r - 0.5) inside++;
+    });
+    const z = w.zones.find(q => !q.dead && q.k === 'bulwark');
+    if (L === 5) ok(!!z && maxOff < 3 && inside === 0 && p.x - cx > 100, `ward L5 follows the knight (${(p.x - cx).toFixed(0)} px walked, centre off by <= ${maxOff.toFixed(1)} px), ${inside} foe-ticks inside`);
+    else ok(!!z && U.dist(z.x, z.y, cx, cy) < 1 && Math.abs(bx - (cx + 20)) < 1, `ward L4 stays at the cast point; a boss inside is not moved (${(bx - cx).toFixed(0)} px)`);
+  }
 }
 
 // 5. Determinism + client hooks on a mock batch.
@@ -147,7 +175,7 @@ vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 
 function digestRun(form, draw) {
   const w = world(12), p = w.heroes[0];
   w.setForm(p, p.weapons[0], form, 2);
-  p.skills[0].lvl = 4;
+  p.skills[0].lvl = 5;
   let d = 0, err = null;
   try {
     for (let i = 0; i < 360; i++) {

@@ -33,7 +33,7 @@ Tables give the 3 shape ranks at path ranks 1 / 3 / 5; path ranks 2 and 4 are ge
 ## Skill (Q): Sanctuary
 
 - Zero damage. cd 14 s. Holy ground at the cursor, radius 80, 4 s: a cast burst knocks foes out; foes inside slowed 45%; every living hero inside heals 5 HP/s.
-- L2: +35% area, wards foes out (shoved from the centre every 0.25 s). L3: lasts 50% longer, downed allies inside revive in about 1.3 s. L4: holy pillars rain inside (one every 0.25 s, 20 px, stun 0.6 s).
+- L2: +35% area, wards foes out (shoved from the centre every 0.25 s). L3: lasts 50% longer, downed allies inside revive in about 1.3 s. L4: holy pillars rain inside (one every 0.25 s, 20 px, stun 0.6 s). L5: allies inside take 40% less damage (checked every 0.25 s).
 
 ## dps.js (`node tools/dps.js cleric`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 

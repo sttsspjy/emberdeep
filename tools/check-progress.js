@@ -2,7 +2,7 @@
 // Offers (count, luck 4th card, weapon-card guarantee at levels 2-3 only, card kinds tune / path / support / refine / passive / skill, per-item weight split, dilution, no chest cards in level-ups,
 // gold / heal fallback, no empty offers, determinism), reroll / skip / banish, the slot lifecycle (tune 5 -> elite chest path pick -> path ranks 2-5 by cards -> boss chest Form fork -> refine;
 // other paths never offered or applied), cache keys, Forms per path (re-homed hybrids reachable from exactly one path), slots (MAX_WEAPONS 3: hero weapon + 2 supports, addWeapon refusals),
-// support cards, chest offers (one per chest for the first waiting slot, queueing, picks only, benchmark elites, co-op), elite rolls, gems (merge cap, value kept, magnet vacuum),
+// support cards, chest offers (one per chest for the first waiting slot, queueing, picks only, benchmark elites, co-op), elite rolls, gems (merge cap, value kept, cap drops at the drop spot, magnet vacuum), magnet drops (gap, one on the ground, hero kills only),
 // gold with greed, party XP in co-op, holy bomb, damage table. Test supports 'tsa' / 'tsb' (Forms 'tsaf' / 'tsbf') are registered in this check's own ED only.
 'use strict';
 const { load } = require('./sim.js');
@@ -394,6 +394,41 @@ const pickVia = (w, i) => { w.input('p1', { pick: i }); w.update(C.TICK); w.even
   wb.spawnPickup('bomb', hb.x, hb.y, 1); tick(wb, 3 / 60);
   ok(near.dead && !far.dead && !el.dead && hb.dealt.bomb > 0, 'holy bomb kills non-elites on screen only');
 }
+// ---- gem cap: a drop always lands at the drop spot (merge within 80 px, else it absorbs the gem farthest from every hero)
+{
+  const w = world(), p = w.heroes[0], live = () => w.pickups.filter(g => g.k[0] === 'x' && !g.dead), total = () => live().reduce((a, q) => a + q.val, 0);
+  let sum = 0;
+  for (let i = 0; i < 349; i++) { w.dropGem(p.x - 900 + (i % 30) * 20, p.y - 900 + Math.floor(i / 30) * 20, 1); sum++; }
+  const farG = w.dropGem(p.x + 1200, p.y + 1200, 7); sum += 7;
+  ok(w.gemCount === 350 && live().length === 350, 'cap filled with far gems (' + w.gemCount + ')');
+  const g = w.dropGem(p.x + 50, p.y, 1); sum += 1;
+  ok(g.x === p.x + 50 && g.y === p.y && g.val === 8 && g.k === 'xp5' && farG.dead, 'cap drop near the hero spawns at the drop spot carrying the farthest gem (val ' + g.val + ')');
+  ok(w.gemCount <= 350 && live().length === 350 && total() === sum, 'gem count stays at the cap, XP kept (' + sum + ')');
+  const g2 = w.dropGem(p.x + 60, p.y + 20, 2); sum += 2;
+  ok(g2 === g && g.val === 10 && live().length === 350 && total() === sum, 'cap drop next to a gem merges into it');
+  const n0 = w.pickups.length; for (let i = 0; i < 3; i++) { w.dropGem(p.x, p.y + 300, 1); sum++; }
+  ok(w.pickups.length === n0 + 1 && w.pickups[n0].x === p.x && w.pickups[n0].y === p.y + 300 && live().length === 350 && total() === sum, 'repeated cap drops at one spot stack into one gem there');
+}
+// ---- magnets: hero kills only, first from 140 s, 100 s apart, a new one replaces an uncollected one
+{
+  const w = world(), p = w.heroes[0], mags = () => w.pickups.filter(g => g.k === 'magnet' && !g.dead);
+  const roll = (n, x) => { for (let i = 0; i < n; i++) w.rollMagnet(x || p.x + 200, p.y); };
+  w.time = 139; roll(5000);
+  ok(mags().length === 0, 'no magnet before 140 s');
+  w.time = 140; roll(5000);
+  ok(mags().length === 1 && w.magT === 140, 'a magnet drops from 140 s');
+  const m1 = mags()[0]; m1.dead = true; w.time = 140 + 99; roll(5000);
+  ok(mags().length === 0, 'none within 100 s of the last drop');
+  w.time = 140 + 100; roll(5000);
+  const m2 = mags()[0];
+  ok(mags().length === 1 && w.magT === 240, 'next magnet 100 s after the last drop');
+  w.time = 400; roll(5000, p.x - 150);
+  ok(mags().length === 1 && m2.dead && mags()[0].x === p.x - 150, 'a new drop replaces the uncollected magnet (one on the ground)');
+  mags()[0].dead = true; w.time = 2000;
+  const e = w.spawnFoe(ED.FOE_IDS[0], p.x + 100, p.y);
+  for (let i = 0; i < 3000 && !mags().length; i++) { e.dead = false; w.killFoe(e, null); }
+  ok(!mags().length, 'kills without a hero source never drop a magnet');
+}
 // ---- braziers: drops, elite food, relight 60 s after breaking only while no living hero is within 700 px
 {
   const w = world(), p = w.heroes[0], B = w.arena.braziers;
@@ -401,7 +436,7 @@ const pickVia = (w, i) => { w.input('p1', { pick: i }); w.update(C.TICK); w.even
   p.weapons.length = 0; p.skills.length = 0;
   ok(B.length >= 40 && B.length <= 55, 'arena has ' + B.length + ' braziers (40-55)');
   const drops = {}; for (const b of B) { w.breakBrazier(b, p); } for (const g of w.pickups) if (!g.dead) drops[g.k] = (drops[g.k] || 0) + 1;
-  ok(B.every(b => b.broken && b.t === w.time) && drops.food > 0, 'every brazier breaks and drops (' + JSON.stringify(drops) + ')');
+  ok(B.every(b => b.broken && b.t === w.time) && drops.food > 0 && !drops.magnet, 'every brazier breaks and drops, no magnet (' + JSON.stringify(drops) + ')');
   const b = B.reduce((a, c) => (Math.hypot(c.x - p.x, c.y - p.y) < Math.hypot(a.x - p.x, a.y - p.y) ? c : a));
   p.x = b.x + 300; p.y = b.y; tick(w, 61);
   ok(b.broken, 'a broken brazier stays broken while a hero is within 700 px (61 s)');

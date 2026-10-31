@@ -395,8 +395,9 @@
   };
 
   // ---------------- pickups ----------------
-  // Gems (larger tiers scaled up), coins, food, magnet, bomb, chest; a gentle bob and a periodic glint; vacuumed gems leave sparkles (FX.trail); chests pulse with a gold glow.
+  // Gems (larger tiers scaled up), coins, food, magnet, bomb, chest; a gentle bob and a periodic glint; vacuumed gems leave sparkles (FX.trail); chests pulse with a gold glow; magnets wear a blue pulsing halo.
   const PK = { xp1: ['pickup.xp1', 1], xp5: ['pickup.xp5', 1.25], xp25: ['pickup.xp25', 1.5], gold: ['pickup.gold', 1], food: ['pickup.food', 1], magnet: ['pickup.magnet', 1], bomb: ['pickup.bomb', 1], chest: ['pickup.chest', 1] };
+  const MAGCOL = 0x4ab8ff00; // magnet halo rgb (alpha OR-ed in)
   const PKCOL = { xp1: 0x6ad7ffff, xp5: 0x8aff9aff, xp25: 0xff7ad9ff, gold: 0xffd24aff, food: 0xff5a5aff, magnet: 0xffe14aff, bomb: 0xffffffff, chest: 0xc89a4aff };
   Ac.pickup = (B, g, t) => {
     const d = PK[g.k] || PK.xp1, o = reset(), chest = g.k === 'chest', gem = g.k === 'xp1' || g.k === 'xp5' || g.k === 'xp25';
@@ -407,6 +408,12 @@
       const pu = 0.5 + 0.5 * Math.sin(t * 4);
       B.circ(g.x, g.y - 6, 14 + pu * 4, (0xffd27a00 | Math.round(30 + 30 * pu)) >>> 0, 0);
       if (Math.floor(t * 2.5) % 3 === 0) o.flash = 0.35;
+    } else if (g.k === 'magnet') {
+      // blue halo: a pulsing ring around the sprite plus a slow wide ring expanding to 40 px and fading
+      const pu = 0.5 + 0.5 * Math.sin(t * 5 + g.id), ph = (t * 0.7 + g.id * 0.13) % 1, cy = g.y - 4 + bob;
+      B.circ(g.x, cy, 10 + pu * 2, (MAGCOL | Math.round(40 + 30 * pu)) >>> 0, 0);
+      B.circ(g.x, cy, 8 + pu * 1.5, (MAGCOL | Math.round(170 + 70 * pu)) >>> 0, 2);
+      B.circ(g.x, cy, 10 + 30 * ph, (MAGCOL | Math.round(200 * (1 - ph))) >>> 0, 2);
     } else if (gem && ((t * 0.45 + g.id * 0.137) % 1) < 0.05) o.flash = 0.6;
     if (pulled && gem && ED.FX.trail && now - s.spk > 0.045) { s.spk = now; ED.FX.trail(g.x, g.y - 3, PKCOL[g.k] & 0xffffff00); }
     if (!B.spr(d[0], ED.Atlas.frameAt(d[0], t), g.x, g.y + bob, o)) B.circ(g.x, g.y - 3 + bob, 2 * d[1], PKCOL[g.k] || 0xffffffff, 0);
