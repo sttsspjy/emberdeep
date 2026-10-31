@@ -155,7 +155,7 @@
   };
   const KIND = {
     chaser: 'Chaser: walks straight at you', swarm: 'Swarmer: fast and weak, comes in flocks', brute: 'Brute: slow and tough, a telegraphed slam',
-    ranged: 'Ranged: stops at range and shoots', exploder: 'Exploder: bursts after a short fuse', charger: 'Charger: a telegraphed dash', diver: 'Diver: hovers, then a telegraphed dive',
+    ranged: 'Ranged: stops at range and shoots', exploder: 'Exploder: bursts after a short fuse', charger: 'Charger: a short telegraphed dash, then a pause', diver: 'Diver: closes in, then a telegraphed dive and a pause',
   };
   const foeDetail = (box, id) => {
     const d = ED.FOES[id], ap = appearances()[id] || [];

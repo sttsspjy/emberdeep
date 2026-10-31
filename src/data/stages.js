@@ -4,7 +4,7 @@
 //   feature: { f: 'row' (colonnade) | 'arc' (broken wall with one gap) | 'cluster' (tight clump) | 'single', w (pick weight), look ('' = plain rock disc), r: [min, max], n: [min, max], gap: [min, max] (px between surfaces), spread (cluster radius) }.
 // arena: { size, obstacles: [min, max] (colliders), braziers: [min, max], clear (no obstacle within this radius of the centre) }.
 // foe: { hp, dmg } stage multipliers on foe and boss HP and on contact / shot damage. gold: multiplier on elite, boss and victory gold (GAME-DESIGN §9).
-// Roster tiers: each stage's 0:00-5:00, 5:00-10:00 and 10:00-15:00 rosters differ (early kinds fade to weight 0, two new kinds per stage at 5:00 and 10:00); the stage's swarmer is in no roster: it comes in flocks and swarm events.
+// Roster tiers: each stage's 0:00-5:00, 5:00-10:00 and 10:00-15:00 rosters differ (early kinds fade to weight 0, two new kinds per stage at 5:00 and 10:00; every row keeps a plain chaser kind, the filler when brain caps re-pick); the stage's swarmer is in no roster: it comes in flocks and swarm events.
 // timeline[m] (minute m; the last entry holds for the rest of the run): { rate (spawns/s solo), cap (alive cap solo), floor (density floor, fraction of the alive cap), roster: [[foeId, weight]] }.
 // events.flock: { id, first, every, n: [at first, at 10:00] } a tight pack of swarmers rushing at one hero (spawner.js flockEvent); events.swarm: { first, every, ring: [ids], stampede: [ids] (used when in the current roster), n: [at first, at 12:00] } a closing ring or a stampede line of swarmers; elites: { first, every };
 // bench: { t (s), elite (s between elites) } the benchmark phase (HP-heavy roster, density floor 0.7, a 'surge' warning); bosses: [{ t (s), id, final }].
@@ -114,7 +114,7 @@
       timeline: timeline(
         RATE.map(r => Math.round(r * 1.05 * 10) / 10),
         {
-          shade: [[0, 9], [3, 7], [5, 3], [7, 0]],
+          shade: [[0, 9], [3, 7], [5, 3], [7, 3], [10, 4], [13, 4]],
           jelly: [[1, 2], [3, 3], [5, 2], [7, 0]],
           voidwraith: [[1, 1], [3, 2], [8, 2], [10, 0]],
           gloom: [[2, 1], [4, 2], [6, 1], [8, 0], [10, 0], [11, 3]],

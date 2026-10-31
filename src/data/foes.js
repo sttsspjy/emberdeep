@@ -3,7 +3,7 @@
 //   hp (at 0:00, solo), spd (px/s), dmg (contact multiplier on the time curve), r (collision radius), xp (gem value: 1 | 5 | 25), kb (knockback taken, 0 immune),
 //   brute, split {id, n:[min,max]}, range (ranged: hold distance), shot {dmg, speed, look, n (shots in one stream along the aim line), spread ('ring': n shots around), lob (no shot:
 //   blast circle radius at the target's spot), cd, wind} (ranged),
-//   fuse (exploder wind-up s), boom {r, dmg, look} (exploder), charge {range, speed, dur, cd, wind} (charger), dive {hover, range, speed, dur, cd, wind} (diver),
+//   fuse (exploder wind-up s), boom {r, dmg, look} (exploder), charge {range, speed, dur, cd, wind, rest (still s after the dash)} (charger), dive {range, speed, dur, cd, wind, rest} (diver),
 //   slam {r, mul (x contact damage), cd, wind, ring {n, speed, look, dmg}, pull {r, str (px/s)}} (brute), pack [min, max] (spawns as a group), scale (draw scale), boss, noElite,
 //   take (damage taken factor, armour), guard {open (s), take} (charger: shield up except after a dash), summon {ids, n, r, cd, wind} (summoner), wall (march pack: spawns as a line, px between members),
 //   blink {range, side, wind, slash, r, mul, cd} (blinker) }
@@ -17,8 +17,8 @@
     return F[id];
   };
   const SLAM = (r, o) => Object.assign({ r, mul: 1.6, cd: 3.2, wind: 0.9 }, o);
-  const CHARGE = (o) => Object.assign({ range: 220, speed: 255, dur: 0.55, cd: 3.9, wind: 0.7 }, o);
-  const DIVE = (o) => Object.assign({ hover: 120, range: 200, speed: 240, dur: 0.5, cd: 4.4, wind: 0.65 }, o);
+  const CHARGE = (o) => Object.assign({ range: 220, speed: 255, dur: 0.55, cd: 3.9, wind: 0.7, rest: 0.8 }, o);
+  const DIVE = (o) => Object.assign({ range: 200, speed: 240, dur: 0.5, cd: 4.4, wind: 0.65, rest: 0.8 }, o);
 
   // ---- stage 1: Ossuary ----
   add('bat', { name: 'Crypt Bat', dirs: 4, ai: 'swarm', hp: 10, spd: 52, dmg: 0.8, r: 6 });
@@ -64,12 +64,12 @@
   add('frostwisp', { name: 'Grave Wisp', dirs: 4, ai: 'diver', pack: [3, 5], hp: 10, spd: 56, dmg: 0.9, r: 6, dive: DIVE() });
   // stage 2: Glowmire
   add('reaver', { name: 'Bog Reaver', dirs: 4, hp: 27, spd: 38, dmg: 1.3, r: 8 });
-  add('drone', { name: 'Marsh Light', dirs: 4, ai: 'diver', pack: [3, 5], hp: 10, spd: 58, dmg: 0.9, r: 6, dive: DIVE({ hover: 130, speed: 255 }) });
+  add('drone', { name: 'Marsh Light', dirs: 4, ai: 'diver', pack: [3, 5], hp: 10, spd: 58, dmg: 0.9, r: 6, dive: DIVE({ speed: 255 }) });
   // stage 3: Abyss
   add('riftcaller', { name: 'Rift Caller', dirs: 4, ai: 'ranged', hp: 24, spd: 29, r: 7, range: 200, shot: { dmg: 5, speed: 94, look: 'skull', n: 8, spread: 'ring', cd: 4.2, wind: 0.9 } });
   add('gloom', { name: 'Gloom', ai: 'exploder', hp: 13, spd: 53, r: 7, fuse: 0.7, boom: { r: 52, dmg: 12, look: 'shadow' } });
   add('eel', { name: 'Gloom Eel', ai: 'charger', pack: [2, 3], hp: 20, spd: 46, r: 8, charge: CHARGE({ range: 240, speed: 300, dur: 0.5, cd: 3.6, wind: 0.65 }) });
-  add('voideye', { name: 'Void Eye', dirs: 4, ai: 'diver', pack: [3, 5], hp: 11, spd: 59, dmg: 1, r: 6, dive: DIVE({ hover: 140, speed: 270, cd: 3.9 }) });
+  add('voideye', { name: 'Void Eye', dirs: 4, ai: 'diver', pack: [3, 5], hp: 11, spd: 59, dmg: 1, r: 6, dive: DIVE({ speed: 270, cd: 3.9 }) });
   // boss parts and bodies registered by boss-spore / boss-twins / boss-weaver / boss-wickeater: their wire indices are held here, those files fill the defs
   for (const id of ['sporepod', 'twinhammer', 'weaver', 'wickeater']) add(id, { boss: true, noElite: true });
   // tier foes (GAME-DESIGN §7): each stage adds one kind at 5:00 and one at 10:00

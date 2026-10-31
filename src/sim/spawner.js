@@ -7,22 +7,25 @@
 // Flock (every events.flock.every s from events.flock.first): one tight pack of the stage's swarmer on the spawn ring at the next golden-angle step around a random living hero, rushing at its spot
 // (8 at 0:40 to 40 at 10:00 x party factor); may exceed the alive cap by FLOCK_OVER (25%), never the hard cap; swarm-brain non-solo kinds come only from flocks and swarm events.
 // Swarm event (every events.swarm.every s): a closing ring of swarmers rushing at one hero's spot, or a stampede line crossing that hero's screen (24 at the first event to 50 by 12:00); rush time uses the foe's paced speed (W.foePace);
-// stampede members cycle the ring ids plus the stampede ids present in the current roster.
+// stampede members cycle the ring ids plus the stampede ids present in the current roster (a dasher member at W.dasherCap is skipped).
 // Benchmark phase (stage bench { t, elite }): from bench.t a 'warn' { kind: 'surge' } event and elites every bench.elite s.
-// Shooter caps: a roster pick of a ranged-brain foe while alive ranged foes >= W.shooterCap (summoner: W.summonerCap) is re-picked among the uncapped roster rows; elites never promote a capped kind.
+// Brain caps: a roster pick of a ranged-brain foe while alive ranged foes >= W.shooterCap (summoner: W.summonerCap; charger / diver / blinker together: W.dasherCap) is re-picked among the uncapped roster rows;
+// packs shrink to the room left under their cap; elites never promote a capped kind; stampedes skip dasher members at the cap.
 // Elites: a non-swarm, non-exploder roster foe promoted. Bosses: a 5 s 'warn' event, then w.spawnBoss; a stage boss id without an ED.Bosses script spawns the stage's brute as an elite boss stand-in.
 (function (ED) {
   'use strict';
   const U = ED.U, W = ED.World.prototype;
-  const HARD_CAP = W.HARD_CAP = 900, RING = [380, 460], BOSS_WARN = 5, SWARM_R = 430, REFILL = 0.1, REFILL_MIN = 4, REFILL_MAX = 40, GOLDEN = Math.PI * (3 - Math.sqrt(5)), FLOCK_R = 40, FLOCK_FULL = 600, FLOCK_OVER = 1.25;
+  const HARD_CAP = W.HARD_CAP = 900, RING = [380, 460], BOSS_WARN = 5, SWARM_R = 430, REFILL = 0.1, REFILL_MIN = 6, REFILL_MAX = 40, GOLDEN = Math.PI * (3 - Math.sqrt(5)), FLOCK_R = 40, FLOCK_FULL = 600, FLOCK_OVER = 1.25;
 
   W.initSpawner = function () {
     const sd = this.sdef, ev = (sd.events && sd.events.swarm) || null, fl = (sd.events && sd.events.flock) || null, el = sd.elites || null;
-    this.sp = { acc: 0, ang: 0, swarmT: ev ? ev.first : Infinity, flockT: fl ? fl.first : Infinity, fopt: { rush: [0, 0, 0] }, eliteT: el ? el.first : Infinity, bossI: 0, warnI: -1, pt: { x: 0, y: 0 }, rows: [], free: [], ids: [], bench: false, nR: -1, nS: -1 };
+    this.sp = { acc: 0, ang: 0, swarmT: ev ? ev.first : Infinity, flockT: fl ? fl.first : Infinity, fopt: { rush: [0, 0, 0] }, eliteT: el ? el.first : Infinity, bossI: 0, warnI: -1, pt: { x: 0, y: 0 }, rows: [], free: [], ids: [], bench: false, nR: -1, nS: -1, nD: -1 };
   };
   // Alive ranged-brain foes allowed: round(min(8, 3 + 0.4 x minute) x party factor); summoners: round(2 x party factor).
   W.shooterCap = function () { return Math.round(Math.min(8, 3 + 0.4 * this.time / 60) * (1 + 0.25 * (this.partyN - 1))); };
   W.summonerCap = function () { return Math.round(2 * (1 + 0.25 * (this.partyN - 1))); };
+  // Alive charger / diver / blinker foes allowed (one shared count): round(min(12, 3 + 0.6 x minute) x party factor).
+  W.dasherCap = function () { return Math.round(Math.min(12, 3 + 0.6 * this.time / 60) * (1 + 0.25 * (this.partyN - 1))); };
   W.timelineRow = function () { const tl = this.sdef.timeline; return tl[Math.min(tl.length - 1, Math.floor(this.time / 60))]; };
   W.aliveCap = function () { const row = this.timelineRow(); return Math.min(HARD_CAP, Math.round(row.cap * (1 + 0.25 * (this.partyN - 1)))); };
 
@@ -37,16 +40,25 @@
     return null;
   };
   const pickRoster = (w, roster) => w.rng.weighted(roster, r => r[1])[0];
-  // Alive non-boss foes with brain ai.
-  const aliveAi = (w, ai) => { let c = 0; const F = w.foes; for (let i = 0; i < F.length; i++) { const e = F[i]; if (!e.dead && !e.boss && e.def.ai === ai) c++; } return c; };
-  // True when def is a ranged / summoner kind at its alive cap; counts once per spawner tick into sp.nR / sp.nS (spawns add to them).
-  const atCap = (w, def) => {
-    const sp = w.sp;
-    if (def.ai === 'ranged') { if (sp.nR < 0) sp.nR = aliveAi(w, 'ranged'); return sp.nR >= w.shooterCap(); }
-    if (def.ai === 'summoner') { if (sp.nS < 0) sp.nS = aliveAi(w, 'summoner'); return sp.nS >= w.summonerCap(); }
-    return false;
+  const isDasher = (ai) => ai === 'charger' || ai === 'diver' || ai === 'blinker';
+  // Alive non-boss foes with brain ai ('dasher': charger, diver or blinker).
+  const aliveAi = (w, ai) => {
+    let c = 0; const F = w.foes;
+    for (let i = 0; i < F.length; i++) { const e = F[i]; if (!e.dead && !e.boss && (ai === 'dasher' ? isDasher(e.def.ai) : e.def.ai === ai)) c++; }
+    return c;
   };
-  const counted = (sp, def, n) => { if (def.ai === 'ranged' && sp.nR >= 0) sp.nR += n; else if (def.ai === 'summoner' && sp.nS >= 0) sp.nS += n; };
+  // Room left under def's brain cap (Infinity for an uncapped brain); counts once per spawner tick into sp.nR / sp.nS / sp.nD (spawns add to them).
+  const capRoom = (w, def) => {
+    const sp = w.sp;
+    if (def.ai === 'ranged') { if (sp.nR < 0) sp.nR = aliveAi(w, 'ranged'); return w.shooterCap() - sp.nR; }
+    if (def.ai === 'summoner') { if (sp.nS < 0) sp.nS = aliveAi(w, 'summoner'); return w.summonerCap() - sp.nS; }
+    if (isDasher(def.ai)) { if (sp.nD < 0) sp.nD = aliveAi(w, 'dasher'); return w.dasherCap() - sp.nD; }
+    return Infinity;
+  };
+  const atCap = (w, def) => capRoom(w, def) <= 0;
+  const counted = (sp, def, n) => {
+    if (def.ai === 'ranged') { if (sp.nR >= 0) sp.nR += n; } else if (def.ai === 'summoner') { if (sp.nS >= 0) sp.nS += n; } else if (isDasher(def.ai) && sp.nD >= 0) sp.nD += n;
+  };
   // A roster id: a weighted pick, re-picked among the uncapped rows when it lands on a capped kind. Returns null when every row is capped.
   const pickFree = (w, roster) => {
     const id = pickRoster(w, roster);
@@ -102,6 +114,7 @@
     const n = Math.min(Math.round(ev.n[0] + (ev.n[1] - ev.n[0]) * k + this.rng.range(-4, 4)), HARD_CAP - this.foes.length);
     if (n <= 0) return;
     const ring = this.rng.chance(0.5), A = this.arena;
+    this.sp.nD = -1;
     let ids = ev.ring;
     if (!ring && ev.stampede) {
       ids = this.sp.ids; ids.length = 0;
@@ -121,6 +134,7 @@
       for (let i = 0; i < n; i++) {
         const id = ids[i % ids.length], def = ED.FOES[id], v = def.spd * this.foePace() * 1.3, o = (i / (n - 1 || 1) - 0.5) * 560, j = this.rng.range(-36, 36), x = cx - dy * o + dx * j, y = cy + dx * o + dy * j;
         if (ED.Arena.blocked(A, x, y, def.r)) continue;
+        if (isDasher(def.ai)) { if (atCap(this, def)) continue; counted(this.sp, def, 1); }
         this.spawnFoe(id, x, y, { rush: [dx, dy, Math.min(9, 960 / v)] });
       }
     }
@@ -146,7 +160,7 @@
     const L = this.living;
     if (!L.length) return;
     const sd = this.sdef, row = this.timelineRow(), party = 1 + 0.25 * (this.partyN - 1), cap = this.aliveCap(), sp = this.sp;
-    sp.nR = sp.nS = -1;
+    sp.nR = sp.nS = sp.nD = -1;
     const deficit = (row.floor || 0) * cap - this.foes.length;
     sp.acc = Math.min(10, sp.acc + row.rate * party * (this.boss ? 0.5 : 1) * dt);
     if (deficit > 0) sp.acc = Math.max(sp.acc, Math.min(REFILL_MAX, Math.max(REFILL_MIN, deficit * REFILL)));
@@ -158,7 +172,7 @@
       if (!pt) { sp.acc -= 1; continue; }
       const x = pt.x, y = pt.y, room = cap - this.foes.length;
       if (def.pack) {
-        const n = Math.min(this.rng.int(def.pack[0], def.pack[1]), room);
+        const n = Math.min(this.rng.int(def.pack[0], def.pack[1]), room, capRoom(this, def));
         counted(sp, def, def.wall ? this.spawnWall(id, x, y, n, h) : this.spawnPack(id, x, y, n, 30));
         sp.acc -= Math.max(1, n);
       } else { this.spawnFoe(id, x, y); counted(sp, def, 1); sp.acc -= 1; }
@@ -179,7 +193,7 @@
       const rows = sp.rows; rows.length = 0;
       for (const r of row.roster) { const d = ED.FOES[r[0]]; if (d.ai !== 'swarm' && d.ai !== 'exploder' && !d.noElite && !atCap(this, d)) rows.push(r); }
       const pt = this.ringPoint(randHero(this), RING[0], RING[1], false);
-      if (rows.length && pt) { const e = this.spawnFoe(pickRoster(this, rows), pt.x, pt.y, { elite: true }); this.emit({ t: 'warn', kind: 'elite', id: e.id, k: e.k }); }
+      if (rows.length && pt) { const e = this.spawnFoe(pickRoster(this, rows), pt.x, pt.y, { elite: true }); counted(sp, e.def, 1); this.emit({ t: 'warn', kind: 'elite', id: e.id, k: e.k }); }
     }
     // bosses: a warning BOSS_WARN s ahead, then the spawn (bosses.js spawnBoss, or a stand-in when the id has no script)
     const b = sd.bosses && sd.bosses[sp.bossI];

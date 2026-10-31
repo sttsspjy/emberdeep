@@ -3,12 +3,14 @@
 //    early kinds fade out); no swarm-brain flyer in any roster (flocks only); boss ids per stage; foe wire order (tier foes after the boss bodies); the XP curve;
 //    foe HP: base x (1 + 0.15 x minute) (swarm brain 0.06) x party x stage; swarmers and divers 10-11 HP.
 // 2. Brains: each attack kind (ranged, exploder, charger, diver, brute, blinker) shows a warn zone >= 0.6 s before it deals damage; a stun cancels a wind-up and drops its telegraph;
-//    ranged streams (one lane, 'aim' look, shot life), lobs (a fixed circle at the hero's spot, then a blast there; killing the caster cancels it), the per-hero shot budget, no retreat;
+//    ranged streams (one lane, 'aim' look, shot life), lobs (a fixed circle at the hero's spot, then a blast there; killing the caster cancels it), the per-hero attack budget, no retreat;
+//    charge / dive reach (start only within min(range, lane - 12), 'dash' look, rest after the dash), divers close in without a token, charge / dive / blink starts spend atkTok;
 //    guard (shield up, open after the bash), summoner (summons after its ring), pull slam (drags a still hero in), wall packs (a line across the approach).
 // 3. Spawner: a weaponless god hero per stage reaches the alive cap by the mid-game, sees swarm events every 120 s from 2:00, elites every 60 s from 2:30, bosses at 5/10/15 min; a missing boss script spawns a stand-in;
 //    from an empty field at 6:00 / 8:00 (solo and a party of 4) the alive count refills to the density floor within 0.5 s without passing the cap; at the floor the rate is x1.
 //    benchmark phase: a 'surge' warning at 12:00, elites every 30 s.
 //    flocks: every 18 s from 0:40, 8 -> 40 swarmers by 10:00 x party factor, one pack within 40 px on the spawn ring rushing at the hero's spot; past the alive cap, not past the hard cap.
+//    brain caps: shooters, summoners and dashers (charger / diver / blinker) never pass their alive caps; dasher packs and stampedes trim to the room left.
 // 4. Recycling: a foe left 1000 px behind returns to the spawn ring. 5. Arena: deterministic, obstacle count in range, centre clear, features keep lanes.
 // 6. Gold: elite coins, mid-boss coin, final boss and victory gold x the stage gold multiplier; w.summary().gold carries it.
 'use strict';
@@ -44,7 +46,9 @@ ED.STAGES.forEach((sd, si) => {
   ok(tl[0].floor === 0 && tl[1].floor === 0.1 && tl[4].floor === 0.25 && tl[9].floor === 0.5 && tl[10].floor === 0.55 && tl[11].floor === 0.6 && tl.slice(12).every(r => r.floor === 0.7), `${sd.id}: density floor ${tl.map(r => r.floor).join(' ')} of the cap`);
   const kindsAt = (a, b) => { const s = new Set(); for (let m = a; m < b; m++) for (const r of tl[m].roster) s.add(r[0]); return s; };
   const A = kindsAt(0, 5), B = kindsAt(5, 10), Cc = kindsAt(10, 15), newB = [...B].filter(id => !A.has(id)), newC = [...Cc].filter(id => !A.has(id) && !B.has(id));
-  const gone = [...kindsAt(0, 2)].filter(id => ED.FOES[id].ai !== 'swarm' && Cc.has(id));
+  const gone = [...kindsAt(0, 2)].filter(id => ED.FOES[id].ai !== 'swarm' && Cc.has(id) && !(sd.id === 'abyss' && id === 'shade'));
+  const filler = tl.slice(5).every(row => row.roster.some(r => ED.FOES[r[0]].ai === 'chaser' && !ED.FOES[r[0]].split && r[1] >= 3));
+  ok(filler, `${sd.id}: every minute from 5:00 keeps a plain chaser (weight >= 3) as the brain-cap filler`);
   ok(newB.length >= 3 && newC.length >= 1 && !gone.length && sd.bench && sd.bench.t === 720 && sd.bench.elite === 30, `${sd.id}: tiers - new at 5:00 ${newB.join(',')}; new at 10:00 ${newC.join(',')}; opening kinds gone by 10:00 except swarmers`);
   const shifts = tl.filter((r, m) => m > 0 && JSON.stringify(r.roster) !== JSON.stringify(tl[m - 1].roster)).length;
   ok(shifts >= 13, `${sd.id}: roster weights shift ${shifts} of 15 minutes`);
@@ -127,12 +131,12 @@ const still = (w, p) => w.input('p1', { mx: 0, my: 0, ax: p.x + 50, ay: p.y });
   ok(b.boom && !b.hurt && b.away > b.zr, `lob: a hero that walked ${Math.round(b.away)} px off is missed`);
   ok(!c.boom, 'lob: killing the spitter in its wind-up cancels the blast');
 }
-{ // shot budget: 8 bolt casters around a still hero at 0:00 start at most 1 + 0.5 x 10 attacks in 10 s (tokens start at 1, refill 0.5 / s)
+{ // attack budget: 8 bolt casters around a still hero at 0:00 start at most 1 + 0.5 x 10 attacks in 10 s (tokens start at 1, refill 0.5 / s)
   const { w, p } = lab('priest', 150);
   for (let k = 1; k < 8; k++) { const a = k * U.TAU / 8; w.spawnFoe('priest', p.x + Math.cos(a) * 150, p.y + Math.sin(a) * 150); }
   const seen = new Set();
   for (let i = 0; i < 600; i++) { still(w, p); w.update(C.TICK); w.events.length = 0; for (const z of w.zones) if (z.warn && z.team === 1) seen.add(z.id); }
-  ok(seen.size >= 5 && seen.size <= 6, `shot budget: 8 casters start ${seen.size} attacks in 10 s`);
+  ok(seen.size >= 5 && seen.size <= 6, `attack budget: 8 casters start ${seen.size} attacks in 10 s`);
 }
 { // no retreat: a bolt caster 60 px from a still hero (inside range - 50) strafes, never backs off
   const { w, p, e } = lab('priest', 60); let dMax = 0;
@@ -168,6 +172,34 @@ for (const id of ['icewolf', 'frostwisp']) { // charger / diver: lane, then a fa
     w.events.length = 0;
   }
   ok(warnT > 0 && warnDur >= 0.6 && dashV > e.def.spd * 3, `${e.def.ai}: lane ${warnDur.toFixed(2)} s, dash ${Math.round(dashV)} px/s`);
+}
+for (const id of ['icewolf', 'eel', 'bulwark', 'frostwisp', 'voideye']) { // charge / dive reach: starts only at 50 < d <= min(range, lane - 12) with a 'dash' lane through the target's spot; stands still `rest` s after the dash
+  const { w, p, e } = lab(id, 260), V = e.def.charge || e.def.dive, L = V.speed * V.dur + e.r, lim = Math.min(V.range, L - 12), restS = e.def.guard ? e.def.guard.open : V.rest;
+  let startD = -1, look = '', past = 0, restT = -1, moved = 0;
+  for (let i = 0; i < 600 && restT < 0; i++) {
+    p.atkTok = 2; still(w, p);
+    const st0 = e.st, d = Math.hypot(e.x - p.x, e.y - p.y); w.update(C.TICK); w.events.length = 0;
+    if (st0 === 0 && e.st === 1 && startD < 0) { startD = d; const z = e.tz; look = z ? z.k : ''; past = z ? z.len - Math.hypot(z.x - p.x, z.y - p.y) : 0; }
+    if (st0 === 2 && e.st === 3) {
+      const rx = e.x, ry = e.y;
+      for (let j = 0; j < 600 && e.st === 3; j++) { p.atkTok = 0; still(w, p); w.update(C.TICK); w.events.length = 0; moved = Math.max(moved, Math.hypot(e.x - rx, e.y - ry)); restT = (j + 1) / 60; }
+    }
+  }
+  ok(startD > 50 && startD <= lim + 1 && look === 'dash' && past >= 11 && Math.abs(restT - restS) < 0.05 && moved < 0.5,
+    `${id}: starts at ${startD.toFixed(1)} px (limit ${lim.toFixed(1)}), '${look}' lane ${past.toFixed(1)} px past the hero, rests ${restT.toFixed(2)} s (want ${restS}), moved ${moved.toFixed(1)} px`);
+}
+{ // diver without a token: spirals in (no orbit-hold), closer after 3 s
+  const { w, p, e } = lab('frostwisp', 200);
+  for (let i = 0; i < 180; i++) { p.atkTok = 0; still(w, p); w.update(C.TICK); w.events.length = 0; }
+  const d1 = Math.hypot(e.x - p.x, e.y - p.y);
+  ok(d1 < 110 && e.st === 0, `diver with no token: 200 -> ${d1.toFixed(1)} px in 3 s, no dive`);
+}
+for (const [id, d] of [['icewolf', 120], ['frostwisp', 100], ['stalker', 160]]) { // charge / dive / blink starts spend one atkTok each; none start below 1
+  const a = lab(id, d); let spent = -1;
+  for (let i = 0; i < 300 && spent < 0; i++) { a.p.atkTok = 1.5; still(a.w, a.p); const s0 = a.e.st; a.w.update(C.TICK); a.w.events.length = 0; if (s0 === 0 && a.e.st === 1) spent = 1.5 - a.p.atkTok; }
+  const b = lab(id, d); let starts = 0;
+  for (let i = 0; i < 300; i++) { b.p.atkTok = 0; still(b.w, b.p); const s0 = b.e.st; b.w.update(C.TICK); b.w.events.length = 0; if (s0 === 0 && b.e.st === 1) starts++; }
+  ok(Math.abs(spent - 1) < 0.02 && starts === 0, `${ED.FOES[id].ai}: a start spends ${spent.toFixed(2)} atkTok; ${starts} starts in 5 s at 0 tokens`);
 }
 { // guard: shield up takes x0.35, the bash leaves a 1.6 s open window (st 3) taking x1.3
   const { w, p, e } = lab('bulwark', 120);
@@ -319,6 +351,48 @@ for (const st of [0, 1, 2]) {
   const r = capRun(1, 180, 420, 'ranged', 'shooterCap'), s = capRun(0, 600, 690, 'summoner', 'summonerCap');
   ok(r.over === 0 && r.peak >= 4, `Glowmire 3:00-7:00: ranged alive peak ${r.peak}, ${r.over} ticks over the cap`);
   ok(s.over === 0 && s.peak >= 1, `Ossuary 10:00-11:30: summoners alive peak ${s.peak}, ${s.over} ticks over the cap`);
+}
+{ // dasher cap: round(min(12, 3 + 0.6 x minute) x party) chargers + divers + blinkers alive; packs and stampedes trim to the room left
+  const cw = new ED.World({ seed: 77, stage: 0, players: players(['knight']) }), c4 = new ED.World({ seed: 77, stage: 0, players: players(['knight', 'knight', 'knight', 'knight']) });
+  const caps = [0, 300, 600, 900, 1200].map(t => (cw.time = t, cw.dasherCap())).join('/');
+  ok(caps === '3/6/9/12/12' && c4.dasherCap() === 5, `dasher cap ${caps} at 0:00/5:00/10:00/15:00/20:00 solo, ${c4.dasherCap()} at 0:00 x4`);
+  const dash = (e) => !e.dead && !e.boss && (e.def.ai === 'charger' || e.def.ai === 'diver' || e.def.ai === 'blinker');
+  const run = (stage, t0, t1) => {
+    const w = new ED.World({ seed: 77, stage, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];
+    p.weapons.length = 0; p.skills.length = 0; w.time = t0; w.sp.bossI = 99; w.sp.swarmT = t0 + 20; w.sp.eliteT = t0 + 10;
+    let over = 0, peak = 0;
+    for (let i = 0; w.time < t1; i++) {
+      const a = i / 60 * 0.4; w.input('p1', { mx: Math.cos(a) * 0.6, my: Math.sin(a) * 0.6, ax: p.x + 50, ay: p.y, pick: p.offer ? 1 : 0 });
+      w.update(C.TICK); w.events.length = 0;
+      let n = 0; for (const e of w.foes) if (dash(e)) n++;
+      peak = Math.max(peak, n); if (n > w.dasherCap()) over++;
+    }
+    return { over, peak };
+  };
+  const r = [0, 1, 2].map(st => run(st, 300, 540));
+  ok(r.every(x => x.over === 0 && x.peak >= 4), `5:00-9:00 dashers alive peak ${r.map(x => x.peak).join('/')} (stages 1/2/3), ticks over the cap ${r.map(x => x.over).join('/')}`);
+  { // pack trim: 5 divers alive at 5:00 (cap 6) and a hound-only roster: one hound joins, then nothing
+    const w = new ED.World({ seed: 77, stage: 0, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];
+    w.sdef = Object.assign({}, w.sdef, { timeline: w.sdef.timeline.map(row => Object.assign({}, row, { roster: [['icewolf', 1]], floor: 0 })), events: {}, elites: null, bosses: [] });
+    w.time = 300; for (let i = 0; i < 5; i++) w.spawnFoe('frostwisp', p.x + 300, p.y + i * 20);
+    w.sp.acc = 8; w.updateSpawner(0);
+    const hounds = w.foes.filter(e => e.def.id === 'icewolf').length;
+    ok(hounds === 1 && w.foes.filter(dash).length === 6, `pack trim: ${hounds} hound joins 5 divers under the cap of 6`);
+  }
+  // stampede (Abyss at 6:00 lists Rift Stalkers): none join with dashers at the cap; below it, exactly the room left
+  const stamp = (pre) => {
+    const v = new ED.World({ seed: 9, stage: 2, players: players(['knight']), cheats: { god: true } }), q = v.heroes[0], ev = v.sdef.events.swarm;
+    v.time = 360; for (let i = 0; i < pre; i++) v.spawnFoe('voideye', q.x + 300, q.y + i * 20);
+    let st = 0, tries = 0;
+    while (!st && tries++ < 40) {
+      const n0 = v.foes.length; v.swarmEvent(ev, q);
+      const e = v.events.find(x => x.t === 'warn' && x.kind === 'swarm'); v.events.length = 0;
+      if (e && !e.ring) st = v.foes.length - n0; else { for (const f of v.foes.slice(n0)) v.killFoe(f, null); v.update(C.TICK); v.events.length = 0; }
+    }
+    return { st, stalkers: v.foes.filter(e => !e.dead && e.def.id === 'stalker').length, cap: v.dasherCap() };
+  };
+  const full = stamp(7), part = stamp(5);
+  ok(full.st > 0 && full.stalkers === 0 && part.stalkers === part.cap - 5, `stampede: ${full.st} members, ${full.stalkers} stalkers at the cap; ${part.stalkers} stalkers with room ${part.cap - 5}`);
 }
 
 // ---------------- 4. recycling ----------------

@@ -2,7 +2,8 @@
 // Open arena: straight-line steering (obstacles slide via ED.Arena.move), no line of sight. State: e.st (0 move, 1 wind-up, 2 act), e.stT (s in state), e.acd (attack cooldown), e.aa (locked angle).
 // Telegraph rule: every attack beyond contact shows a warn zone (team 1, >= 0.6 s) for its whole wind-up and resolves from the brain at the wind-up end with the aim locked at its start;
 // the zone itself carries no damage, dies with its caster and is dropped when a stun or freeze cancels the attack (w.foeCancel). Ranged attacks start only on the target's screen
-// and spend one of the target's shot tokens (p.shotTok, refilled in updateFoes; none: the attack waits). Ranged / summoner foes never back away from the target.
+// Attack budget: ranged, charge, dive and blink starts spend one of the target's attack tokens (p.atkTok, refilled in updateFoes; none: the attack waits). Ranged / summoner foes never back away from the target.
+// Charge / dive lanes (look 'dash') start only when the lane (speed x dur + r) reaches 12 px past the target's spot; after the dash the foe stands still in st 3 for rest s.
 // Elites widen attacks (shape, not numbers): ranged +2 shots in the stream (ring x1.5, lob x1.5 radius), charge / dive x1.35 longer, slam x1.5 radius plus a shot ring, summons +3, blink slash x1.5 radius. Kinds: GAME-DESIGN §7.
 // Options: charge.guard (shield up outside a vulnerable window after the bash), slam.pull (the wind-up drags heroes in), summoner, march (wall packs), blinker.
 (function (ED) {
@@ -15,7 +16,7 @@
   // Scratch zone options (w.zone copies every field): one telegraph per attack start, no allocation.
   const Z = { team: 1, warn: true, dmg: 0, x: 0, y: 0, r: 0, a: 0, len: 0, w: 0, arc: 0, dur: 0.6, src: null, followSrc: false, look: 'tele', wid: '' };
   // wid: optional client overlay key (ED.SkillFx, e.g. 'summon', 'blinkmark').
-  // lk: zone look ('tele' default; 'aim' for ranged aim lines).
+  // lk: zone look ('tele' default; 'aim' for ranged aim lines, 'dash' for charge / dive lanes).
   const warn = (w, e, x, y, r, a, len, wd, arc, dur, follow, wid, lk) => {
     Z.x = x; Z.y = y; Z.r = r; Z.a = a; Z.len = len; Z.w = wd; Z.arc = arc; Z.dur = Math.max(0.6, dur); Z.src = e; Z.followSrc = follow; Z.wid = wid || ''; Z.look = lk || 'tele';
     const z = w.zone(Z); Z.src = null;
@@ -103,8 +104,8 @@
     }
     e.acd -= dt;
     const R = e.def.range || 160, vis = onScreen(e, t), d = hold(w, e, t, R, vis, dt);
-    if (e.acd > 0 || !vis || d > R + 70 || !(t.shotTok >= 1)) return;
-    t.shotTok -= 1;
+    if (e.acd > 0 || !vis || d > R + 70 || !(t.atkTok >= 1)) return;
+    t.atkTok -= 1;
     e.aa = Math.atan2(t.y - e.y, t.x - e.x);
     const dur = start(e, S.wind);
     if (S.lob) { const v = e.vars || (e.vars = { x: 0, y: 0 }); v.x = t.x; v.y = t.y; warn(w, e, v.x, v.y, S.lob * (e.elite ? 1.5 : 1), 0, 0, 0, 0, dur, false); }
@@ -130,37 +131,40 @@
     if ((t.x - e.x) * (t.x - e.x) + (t.y - e.y) * (t.y - e.y) < rr * rr) { e.vx = e.vy = 0; warn(w, e, e.x, e.y, R, 0, 0, 0, 0, start(e, e.def.fuse || 0.7), true); }
   };
 
-  // Charger: chases; in range it plants, shows its charge lane, then dashes straight along it (contact hurts on the way) and stops early at an obstacle.
-  // def.guard { open, take }: shield up (damage taken x def.take) except for `open` s after each dash, when it stands still in st 3 taking x guard.take.
+  // Stands still in st 3 (recover after a dash) until rest s pass, then back to st 0. Returns true while resting.
+  const rest = (e, dt, secs) => { if (e.st !== 3) return false; e.stT += dt; e.vx = e.vy = 0; if (e.stT >= secs) { e.st = 0; e.stT = 0; } return true; };
+  // Charger: chases; at 50 < d <= min(range, lane - 12) it plants, shows its charge lane (lane = speed x dur + r, through the target's spot), dashes along it (contact hurts on the way,
+  // stops early at an obstacle), then rests charge.rest s in st 3. def.guard { open, take }: shield up (damage taken x def.take) except in st 3, which lasts guard.open s and takes x guard.take.
   AI.charger = (w, e, dt) => {
-    const C = e.def.charge, G = e.def.guard, t = e.tgt, dur = C.dur * (e.elite ? 1.35 : 1);
-    if (G) {
-      if (e.st === 3) { e.stT += dt; e.vx = e.vy = 0; if (e.stT >= G.open) { e.st = 0; e.stT = 0; e.takeMul = e.def.take || 1; } return; }
-      e.takeMul = e.def.take || 1;
-    }
+    const C = e.def.charge, G = e.def.guard, t = e.tgt, dur = C.dur * (e.elite ? 1.35 : 1), L = C.speed * dur + e.r;
+    if (rest(e, dt, G ? G.open : C.rest)) { if (G && e.st === 0) e.takeMul = e.def.take || 1; return; }
+    if (G) e.takeMul = e.def.take || 1;
     if (e.st === 1) { e.stT += dt; if (e.stT >= W6(C.wind)) { e.st = 2; e.stT = 0; e.cd = 0; e.tz = null; } return; }
-    if (e.st === 2) { e.stT += dt; if (dash(w, e, C.speed, dt) || e.stT >= dur) { done(w, e, C.cd); if (G) { e.st = 3; e.takeMul = G.take; e.vx = e.vy = 0; } } return; }
+    if (e.st === 2) { e.stT += dt; if (dash(w, e, C.speed, dt) || e.stT >= dur) { done(w, e, C.cd); e.st = 3; e.vx = e.vy = 0; if (G) e.takeMul = G.take; } return; }
     e.acd -= dt;
     const d = w.steer(e, t.x, t.y, 1, dt);
-    if (e.acd <= 0 && d > 50 && d < C.range && onScreen(e, t)) {
+    if (e.acd <= 0 && d > 50 && d <= Math.min(C.range, L - 12) && onScreen(e, t) && t.atkTok >= 1) {
+      t.atkTok -= 1;
       e.aa = Math.atan2(t.y - e.y, t.x - e.x); e.vx = e.vy = 0;
-      warn(w, e, e.x, e.y, 0, e.aa, C.speed * dur + e.r, e.r * 2 + 6, 0, start(e, C.wind), true);
+      warn(w, e, e.x, e.y, 0, e.aa, L, e.r * 2 + 6, 0, start(e, C.wind), true, '', 'dash');
     }
   };
 
-  // Diver: circles the target at def.dive.hover px (direction by id parity), then shows a lane and dives through the target's spot.
+  // Diver: spirals in (inward + 0.7 x tangential, side by id parity) at its walk speed; at 50 < d <= min(range, lane - 12) it shows a lane (lane = speed x dur + r)
+  // and dives through the target's spot, then rests dive.rest s in st 3.
   AI.diver = (w, e, dt) => {
-    const V = e.def.dive, t = e.tgt, dur = V.dur * (e.elite ? 1.35 : 1);
+    const V = e.def.dive, t = e.tgt, dur = V.dur * (e.elite ? 1.35 : 1), L = V.speed * dur + e.r;
+    if (rest(e, dt, V.rest)) return;
     if (e.st === 1) { e.stT += dt; faceTo(e, t.x); if (e.stT >= W6(V.wind)) { e.st = 2; e.stT = 0; e.cd = 0; e.tz = null; } return; }
-    if (e.st === 2) { e.stT += dt; if (dash(w, e, V.speed, dt) || e.stT >= dur) done(w, e, V.cd); return; }
+    if (e.st === 2) { e.stT += dt; if (dash(w, e, V.speed, dt) || e.stT >= dur) { done(w, e, V.cd); e.st = 3; e.vx = e.vy = 0; } return; }
     e.acd -= dt;
-    const dx = e.x - t.x, dy = e.y - t.y, d = Math.hypot(dx, dy) || 1, s = (e.id & 1) ? 1 : -1, k = U.clamp((d - V.hover) / 40, -1, 1);
-    const mx = -dy / d * s - dx / d * k, my = dx / d * s - dy / d * k;
-    w.steer(e, e.x + mx * 60, e.y + my * 60, 1, dt);
+    const dx = t.x - e.x, dy = t.y - e.y, d = Math.hypot(dx, dy) || 1, s = (e.id & 1) ? 0.7 : -0.7, ux = dx / d, uy = dy / d;
+    w.steer(e, e.x + (ux - uy * s) * 60, e.y + (uy + ux * s) * 60, 1, dt);
     faceTo(e, t.x);
-    if (e.acd <= 0 && d < V.range && d > 50 && onScreen(e, t)) {
-      e.aa = Math.atan2(-dy, -dx); e.vx = e.vy = 0;
-      warn(w, e, e.x, e.y, 0, e.aa, V.speed * dur + e.r, e.r * 2 + 4, 0, start(e, V.wind), true);
+    if (e.acd <= 0 && d > 50 && d <= Math.min(V.range, L - 12) && onScreen(e, t) && t.atkTok >= 1) {
+      t.atkTok -= 1;
+      e.aa = Math.atan2(dy, dx); e.vx = e.vy = 0;
+      warn(w, e, e.x, e.y, 0, e.aa, L, e.r * 2 + 4, 0, start(e, V.wind), true, '', 'dash');
     }
   };
 
@@ -211,11 +215,11 @@
     }
     e.acd -= dt;
     const d = w.steer(e, t.x, t.y, 1, dt);
-    if (e.acd <= 0 && d < B.range && onScreen(e, t)) {
+    if (e.acd <= 0 && d < B.range && onScreen(e, t) && t.atkTok >= 1) {
       const a = Math.atan2(e.y - t.y, e.x - t.x) + w.rng.sign() * w.rng.range(1.6, 2.6);
       v.x = t.x + Math.cos(a) * B.side; v.y = t.y + Math.sin(a) * B.side;
       if (ED.Arena.blocked(w.arena, v.x, v.y, e.r)) { e.acd = 0.5; return; }
-      e.vx = e.vy = 0;
+      t.atkTok -= 1; e.vx = e.vy = 0;
       warn(w, e, v.x, v.y, e.r + 8, 0, 0, 0, 0, start(e, B.wind), false, 'blinkmark');
     }
   };

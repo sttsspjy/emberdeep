@@ -501,10 +501,10 @@
     if (!A.ready) return;
     const t = A.ctx.currentTime, v = ED.Game && ED.Game.view, m = v && v.me;
     if (m) { lx = m.x; ly = m.y; }
-    if (v && v.zones) { // a new foe telegraph (warn zone, not the hero's, not an 'aim' lane: its shot rings 'eshoot') rings a rising warning at its position
+    if (v && v.zones) { // a new foe telegraph (warn zone, not the hero's, not an 'aim' lane (its shot rings 'eshoot') or a 'dash' lane) rings a rising warning at its position
       if (v !== zView) { zView = v; zMax = 0; }
       let top = zMax;
-      for (let i = 0; i < v.zones.length; i++) { const z = v.zones[i]; if (z.id > zMax) { if (z.id > top) top = z.id; if (z.warn && z.team !== 0 && !z.dead && z.k !== 'aim') agg(C.tele, posGain(z.x, z.y), 3); } }
+      for (let i = 0; i < v.zones.length; i++) { const z = v.zones[i]; if (z.id > zMax) { if (z.id > top) top = z.id; if (z.warn && z.team !== 0 && !z.dead && z.k !== 'aim' && z.k !== 'dash') agg(C.tele, posGain(z.x, z.y), 3); } }
       zMax = top;
     }
     if (H.n) {

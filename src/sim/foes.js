@@ -2,11 +2,11 @@
 // Foe fields: ARCHITECTURE §4 plus internal ones: tgt (nearest living hero, retargeted every RETARGET ticks staggered by id), cd (contact cooldown), age, invulnT, takeMul (damage taken factor),
 // scale (draw scale), final (final boss), rushT / rx / ry (stampede or closing ring: fixed heading), burnTick, hev / hevT (hit aggregation), enraged,
 // acd (attack cooldown), aa (locked attack angle), tz / tzId (the brain's live telegraph zone; ai.js), ovT / ovK / ovX / ovY / ovP (skill override: flee or lure, ai.js). No per-foe allocation: pooled objects carry every field.
-// Shot budget: each living hero's p.shotTok refills at 0.5 + 0.05 x minute per s (at most SHOT_TOK); a ranged attack start against it spends 1 (ai.js).
+// Attack budget: each living hero's p.atkTok refills at 0.5 + 0.05 x minute per s (at most ATK_TOK); a ranged, charge, dive or blink start against it spends 1 (ai.js).
 (function (ED) {
   'use strict';
   const U = ED.U, W = ED.World.prototype;
-  const CONTACT_CD = 1.0, FAR = 900, FAR_ELITE = 1300, RETARGET = 20, SHOT_TOK = 2;
+  const CONTACT_CD = 1.0, FAR = 900, FAR_ELITE = 1300, RETARGET = 20, ATK_TOK = 2;
 
   W.initFoes = function () { this.foePool = []; };
   // Contact damage at the current time: 3 at 0:00 rising to 9 at 15:00 (GAME-DESIGN §7), x the stage damage factor.
@@ -65,7 +65,7 @@
 
   W.updateFoes = function (dt) {
     const list = this.foes, n = list.length, living = this.living, A = this.arena, nl = living.length, tok = (0.5 + 0.05 * this.time / 60) * dt;
-    for (let h = 0; h < nl; h++) { const p = living[h]; p.shotTok = Math.min(SHOT_TOK, p.shotTok + tok); }
+    for (let h = 0; h < nl; h++) { const p = living[h]; p.atkTok = Math.min(ATK_TOK, p.atkTok + tok); }
     for (let i = 0; i < n; i++) {
       const e = list[i];
       if (e.dead) continue;

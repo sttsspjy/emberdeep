@@ -95,7 +95,7 @@
     const zf = ED.ZoneFx && ED.ZoneFx[z.k]; if (zf && zf(B, z, t)) return; // look-keyed draw (boss zones carry no weapon id)
     const k = z.dur > 0 ? U.clamp(z.t / z.dur, 0, 1) : 0;
     if (hostile(z)) {
-      if (z.k === 'aim') return; // ranged aim line: drawn only by drawTele (no ground fill)
+      if (z.k === 'aim' || z.k === 'dash') return; // ranged aim line / charge-dive lane: drawn only by drawTele (no ground fill)
       const pulse = 0.5 + 0.5 * Math.sin(t * 18), fill = (0xff302000 | Math.round(60 + 70 * k + 30 * pulse)) >>> 0, prog = (0xff8a5a00 | Math.round(90 + 60 * k)) >>> 0;
       if (z.len > 0) {
         const ex = z.x + Math.cos(z.a) * z.len, ey = z.y + Math.sin(z.a) * z.len;
@@ -112,12 +112,21 @@
   }
   // Top pass for hostile telegraphs, over the horde: a pulsing translucent fill and a bright 2 px outline, so the area reads through hundreds of foes.
   // Look 'aim' (ranged foe lane): a steady 1 px line from the shooter along z.a, growing 35% -> 100% of z.len over the wind-up, alpha 120 -> 170, a 3 px tick at its tip.
+  // Look 'dash' (charge / dive lane): two 1 px edge lines, alpha 100 -> 160 over the wind-up, and a centre progress line (width max(1, z.w / 4), alpha 90) out to k x len; no pulse, no end caps.
+  // 'aim' and 'dash' draw under the projectiles (lowTele), every other hostile telegraph over them.
+  const lowTele = (z) => z.k === 'aim' || z.k === 'dash';
   function drawTele(B, z, t) {
     const k = z.dur > 0 ? U.clamp(z.t / z.dur, 0, 1) : 0;
     if (z.k === 'aim') {
       const L = z.len * (0.35 + 0.65 * k), ex = z.x + Math.cos(z.a) * L, ey = z.y + Math.sin(z.a) * L;
       B.line(z.x, z.y, ex, ey, 1, (0xff6a4a00 | Math.round(120 + 50 * k)) >>> 0);
       B.rect(Math.round(ex) - 1, Math.round(ey) - 1, 3, 3, (0xffa08a00 | Math.round(150 + 60 * k)) >>> 0);
+      return;
+    }
+    if (z.k === 'dash') {
+      const c = Math.cos(z.a), s = Math.sin(z.a), ex = z.x + c * z.len, ey = z.y + s * z.len, nx = -s * z.w / 2, ny = c * z.w / 2, edge = (0xff6a4a00 | Math.round(100 + 60 * k)) >>> 0;
+      B.line(z.x + nx, z.y + ny, ex + nx, ey + ny, 1, edge); B.line(z.x - nx, z.y - ny, ex - nx, ey - ny, 1, edge);
+      B.line(z.x, z.y, z.x + c * z.len * k, z.y + s * z.len * k, Math.max(1, z.w * 0.25), 0xff8a5a5a);
       return;
     }
     const pulse = 0.5 + 0.5 * Math.sin(t * 18);
@@ -217,6 +226,7 @@
       else if (a.hp !== undefined) ED.Actors.brazier(B, a, t);
       else ED.Actors.obstacle(B, a, wallRgba);
     }
+    if (tele) for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && hostile(z) && lowTele(z) && zoneInView(z)) drawTele(B, z, t); }
     const prs = view.projs;
     for (let i = 0; i < prs.length; i++) { const pr = prs[i]; if (!pr.dead && inView(pr)) drawProj(B, pr, t); }
     for (let i = 0; i < zones.length; i++) { // zone overlays above actors (own-team ones share the zone fade)
@@ -225,7 +235,7 @@
       const f = z.team === 1 ? 1 : zf; if (f < 1) B.fade(f); h.top(B, z, t); if (f < 1) B.fade(1);
     }
     ED.FX.draw(B, t);
-    if (tele) for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && hostile(z) && zoneInView(z)) drawTele(B, z, t); }
+    if (tele) for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && hostile(z) && !lowTele(z) && zoneInView(z)) drawTele(B, z, t); }
     const busy = heroes.length === 1 && (tele > 0 || zl > 0.5 || crowd > 150);
     for (let i = 0; i < heroes.length; i++) { const p = heroes[i]; if (!p.dead && inView(p)) ED.Actors.heroTop(B, p, t, p === me, busy); } // hero markers over FX and telegraphs
     // overlays: hero names / revive bars (co-op), elite HP bars
