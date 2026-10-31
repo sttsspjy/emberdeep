@@ -13,12 +13,13 @@
   // slam (directional: blast at each strike tip; 360 Forms: ring around the hero on the string's last strike), stag (stun s on strike hits).
   // Form keys: cracks (Colossus: crack lines across the first front sweep of a string), cutT (Gale: cut line life s), quake + fiss (Earthsplitter: every quake-th attack, fiss radial fissures), orbit (Tempest: spiral blades).
   // FORM[wid]: full (strikes are 360 spins), spin (honours S.spin; Forms ignore it), gap (s between strikes), one (a single strike per attack; each S.n above 1 adds 2 cracks instead), heart (foes within half reach take that much extra), crack, swirl (spin hits push foes around the hero), gale (big crescents + cut lines), spiral (spiral blades per attack),
-  // quake (fissure ring every S.quake attacks), move (cooldown runs this much faster while moving), big (directional Forms: big foes take that many x from sweeps and crescents).
+  // quake (fissure ring every S.quake attacks), move (cooldown runs this much faster while moving), big (directional Forms: big foes take that many x from sweeps and crescents),
+  // cone (half-angle rad: the swing arc is at most 2 x cone, no back swing, follow-up strikes on the aim line, crescents and cut lines fan within +-0.6 x cone).
   const FORM = {
     cleave: { gap: 0.15, spin: true },
     colossus: { gap: 0.3, crack: true, one: true, heart: 2.5, big: 1.6 },
     whirlwind: { full: true, gap: 0.14, swirl: true, move: 0.3, heart: 1 },
-    gale: { gap: 0.18, gale: true, big: 1.6 },
+    gale: { gap: 0.18, gale: true, big: 1.6, cone: PI / 6 },
     earthsplitter: { full: true, gap: 0.2, quake: true, heart: 1 },
     tempest: { full: true, gap: 0.16, spiral: true, heart: 1 },
   };
@@ -49,15 +50,17 @@
     WAVE.life = Math.min(0.72, 0.5 * Math.sqrt(S.area)) * (S.ret ? 2 : 1);
     w.shoot(p, ws.id, p.x + Math.cos(a) * 14, p.y - 4 + Math.sin(a) * 14, a, S, WAVE);
   };
-  // Gale crescent: big, piercing, leaves a cut line (dps zone along its whole flight, ticking once the crescent has passed its start).
-  const GALE = { look: 'gale', speed: 260, dmg: 0, pierce: 999, r: 16, life: 0.7, knock: 0, ret: false, onHit: projBig };
+  // Gale crescent: big, piercing, starts 2 x its radius out (its body inside the cone), leaves a cut line (dps zone along its whole flight, ticking once the crescent has passed its start);
+  // a returning crescent ends back at its start distance (2 x radius + one step), so its body never sweeps around the hero.
+  const galeTick = (w, pr) => { const p = pr.p; if (pr.back && p && Math.hypot(p.x - pr.x, p.y - pr.y) < pr.r * 2 + 8) pr.dead = true; };
+  const GALE = { look: 'gale', speed: 260, dmg: 0, pierce: 999, r: 16, life: 0.7, knock: 0, ret: false, onHit: projBig, tick: galeTick };
   const CUT = { team: 0, p: null, wid: '', look: 'cut', x: 0, y: 0, a: 0, len: 1, w: 12, dur: 1, tick: 0.25, tickDelay: 0.3, dps: 0, stun: 0 };
   const gale = (w, p, ws, S, a) => {
-    GALE.dmg = S.dmg * 0.7 * DK; GALE.r = 15 * S.area; GALE.knock = S.knock * 0.3; GALE.ret = !!S.ret; GALE.life = 0.68 * (S.ret ? 2 : 1);
-    const x = p.x + Math.cos(a) * 14, y = p.y - 4 + Math.sin(a) * 14;
+    GALE.dmg = S.dmg * 0.4 * DK; GALE.r = 15 * S.area; GALE.knock = S.knock * 0.3; GALE.ret = !!S.ret; GALE.life = 0.9 * (S.ret ? 2 : 1);
+    const o = GALE.r * 2, x = p.x + Math.cos(a) * o, y = p.y - 4 + Math.sin(a) * o;
     w.shoot(p, ws.id, x, y, a, S, GALE);
-    CUT.p = p; CUT.wid = ws.id; CUT.x = x; CUT.y = y; CUT.a = a; CUT.len = Math.min(CRACK_MAX, GALE.speed * 0.68); CUT.w = 12 * Math.sqrt(S.area);
-    CUT.dur = S.cutT; CUT.dps = S.dmg * 0.45; CUT.stun = 0;
+    CUT.p = p; CUT.wid = ws.id; CUT.x = x; CUT.y = y; CUT.a = a; CUT.len = Math.min(CRACK_MAX, GALE.speed * 0.9); CUT.w = 12 * Math.sqrt(S.area);
+    CUT.dur = S.cutT; CUT.dps = S.dmg * 0.3; CUT.stun = 0;
     w.zone(CUT);
   };
   // Crack / fissure: a team-0 warn line from (x, y) along a that erupts after dur (hit, stagger, knock away from its start).
@@ -93,14 +96,14 @@
     ARC.knock = F.swirl ? 0 : S.knock; ARC.stun = S.stag || 0; ARC.look = full ? 'whirl' : 'slash'; ARC.onHit = F.swirl ? swirl : F.big ? arcBig : null;
     SX = cx; SY = cy; SWF = S.knock; HP = p; HW = ws.id;
     const sk = full && !F.full ? SPIN_K : 1;
-    const sides = !full && S.back ? 2 : 1, nw = S.wave | 0;
+    const sides = !full && S.back && !F.cone ? 2 : 1, nw = S.wave | 0, arc = full ? TAU : F.cone ? Math.min(S.arc, 2 * F.cone) : S.arc;
     for (let s = 0; s < sides; s++) {
       const b = a + s * PI;
       DK = (s ? 0.5 : 1) * (k ? 0.8 : 1) * sk;
-      w.arc(p, ws.id, cx, cy, b, R, full ? TAU : S.arc, S.dmg * DK, ARC);
-      if (F.heart) { ARC.noEv = true; w.arc(p, ws.id, cx, cy, b, R * 0.5, full ? TAU : S.arc, S.dmg * DK * F.heart, ARC); ARC.noEv = false; }
+      w.arc(p, ws.id, cx, cy, b, R, arc, S.dmg * DK, ARC);
+      if (F.heart) { ARC.noEv = true; w.arc(p, ws.id, cx, cy, b, R * 0.5, arc, S.dmg * DK * F.heart, ARC); ARC.noEv = false; }
       if (full) continue;
-      if (F.gale && !s) for (let i = 0; i < nw; i++) gale(w, p, ws, S, b + (i - (nw - 1) / 2) * 0.3);
+      if (F.gale && !s) for (let i = 0; i < nw; i++) gale(w, p, ws, S, b + (nw > 1 ? (i / (nw - 1) * 2 - 1) * F.cone * 0.6 : 0));
       else if (!s) for (let i = 0; i < nw; i++) wave(w, p, ws, S, b + (i - (nw - 1) / 2) * 0.35, 0.7);
       if (F.crack && k === 0 && s === 0) { const c = (S.cracks | 0) + (F.one ? 2 * ((S.n | 0) - 1) : 0); for (let i = 0; i < c; i++) crack(w, p, ws, S, b + (c > 1 ? (i / (c - 1) - 0.5) * S.arc * 0.85 : 0), R * 1.9, 0.7, 0.3 + 0.05 * i); }
       if (S.slam && !s) slam(w, p, ws, S, cx + Math.cos(b) * R * 0.8, cy + Math.sin(b) * R * 0.8, 24 * S.area, 0.8);
@@ -131,7 +134,7 @@
       if (F.move && p.moving) ws.cd -= dt * F.move;
       if (!(st.left > 0) || (st.t -= dt) > 0) return;
       st.t = F.gap; st.left--; st.k++;
-      strike(w, p, ws, S, F.full ? st.a + st.k * 0.4 : st.a + (st.k & 1 ? 0.3 : -0.3), st.k, st.left === 0);
+      strike(w, p, ws, S, F.full ? st.a + st.k * 0.4 : F.cone ? st.a : st.a + (st.k & 1 ? 0.3 : -0.3), st.k, st.left === 0);
     },
   };
 
@@ -176,7 +179,7 @@
   // Rending Gale (Edge Wave): swings fling big piercing crescents that leave cutting wind lines.
   ED.addWeapon({
     id: 'gale', name: 'Rending Gale', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', evolved: true, form: true, from: 'cleave', txt: 'Big crescents that leave cutting wind',
-    base: { dmg: 20, cd: 1.3, n: 1, pierce: 0, area: 1.15, speed: 0, dur: 0, knock: 80, range: 56, arc: 2.0, wave: 3, stag: 0, slam: 0, cutT: 1.0 },
+    base: { dmg: 18, cd: 0.7, n: 1, pierce: 0, area: 1.15, speed: 0, dur: 0, knock: 80, range: 56, arc: 2.0, wave: 3, stag: 0, slam: 0, cutT: 1.0 },
     refine: [
       { mods: { wave: 2 }, txt: '+2 crescents' },
       { mods: { cutT: 1.0 }, txt: 'Wind cuts linger twice as long' },

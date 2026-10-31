@@ -6,7 +6,7 @@
 // foe: { hp, dmg } stage multipliers on foe and boss HP and on contact / shot damage. gold: multiplier on elite, boss and victory gold (GAME-DESIGN §9).
 // Roster tiers: each stage's 0:00-5:00, 5:00-10:00 and 10:00-15:00 rosters differ (early kinds fade to weight 0, two new kinds per stage at 5:00 and 10:00; every row keeps a plain chaser kind, the filler when brain caps re-pick); the stage's swarmer is in no roster: it comes in flocks and swarm events.
 // timeline[m] (minute m; the last entry holds for the rest of the run): { rate (spawns/s solo), cap (alive cap solo), floor (density floor, fraction of the alive cap), roster: [[foeId, weight]] }.
-// events.flock: { id, first, every, n: [at first, at 10:00] } a tight pack of swarmers rushing at one hero (spawner.js flockEvent); events.swarm: { first, every, ring: [ids], stampede: [ids] (used when in the current roster), n: [at first, at 12:00] } a closing ring or a stampede line of swarmers; elites: { first, every };
+// events.flock: { id, first, every, n: [at first, at 10:00] } a pack or a line of swarmers flying through one hero's spot (spawner.js flockEvent); events.swarm: { first, every, ring: [ids], stampede: [ids] (used when in the current roster), n: [at first, at 12:00] } a closing ring or a stampede line flying through; elites: { first, every };
 // bench: { t (s), elite (s between elites) } the benchmark phase (HP-heavy roster, density floor 0.7, a 'surge' warning); bosses: [{ t (s), id, final }].
 (function (ED) {
   'use strict';

@@ -2,6 +2,7 @@
 // 1. Every path rank changes the effective numbers or the fired pattern (swings / booms / projectiles / zones of one attack string).
 // 2. Every Form (3 pure + 2 hybrid) is ready only under its rule (its path(s) at rank 3), locks the others once taken, refines twice and deals damage in a foe ring.
 // 3. Damage only in view: a full 3/3/3 build of every Form never hurts a pinned foe 340 px away (outside the 320 px half view) while hurting near ones.
+// 3b. Rending Gale stays in a +-30 deg cone (3/3/3 build): at >= 120 px only rays within 30 deg of the aim are hit; nothing past 45 deg at any distance (crescent bodies near the hero).
 // 4. Bulwark Shove at levels 1..4: zero damage; pushes foes out to the shove edge (elites half, immune foes stay), slows (L3 stuns); L4 ring blocks a foe walking in.
 // 5. Determinism: the same seed and inputs give the same digest (hero, foes, damage) for every Form; client draw hooks run on a mock batch without non-finite args.
 'use strict';
@@ -93,6 +94,21 @@ for (const f of [{ id: 'cleave' }].concat(FORMS)) {
   }
   const hurtFar = far.filter(e => e.hp < e.maxHp).length, hurtNear = near.filter(e => e.hp < e.maxHp).length;
   ok(hurtFar === 0 && hurtNear >= 6, `${f.id} 3/3/3: no damage outside the view (far hurt ${hurtFar}, near hurt ${hurtNear}/8)`);
+}
+
+// 3b. Rending Gale cone (3/3/3, refined, aim +x): pinned foes along rays at 30-240 px; at >= 120 px only rays within +-30 deg are hit (240 px still hit at 20 deg), at any distance none past +-45 deg.
+{
+  const hit = {};
+  for (const deg of [0, 20, 30, 40, 60, 75, 90, 135, 180]) for (const sg of [1, -1]) {
+    const w = world(4), p = w.heroes[0], ws = ranks(w, p, [3, 3, 3]);
+    w.takeForm(p, ws, 'gale'); while (w.refineForm(p, ws)); w.recalc(p, false);
+    const a = sg * deg * Math.PI / 180, F = [30, 60, 90, 120, 180, 240].map(d => ({ d, x: p.x + Math.cos(a) * d, y: p.y - 4 + Math.sin(a) * d }));
+    for (const f of F) f.e = w.spawnFoe('skeleton', f.x, f.y, { hpMul: 1e4 });
+    for (let i = 0; i < 240; i++) { for (const f of F) { f.e.x = f.x; f.e.y = f.y; f.e.kbx = f.e.kby = 0; f.e.spd = 0; } w.input(p.pid, { mx: 0, my: 0, ax: p.x + 100, ay: p.y - 4 }); w.update(C.TICK); w.events.length = 0; }
+    for (const f of F) if (f.e.hp < f.e.maxHp) hit[f.d] = Math.max(hit[f.d] || 0, deg);
+  }
+  const far = Math.max(hit[120] || 0, hit[180] || 0, hit[240] || 0), any = Math.max(...Object.values(hit));
+  ok(far <= 30 && any <= 45 && hit[120] >= 20 && hit[240] >= 20, `gale cone: widest ray hit by distance ${Object.keys(hit).map(d => d + ' px ' + hit[d] + ' deg').join(', ')}`);
 }
 
 // 4. Bulwark Shove (zero damage): foes within r slide out to r x 5/3 and are slowed (L3: stunned), elites half the way, bosses / knockback-immune foes stay; L2 +30% radius; L4 ring foes cannot cross.

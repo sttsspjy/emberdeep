@@ -4,9 +4,10 @@
 // Density floor: while alive < row.floor x alive cap the spawn budget is raised to REFILL x the deficit (at least REFILL_MIN, at most REFILL_MAX per tick), so the screen refills within ~0.4 s.
 // Packs: def.pack foes spawn [min, max] together (1 spawn each);
 // def.wall packs spawn as a line across the hero's direction, def.wall px apart, each member keeping its side offset in e.aa (AI.march).
-// Flock (every events.flock.every s from events.flock.first): one tight pack of the stage's swarmer on the spawn ring at the next golden-angle step around a random living hero, rushing at its spot
-// (8 at 0:40 to 40 at 10:00 x party factor); may exceed the alive cap by FLOCK_OVER (25%), never the hard cap; swarm-brain non-solo kinds come only from flocks and swarm events.
-// Swarm event (every events.swarm.every s): a closing ring of swarmers rushing at one hero's spot, or a stampede line crossing that hero's screen (24 at the first event to 50 by 12:00); rush time uses the foe's paced speed (W.foePace);
+// Flock (every events.flock.every s from events.flock.first): the stage's swarmer on the spawn ring at the next golden-angle step around a random living hero (8 at 0:40 to 40 at 10:00 x party factor),
+// 50/50 a tight pack or a line (x1.5 members, LINE_GAP px apart across the heading); may exceed the alive cap by FLOCK_OVER (25%), never the hard cap; swarm-brain non-solo kinds come only from flocks and swarm events.
+// Swarm event (every events.swarm.every s): a closing ring of swarmers through one hero's spot, or a stampede line crossing that hero's screen (24 at the first event to 50 by 12:00).
+// Flock and swarm-event members fly through (foes.js): a fixed heading through the hero's spot at FLY_V x W.foePace px/s, never chasing; rush time covers the crossing (distance + FLY_PAST px);
 // stampede members cycle the ring ids plus the stampede ids present in the current roster (a dasher member at W.dasherCap is skipped).
 // Benchmark phase (stage bench { t, elite }): from bench.t a 'warn' { kind: 'surge' } event and elites every bench.elite s.
 // Brain caps: a roster pick of a ranged-brain foe while alive ranged foes >= W.shooterCap (summoner: W.summonerCap; charger / diver / blinker together: W.dasherCap) is re-picked among the uncapped roster rows;
@@ -15,11 +16,11 @@
 (function (ED) {
   'use strict';
   const U = ED.U, W = ED.World.prototype;
-  const HARD_CAP = W.HARD_CAP = 900, RING = [380, 460], BOSS_WARN = 5, SWARM_R = 430, REFILL = 0.1, REFILL_MIN = 6, REFILL_MAX = 40, GOLDEN = Math.PI * (3 - Math.sqrt(5)), FLOCK_R = 40, FLOCK_FULL = 600, FLOCK_OVER = 1.25;
+  const HARD_CAP = W.HARD_CAP = 900, RING = [380, 460], BOSS_WARN = 5, SWARM_R = 430, REFILL = 0.1, REFILL_MIN = 6, REFILL_MAX = 40, GOLDEN = Math.PI * (3 - Math.sqrt(5)), FLOCK_R = 40, FLOCK_FULL = 600, FLOCK_OVER = 1.25, LINE_GAP = 14, FLY_V = 120, FLY_PAST = 700;
 
   W.initSpawner = function () {
     const sd = this.sdef, ev = (sd.events && sd.events.swarm) || null, fl = (sd.events && sd.events.flock) || null, el = sd.elites || null;
-    this.sp = { acc: 0, ang: 0, swarmT: ev ? ev.first : Infinity, flockT: fl ? fl.first : Infinity, fopt: { rush: [0, 0, 0] }, eliteT: el ? el.first : Infinity, bossI: 0, warnI: -1, pt: { x: 0, y: 0 }, rows: [], free: [], ids: [], bench: false, nR: -1, nS: -1, nD: -1 };
+    this.sp = { acc: 0, ang: 0, swarmT: ev ? ev.first : Infinity, flockT: fl ? fl.first : Infinity, fopt: { rush: [0, 0, 0, 0] }, eliteT: el ? el.first : Infinity, bossI: 0, warnI: -1, pt: { x: 0, y: 0 }, rows: [], free: [], ids: [], bench: false, nR: -1, nS: -1, nD: -1 };
   };
   // Alive ranged-brain foes allowed: round(min(8, 3 + 0.4 x minute) x party factor); summoners: round(2 x party factor).
   W.shooterCap = function () { return Math.round(Math.min(8, 3 + 0.4 * this.time / 60) * (1 + 0.25 * (this.partyN - 1))); };
@@ -91,24 +92,34 @@
     return c;
   };
 
-  // Flock event around hero p: round(n x party factor) foes of ev.id (n: ev.n[0] at ev.first to ev.n[1] at FLOCK_FULL s, then holds; at most the hard cap room) within FLOCK_R px of a ring point
-  // at the next golden-angle step (members on a blocked spot take the free centre), all rushing along the centre's heading to 30 px short of p's spot. Returns the number spawned.
+  // Fly-through options in sp.fopt: heading (dx, dy), rush time for dist px to the hero's spot plus FLY_PAST, speed FLY_V x pace.
+  const fly = (w, dx, dy, dist) => { const ru = w.sp.fopt.rush, v = FLY_V * w.foePace(); ru[0] = dx; ru[1] = dy; ru[2] = (dist + FLY_PAST) / v; ru[3] = v; return w.sp.fopt; };
+
+  // Flock event around hero p: round(n x party factor) foes of ev.id (n: ev.n[0] at ev.first to ev.n[1] at FLOCK_FULL s, then holds; x1.5 for a line; at most the hard cap and FLOCK_OVER room) around a ring point
+  // at the next golden-angle step, all flying the centre's heading through p's spot. Pack: within FLOCK_R px (blocked spots take the free centre); line: LINE_GAP px apart across the heading (blocked spots skipped).
+  // Returns the number spawned.
   W.flockEvent = function (ev, p) {
-    const sp = this.sp, k = U.clamp((this.time - ev.first) / Math.max(1, FLOCK_FULL - ev.first), 0, 1);
-    const n = Math.min(Math.round((ev.n[0] + (ev.n[1] - ev.n[0]) * k) * (1 + 0.25 * (this.partyN - 1))), HARD_CAP - this.foes.length, Math.round(this.aliveCap() * FLOCK_OVER) - this.foes.length);
+    const sp = this.sp, k = U.clamp((this.time - ev.first) / Math.max(1, FLOCK_FULL - ev.first), 0, 1), line = this.rng.chance(0.5);
+    const n = Math.min(Math.round((ev.n[0] + (ev.n[1] - ev.n[0]) * k) * (1 + 0.25 * (this.partyN - 1)) * (line ? 1.5 : 1)), HARD_CAP - this.foes.length, Math.round(this.aliveCap() * FLOCK_OVER) - this.foes.length);
     sp.ang = (sp.ang + GOLDEN + this.rng.range(-0.3, 0.3)) % U.TAU;
     const pt = n > 0 ? this.ringPoint(p, RING[0], RING[1], false, sp.ang) : null;
     if (!pt) return 0;
-    const cx = pt.x, cy = pt.y, def = ED.FOES[ev.id], dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy) || 1, ru = sp.fopt.rush;
-    ru[0] = dx / d; ru[1] = dy / d; ru[2] = Math.max(0.1, (d - 30) / (def.spd * this.foePace() * 1.3));
+    const cx = pt.x, cy = pt.y, def = ED.FOES[ev.id], dx = p.x - cx, dy = p.y - cy, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d, o = fly(this, ux, uy, d);
+    let c = 0;
     for (let i = 0; i < n; i++) {
-      const a = this.rng.next() * U.TAU, r = this.rng.range(0, FLOCK_R), x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r, free = !ED.Arena.blocked(this.arena, x, y, def.r);
-      this.spawnFoe(ev.id, free ? x : cx, free ? y : cy, sp.fopt);
+      if (line) {
+        const l = (i - (n - 1) / 2) * LINE_GAP, x = cx - uy * l, y = cy + ux * l;
+        if (ED.Arena.blocked(this.arena, x, y, def.r)) continue;
+        this.spawnFoe(ev.id, x, y, o); c++;
+      } else {
+        const a = this.rng.next() * U.TAU, r = this.rng.range(0, FLOCK_R), x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r, free = !ED.Arena.blocked(this.arena, x, y, def.r);
+        this.spawnFoe(ev.id, free ? x : cx, free ? y : cy, o); c++;
+      }
     }
-    return n;
+    return c;
   };
 
-  // Swarm event around hero p: ring (members rush toward p's spot and arrive together) or stampede (a line 460 px behind, rushing across p's screen).
+  // Swarm event around hero p: ring (members fly in from SWARM_R px through p's spot and arrive together) or stampede (a line 460 px behind, flying across p's screen).
   W.swarmEvent = function (ev, p) {
     const k = Math.min(1, Math.max(0, (this.time - ev.first) / Math.max(1, 720 - ev.first)));
     const n = Math.min(Math.round(ev.n[0] + (ev.n[1] - ev.n[0]) * k + this.rng.range(-4, 4)), HARD_CAP - this.foes.length);
@@ -125,17 +136,17 @@
     if (ring) {
       const off = this.rng.next() * U.TAU;
       for (let i = 0; i < n; i++) {
-        const id = ids[i % ids.length], def = ED.FOES[id], v = def.spd * this.foePace() * 1.3, a = off + i / n * U.TAU, x = p.x + Math.cos(a) * SWARM_R, y = p.y + Math.sin(a) * SWARM_R;
+        const id = ids[i % ids.length], def = ED.FOES[id], a = off + i / n * U.TAU, x = p.x + Math.cos(a) * SWARM_R, y = p.y + Math.sin(a) * SWARM_R;
         if (ED.Arena.blocked(A, x, y, def.r)) continue;
-        this.spawnFoe(id, x, y, { rush: [-Math.cos(a), -Math.sin(a), (SWARM_R - 30) / v] });
+        this.spawnFoe(id, x, y, fly(this, -Math.cos(a), -Math.sin(a), SWARM_R));
       }
     } else {
-      const a = this.rng.next() * U.TAU, dx = Math.cos(a), dy = Math.sin(a), cx = p.x - dx * 460, cy = p.y - dy * 460;
+      const a = this.rng.next() * U.TAU, dx = Math.cos(a), dy = Math.sin(a), cx = p.x - dx * 460, cy = p.y - dy * 460, o = fly(this, dx, dy, 460);
       for (let i = 0; i < n; i++) {
-        const id = ids[i % ids.length], def = ED.FOES[id], v = def.spd * this.foePace() * 1.3, o = (i / (n - 1 || 1) - 0.5) * 560, j = this.rng.range(-36, 36), x = cx - dy * o + dx * j, y = cy + dx * o + dy * j;
+        const id = ids[i % ids.length], def = ED.FOES[id], l = (i / (n - 1 || 1) - 0.5) * 560, j = this.rng.range(-36, 36), x = cx - dy * l + dx * j, y = cy + dx * l + dy * j;
         if (ED.Arena.blocked(A, x, y, def.r)) continue;
         if (isDasher(def.ai)) { if (atCap(this, def)) continue; counted(this.sp, def, 1); }
-        this.spawnFoe(id, x, y, { rush: [dx, dy, Math.min(9, 960 / v)] });
+        this.spawnFoe(id, x, y, o);
       }
     }
     this.emit({ t: 'warn', kind: 'swarm', ring, pid: p.pid });

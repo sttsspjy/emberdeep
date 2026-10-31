@@ -154,12 +154,12 @@
     return out;
   };
   const KIND = {
-    chaser: 'Chaser: walks straight at you', swarm: 'Swarmer: fast and weak, comes in flocks', brute: 'Brute: slow and tough, a telegraphed slam',
+    chaser: 'Chaser: walks straight at you', swarm: 'Swarmer: fast and weak; flocks fly straight past you', brute: 'Brute: slow and tough, a telegraphed slam',
     ranged: 'Ranged: stops at range and shoots', exploder: 'Exploder: bursts after a short fuse', charger: 'Charger: a short telegraphed dash, then a pause', diver: 'Diver: closes in, then a telegraphed dive and a pause',
   };
   const foeDetail = (box, id) => {
     const d = ED.FOES[id], ap = appearances()[id] || [];
-    const kind = (KIND[d.ai] || '').split(': '), desc = kind[1] ? kind[1][0].toUpperCase() + kind[1].slice(1) : '';
+    const kind = (d.ai === 'swarm' && d.solo ? 'Swarmer: fast and weak, chases you' : KIND[d.ai] || '').split(': '), desc = kind[1] ? kind[1][0].toUpperCase() + kind[1].slice(1) : '';
     head(box, foeIcon(id), d.name, d.split ? 'Splitter' : kind[0], d.split ? 'Splits when it dies' : desc);
     chips(box, [['HP', d.hp], ['Speed', d.spd], ['XP', d.xp], d.kb === 0 ? ['Knockback', 'immune'] : null]);
     const L = [];
@@ -207,7 +207,7 @@
     h3(box, 'Bosses');
     for (const b of sd.bosses) if (ED.FOES[b.id]) { const on = seen('foes', b.id), r = ref(box, foeIcon(b.id), on ? ED.FOES[b.id].name : '???', U.fmtTime(b.t) + (b.final ? ', final boss' : '')); if (!on) r.classList.add('unseen'); }
     const fl = sd.events && sd.events.flock, ev = sd.events && sd.events.swarm;
-    if (fl && ED.FOES[fl.id]) para(box, 'Flock of ' + ED.FOES[fl.id].name + 's every ' + fl.every + ' s from ' + U.fmtTime(fl.first));
+    if (fl && ED.FOES[fl.id]) para(box, 'Flock of ' + ED.FOES[fl.id].name + 's every ' + fl.every + ' s from ' + U.fmtTime(fl.first) + ', flying past');
     if (ev) para(box, 'Swarm wave every ' + ev.every + ' s from ' + U.fmtTime(ev.first));
     if (sd.elites) para(box, 'Elite every ' + sd.elites.every + ' s from ' + U.fmtTime(sd.elites.first) + ': it drops a chest');
     para(box, best ? 'Your best: ' + U.fmtTime(best.time) + ', ' + U.fmtNum(best.kills) + ' kills, level ' + best.level + (best.won ? ', beaten' : '') : 'Not played yet', best && best.won ? 'ok' : 'mut');

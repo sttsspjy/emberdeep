@@ -18,11 +18,11 @@ Base: 28 dmg, cd 1.1 s, one 115° arc (2.0 rad), reach 56 px, knock 120. Attacks
 |---|---|---|---|---|
 | Colossus Blade | Greatblade 3 | One slow 200° sweep (58 dmg, cd 1.8 s, area 1.5, stagger 0.5 s); foes within half reach take +250%; big foes ×1.6; 3 cracks fan across the sweep and erupt 0.3 s later (≤ 200 px, 0.7×). Extra swings become +2 cracks each. | +2 ground cracks | +20% size, longer stagger |
 | Whirlwind | Whirl 3 | 360° spins (12 dmg, cd 0.9 s, reach 50 × area 1.2 = 60 px); hits swirl foes around and outward (knock 150, elites half); cooldown runs 1.3× while moving; inner half +100%. | +1 spin per whirl | +15% spin size |
-| Rending Gale | Edge Wave 3 | Swings fling 3 big piercing wind crescents (0.7×, ~175 px) that leave cut lines (0.45× dmg/s, 1 s); big foes take ×1.6 from sweeps and crescents. | +2 crescents | Cuts linger twice as long |
+| Rending Gale | Edge Wave 3 | A ±30° cone straight ahead (18 dmg, cd 0.7 s): the swing arc is at most 60°, no back swing, extra swings stay on the aim line; 3 big piercing wind crescents (0.4×, start 2 × their radius out, ~235 px) fan within ±18° and leave cut lines (0.3× dmg/s, 1 s, ≤ 200 px); returning crescents end at their start distance; big foes take ×1.6 from sweeps and crescents. | +2 crescents | Cuts linger twice as long |
 | Earthsplitter | Greatblade 3 + Whirl 3 | Heavy spins (25 dmg, cd 1.2 s, reach 46 px × Greatblade area 1.3 = 60 px, knock 160, inner half +100%); every 3rd attack 8 fissures radiate (≤ 200 px, erupt 0.35 s) plus a ground slam. | +4 fissures | Every 2nd attack |
 | Blade Tempest | Whirl 3 + Edge Wave 3 | Spins (11 dmg, reach 60 px, knock 120, inner half +100%) release 3 blades that circle at 48 px, then spiral out to ~200 px (0.18×, re-hit 0.6 s); back = a second counter-turning ring; waves add blades. | +2 blades | +1 blade, +20% blade size |
 
-Path keys in Forms: dmg / area / cd / stagger / slam / waves / return apply to every Form; back mirrors Colossus and Gale sweeps (Gale crescents too) and doubles Tempest rings; extra swings repeat spins (Colossus: +2 cracks each); spin applies to Cleave only. Velocity does not grow spin reach (area does).
+Path keys in Forms: dmg / area / cd / stagger / slam / waves / return apply to every Form; back mirrors Colossus sweeps and doubles Tempest rings; Gale ignores back and arc beyond its cone; extra swings repeat spins (Colossus: +2 cracks each); spin applies to Cleave only. Velocity does not grow spin reach (area does).
 
 ## Q: Bulwark Shove (`shove`, cd 9 s)
 
@@ -38,20 +38,20 @@ Zero damage. Every foe within 120 px of the knight (r, scales with reach) slides
 
 | build | form | kind | crowd wpn | kills/s | single wpn |
 |---|---|---|---|---|---|
-| base | - |  | 746 | 1.1 | 22 |
-| p0 | - |  | 1,660 | 6.7 | 45 |
-| p1 | - |  | 1,797 | 7.6 | 32 |
-| p2 | - |  | 1,982 | 8.3 | 98 |
-| all | - |  | 3,815 | 18.1 | 142 |
-| f0 | colossus | dir | 4,873 | 23.5 | 268 |
-| f1 | whirlwind | 360° | 2,616 | 12.3 | 36 |
-| f2 | gale | dir | 4,771 | 23.3 | 256 |
-| h0 | earthsplitter | 360° | 2,648 | 11.7 | 96 |
-| h1 | tempest | 360° | 2,611 | 11.6 | 35 |
-| F0 | colossus | dir | 6,713 | 32.8 | 423 |
-| F1 | whirlwind | 360° | 2,382 | 9.8 | 135 |
-| F2 | gale | dir | 7,180 | 36.3 | 612 |
-| H0 | earthsplitter | 360° | 3,708 | 17.3 | 138 |
-| H1 | tempest | 360° | 2,704 | 10.8 | 80 |
+| base | - |  | 679 | 8.6 | 25 |
+| p0 | - |  | 1,176 | 16.1 | 52 |
+| p1 | - |  | 1,228 | 16.6 | 37 |
+| p2 | - |  | 1,596 | 21.9 | 164 |
+| all | - |  | 2,191 | 29.9 | 216 |
+| f0 | colossus | dir | 2,821 | 39.0 | 268 |
+| f1 | whirlwind | 360° | 1,442 | 19.9 | 36 |
+| f2 | gale | dir | 2,519 | 34.5 | 510 |
+| h0 | earthsplitter | 360° | 1,668 | 21.8 | 96 |
+| h1 | tempest | 360° | 1,391 | 16.8 | 35 |
+| F0 | colossus | dir | 3,531 | 48.1 | 486 |
+| F1 | whirlwind | 360° | 1,678 | 22.1 | 135 |
+| F2 | gale | dir | 3,345 | 47.0 | 1,071 |
+| H0 | earthsplitter | 360° | 2,220 | 29.8 | 138 |
+| H1 | tempest | 360° | 2,072 | 26.5 | 80 |
 
-Role rule (f / h rows): 360° Forms (Whirlwind, Earthsplitter, Blade Tempest) crowd ≤ 0.6 × directional mean (4,822 → ≤ 2,893); directional single ≥ 2 × the 360° best (96 → ≥ 192). Whirlwind's numbers are standing still; moving spins 1.3× faster.
+Role rule (f / h rows): 360° Forms (Whirlwind, Earthsplitter, Blade Tempest) crowd ≤ 0.6 × directional mean (2,670 → ≤ 1,602); directional single ≥ 2 × the 360° best (96 → ≥ 192). Whirlwind's numbers are standing still; moving spins 1.3× faster.

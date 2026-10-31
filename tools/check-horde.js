@@ -9,7 +9,8 @@
 // 3. Spawner: a weaponless god hero per stage reaches the alive cap by the mid-game, sees swarm events every 120 s from 2:00, elites every 60 s from 2:30, bosses at 5/10/15 min; a missing boss script spawns a stand-in;
 //    from an empty field at 6:00 / 8:00 (solo and a party of 4) the alive count refills to the density floor within 0.5 s without passing the cap; at the floor the rate is x1.
 //    benchmark phase: a 'surge' warning at 12:00, elites every 30 s.
-//    flocks: every 18 s from 0:40, 8 -> 40 swarmers by 10:00 x party factor, one pack within 40 px on the spawn ring rushing at the hero's spot; past the alive cap, not past the hard cap.
+//    flocks: every 18 s from 0:40, 8 -> 40 swarmers by 10:00 x party factor, a pack within 40 px or a line (x1.5, >= 300 px at 10:00) on the spawn ring; past the alive cap, not past the hard cap;
+//    flock, ring and stampede members fly through (fixed heading and speed, never back), despawn 360 px outside the view (no gem, kill or 'die'), never recycle, despawn at the arena bound.
 //    brain caps: shooters, summoners and dashers (charger / diver / blinker) never pass their alive caps; dasher packs and stampedes trim to the room left.
 // 4. Recycling: a foe left 1000 px behind returns to the spawn ring. 5. Arena: deterministic, obstacle count in range, centre clear, features keep lanes.
 // 6. Gold: elite coins, mid-boss coin, final boss and victory gold x the stage gold multiplier; w.summary().gold carries it.
@@ -296,29 +297,108 @@ for (const st of [0, 1, 2]) {
   const sk = ED.FOES.skeleton.spd, s0 = (w.time = 0, w.spawnFoe('skeleton', 0, 0).spd), s2 = (w.time = 120, w.spawnFoe('skeleton', 0, 0).spd), s4 = (w.time = 240, w.spawnFoe('skeleton', 0, 0).spd);
   ok(Math.abs(s0 - sk * 0.8) < 1e-9 && Math.abs(s2 - sk * 0.9) < 1e-9 && s4 === sk, `foe pace: skeleton ${s0.toFixed(1)} / ${s2.toFixed(1)} / ${s4} px/s at 0:00 / 2:00 / 4:00`);
 }
-{ // flocks: a weaponless god hero, roster spawns off, sees one flock every 18 s from 0:40; sizes by time and party; one tight pack on the ring rushing at the hero's spot; past the alive cap, not the hard cap
-  const flockWorld = (n, stage) => {
-    const w = new ED.World({ seed: 78, stage: stage || 0, players: players(Array(n).fill('knight')), cheats: { god: true } });
+{ // flocks: a weaponless god hero, roster spawns off, sees one flock every 18 s from 0:40; sizes by time, party and formation (line x1.5); a tight pack or a line across the heading on the ring,
+  // every member flying through the hero's spot; past the alive cap, not the hard cap
+  const flockWorld = (n, stage, seed) => {
+    const w = new ED.World({ seed: seed || 78, stage: stage || 0, players: players(Array(n).fill('knight')), cheats: { god: true } });
     for (const h of w.heroes) { h.weapons.length = 0; h.skills.length = 0; }
     w.sdef = Object.assign({}, w.sdef, { timeline: w.sdef.timeline.map(r => Object.assign({}, r, { rate: 0, floor: 0 })), events: { flock: w.sdef.events.flock }, elites: null, bosses: [] });
     return w;
   };
-  const w = flockWorld(1), p = w.heroes[0], times = [];
+  const size = (fl, t, n, line) => { const k = U.clamp((t - fl.first) / (600 - fl.first), 0, 1); return Math.round((fl.n[0] + (fl.n[1] - fl.n[0]) * k) * (1 + 0.25 * (n - 1)) * (line ? 1.5 : 1)); };
+  // members F around hero h: centroid distance d, line (on one line across the heading), span (lateral extent), head (heading at h's spot), tight (pack within 80 px)
+  const shape = (F, h) => {
+    const cx = F.reduce((s, e) => s + e.x, 0) / (F.length || 1), cy = F.reduce((s, e) => s + e.y, 0) / (F.length || 1), d = Math.hypot(cx - h.x, cy - h.y), ux = (h.x - cx) / d, uy = (h.y - cy) / d;
+    const along = F.map(e => (e.x - cx) * ux + (e.y - cy) * uy), lat = F.map(e => -(e.x - cx) * uy + (e.y - cy) * ux);
+    const line = F.length > 1 && along.every(v => Math.abs(v) < 1), span = F.length ? Math.max(...lat) - Math.min(...lat) : 0;
+    const head = F.every(e => e.rushT > 0 && Math.abs(e.rx - ux) < 0.15 && Math.abs(e.ry - uy) < 0.15), tight = F.every(e => Math.hypot(e.x - cx, e.y - cy) <= 80);
+    return { n: F.length, d, line, span, head, tight, id: F.length ? F[0].def.id : '' };
+  };
+  const FL0 = ED.STAGES[0].events.flock, w = flockWorld(1), p = w.heroes[0], times = [], forms = [];
   let last = 0;
-  for (let i = 0; w.time < 100; i++) { w.input('p1', { mx: 0, my: 0, ax: p.x + 50, ay: p.y }); w.update(C.TICK); w.events.length = 0; if (w.foes.length > last) times.push(Math.round(w.time) + 'x' + (w.foes.length - last)); last = w.foes.length; }
-  ok(times.join() === '40x8,58x9,76x10,94x11', `flocks at ${times.join(', ')} (time s x size)`);
-  const one = (n, t, fill, stage) => {
-    const v = flockWorld(n, stage), h = v.heroes[0]; v.time = t; v.sp.flockT = t;
+  for (let i = 0; w.time < 100; i++) {
+    const n0 = w.foes.length; w.input('p1', { mx: 0, my: 0, ax: p.x + 50, ay: p.y }); w.update(C.TICK); w.events.length = 0;
+    if (w.foes.length > last) { times.push(Math.round(w.time) + 'x' + (w.foes.length - last)); forms.push(shape(w.foes.slice(n0), p).line ? 'line' : 'pack'); }
+    last = w.foes.length;
+  }
+  const want = times.map((s, i) => { const t = +s.split('x')[0]; return t + 'x' + size(FL0, t, 1, forms[i] === 'line'); });
+  ok(times.length === 4 && times.join() === want.join() && forms.includes('line') && forms.includes('pack'), `flocks at ${times.join(', ')} (time s x size; ${forms.join(', ')})`);
+  const one = (n, t, fill, stage, seed) => {
+    const v = flockWorld(n, stage, seed), h = v.heroes[0]; v.time = t; v.sp.flockT = t;
     for (let i = 0; i < fill; i++) v.spawnFoe('skeleton', h.x + 600 + (i % 30) * 4, h.y + Math.floor(i / 30) * 4);
-    const n0 = v.foes.length; v.updateSpawner(0); const F = v.foes.slice(n0);
-    const cx = F.reduce((s, e) => s + e.x, 0) / (F.length || 1), cy = F.reduce((s, e) => s + e.y, 0) / (F.length || 1), d = Math.hypot(cx - h.x, cy - h.y);
-    const head = F.every(e => e.rushT > 0 && Math.abs(e.rx - (h.x - cx) / d) < 0.15 && Math.abs(e.ry - (h.y - cy) / d) < 0.15), tight = F.every(e => Math.hypot(e.x - cx, e.y - cy) <= 80);
-    return { n: F.length, d, head, tight, id: F.length ? F[0].def.id : '', cap: v.aliveCap(), alive: v.foes.length };
+    const n0 = v.foes.length; v.updateSpawner(0);
+    return Object.assign(shape(v.foes.slice(n0), h), { cap: v.aliveCap(), alive: v.foes.length });
   };
   const a = one(1, 600, 0), b = one(4, 600, 0), c = one(1, 900, 0), d = one(1, 40, 80), e = one(4, 900, 880), f = one(1, 600, 750), g = one(1, 300, 0, 2);
-  ok(a.n === 40 && b.n === 70 && c.n === 40 && g.n === 23 && g.id === 'starspawn', `flock size: ${a.n} at 10:00 solo, ${b.n} x4, ${c.n} at 15:00, Abyss ${g.n} ${g.id} at 5:00`);
-  ok(a.head && a.tight && a.d >= 340 && a.d <= 470, `flock: one pack ${Math.round(a.d)} px out, every member rushing at the hero's spot`);
-  ok(d.n === 8 && d.alive > d.cap && f.alive === Math.round(f.cap * 1.25) && e.n === 20 && e.alive === 900, `flock past the alive cap (${d.alive} alive, cap ${d.cap}), at most +25% (${f.alive} at cap ${f.cap}); hard cap holds (${e.n} spawned at 880 -> ${e.alive})`);
+  ok(a.n === size(FL0, 600, 1, a.line) && b.n === size(FL0, 600, 4, b.line) && c.n === size(FL0, 900, 1, c.line) && g.n === size(ED.STAGES[2].events.flock, 300, 1, g.line) && g.id === 'starspawn',
+    `flock size: ${a.n} at 10:00 solo, ${b.n} x4, ${c.n} at 15:00, Abyss ${g.n} ${g.id} at 5:00 (lines x1.5)`);
+  let pk = null, ln = null;
+  for (let s = 1; s < 40 && !(pk && ln); s++) { const r = one(1, 600, 0, 0, s); if (r.line) ln = ln || r; else pk = pk || r; }
+  ok(pk && pk.head && pk.tight && pk.d >= 340 && pk.d <= 470, `pack flock: ${pk && pk.n} within 80 px, ${pk && Math.round(pk.d)} px out, every member heading through the hero's spot`);
+  ok(ln && ln.head && ln.n === 60 && ln.span >= 300 && ln.d >= 340 && ln.d <= 470, `line flock: ${ln && ln.n} on one line spanning ${ln && Math.round(ln.span)} px across the heading, ${ln && Math.round(ln.d)} px out, heading through the hero's spot`);
+  ok((d.n === 8 || d.n === 12) && d.alive > d.cap && f.alive === Math.round(f.cap * 1.25) && e.n === 20 && e.alive === 900, `flock past the alive cap (${d.alive} alive, cap ${d.cap}), at most +25% (${f.alive} at cap ${f.cap}); hard cap holds (${e.n} spawned at 880 -> ${e.alive})`);
+
+  // fly-through: pack, line, closing ring and stampede members (still hero) keep heading and speed (120 x pace), never come back once 40 px past the hero,
+  // despawn more than 360 px outside its view; no gem, kill or 'die'
+  const V = ED.HERO_VIEW, OUT = 360;
+  const flyRun = (spawn) => {
+    const v = flockWorld(1, 0, 3), h = v.heroes[0]; v.time = 600; v.sp.flockT = Infinity;
+    const n0 = v.foes.length; spawn(v, h); const F = v.foes.slice(n0), ids = new Set(F.map(m => m.id));
+    const st = F.map(m => ({ m, id: m.id, rx: m.rx, ry: m.ry, best: -Infinity, past: false, done: false }));
+    let turn = 0, back = 0, slow = 0, die = 0, inView = 0, t = 0;
+    for (; t < 20 * 60 && st.some(s => !s.done); t++) {
+      v.input('p1', { mx: 0, my: 0, ax: h.x + 50, ay: h.y }); v.update(C.TICK);
+      for (const ev of v.events) if (ev.t === 'die' && ids.has(ev.id)) die++;
+      v.events.length = 0;
+      for (const s of st) {
+        const m = s.m;
+        if (s.done) continue;
+        if (m.dead || m.id !== s.id) {
+          s.done = true;
+          if (Math.abs(m.x - h.x) <= V.hw + OUT && Math.abs(m.y - h.y + V.oy) <= V.hh + OUT) inView++;
+          continue;
+        }
+        if (m.rx !== s.rx || m.ry !== s.ry) turn++;
+        if (!(m.freezeT > 0 || m.stunT > 0) && Math.abs(Math.hypot(m.vx, m.vy) - 120 * v.foePace()) > 1e-6) slow++;
+        const proj = (m.x - h.x) * s.rx + (m.y - h.y) * s.ry;
+        if (proj > 40) s.past = true; // cleared the hero body and the crossing crowd (separation nudges)
+        if (s.past && proj < s.best - 2) back++;
+        s.best = Math.max(s.best, proj);
+      }
+    }
+    const gems = v.pickups.filter(g => !g.dead && g.k === 'gem').length;
+    return { n: F.length, gone: st.every(s => s.done), t: t / 60, turn, back, slow, die, inView, gems, kills: v.kills };
+  };
+  const flockPick = (line) => (v, h) => {
+    for (let i = 0; i < 40; i++) {
+      const n0 = v.foes.length, c = v.flockEvent(FL0, h), F = v.foes.slice(n0);
+      if (c && shape(F, h).line === line) return;
+      for (const m of F) v.despawnFoe(m);
+      v.compact();
+    }
+  };
+  const swarmPick = (ring) => (v, h) => {
+    for (let i = 0; i < 40; i++) {
+      const n0 = v.foes.length; v.swarmEvent(ED.STAGES[0].events.swarm, h);
+      const ev = v.events.find(x => x.t === 'warn' && x.kind === 'swarm'); v.events.length = 0;
+      if (ev && ev.ring === ring) return;
+      for (const m of v.foes.slice(n0)) v.despawnFoe(m);
+      v.compact();
+    }
+  };
+  for (const [name, fn] of [['pack', flockPick(false)], ['line', flockPick(true)], ['ring', swarmPick(true)], ['stampede', swarmPick(false)]]) {
+    const r = flyRun(fn);
+    ok(r.n > 0 && r.gone && !r.turn && !r.back && !r.slow && !r.die && !r.inView && !r.gems && !r.kills,
+      `${name} fly-through: ${r.n} members all gone in ${r.t.toFixed(1)} s; heading changes ${r.turn}, speed off ${r.slow}, came back ${r.back}, despawned within view+360 ${r.inView}, 'die' ${r.die}, gems ${r.gems}, kills ${r.kills}`);
+  }
+  { // never recycled: a rusher 1000 px out (beyond FAR) flying at the hero keeps its course; one flying into the arena bound despawns without a 'die'
+    const v = flockWorld(1, 0, 3), h = v.heroes[0], m = v.spawnFoe('bat', h.x + 1000, h.y, { rush: [-1, 0, 20, 96] }), x0 = m.x, id = m.id;
+    let die = 0;
+    for (let i = 0; i < 70; i++) { v.input('p1', { mx: 0, my: 0, ax: h.x + 50, ay: h.y }); v.update(C.TICK); v.events.length = 0; }
+    const moved = x0 - m.x, alive = !m.dead && m.id === id, wall = v.spawnFoe('bat', 20, h.y, { rush: [-1, 0, 20, 96] });
+    for (let i = 0; i < 30; i++) { v.input('p1', { mx: 0, my: 0, ax: h.x + 50, ay: h.y }); v.update(C.TICK); for (const ev of v.events) if (ev.t === 'die') die++; v.events.length = 0; }
+    ok(alive && Math.abs(m.y - h.y) < 1e-6 && Math.abs(moved - 96 * 70 / 60) < 1 && wall.dead && !die, `rushers never recycle: ${Math.round(moved)} px straight in 70 ticks from 1000 px out; a rusher at the arena bound despawns silently`);
+  }
 }
 { // benchmark phase: a 'surge' warning at 12:00, then elites every 30 s
   const w = new ED.World({ seed: 77, stage: 1, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];

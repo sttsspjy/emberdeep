@@ -1,12 +1,12 @@
 // Foe pool, spawn, per-tick update (statuses, knockback, brain, contact), kill and drops, elites, off-screen recycling (GAME-DESIGN §7).
 // Foe fields: ARCHITECTURE §4 plus internal ones: tgt (nearest living hero, retargeted every RETARGET ticks staggered by id), cd (contact cooldown), age, invulnT, takeMul (damage taken factor),
-// scale (draw scale), final (final boss), rushT / rx / ry (stampede or closing ring: fixed heading), burnTick, hev / hevT (hit aggregation), enraged,
+// scale (draw scale), final (final boss), rushT / rx / ry (fly-through rusher: rush time left, fixed heading; spd is its flight speed), burnTick, hev / hevT (hit aggregation), enraged,
 // acd (attack cooldown), aa (locked attack angle), tz / tzId (the brain's live telegraph zone; ai.js), ovT / ovK / ovX / ovY / ovP (skill override: flee or lure, ai.js). No per-foe allocation: pooled objects carry every field.
 // Attack budget: each living hero's p.atkTok refills at 0.5 + 0.05 x minute per s (at most ATK_TOK); a ranged, charge, dive or blink start against it spends 1 (ai.js).
 (function (ED) {
   'use strict';
   const U = ED.U, W = ED.World.prototype;
-  const CONTACT_CD = 1.0, FAR = 900, FAR_ELITE = 1300, RETARGET = 20, ATK_TOK = 2;
+  const CONTACT_CD = 1.0, FAR = 900, FAR_ELITE = 1300, RETARGET = 20, ATK_TOK = 2, FLY_OUT = 360, VW = ED.HERO_VIEW;
   const SPLIT_ARC = 70 * Math.PI / 180, SPLIT_JIT = 0.08; // splitter children: half-arc half width, angle jitter (rad); sum < 90 deg
 
   W.initFoes = function () { this.foePool = []; };
@@ -22,7 +22,7 @@
   ED.bossHp = (t, k) => Math.round(1500 * Math.pow(t / 300, 2) * k); // boss HP at spawn time t s: 1500 x (t / 300)^2; k = party x stage HP factor (GAME-DESIGN §8)
   W.bossHp = function (t) { return ED.bossHp(t, this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1)); };
 
-  // Spawns foe k (id string or FOE_IDX) at (x, y). opts: { elite, hpMul, rush: [dx, dy, s] (fixed heading for s seconds, default 6) }. Returns the foe.
+  // Spawns foe k (id string or FOE_IDX) at (x, y). opts: { elite, hpMul, rush: [dx, dy, s, v] (fly-through: heading (dx, dy) at v px/s, rush time s) }. Returns the foe.
   W.spawnFoe = function (k, x, y, opts) {
     const def = typeof k === 'string' ? ED.FOES[k] : ED.FOES[ED.FOE_IDS[k]];
     if (!def) return null;
@@ -35,7 +35,7 @@
     e.hitT = 0; e.vars = null; e.tgt = null; e.cd = 0; e.age = 0; e.invulnT = 0; e.takeMul = def.take || 1; e.scale = def.scale || 1; e.hev = 0; e.hevT = -1;
     e.rushT = 0; e.rx = 0; e.ry = 0; e.acd = 0.6 + (e.id % 7) * 0.2; e.aa = 0; e.tz = null; e.tzId = 0; e.dead = false;
     e.ovT = 0; e.ovK = 0; e.ovX = 0; e.ovY = 0; e.ovP = null; e.brI = 0; e.brT = 0;
-    if (opts && opts.rush) { e.rushT = opts.rush[2] || 6; e.rx = opts.rush[0]; e.ry = opts.rush[1]; }
+    if (opts && opts.rush) { e.rushT = opts.rush[2]; e.rx = opts.rush[0]; e.ry = opts.rush[1]; e.spd = opts.rush[3]; }
     if (opts && opts.elite) this.promoteElite(e);
     this.foes.push(e);
     return e;
@@ -55,6 +55,19 @@
     ED.Arena.move(this.arena, e, e.vx * dt, e.vy * dt, e.r);
     if (dx < -0.5) e.face = -1; else if (dx > 0.5) e.face = 1;
     return d;
+  };
+
+  // Removes e without a kill: no kill credit, 'die' event or drops; snapshots stop carrying it.
+  W.despawnFoe = function (e) { if (e.st) this.foeCancel(e); e.dead = true; e.hp = 0; e.hpQ = 0; };
+  // True when fly-through rusher e is more than FLY_OUT px outside every living hero's view and (while its rush time lasts) heading away from each.
+  W.flyGone = function (e) {
+    const L = this.living;
+    for (let h = 0; h < L.length; h++) {
+      const p = L[h], dx = e.x - p.x, dy = e.y - p.y;
+      if (Math.abs(dx) <= VW.hw + FLY_OUT && Math.abs(dy + VW.oy) <= VW.hh + FLY_OUT) return false;
+      if (e.rushT > 0 && dx * e.rx + dy * e.ry <= 0) return false;
+    }
+    return true;
   };
 
   // Drops the brain's live telegraph (if still its own) and returns e to moving.
@@ -96,12 +109,10 @@
         e.tgt = tg;
       }
       if (e.freezeT > 0 || e.stunT > 0) { e.vx = e.vy = 0; if (e.st && !e.boss) this.foeCancel(e); }
-      else if (e.rushT > 0) {
+      else if (e.rx || e.ry) { // fly-through rusher: keeps its heading, never chases; despawns at the arena bound or once gone past every hero's view
         e.rushT -= dt;
-        const v = e.spd * 1.3; e.vx = e.rx * v; e.vy = e.ry * v;
-        e.x += e.vx * dt; e.y += e.vy * dt; e.face = e.rx < 0 ? -1 : 1;
-        if (e.x < -60 || e.y < -60 || e.x > A.size + 60 || e.y > A.size + 60) e.rushT = 0;
-        ED.Arena.collide(A, e, e.r);
+        e.vx = e.rx * e.spd; e.vy = e.ry * e.spd; e.face = e.rx < 0 ? -1 : 1;
+        if (ED.Arena.move(A, e, e.vx * dt, e.vy * dt, e.r) === true || (nl && this.flyGone(e))) { this.despawnFoe(e); continue; }
       } else if (e.ovT > 0) ED.AI.override(this, e, dt);
       else if (tg) {
         const brain = ED.AI[e.def.ai] || ED.AI.chaser;
@@ -114,8 +125,8 @@
           if ((p.x - e.x) * (p.x - e.x) + (p.y - e.y) * (p.y - e.y) <= rr * rr) { if (this.hurtHero(p, e.dmg, e) > 0) e.cd = CONTACT_CD; break; }
         }
       }
-      // off-screen recycling (once a second per foe): a normal foe further than FAR (elites FAR_ELITE) from every hero moves to a fresh spawn point ahead of a hero
-      if (!e.boss && nl && e.rushT <= 0 && (this.tick + e.id) % 60 === 0) {
+      // off-screen recycling (once a second per foe): a normal non-rusher foe further than FAR (elites FAR_ELITE) from every hero moves to a fresh spawn point ahead of a hero
+      if (!e.boss && nl && !(e.rx || e.ry) && (this.tick + e.id) % 60 === 0) {
         const far = e.elite ? FAR_ELITE : FAR;
         let out = true;
         for (let h = 0; h < nl; h++) { const p = living[h]; if ((p.x - e.x) * (p.x - e.x) + (p.y - e.y) * (p.y - e.y) < far * far) { out = false; break; } }
