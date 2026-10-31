@@ -261,7 +261,7 @@ ok(pC.lobby.status === 'closed' && !pC.lobby.inRun, 'client party closed');
 function scene(n, spread) {
   const W2 = new ED.World({ seed: 42, stage: 0, players: [{ pid: 'host', name: 'H', slot: 0, cls: 'ranger', meta: { shop: {}, sigs: [] } }, { pid: 'c', name: 'C', slot: 1, cls: 'knight', meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
   for (const row of W2.sdef.timeline) row.rate = 0;
-  W2.sp.swarmT = W2.sp.eliteT = Infinity; W2.sdef = Object.assign({}, W2.sdef, { bosses: [] });
+  W2.sp.swarmT = W2.sp.eliteT = W2.sp.flockT = Infinity; W2.sdef = Object.assign({}, W2.sdef, { bosses: [] });
   const p = W2.heroes[0], c = W2.heroes[1], rng = U.RNG(9), ids = ['bat', 'skeleton', 'slime', 'skelknight', 'bonearcher'];
   W2.setRanks(p, p.weapons[0], 9, true);
   for (const id of SUPS.slice(0, 2)) W2.setRanks(p, W2.addWeapon(p, id), 9, true); // all 3 slots: hero weapon + 2 supports, Forms refined
@@ -324,7 +324,7 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
     W3.recalc(p, true);
   });
   for (const row of W3.sdef.timeline) row.rate = 0;
-  W3.sp.swarmT = W3.sp.eliteT = Infinity; W3.sdef = Object.assign({}, W3.sdef, { bosses: [] });
+  W3.sp.swarmT = W3.sp.eliteT = W3.sp.flockT = Infinity; W3.sdef = Object.assign({}, W3.sdef, { bosses: [] });
   const rng = U.RNG(3), ids = W3.sdef.timeline[W3.sdef.timeline.length - 1].roster.map(r => r[0]).filter(id => ED.FOES[id] && !ED.FOES[id].boss);
   const top = () => { let k = 0; while (W3.foes.length < 900 && k++ < 400) { const p = W3.heroes[rng.int(0, 3)], a = rng.next() * U.TAU, d = 60 + Math.sqrt(rng.next()) * 380, x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d; if (!ED.Arena.blocked(W3.arena, x, y, 8)) W3.spawnFoe(ids[rng.int(0, ids.length - 1)], x, y, { hpMul: 1 }); } };
   const pidIdx = {}; W3.heroes.forEach((p, i) => { pidIdx[p.pid] = i; });

@@ -10,7 +10,7 @@ Base: 24 dmg, cd 1.1 s, one 115° arc (2.0 rad), reach 56 px, knock 120. Attacks
 |---|---|---|---|
 | Greatblade → Colossus Blade | Bigger, slower swings that stagger (area +30%, cd +15%, stun 0.3 s) | Much wider arc, +30% damage (arc +0.9 rad) | Each swing ends in a ground slam (blast at the tip, r 24 × area, 0.8×) |
 | Whirl → Whirlwind | Also swings behind you | +1 swing per attack | Last swing becomes a full spin (Cleave only, 0.6×) |
-| Edge Wave → Rending Gale | Swings fling a crescent wave (piercing, 0.45×, ~125 px) | +2 waves in a fan | Waves fly back to you, +20% damage |
+| Edge Wave → Rending Gale | Swings fling a crescent wave (piercing, 0.7×, ~125 px) | +2 waves in a fan | Waves fly back to you, +20% damage |
 
 ## Forms (one per run; path ranks keep applying)
 

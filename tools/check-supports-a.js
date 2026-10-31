@@ -11,7 +11,7 @@ let fails = 0;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
 const t0 = Date.now();
 const IDS = ['censer', 'lanterns', 'meteorcall', 'frostring'];
-const SAME_LOOKS = { meteorcall03: 1 }; // Volley 3 (densest-pack aim): dense probe
+const SAME_LOOKS = { meteorcall03: 1, censer02: 1, censer12: 1 }; // Volley 3 (densest-pack aim): dense probe; censer Size 2 (swinging censer), Ward 2 (harder push): censer probes
 const META = fs.readFileSync(path.join(__dirname, '..', 'src', 'art', 'meta.js'), 'utf8');
 
 // Silent world (no spawner, no xp), god mode; the hero weapon is held but never fires.
@@ -46,12 +46,12 @@ function build(id, ranks, form, seed) {
 const dealt = (p, ws) => (p.dealt[ws.root] || 0) + (p.dealt[ED.WEAPONS[ws.root].paths[0].form] || 0) + (p.dealt.burn || 0);
 const b4 = (v) => Math.round(v / 4) * 4;
 // Pattern signature over s s against two 24-foe rings (inner 0.5 x HP, outer 40 x HP): zone looks (max live count, max r), shot looks (max live count, distance range from the hero),
-// statuses seen (slowed / frozen / burning / knocked), the strongest slow, freeze onsets, boom looks, max zone dur per look.
+// statuses seen (slowed / frozen / burning / knocked), the strongest slow, freeze onsets, boom looks, max zone dur per look. kmax (outside the signature): strongest foe knockback seen.
 function pattern(id, ranks, form, s, seed) {
   const { w, p, ws } = build(id, ranks, form, seed || 9), ev = [];
   ring(w, p.x, p.y, 24, 45, 0.5); ring(w, p.x, p.y, 24, 100, 40);
   const zc = {}, zr = {}, zd = {}, pc = {}, pd = {}, st = { slow: 0, frozen: 0, burn: 0, knock: 0 };
-  let slowK = 0, fon = 0;
+  let slowK = 0, fon = 0, kmax = 0;
   const wasF = new Set();
   const err = run(w, s || 5, (tick) => {
     const cz = {}, cp = {};
@@ -68,13 +68,15 @@ function pattern(id, ranks, form, s, seed) {
       if (e.slowT > 0) { st.slow = 1; slowK = Math.max(slowK, Math.round(e.slowK * 10) / 10); }
       if (e.freezeT > 0) { st.frozen = 1; if (!wasF.has(e.id)) { wasF.add(e.id); onset = true; } } else wasF.delete(e.id);
       if (e.burnT > 0) st.burn = 1;
-      if (Math.abs(e.kbx) + Math.abs(e.kby) > 5) st.knock = 1;
+      const km = Math.abs(e.kbx) + Math.abs(e.kby);
+      if (km > 5) st.knock = 1;
+      if (km > kmax) kmax = km;
     }
     if (onset) fon++;
   }, ev);
   const booms = {}; for (const e of ev) if (e.t === 'boom' && e.pid === p.pid) booms[e.look] = 1;
   const sig = JSON.stringify({ zc, zr, zd, pc, pd, st, slowK, fon, booms: Object.keys(booms).sort() });
-  return { err, w, p, ws, sig, zc, zr, zd, pc, pd, st, slowK, fon, booms, dealt: ws ? dealt(p, ws) : 0 };
+  return { err, w, p, ws, sig, zc, zr, zd, pc, pd, st, slowK, fon, kmax, booms, dealt: ws ? dealt(p, ws) : 0 };
 }
 
 for (const id of IDS) {
@@ -123,7 +125,7 @@ for (const id of IDS) {
   const b = pattern('censer', [0, 0, 0], '', 3), s1 = pattern('censer', [1, 0, 0], '', 3), s2 = pattern('censer', [2, 0, 0], '', 3);
   ok(z(s1, 'censer') > z(b, 'censer') && s2.w.zones.some(q => !q.dead && q.k === 'censer' && q.w === 1), `censer Size: wider aura (${z(b, 'censer')} -> ${z(s1, 'censer')} px), a swinging censer`);
   const w1 = pattern('censer', [0, 1, 0], '', 3), w2 = pattern('censer', [0, 2, 0], '', 3), w3 = pattern('censer', [0, 3, 0], '', 4);
-  ok(!b.st.slow && w1.st.slow && !w1.st.knock && w2.st.knock && w3.zc.cward > 0, 'censer Ward: slow, push, ward blasts');
+  ok(b.st.knock && !b.st.slow && w1.st.slow && w2.kmax > w1.kmax * 1.5 && w3.zc.cward > 0, `censer: base pulses push; Ward: slow, harder push (knock ${Math.round(w1.kmax)} -> ${Math.round(w2.kmax)}), ward blasts`);
   const e1 = pattern('censer', [0, 0, 1], '', 3), e2 = pattern('censer', [0, 0, 2], '', 3), e3 = pattern('censer', [0, 0, 3], '', 6);
   ok(!b.st.burn && e1.st.burn && e2.zc.cember > 0 && e3.booms.fire && !e2.booms.fire, 'censer Embers: burn, ember patches, kill bursts');
   const l0 = pattern('lanterns', [0, 0, 0], '', 2), l1 = pattern('lanterns', [1, 0, 0], '', 2), r1 = pattern('lanterns', [0, 1, 0], '', 2), r2 = pattern('lanterns', [0, 2, 0], '', 2), r3 = pattern('lanterns', [0, 3, 0], '', 4);

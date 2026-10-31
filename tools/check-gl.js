@@ -46,7 +46,7 @@ function inPage() {
   H.scene = async (n) => {
     const e = E(), w = e.Game.w, p = w.heroes[0], ids = w.sdef.timeline[0].roster.map(r => r[0]);
     for (const row of w.sdef.timeline) row.rate = 0;
-    w.sp.swarmT = w.sp.eliteT = Infinity;
+    w.sp.swarmT = w.sp.eliteT = w.sp.flockT = Infinity;
     for (let k = 0; w.foes.length < n && k < 4 * n; k++) { const a = Math.random() * 6.283, d = 40 + Math.random() * 170, x = p.x + Math.cos(a) * d * 1.6, y = p.y + Math.sin(a) * d; if (!e.Arena.blocked(w.arena, x, y, 8)) w.spawnFoe(ids[k % ids.length], x, y, { hpMul: 50, elite: k % 25 === 0 }); }
     w.zone({ team: 1, warn: true, x: p.x + 80, y: p.y - 40, r: 46, dur: 2, k: 'tele', detached: true });
     w.zone({ team: 1, warn: true, x: p.x - 150, y: p.y + 30, len: 140, w: 26, a: 0.4, dur: 2, k: 'tele', detached: true });

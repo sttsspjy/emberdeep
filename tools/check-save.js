@@ -22,14 +22,15 @@ ok(ED.SHOP.length === 13 && ED.SHOP_IDS[12] === 'banish' && ED.SHOP.every(s => s
 
 // 2. shop
 const p = S.defaultProfile();
-p.gold = 1000;
-ok(S.shopCost(p, 'might') === 200 && S.buy(p, 'might') && p.gold === 800 && S.rank(p, 'might') === 1, 'buy might rank 1 for 200');
-ok(S.shopCost(p, 'might') === 400 && S.buy(p, 'might') && p.gold === 400, 'rank 2 costs 400');
-ok(!S.buy(p, 'might') && p.gold === 400 && S.rank(p, 'might') === 2, 'rank 3 (600) refused with 400 gold');
+const B = ED.SHOP_BASE; // rank r + 1 costs B x (r + 1)
+p.gold = 5 * B;
+ok(S.shopCost(p, 'might') === B && S.buy(p, 'might') && p.gold === 4 * B && S.rank(p, 'might') === 1, 'buy might rank 1 for ' + B);
+ok(S.shopCost(p, 'might') === 2 * B && S.buy(p, 'might') && p.gold === 2 * B, 'rank 2 costs ' + 2 * B);
+ok(!S.buy(p, 'might') && p.gold === 2 * B && S.rank(p, 'might') === 2, 'rank 3 (' + 3 * B + ') refused with ' + 2 * B + ' gold');
 p.gold = 1e6; for (let i = 0; i < 9; i++) S.buy(p, 'revival');
 ok(S.rank(p, 'revival') === 2 && S.shopCost(p, 'revival') === 0 && !S.buy(p, 'revival'), 'revival caps at 2, cost 0 when maxed');
 ok(S.shopCost(p, 'nope') === 0 && !S.buy(p, 'nope'), 'unknown shop id refused');
-const spent = 200 + 400 + 200 + 400, before = p.gold;
+const spent = 6 * B, before = p.gold;
 ok(S.refundTotal(p) === spent && S.refundAll(p) === spent && p.gold === before + spent && eq(p.shop, {}), 'refund returns every coin spent (' + spent + ') and clears ranks');
 
 // 3. save code
@@ -108,12 +109,13 @@ ok(hp.prog === 0 && hp.need === 3000 && !hp.done, 'hero progress of a fresh prof
 store.clear(); M.p = null;
 const mp = M.get();
 ok(eq(mp, S.defaultProfile()), 'Meta.get() without storage = default profile');
-mp.gold = 700;
+const G0 = 3.5 * B;
+mp.gold = G0;
 const rows = M.shop();
-ok(rows.length === ED.SHOP.length && rows[0].cost === 200 && rows[0].afford && rows[0].rank === 0 && !rows[0].maxed, 'Meta.shop rows');
-ok(M.buy('might') && M.buy('might') && !M.buy('might') && M.gold() === 100, 'Meta.buy charges 200 then 400, refuses 600');
+ok(rows.length === ED.SHOP.length && rows[0].cost === B && rows[0].afford && rows[0].rank === 0 && !rows[0].maxed, 'Meta.shop rows');
+ok(M.buy('might') && M.buy('might') && !M.buy('might') && M.gold() === G0 - 3 * B, 'Meta.buy charges ' + B + ' then ' + 2 * B + ', refuses ' + 3 * B);
 ok(S.load().shop.might === 2, 'Meta.buy persists');
-ok(M.shop()[0].val === 0.1 && M.refundTotal() === 600 && M.refund() === 600 && M.gold() === 700 && S.load().gold === 700, 'Meta.refund returns 600 and persists');
+ok(M.shop()[0].val === 0.1 && M.refundTotal() === 3 * B && M.refund() === 3 * B && M.gold() === G0 && S.load().gold === G0, 'Meta.refund returns ' + 3 * B + ' and persists');
 ok(M.unlocked('knight') && !M.unlocked('shade') && M.stageUnlocked(0) && !M.stageUnlocked(1), 'Meta.unlocked / stageUnlocked');
 const news = M.recordRun(summary({ won: true, time: 900, kills: 3100, level: 41, perHero: [{ pid: 'me', cls: 'pyro', kills: 3100 }] }), 'me');
 ok(eq(news.map(x => x.kind + ':' + x.id).sort(), ['hero:bell', 'hero:cleric', 'hero:necro', 'hero:shade', 'stage:' + ED.STAGE_IDS[1]].sort()), 'Meta.recordRun returns every new unlock: ' + news.map(x => x.txt).join(' | '));
@@ -121,7 +123,7 @@ ok(M.seen('heroes', 'knight') === false && typeof M.seen === 'function', 'Meta.s
 ok(M.last.gold === 40 && S.load().stats.runs === 1 && M.heroes().every(h => h.unlocked) && M.stages()[1].unlocked && M.stages()[0].best.won, 'recordRun saved; heroes() and stages() rows reflect it');
 const c2 = M.code(), restored = M.restore(S.encode(S.defaultProfile()));
 ok(restored === M.get() && M.gold() === 0 && S.load().gold === 0, 'Meta.restore replaces and saves the bound profile');
-ok(M.restore(c2) && M.gold() === 740 && M.unlocked('bell'), 'Meta.code -> restore round trip');
+ok(M.restore(c2) && M.gold() === G0 + 40 && M.unlocked('bell'), 'Meta.code -> restore round trip');
 ok(/checksum|damaged|never/.test(throwsMsg(() => M.restore('WK1-ZZZZZ'))) && M.unlocked('bell'), 'a bad code leaves the bound profile untouched');
 M.use(S.defaultProfile());
 ok(!M.unlocked('bell') && M.heroes().find(h => h.id === 'bell').txt === 'Reach level 25 in one run', 'Meta.use binds another profile');

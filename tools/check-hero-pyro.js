@@ -13,7 +13,7 @@ const ROOT = ED.WEAPONS.firebolt, FORMS = ED.weaponForms('firebolt');
 const world = (seed) => {
   const w = new ED.World({ seed: seed || 5, stage: 0, players: [{ pid: 'p1', name: 'T', slot: 0, cls: 'pyro', meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
   for (const row of w.sdef.timeline) { row.rate = 0; row.floor = 0; }
-  w.sp.swarmT = w.sp.eliteT = Infinity; w.sdef = Object.assign({}, w.sdef, { bosses: [], bench: null });
+  w.sp.swarmT = w.sp.eliteT = w.sp.flockT = Infinity; w.sdef = Object.assign({}, w.sdef, { bosses: [], bench: null });
   return w;
 };
 const build = (w, p, ranks, form) => {

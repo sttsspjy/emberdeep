@@ -12,7 +12,7 @@
 // a share of shots and telegraphs never seen (per-id seeded hash), later and unreliable dashes, wandering heading noise; below 0.5 also 8 directions and shot paths read short
 // (velocity x 2 skill: none at 0).
 // Cards: a Form always (a chest Form offer: the first card) > refine > hero path ranks (the path closest to rank 3 first: one path to 3, then a second) > new support > support path ranks
-// (same order) > passives by a fixed preference > skill; reroll / banish weak offers.
+// (same order) > passives by a fixed preference plus a per-seed offset > skill; reroll / banish weak offers.
 (function (root) {
   'use strict';
   const NDIR = 16, NC = NDIR + 1, PLAN = 3;
@@ -66,6 +66,8 @@
     this.skill = sk; this.planN = PLAN + Math.round(u * 12); this.react = u * 0.45; this.dashAt = 0.55 + u * 0.9;
     this.miss = u * 0.3; this.dashP = 0.35 + 0.65 * sk; this.noise = u * 0.6; this.dstep = sk < 0.5 ? 2 : 1; this.vk = Math.min(1, 2 * sk); // missed threat share, dash chance per re-plan, heading noise, direction step, shot velocity read
     this.jit = 0; this.jitT = 0; this.mix = Math.imul(this.seed, 0x9e3779b1) >>> 0;
+    // Per-seed passive preference offset in -120..120 (benches sample different passive sets).
+    this.pj = {}; for (const id in PASSIVE_PREF) { let h = this.mix; for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193) >>> 0; this.pj[id] = (h % 241) - 120; }
 
     this.rs = (this.seed ^ 0x5eed1234) >>> 0 || 1; // LCG state
     this.n = 0; this.plan = 0; this.dir = -1; this.mx = 0; this.my = 0;
@@ -460,7 +462,7 @@
     if (c.kind === 'support') return 800;
     if (c.kind === 'passive' || c.kind === 'plvl') {
       const id = c.id, isNew = c.kind === 'passive';
-      let s = (PASSIVE_PREF[id] || 150) * (isNew ? 1 : 0.9);
+      let s = ((PASSIVE_PREF[id] || 150) + (this.pj[id] || 0)) * (isNew ? 1 : 0.9);
       if (hpF < 0.5 && (id === 'vigor' || id === 'plating' || id === 'mending')) s += 120;
       return s;
     }

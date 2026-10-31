@@ -48,7 +48,7 @@ for (const id of IDS) {
 }
 
 // 2. Shape of the attack: 4 s into a still foe grid (36-60 px apart over the view, 40 px clear around the hero; run at a per-weapon HP where kill effects show and at 20x HP), the hero walking a circle, aim up-right.
-const PHP = { waraxe: 1.5, bramble: 0.09, glaive: 1.5, chainspark: 1.2 }, GAP = { waraxe: 60, bramble: 36, glaive: 36, chainspark: 36 };
+const PHP = { waraxe: 1.5, bramble: 0.24, glaive: 1.5, chainspark: 1.2 }, GAP = { waraxe: 60, bramble: 36, glaive: 36, chainspark: 36 };
 const pattern = (id, r, fid) => run(id, r, fid, PHP[id]) + ' | ' + run(id, r, fid, 20);
 function run(id, r, fid, hpMul) {
   const w = world(9), p = w.heroes[0], ws = build(w, p, id, r, fid);

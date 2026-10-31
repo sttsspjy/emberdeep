@@ -101,7 +101,7 @@
       if (F.heart) { ARC.noEv = true; w.arc(p, ws.id, cx, cy, b, R * 0.5, full ? TAU : S.arc, S.dmg * DK * F.heart, ARC); ARC.noEv = false; }
       if (full) continue;
       if (F.gale && !s) for (let i = 0; i < nw; i++) gale(w, p, ws, S, b + (i - (nw - 1) / 2) * 0.3);
-      else if (!s) for (let i = 0; i < nw; i++) wave(w, p, ws, S, b + (i - (nw - 1) / 2) * 0.35, 0.45);
+      else if (!s) for (let i = 0; i < nw; i++) wave(w, p, ws, S, b + (i - (nw - 1) / 2) * 0.35, 0.7);
       if (F.crack && k === 0 && s === 0) { const c = (S.cracks | 0) + (F.one ? 2 * ((S.n | 0) - 1) : 0); for (let i = 0; i < c; i++) crack(w, p, ws, S, b + (c > 1 ? (i / (c - 1) - 0.5) * S.arc * 0.85 : 0), R * 1.9, 0.7, 0.3 + 0.05 * i); }
       if (S.slam && !s) slam(w, p, ws, S, cx + Math.cos(b) * R * 0.8, cy + Math.sin(b) * R * 0.8, 24 * S.area, 0.8);
     }

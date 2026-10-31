@@ -202,12 +202,13 @@ function pageBoot(cfg) {
       for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2 - 0.5, x = p.x + Math.cos(a) * 150, y = p.y + Math.sin(a) * 110; if (!E.Arena.blocked(w.arena, x, y, e.r)) { e.x = x; e.y = y; break; } }
       return e.id;
     };
-    // Jumps the run clock to sec; swarm / elite / boss timers skip what that time already passed.
+    // Jumps the run clock to sec; flock / swarm / elite / boss timers skip what that time already passed.
     D.setTime = (sec) => {
       const w = run(); if (!w) return null;
-      const sd = w.sdef, sp = w.sp || {}, sw = sd.events && sd.events.swarm, el = sd.elites;
+      const sd = w.sdef, sp = w.sp || {}, sw = sd.events && sd.events.swarm, fl = sd.events && sd.events.flock, el = sd.elites;
       w.time = Math.max(0, +sec || 0);
       if (sw && typeof sp.swarmT === 'number') { sp.swarmT = sw.first; while (sp.swarmT <= w.time) sp.swarmT += sw.every; }
+      if (fl && typeof sp.flockT === 'number') { sp.flockT = fl.first; while (sp.flockT <= w.time) sp.flockT += fl.every; }
       if (el && typeof sp.eliteT === 'number') { sp.eliteT = el.first; while (sp.eliteT <= w.time) sp.eliteT += el.every; }
       if (typeof sp.bossI === 'number') { let i = 0; while (sd.bosses && sd.bosses[i] && sd.bosses[i].t <= w.time) i++; sp.bossI = i; sp.warnI = i - 1; }
       E.Game.syncView();

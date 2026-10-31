@@ -157,7 +157,7 @@ console.log('     hero x stage digest ' + mdig);
 const S = ED.Save, p = S.defaultProfile();
 p.name = 'Tester'; p.gold = 450; S.buy(p, 'might');
 const back = S.decode(S.encode(p));
-ok(back.name === 'Tester' && back.gold === 250 && back.shop.might === 1, 'save code round trip');
+ok(back.name === 'Tester' && back.gold === 450 - ED.SHOP_BASE && back.shop.might === 1, 'save code round trip');
 const g = S.applyRun(p, Object.assign({}, sum, { time: 700, level: 41 }), 0, 'p1');
 ok(g.unlocked.includes('necro') && g.unlocked.includes('cleric') && g.unlocked.includes('bell') && p.beat.includes(0) && S.stageUnlocked(p, 1), 'applyRun unlocks heroes and stage 2: ' + g.unlocked.join(','));
 let bad = false; try { S.decode('WK1-AAAAA-AAAAA'); bad = true; } catch (e) { /* rejected */ }

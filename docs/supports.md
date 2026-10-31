@@ -3,21 +3,21 @@
 Pool of 8, 2 support slots per hero (GAME-DESIGN §4). Each: 3 paths x 3 ranks, one Form (any path at rank 3; from a chest).
 
 ## Censer
-Horde (Garlic). An aura around you; every cooldown a pulse hits every foe inside.
-Base: 3 dmg, cd 0.7 s, radius 40. dps.js crowd 231 (single 4).
+Horde (Garlic). An aura around you; every cooldown a pulse hits every foe inside, pushes it out (knock 50) and staggers it (0.1 s stun).
+Base: 6 dmg, cd 0.7 s, radius 40. dps.js crowd 231 (single 4).
 
 | Path | Rank 1 | Rank 2 | Rank 3 |
 |---|---|---|---|
 | Size | aura +20% | a censer swings round at 0.8 R (12 px, 50%, every 0.2 s) | aura +20%, +1 censer |
-| Ward | foes inside slowed 25% | pulses push out (knock 60), +20% dmg | every 3rd pulse blasts foes back (knock 240, 0.3 s stun) |
+| Ward | foes inside slowed 25% | pulses push harder (knock +60), +20% dmg | every 3rd pulse blasts foes back (knock 240, 0.3 s stun) |
 | Embers | pulses burn (40% dmg per s, 2 s) | each pulse drops a burning ember (12 px, 2.5 s, 80% per s) | burning foes slain burst (24 px, 60%; never chains) |
 
-Form **Holy Censer** (base 6 dmg, cd 0.55 s, radius 60, push 110, slow 20%): kills inside the aura heal you 1 HP each, at most 3 HP/s. Refines: aura +20% · heals allies inside too, cap 5 HP/s.
+Form **Holy Censer** (base 9 dmg, cd 0.55 s, radius 60, push 110, slow 20%): kills inside the aura heal you 1 HP each, at most 3 HP/s. Refines: aura +20% · heals allies inside too, cap 5 HP/s.
 All 9 ranks: crowd 988 (x4.3). Holy Censer + all ranks: 1331 (x1.35).
 
 ## Orbit Lanterns
 Horde. Lanterns circle you (pierce all), each re-hitting a foe every 0.4 s; the ring is permanent and rebuilds in phase when it changes.
-Base: 3 dmg, 3 lanterns, orbit 40 px, 1.7 rad/s, knock 70. dps.js crowd 252 (single 5).
+Base: 5 dmg, 3 lanterns, orbit 40 px, 1.7 rad/s, knock 70. dps.js crowd 252 (single 5).
 
 | Path | Rank 1 | Rank 2 | Rank 3 |
 |---|---|---|---|
@@ -25,7 +25,7 @@ Base: 3 dmg, 3 lanterns, orbit 40 px, 1.7 rad/s, knock 70. dps.js crowd 252 (sin
 | Radius | orbit +14 px, lanterns 15% bigger | counter-ring (ceil(n / 3) + 1 at 1.6x, other way) | rings swing in and out (0.65-1.35x, 3 s) |
 | Flare | a lantern that hits bursts (16 px, 30%, once per 1.2 s) | bursts slow 40%, +20% dmg | bursts 50% wider |
 
-Form **Sun Wheel** (base 2.4 dmg, cd 1.8 s, 4 suns, radius 60, 1.4 rad/s): a burning ring around you; every cooldown the suns burst in turn (26 px, full dmg, push 180, burn 100% dmg per s for 2 s). Refines: +2 suns · flares 35% more often.
+Form **Sun Wheel** (base 5 dmg, cd 1.8 s, 4 suns, radius 60, 1.4 rad/s): a burning ring around you; every cooldown the suns burst in turn (26 px, full dmg, push 180, burn 100% dmg per s for 2 s). Refines: +2 suns · flares 35% more often.
 All 9 ranks: crowd 917 (x3.6). Sun Wheel + all ranks: 1262 (x1.38).
 
 ## Meteor Call
@@ -43,7 +43,7 @@ All 9 ranks: crowd 776 (x4.1). Starfall + all ranks: 1110 (x1.43).
 
 ## Frost Ring
 Control. Every cooldown a ring grows from you to its radius in 0.45 s; its front hits each foe once: damage, push 70, slow 40% for 1.5 s. Extra rings of a volley follow 0.25 s apart at 50% dmg.
-Base: 3 dmg, cd 2.4 s, radius 60. dps.js crowd 143 (single 1).
+Base: 5 dmg, cd 2.4 s, radius 60. dps.js crowd 143 (single 1).
 
 | Path | Rank 1 | Rank 2 | Rank 3 |
 |---|---|---|---|

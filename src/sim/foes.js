@@ -13,8 +13,8 @@
   W.contactDmg = function () { return (3 + 9 * Math.min(1, this.time / 900)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
   // Shot / blast damage factor at the current time: x1 at 0:00 rising to x2.2 at 15:00 (shots 4-11 per hit), x the stage damage factor.
   W.foeDmgK = function () { return (1 + 1.2 * Math.min(1, this.time / 900)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
-  // Foe HP at the current time: base x (1 + 0.24 x minutes) x party factor x the stage HP factor.
-  W.foeHp = function (base) { return base * (1 + 0.24 * this.time / 60) * this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1); };
+  // HP of foe def spawned now: def.hp x (1 + g x minutes) x party factor x the stage HP factor; g 0.06 swarm brain, 0.24 boss parts, else 0.15 (GAME-DESIGN §7).
+  W.foeHp = function (def) { return def.hp * (1 + (def.ai === 'swarm' ? 0.06 : def.boss ? 0.24 : 0.15) * this.time / 60) * this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1); };
   // Walk speed factor of foes spawned now: 0.8 at 0:00 rising to 1 at 4:00; fixed at spawn, bosses exempt, telegraphed dashes keep their own speed.
   W.foePace = function () { return 0.8 + 0.2 * Math.min(1, this.time / 240); };
   // Boss HP for a boss due at t s (GAME-DESIGN §8): 1500 x (minute / 5)^2.5 (1500 / 8485 / 23383 at 5 / 10 / 15 min) x party factor x the stage HP factor.
@@ -27,7 +27,7 @@
     if (!def) return null;
     const e = this.foePool.pop() || {};
     e.id = this.nextId(); e.k = def.idx; e.def = def; e.x = x; e.y = y; e.vx = 0; e.vy = 0; e.r = def.r;
-    e.maxHp = e.hp = Math.max(1, Math.round(this.foeHp(def.hp) * ((opts && opts.hpMul) || 1))); e.hpQ = 255;
+    e.maxHp = e.hp = Math.max(1, Math.round(this.foeHp(def) * ((opts && opts.hpMul) || 1))); e.hpQ = 255;
     e.dmg = this.contactDmg() * def.dmg; e.spd = def.boss ? def.spd : def.spd * this.foePace(); e.kbx = 0; e.kby = 0; e.face = 1; e.flash = 0; e.st = 0; e.stT = 0;
     e.elite = false; e.boss = !!def.boss; e.final = false; e.enraged = false;
     e.slowT = 0; e.slowK = 0; e.burnT = 0; e.burnDps = 0; e.burnOwner = null; e.burnTick = 0.5; e.stunT = 0; e.freezeT = 0;

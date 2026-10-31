@@ -3,7 +3,7 @@
 // ED.UNLOCKS: heroes: { cls: rule } where rule is { start } | { survive: s } | { beat: stage index } | { kills: n } (one run) | { level: n } (one run), txt = the lock line; stages: { index: rule }.
 (function (ED) {
   'use strict';
-  ED.SHOP_BASE = 200;
+  ED.SHOP_BASE = 80;
   ED.SHOP = [
     { id: 'might', name: 'Might', icon: 'icon.p.might', max: 5, stat: 'might', per: 0.05, txt: '+5% damage' },
     { id: 'vigor', name: 'Vigor', icon: 'icon.p.vigor', max: 5, stat: 'maxHp', per: 10, txt: '+10 max HP' },

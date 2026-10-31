@@ -17,7 +17,7 @@ const CROWD = 160, HPK = 3.4;
 const world = (cls) => {
   const w = new ED.World({ seed: 7, stage: 0, players: [{ pid: 'p1', name: 'D', slot: 0, cls, meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
   for (const row of w.sdef.timeline) { row.rate = 0; row.floor = 0; }
-  w.sp.swarmT = w.sp.eliteT = Infinity; w.sdef = Object.assign({}, w.sdef, { bosses: [], bench: null });
+  w.sp.swarmT = w.sp.eliteT = w.sp.flockT = Infinity; w.sdef = Object.assign({}, w.sdef, { bosses: [], bench: null });
   return w;
 };
 // Build: ranks per path [a, b, c] and the Form id to take (refined fully) or ''. Returns the measured slot index or -1.

@@ -145,16 +145,16 @@
     else lvls(box, [['Each', d.txt], ['Lv ' + d.max, scaled(d.txt, d.max)]]);
   };
 
-  // Foe appearances: { id: [{ stage, min }] } from the stage timelines; split children inherit the parent's.
+  // Foe appearances: { id: [{ stage, min }] } from the stage timelines and flocks; split children inherit the parent's.
   const appearances = () => {
     const out = {};
     const add = (id, i, m) => { const a = out[id] || (out[id] = []); const e = a.find(x => x.stage === i); if (!e) a.push({ stage: i, min: m }); else e.min = Math.min(e.min, m); };
-    ED.STAGES.forEach((sd, i) => sd.timeline.forEach((row, m) => { for (const r of row.roster) if (r[1] > 0) add(r[0], i, m); }));
+    ED.STAGES.forEach((sd, i) => { sd.timeline.forEach((row, m) => { for (const r of row.roster) if (r[1] > 0) add(r[0], i, m); }); const fl = sd.events && sd.events.flock; if (fl) add(fl.id, i, Math.floor(fl.first / 60)); });
     for (const id in out) { const sp = ED.FOES[id] && ED.FOES[id].split; if (sp) for (const a of out[id]) add(sp.id, a.stage, a.min); }
     return out;
   };
   const KIND = {
-    chaser: 'Chaser: walks straight at you', swarm: 'Swarmer: fast and weak, comes in packs', brute: 'Brute: slow and tough, a telegraphed slam',
+    chaser: 'Chaser: walks straight at you', swarm: 'Swarmer: fast and weak, comes in flocks', brute: 'Brute: slow and tough, a telegraphed slam',
     ranged: 'Ranged: stops at range and shoots', exploder: 'Exploder: bursts after a short fuse', charger: 'Charger: a telegraphed dash', diver: 'Diver: hovers, then a telegraphed dive',
   };
   const foeDetail = (box, id) => {
@@ -206,7 +206,8 @@
     chips(box, [['Foe HP', 'x' + sd.foe.hp], ['Foe damage', 'x' + sd.foe.dmg]]);
     h3(box, 'Bosses');
     for (const b of sd.bosses) if (ED.FOES[b.id]) { const on = seen('foes', b.id), r = ref(box, foeIcon(b.id), on ? ED.FOES[b.id].name : '???', U.fmtTime(b.t) + (b.final ? ', final boss' : '')); if (!on) r.classList.add('unseen'); }
-    const ev = sd.events && sd.events.swarm;
+    const fl = sd.events && sd.events.flock, ev = sd.events && sd.events.swarm;
+    if (fl && ED.FOES[fl.id]) para(box, 'Flock of ' + ED.FOES[fl.id].name + 's every ' + fl.every + ' s from ' + U.fmtTime(fl.first));
     if (ev) para(box, 'Swarm wave every ' + ev.every + ' s from ' + U.fmtTime(ev.first));
     if (sd.elites) para(box, 'Elite every ' + sd.elites.every + ' s from ' + U.fmtTime(sd.elites.first) + ': it drops a chest');
     para(box, best ? 'Your best: ' + U.fmtTime(best.time) + ', ' + U.fmtNum(best.kills) + ' kills, level ' + best.level + (best.won ? ', beaten' : '') : 'Not played yet', best && best.won ? 'ok' : 'mut');

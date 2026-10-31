@@ -40,7 +40,7 @@ function fight(o) {
   const w = new ED.World({ seed: o.seed || 4242, stage: o.stage, players: players(o.cls || ['knight']), cheats: o.cheats || { might: 0.05 } }); // behaviour fights: the hero chips, scripted HP drives phases
   const T = o.minute * 60, out = { w, ctx: null, err: null, minTele: Infinity, phases: [], ends: 0, falls: 0, rises: 0, hurts: 0, digest: 0, chest: false, half: null, st3: 0, carpet: 0, slowed: 0, pods: 0, boss: null, endT: -1, swords: 0, combos: 0 };
   try {
-    w.time = T; w.sp.bossI = 99; w.sp.swarmT = T + 90; w.sp.eliteT = T + 60;
+    w.time = T; w.sp.bossI = 99; w.sp.swarmT = T + 90; w.sp.flockT = T + 90; w.sp.eliteT = T + 60;
     for (let i = 0; i < 300; i++) w.update(C.TICK); // horde warm-up
     w.events.length = 0;
     const e = out.boss = w.spawnBoss({ t: T, id: o.id });

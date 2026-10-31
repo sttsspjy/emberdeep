@@ -102,9 +102,9 @@ async function main() {
     check(await page.locator('.shop-row').count() === nShop, nShop + ' shop ranks');
     await page.locator('.shop-row button[data-id="might"]').click();
     let pr = await page.evaluate(() => ({ g: ED.App.profile.gold, r: ED.App.profile.shop.might | 0 }));
-    check(pr.g === 4800 && pr.r === 1, 'buy Might: rank 1, gold 4800');
+    check(pr.g === 4920 && pr.r === 1, 'buy Might: rank 1, gold 4920');
     await page.locator('.shop-row button[data-id="might"]').click();
-    check(/Refund all \(\+600\)/.test(await page.locator('#btn-refund').innerText()), 'refund shows the total');
+    check(/Refund all \(\+240\)/.test(await page.locator('#btn-refund').innerText()), 'refund shows the total');
     await shot(page, 'camp');
     await page.locator('#btn-refund').click();
     pr = await page.evaluate(() => ({ g: ED.App.profile.gold, r: ED.App.profile.shop.might | 0 }));

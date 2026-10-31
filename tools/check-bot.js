@@ -36,7 +36,7 @@ const FIELDS = ['stage', 'stageId', 'cls', 'seed', 'meta', 'won', 'time', 'level
 const miss = FIELDS.filter(k => !(k in a));
 ok(!miss.length && !('weapon' in a) && !('fill' in a) && Array.isArray(a.bosses) && Array.isArray(a.build.weapons) && Array.isArray(a.build.passives) && typeof a.dealt === 'object',
   'result has every field, no weapon / fill' + (miss.length ? ': missing ' + miss.join(',') : ''));
-ok(a.build.weapons.length === 1 && Array.isArray(a.build.weapons[0].pr) && a.build.weapons[0].pr.length === 3 && 'fl' in a.build.weapons[0], 'build weapon carries path ranks and refine: ' + JSON.stringify(a.build.weapons[0]));
+ok(a.build.weapons.length >= 1 && a.build.weapons[0].id === 'firebolt' && a.build.weapons.every(x => Array.isArray(x.pr) && x.pr.length === 3 && 'fl' in x), 'build weapons (signature first, then supports) carry path ranks and refine: ' + JSON.stringify(a.build.weapons));
 ok(a.time >= 89 && a.time <= 91 && a.death === 'timeout' && a.ticks > 0, `maxTime stops the run (time ${a.time}, death ${a.death})`);
 
 // 3. pure reader
