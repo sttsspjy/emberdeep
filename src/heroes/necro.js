@@ -284,7 +284,7 @@
   // Lich: the army rises as plague ghouls that rush foes and burst (blast S.gr, damage S.dmg x S.mk), leaving a blight pool; shards as Bone Shard.
   ED.addWeapon({
     id: 'lich', name: 'Lich', icon: 'weapon.soulscythe', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'The dead rise as bursting ghouls',
-    base: base({ dmg: 16, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 5, raise: 2, kind: 3, life: 5, mk: 1.15, gr: 34 }),
+    base: base({ dmg: 20, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 5, raise: 2, kind: 3, life: 5, mk: 1.15, gr: 34 }),
     refine: [
       { mods: { cap: 2, raise: 1 }, txt: '+2 ghouls, raised faster' },
       { mods: { dmg: 0.25, gr: 10 }, txt: '+25% damage, bigger bursts' },

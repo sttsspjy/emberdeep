@@ -198,7 +198,7 @@
     h3(box, 'Attacks');
     lvls(box, (BOSS_TXT[b.id] || []).map((t, i) => [String(i + 1), t]));
     para(box, 'Every attack is telegraphed: a red outline marks where it lands.', 'mut');
-    para(box, b.final ? 'Beat it to win the stage. Still alive at ' + U.fmtTime(ED.CONST.ENRAGE_T) + ', it enrages: x3 damage and speed.' : 'Drops a chest: pick a Form for a ready weapon, else a path, else an extra level-up.');
+    para(box, b.final ? 'Beat it to win the stage. Still alive at ' + U.fmtTime(ED.CONST.ENRAGE_T) + ', it enrages: x3 damage and speed.' : 'Drops a chest: pick a Form for a ready weapon (from the 10:00 boss on), else a path, else an extra level-up.');
     para(box, 'HP grows with the party size.', 'mut');
   };
   const stageDetail = (box, i) => {

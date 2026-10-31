@@ -24,9 +24,10 @@
   const FOE_R = 300, PROJ_R = 420, ZONE_PAD = 260;
   const PASSIVE_PREF = { might: 300, multishot: 290, haste: 285, reach: 265, plating: 250, vigor: 235, duration: 225, mending: 205, swiftness: 190, velocity: 180, magnet: 150, fortune: 110 };
   // Hit reach (px from the hero centre to the edge of a foe of radius r) of short-reach weapons from their live numbers (ED.World.weaponS); weapons absent here are ranged.
-  // Frost rings test the foe centre; auras, arcs, pools and orbiting bodies the foe's edge (orbits: outer edge of the body ring).
+  // Frost rings test the foe centre; auras, arcs, stabs, pools and orbiting bodies the foe's edge (orbits: outer edge of the body ring).
   const bell = (S) => S.orbit * Math.sqrt(S.area) + S.r * S.area * 0.5, arc = (S) => S.range * S.area;
-  const REACH = { toll: bell, cathedral: bell, cleave: arc, whirlwind: arc, colossus: arc, earthsplitter: arc, gale: arc, tempest: arc };
+  const stab = (S) => S.len * S.area;
+  const REACH = { daggers: stab, thousand: stab, assassinate: stab, lotus: stab, shadowfan: stab, reaper: stab, toll: bell, cathedral: bell, glaciertoll: bell, carillon: bell, undertow: bell, windchime: bell, cleave: arc, whirlwind: arc, colossus: arc, earthsplitter: arc, gale: arc, tempest: arc };
   const FOE_TYP = 10; // typical foe radius for the crowd stance
   // Contact band (danger() reads it): gaps below CG px are scored; CK weighs contact at the far horizons (H >= 0.55 s). Ranged stance 30 / 1; short-reach stance narrower.
   let CG = 30, CK = 1;

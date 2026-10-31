@@ -283,7 +283,7 @@
   // Verdict (Lance): the beam sweeps more often and calls pillars down along its path.
   ED.addWeapon({
     id: 'verdict', name: 'Verdict', icon: 'weapon.warhammer', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Beams call pillars as they sweep',
-    base: base({ dmg: 30, cd: 1.0, n: 2, bcd: 1.6, vpK: 1.7 }),
+    base: base({ dmg: 48, cd: 1.0, n: 2, bcd: 1.6, vpK: 0.6 }),
     refine: [
       { mods: { blen: 0.3 }, txt: 'Beams reach 30% farther' },
       { mods: { n: 1, dmg: 0.2 }, txt: '+1 pillar, +20% damage' },

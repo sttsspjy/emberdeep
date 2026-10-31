@@ -30,7 +30,7 @@ Menus work with the keyboard too: arrows or WASD move between buttons, Enter pre
 1. Pick a hero, then a stage.
 2. Collect the gems foes drop. Each level offers 3–4 cards: a step for one of your weapons, a new support weapon (up to 2, from a shared pool of 8), a passive (up to 6) or a skill level. Solo play pauses while you choose.
 3. Each weapon grows in stages: 5 tune steps (damage, attack speed or area), then an elite chest lets you pick one of its three paths for good, path ranks 2–5 change how it looks and fires, then a boss chest offers that path's **Forms**: a new shape of the weapon (most of its damage). Unknown Forms show as ???. Each weapon takes one Form; after that it can be refined twice.
-4. Chests: an elite chest offers a path pick when a weapon is ready for one, else levels a passive or your skill; a boss chest offers a Form when a weapon is ready for one, else a path pick or an extra level-up. In co-op every hero gets a chest reward, whoever opens it.
+4. Chests: an elite chest offers a path pick when a weapon is ready for one, else levels a passive or your skill; a boss chest (from the 10:00 boss on) offers a Form when a weapon is ready for one, else a path pick or an extra level-up. In co-op every hero gets a chest reward, whoever opens it.
 5. Bosses arrive at 5:00, 10:00 and 15:00; the final boss at 20:00. Beat it to win.
 6. Break braziers for gold, food, a magnet or a holy bomb. A brazier relights a minute after it breaks once you are away from it; elites often drop food.
 7. The results screen shows your build and how much damage each weapon and your skill dealt.

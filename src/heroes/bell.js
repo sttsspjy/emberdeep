@@ -158,7 +158,7 @@
   // One toll hits a foe once with the bell rings and once with their echoes, however many bells reach it (shared Sets, two pairs alternating per toll); a toll never restarts mid-sequence.
   ED.addWeapon({
     id: 'cathedral', name: 'Cathedral', icon: 'weapon.greatbell', sig: 'bell', mode: 'around', evolved: true, form: true, from: 'toll', txt: 'Great bells peal in sequence',
-    base: { dmg: 11, cd: 1.6, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 300, range: 0, r: 84, orbit: 62, spin: 1.7, body: 0.8, stun: 0.2, great: 1 },
+    base: { dmg: 7, cd: 1.8, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 300, range: 0, r: 84, orbit: 62, spin: 1.7, body: 0.8, stun: 0.2, great: 1 },
     refine: [
       { mods: { great: 1 }, txt: 'The great ring tolls twice' },
       { mods: { area: 0.25 }, txt: '+25% ring size' },
@@ -211,7 +211,7 @@
   // Frost bells; every cd each peals a slow frost ring (0.45 s) that freezes foes S.freeze s; a frozen foe a later ring reaches takes +S.shatter damage, bursts in shards and thaws.
   ED.addWeapon({
     id: 'glaciertoll', name: 'Glacier Toll', icon: 'weapon.bronzebell', sig: 'bell', mode: 'around', evolved: true, form: true, from: 'toll', txt: 'Peals freeze foes solid',
-    base: { dmg: 6, cd: 1.4, n: 3, pierce: 0, area: 1, speed: 0, dur: 0, knock: 40, range: 0, r: 78, orbit: 50, spin: 2.0, body: 0.6, freeze: 1.1, shatter: 0.6 },
+    base: { dmg: 3, cd: 1.4, n: 3, pierce: 0, area: 1, speed: 0, dur: 0, knock: 40, range: 0, r: 78, orbit: 50, spin: 2.0, body: 0.6, freeze: 1.1, shatter: 0.6 },
     refine: [
       { mods: { n: 1 }, txt: '+1 frost bell' },
       { mods: { area: 0.2, freeze: 0.5 }, txt: '+20% ring size, freeze 0.5 s longer' },
@@ -226,7 +226,7 @@
   // then the wheel swells from 0.6x to (0.6 + S.swell)x its orbit and back over 0.8 s.
   ED.addWeapon({
     id: 'carillon', name: 'Carillon', icon: 'weapon.handbells', sig: 'bell', mode: 'around', evolved: true, form: true, from: 'toll', txt: 'A wheel of bells sweeps out and back',
-    base: { dmg: 8, cd: 1.3, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 110, range: 0, r: 40, orbit: 40, spin: 3.2, body: 2, swell: 0.9 },
+    base: { dmg: 4.5, cd: 1.3, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 110, range: 0, r: 40, orbit: 40, spin: 3.2, body: 2, swell: 0.9 },
     refine: [
       { mods: { n: 2 }, txt: '+2 bells' },
       { mods: { spin: 1.2, swell: 0.35 }, txt: 'Bells whirl faster and swing wider' },
@@ -246,7 +246,7 @@
   // toward the bells' orbit; then a clap ring from the hero out to the orbit + 26 px (60% damage) stuns them S.stun + 0.4 s.
   ED.addWeapon({
     id: 'undertow', name: 'Undertow', icon: 'weapon.greatbell', sig: 'bell', mode: 'around', evolved: true, form: true, from: 'toll', txt: 'Peals drag the horde onto your bells',
-    base: { dmg: 7, cd: 1.6, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 60, range: 0, r: 80, orbit: 44, spin: 2.6, body: 1, stun: 0 },
+    base: { dmg: 4.5, cd: 1.6, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 60, range: 0, r: 80, orbit: 44, spin: 2.6, body: 1, stun: 0 },
     refine: [
       { mods: { n: 1 }, txt: '+1 bell' },
       { mods: { area: 0.25 }, txt: 'Drags from 25% farther' },

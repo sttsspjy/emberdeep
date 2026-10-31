@@ -11,7 +11,7 @@
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST, W = ED.World.prototype;
-  const GEM_CAP = 350, TOUCH = 6, GOLD_CARD = 25, HEAL_CARD = 30, RELIGHT = 60, RELIGHT_R = 700;
+  const FORM_T = 600, GEM_CAP = 350, TOUCH = 6, GOLD_CARD = 25, HEAL_CARD = 30, RELIGHT = 60, RELIGHT_R = 700;
 
   W.initProgress = function () { this.pickPool = []; this.gemCount = 0; };
   W.initHeroProgress = function (p) { p.rerolls = p.stats.rerolls | 0; p.skips = p.stats.skips | 0; p.banishes = p.stats.banishes | 0; p.banned = []; p.pendPath = 0; p.pendForm = 0; };
@@ -278,7 +278,7 @@
   };
   // Chest reward for hero p (a downed hero picks its offers after revival). A chest offer is queued (p.pendPath / p.pendForm + 1) only while p has more waiting slots than queued offers.
   // Elite (val 1): a path-pick offer; else from the benchmark (w.sp.bench) a Form offer; else one roll levelling a random owned passive or skill below max; nothing to level pays 25 gold x goldMul.
-  // Boss (val 2): a Form offer; else a path-pick offer; else one extra level-up offer (p.pend++).
+  // Boss (val 2): a Form offer (from FORM_T: the 5:00 boss never forks a Form); else a path-pick offer; else one extra level-up offer (p.pend++).
   // Emits 'chest' { pid, val, results: [{ kind: 'pathpick'|'form'|'offer'|'plvl'|'skill'|'gold', id, lvl, name, icon, txt, val (gold) }] } and returns results.
   W.chestFor = function (p, val) {
     const results = [], boss = (val | 0) >= 2;
@@ -286,7 +286,7 @@
     const path = () => { p.pendPath = (p.pendPath | 0) + 1; results.push({ kind: 'pathpick', id: 'pathpick', lvl: 0, name: 'Path', icon: 'fx.spark.magic', txt: 'Choose a path', val: 0 }); };
     const form = () => { p.pendForm = (p.pendForm | 0) + 1; results.push({ kind: 'form', id: 'form', lvl: 0, name: 'Form', icon: 'fx.spark.magic', txt: 'Choose a Form', val: 0 }); };
     if (boss) {
-      if (formOk) form();
+      if (formOk && this.time >= FORM_T) form();
       else if (pathOk) path();
       else { p.pend++; results.push({ kind: 'offer', id: 'offer', lvl: 0, name: 'Level up', icon: 'fx.spark.magic', txt: 'An extra level-up', val: 0 }); }
     } else if (pathOk) path();

@@ -20,7 +20,7 @@ Role: holy strikes on foes near the hero, healing and protecting allies, zone co
 
 Tables give the 3 shape ranks at path ranks 1 / 3 / 5; path ranks 2 and 4 are generic steps (+10% damage, cooldown x0.95). Before the path: 5 tune steps; the path is picked from a chest (one per slot, permanent); a path at rank 5 readies its Forms (GAME-DESIGN §4). A Form keeps only its own path's ranks.
 
-## Forms (one per run; path ranks keep applying; base dmg 30, Halo 24, Judgment Ray 23)
+## Forms (one per run; path ranks keep applying; base dmg 30, Verdict 48, Halo 24, Judgment Ray 23)
 
 | Form | Rule | Pattern | Refine 1 | Refine 2 |
 |---|---|---|---|---|
@@ -28,7 +28,7 @@ Tables give the 3 shape ranks at path ranks 1 / 3 / 5; path ranks 2 and 4 are ge
 | Halo | Censer 5 | The aura becomes a ring wall, radius 60 × area: the band (−14 / +10 px) hits every 0.25 s for 35%, slows 40%, shoves out (knock 140); inner pulses 80%; heal +0.6 HP/s; +1 censer riding the ring | The ring is 30% wider | +2 censers, +20% damage |
 | Judgment Ray | Lance 5 | 1 + 1 + beams + passes holy beams (60 px) turn around the hero at 2.4 rad/s without pause, 35% per crossing; 3 pillars per volley | Beams reach 30% farther | +1 beam, +20% damage |
 | Consecration | Censer 5 | Every volley pillar leaves holy ground (2 × pillar radius, 3 s × duration): 30% dps, 30% slow; heroes standing in any of it heal 1.2 HP/s (no stacking) | +1 pillar | +20% damage, ground burns hotter |
-| Verdict | Lance 5 | Sweeps every 1.6 s and each beam calls a pillar every 0.06 s along it (at 50 / 78 / 100% of its length, 170% dmg, 85% radius) | Beams reach 30% farther | +1 pillar, +20% damage |
+| Verdict | Lance 5 | Sweeps every 1.6 s and each beam calls a pillar every 0.06 s along it (at 50 / 78 / 100% of its length, 60% dmg, 85% radius) | Beams reach 30% farther | +1 pillar, +20% damage |
 
 ## Skill (Q): Sanctuary
 
@@ -48,6 +48,6 @@ Tables give the 3 shape ranks at path ranks 1 / 3 / 5; path ranks 2 and 4 are ge
 | f10 | halo | 360° | 2,486 | 33.9 | 195 |
 | f11 | consecration | dir | 4,574 | 62.3 | 564 |
 | f20 | jray | 360° | 2,373 | 31.9 | 211 |
-| f21 | verdict | dir | 4,124 | 57.4 | 271 |
+| f21 | verdict | dir | 4,874 | 68.5 | 435 |
 
-Role rule (f rows): 360° Forms (Halo, Judgment Ray) crowd ≤ 0.6 × directional mean (4,653 → ≤ 2,792): met; directional single ≥ 2 × the 360° best (211 → ≥ 422): Verdict 271 misses; each kind within ±25% of its mean.
+Role rule (f rows): 360° Forms (Halo, Judgment Ray) crowd ≤ 0.6 × directional mean (4,903 → ≤ 2,942): met; directional single ≥ 2 × the 360° best (211 → ≥ 422): met (Verdict 435 lowest); each kind within ±25% of its mean.

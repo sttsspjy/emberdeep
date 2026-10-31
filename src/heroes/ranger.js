@@ -114,7 +114,7 @@
   const HAIL = { look: 'arrow', pierce: 0, bk: 0.5, onHit: split };
   ED.addWeapon({
     id: 'hail', name: 'Hail of Arrows', icon: 'weapon.twinbows', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'Arrows split on hit',
-    base: { dmg: 22, cd: 0.7, n: 3, pierce: 1, area: 1, speed: 440, dur: 0, knock: 30, range: 320, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 22, cd: 1.05, n: 3, pierce: 1, area: 1, speed: 440, dur: 0, knock: 30, range: 320, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows' },
       { mods: { dmg: 0.25, pierce: 2 }, txt: '+25% damage, pierce 2 more' },
@@ -164,7 +164,7 @@
   const SEEK = { look: 'arrow', homing: 10, pierce: 0, onHit: seekHit };
   ED.addWeapon({
     id: 'seeker', name: 'Seeker', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'Homing arrows hunt kill to kill',
-    base: { dmg: 44, cd: 0.68, n: 5, pierce: 0, area: 1, speed: 360, dur: 0, knock: 20, range: 360, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 44, cd: 0.9, n: 5, pierce: 0, area: 1, speed: 360, dur: 0, knock: 20, range: 360, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows' },
       { mods: { dmg: 0.25, bounce: 2 }, txt: '+25% damage, +2 bounces' },
@@ -177,7 +177,7 @@
   const GALE = { look: 'arrow', onHit: bounce };
   ED.addWeapon({
     id: 'galeshot', name: 'Gale Barrage', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'A rapid stream of arrows',
-    base: { dmg: 26, cd: 1.2, n: 1, pierce: 16, area: 1, speed: 520, dur: 0, knock: 15, range: 330, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 26, cd: 0.95, n: 1, pierce: 16, area: 1, speed: 520, dur: 0, knock: 15, range: 330, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows per stream' },
       { mods: { dmg: 0.25, pierce: 2 }, txt: '+25% damage, pierce 2 more' },

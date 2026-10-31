@@ -270,7 +270,7 @@ async function main() {
     await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(await page.evaluate(() => ED.Game.w.heroes[0].weapons[0].path === 0), 'key 1 picks path 0');
     // boss chest with a ready Form: chest popup says so, then a Form offer (header, no reroll / skip / banish foot); key 1 takes it
-    await page.evaluate(() => { const w = ED.Game.w, p = w.heroes[0]; p.offer = null; p.pend = 0; w.setRanks(p, p.weapons[0], ED.TUNE_MAX, 0, ED.PATH_MAX); p.rerolls = 1; w.openChest(p, 2); });
+    await page.evaluate(() => { const w = ED.Game.w, p = w.heroes[0]; p.offer = null; p.pend = 0; w.setRanks(p, p.weapons[0], ED.TUNE_MAX, 0, ED.PATH_MAX); p.rerolls = 1; w.time = Math.max(w.time, 600); w.openChest(p, 2); });
     await page.waitForFunction(() => !document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(/Boss chest!/.test(await page.locator('#ov-chest').innerText()) && /Choose a Form/.test(await page.locator('#ov-chest').innerText()), 'boss chest popup: Choose a Form');
     check(await vis(page, 'ov-offer') && (await page.locator('#offer-title').innerText()) === 'Choose a Form · Cleave' && (await page.locator('.offer-card.k-form').count()) >= 1 && !(await vis(page, 'offer-foot')), 'Form offer: header, Form cards, no reroll / skip / banish');

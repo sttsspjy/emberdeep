@@ -8,6 +8,8 @@
 const { load } = require('./sim.js');
 const ED = load(), C = ED.CONST;
 let fails = 0;
+// Boss chest from the 10:00 boss on (Form forks start at FORM_T 600 s).
+const boss = (w, p) => { w.time = Math.max(w.time, 600); return w.openChest(p, 2); };
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
 const world = (cls, shop, n, seed) => new ED.World({ seed: seed || 5, stage: 0, players: Array.from({ length: n || 1 }, (_, i) => ({ pid: 'p' + (i + 1), slot: i, cls: i ? 'ranger' : cls || 'knight', meta: { shop: shop || {}, sigs: [] } })) });
 const keys = (o) => o.map(c => ED.World.prototype.cardKey(c));
@@ -136,7 +138,9 @@ const pickVia = (w, i) => { w.input('p1', { pick: i }); w.update(C.TICK); w.even
   ok(w.formsReady(p, ws).map(f => f.id).join() === d.paths[2].forms.join() && d.paths[2].forms.length === 2, 'Form-ready: the picked path\'s 2 Forms (' + d.paths[2].forms.join(', ') + ')');
   const re = w.openChest(p, 1)[0];
   ok(re.kind !== 'form' && re.kind !== 'pathpick' && !p.pendForm, 'elite chest outside the benchmark: no Form offer (' + re.kind + ')');
-  const rb = w.openChest(p, 2);
+  w.time = 320; const r5 = w.openChest(p, 2)[0];
+  ok(r5.kind === 'offer' && !p.pendForm && p.pend > 0, 'the 5:00 boss chest never forks a Form: an extra level-up instead (' + r5.kind + ')'); p.pend = 0;
+  const rb = boss(w, p);
   ok(rb.length === 1 && rb[0].kind === 'form' && rb[0].txt === 'Choose a Form' && p.pendForm === 1, 'boss chest with a Form-ready slot: queues a Form offer');
   w.updateProgress();
   const fo = p.offer;
@@ -148,7 +152,7 @@ const pickVia = (w, i) => { w.input('p1', { pick: i }); w.update(C.TICK); w.even
   w.events.length = 0; w.input('p1', { pick: 2 }); w.update(C.TICK);
   const ev = w.events.find(e => e.t === 'evolve'), F = fo[1].id, FD = ED.WEAPONS[F];
   ok(ws.id === F && ws.evo && ws.lvl === 12 && ev && ev.from === 'cleave' && ev.wid === F && !p.offer && !w.paused, `picking ${F}: the weapon id swaps, emits evolve, lvl 12, unpauses`);
-  ok(!w.formsReady(p, ws).length && !w.takeForm(p, ws, fo[0].id) && w.openChest(p, 2)[0].kind === 'offer', 'one Form per slot: none ready after it, a second take refused, a boss chest gives an extra level-up');
+  ok(!w.formsReady(p, ws).length && !w.takeForm(p, ws, fo[0].id) && boss(w, p)[0].kind === 'offer', 'one Form per slot: none ready after it, a second take refused, a boss chest gives an extra level-up');
   p.pend = 0;
   const S1 = w.weaponS(p, 0);
   ok(S1.ret === true && S1.wave >= (FD.base.wave || 0) + 3 && !S1.back && !S1.slam, `the picked path's shape ranks keep applying to the Form, no other path's (wave ${S1.wave}, ret ${S1.ret})`);
@@ -203,7 +207,7 @@ const pickVia = (w, i) => { w.input('p1', { pick: i }); w.update(C.TICK); w.even
     'slot 2 filled: no new support cards, no 4th weapon');
   // two path-ready slots: one path-pick offer per chest, the first ready slot in slot order first
   w.setRanks(p, s1, ED.TUNE_MAX); w.setRanks(p, p.weapons[0], ED.TUNE_MAX);
-  const a = w.openChest(p, 1)[0], b = w.openChest(p, 2)[0], c = w.openChest(p, 1)[0];
+  const a = w.openChest(p, 1)[0], b = boss(w, p)[0], c = w.openChest(p, 1)[0];
   ok(a.kind === 'pathpick' && b.kind === 'pathpick' && c.kind !== 'pathpick' && p.pendPath === 2, `two path-ready slots: two chests queue two path picks, a third does not (${a.kind}, ${b.kind}, ${c.kind})`);
   w.updateProgress();
   ok(p.offer && p.offer.every(x => x.kind === 'pathpick' && x.id === 'cleave'), 'the first path-pick offer is the hero weapon\'s (slot 0)');
@@ -214,7 +218,7 @@ const pickVia = (w, i) => { w.input('p1', { pick: i }); w.update(C.TICK); w.even
   // support Form: 1 per path; Form offers per slot in slot order
   w.setRanks(p, s1, ED.TUNE_MAX, 0, ED.PATH_MAX); w.setRanks(p, p.weapons[0], ED.TUNE_MAX, 1, ED.PATH_MAX);
   ok(w.formsReady(p, s1).map(f => f.id).join() === 'tsaf' && w.formsReady(p, p.weapons[0]).map(f => f.id).join() === ED.WEAPONS.cleave.paths[1].forms.join(), 'support at rank 5: its one Form ready; the hero weapon its path\'s Forms');
-  ok(w.openChest(p, 2)[0].kind === 'form' && w.openChest(p, 2)[0].kind === 'form' && w.openChest(p, 2)[0].kind === 'offer' && p.pendForm === 2, 'two Form-ready slots: two boss chests queue two Form offers, a third gives a level-up');
+  ok(boss(w, p)[0].kind === 'form' && boss(w, p)[0].kind === 'form' && boss(w, p)[0].kind === 'offer' && p.pendForm === 2, 'two Form-ready slots: two boss chests queue two Form offers, a third gives a level-up');
   p.pend = 0; w.updateProgress();
   ok(p.offer && p.offer.map(x => x.id).join() === ED.WEAPONS.cleave.paths[1].forms.join(), 'the first Form offer is the hero weapon\'s path Forms: ' + (p.offer || []).map(x => x.id).join());
   pickVia(w, 1); w.updateProgress();
@@ -234,20 +238,20 @@ const pickVia = (w, i) => { w.input('p1', { pick: i }); w.update(C.TICK); w.even
 // ---- chest offers: fallback, queueing behind a level-up, a vanished slot, benchmark elites, boss path picks, co-op
 {
   const w = world(), p = w.heroes[0];
-  let r = w.openChest(p, 2);
+  let r = boss(w, p);
   ok(r[0].kind === 'offer' && p.pend === 1 && !p.pendForm && !p.pendPath, 'boss chest with nothing waiting: an extra level-up');
   p.pend = 0;
   w.setRanks(p, p.weapons[0], ED.TUNE_MAX);
-  r = w.openChest(p, 2);
+  r = boss(w, p);
   ok(r[0].kind === 'pathpick' && p.pendPath === 1, 'boss chest with a path-ready slot and no Form ready: a path-pick offer');
   p.pendPath = 0;
   w.setRanks(p, p.weapons[0], ED.TUNE_MAX, 0, ED.PATH_MAX);
-  const a = w.openChest(p, 2)[0], b = w.openChest(p, 2)[0];
+  const a = boss(w, p)[0], b = boss(w, p)[0];
   ok(a.kind === 'form' && b.kind === 'offer' && p.pendForm === 1 && p.pend === 1, 'one Form-ready slot, two boss chests: one Form offer, then an extra level-up');
   p.pend = 0; p.pendForm = 0;
   w.addXp(ED.World.xpFor(1)); w.updateProgress();
   const lvl = p.offer;
-  ok(lvl && !w.isChestOffer(lvl) && w.openChest(p, 2)[0].kind === 'form' && p.offer === lvl && p.pendForm === 1, 'a Form offer queues behind an open level-up offer');
+  ok(lvl && !w.isChestOffer(lvl) && boss(w, p)[0].kind === 'form' && p.offer === lvl && p.pendForm === 1, 'a Form offer queues behind an open level-up offer');
   w.input('p1', { pick: 1 }); w.update(C.TICK);
   ok(w.isFormOffer(p.offer) && w.paused, 'after the pick the queued Form offer opens (solo pauses)');
   p.offer = null; p.pendForm = 0; w.paused = false;
@@ -271,7 +275,7 @@ const pickVia = (w, i) => { w.input('p1', { pick: i }); w.update(C.TICK); w.even
   // co-op: each hero gets its own chest result
   const c = world('knight', {}, 2), [k, rg] = c.heroes;
   c.setRanks(k, k.weapons[0], ED.TUNE_MAX, 0, ED.PATH_MAX); c.events.length = 0;
-  c.openChest(rg, 2);
+  boss(c, rg);
   const evs = c.events.filter(x => x.t === 'chest');
   ok(evs.length === 2 && evs.find(x => x.pid === 'p1').results[0].kind === 'form' && evs.find(x => x.pid === 'p2').results[0].kind === 'offer' && k.pendForm === 1 && rg.pend === 1,
     'co-op boss chest: the hero with a ready Form gets a Form offer, the other an extra level-up');
@@ -284,7 +288,7 @@ const pickVia = (w, i) => { w.input('p1', { pick: i }); w.update(C.TICK); w.even
     w.addWeapon(p, 'tsa');
     for (let i = 0; i < 400; i++) {
       const roll = R.next();
-      if (roll < 0.7) p.pend++; else w.openChest(p, roll < 0.9 ? 1 : 2);
+      if (roll < 0.7) p.pend++; else if (roll < 0.9) w.openChest(p, 1); else boss(w, p);
       for (let k = 0; k < 8 && (p.offer || p.pend > 0 || p.pendPath > 0 || p.pendForm > 0); k++) {
         w.updateProgress();
         if (!p.offer) continue;
@@ -360,7 +364,7 @@ const pickVia = (w, i) => { w.input('p1', { pick: i }); w.update(C.TICK); w.even
   const g0 = w.gold; r = w.openChest(p, 1);
   ok(r.length === 1 && r[0].kind === 'gold' && w.gold === g0 + 25, 'nothing to level: 25 gold');
   w.events.length = 0;
-  const pend0 = p.pend; r = w.openChest(p, 2);
+  const pend0 = p.pend; r = boss(w, p);
   ok(r.length === 1 && r[0].kind === 'offer' && p.pend === pend0 + 1 && r[0].txt, 'boss chest, nothing waiting: one extra level-up offer (' + r[0].txt + ')');
   w.updateProgress();
   ok(p.offer && p.pend === pend0, 'the extra level-up opens an offer');
@@ -428,7 +432,7 @@ const pickVia = (w, i) => { w.input('p1', { pick: i }); w.update(C.TICK); w.even
   const r = w.openChest(a, 1), evs = w.events.filter(e => e.t === 'chest');
   ok(evs.length === 2 && evs[0].pid === a.pid && evs[0].results === r && evs[1].pid === b.pid && lv(a) === l0[0] + 1 && lv(b) === l0[1] + 1 && lv(c) === l0[2], 'co-op elite chest: opener and downed hero each roll and get their own event; the dead hero gets nothing');
   const p0 = w.heroes.map(h => h.pend); w.events.length = 0;
-  w.openChest(a, 2);
+  boss(w, a);
   ok(w.events.filter(e => e.t === 'chest').length === 2 && a.pend === p0[0] + 1 && b.pend === p0[1] + 1 && c.pend === p0[2], 'co-op boss chest: an extra level-up for every hero that is not dead');
 }
 // ---- damage table
