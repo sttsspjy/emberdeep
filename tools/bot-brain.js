@@ -11,8 +11,10 @@
 // skill < 1 (a casual player): slower re-plans, shots / zones seen only after a reaction delay,
 // a share of shots and telegraphs never seen (per-id seeded hash), later and unreliable dashes, wandering heading noise; below 0.5 also 8 directions and shot paths read short
 // (velocity x 2 skill: none at 0).
-// Cards: a Form always (a chest Form offer: the first card) > refine > hero path ranks (the path closest to rank 3 first: one path to 3, then a second) > new support > support path ranks
-// (same order) > passives by a fixed preference plus a per-seed offset > skill; reroll / banish weak offers.
+// Cards: chest offers by per-seed choice (path pick: path (seed + weapon hash) mod 3, so any 3 consecutive seeds cover every path of every weapon; Form fork: Form index
+// (floor((seed - 1) / 3) + weapon hash) mod n, so the seeds sharing a path alternate its Forms) > refine > hero tune / path rank
+// > new support > a new passive while below the passive quota > support tune / path rank > passives by a fixed preference plus a per-seed offset > skill; reroll / banish weak offers.
+// Tune kinds follow a per-seed and weapon order (damage first in 4 of 6 orders). Passive quota: 1 + floor(time / P), P = 180-270 s per seed (4-6 passives by 15:00).
 (function (root) {
   'use strict';
   const NDIR = 16, NC = NDIR + 1, PLAN = 3;
@@ -67,7 +69,8 @@
     this.miss = u * 0.3; this.dashP = 0.35 + 0.65 * sk; this.noise = u * 0.6; this.dstep = sk < 0.5 ? 2 : 1; this.vk = Math.min(1, 2 * sk); // missed threat share, dash chance per re-plan, heading noise, direction step, shot velocity read
     this.jit = 0; this.jitT = 0; this.mix = Math.imul(this.seed, 0x9e3779b1) >>> 0;
     // Per-seed passive preference offset in -120..120 (benches sample different passive sets).
-    this.pj = {}; for (const id in PASSIVE_PREF) { let h = this.mix; for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193) >>> 0; this.pj[id] = (h % 241) - 120; }
+    this.pj = {}; for (const id in PASSIVE_PREF) this.pj[id] = (this.sh(id) % 241) - 120;
+    this.pq = 180 + this.sh('#pq') % 91; // passive quota period (s)
 
     this.rs = (this.seed ^ 0x5eed1234) >>> 0 || 1; // LCG state
     this.n = 0; this.plan = 0; this.dir = -1; this.mx = 0; this.my = 0;
@@ -79,6 +82,9 @@
     this.gmin = Infinity; this.gx = 0; this.gy = 0; // nearest contact foe: gap and position
     this.reach = 0; this.close = false; this.bossFn = null; this.bossS = null; this.bossOn = false; // stance(): main weapon reach to a typical foe's edge (0 = ranged), crowd / boss stance
   }
+  // Hash of string k (uint32): wh is the same for every bot, sh is seeded per bot.
+  const wh = (k) => { let h = 0x811c9dc5; for (let i = 0; i < k.length; i++) h = Math.imul(h ^ k.charCodeAt(i), 0x01000193) >>> 0; return hsh(h) * 4294967296 >>> 0; };
+  Brain.prototype.sh = function (k) { let h = this.mix; for (let i = 0; i < k.length; i++) h = Math.imul(h ^ k.charCodeAt(i), 0x01000193) >>> 0; return hsh(h) * 4294967296 >>> 0; };
   Brain.prototype.rnd = function () { this.rs = (Math.imul(this.rs, 1664525) + 1013904223) >>> 0; return this.rs / 4294967296; };
   Brain.prototype.onStart = function (w, p) { this.lastX = p.x; this.lastY = p.y; this.planT = w.time; };
 
@@ -450,21 +456,26 @@
   };
 
   // ---------- cards ----------
+  // Tune kind orders (index into ED.TUNE: 0 damage, 1 haste, 2 area); damage first in 4 of 6.
+  const TUNE_ORD = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [0, 1, 2], [2, 0, 1], [0, 2, 1]];
   Brain.prototype.cardScore = function (ED, w, p, c) {
     const hpF = p.hp / Math.max(1, p.maxHp);
-    if (c.kind === 'form' || c.kind === 'pathpick') return 2000 - (c.path | 0); // chest offers: the first card
-    if (c.kind === 'refine') return 1200;
-    if (c.kind === 'tune') { const d = ED.WEAPONS[c.id] || {}; return (d.support ? 600 : 1000) - (c.tk | 0); }
-    if (c.kind === 'path') {
-      // c.lvl - 1 = the path's current rank: the path closest to rank 3 goes first (one path to 3, then a second); ties to the path with a Form, then the lower index. Support paths below a new support.
-      const d = ED.WEAPONS[c.id] || {}, pa = (d.paths || [])[c.path] || {};
-      return (d.support ? 600 : 1000) + 30 * (c.lvl - 1) + (pa.form ? 5 : 0) - c.path;
+    if (c.kind === 'pathpick') { const n = ((ED.WEAPONS[c.id] || {}).paths || [0, 0, 0]).length, pref = (this.seed + wh('path:' + c.id)) % n; return 2000 - ((c.path - pref + n) % n); } // preferred path, then the next ones in order
+    if (c.kind === 'form') {
+      // Form index within its path's list (cards built without a path: its first listing path); the preferred index per seed and weapon, else the next.
+      const rid = ED.weaponRoot(c.id), f = (ED.weaponForms(rid) || []).find(x => x.id === c.id), i = c.path >= 0 ? c.path : f ? f.path : 0;
+      const L = ED.pathForms(rid, i), j = Math.max(0, L.indexOf(c.id)), n = Math.max(1, L.length), pref = (Math.floor((this.seed - 1) / 3) + wh('form:' + rid)) % n;
+      return 2000 - ((j - pref + n) % n);
     }
+    if (c.kind === 'refine') return 1200;
+    if (c.kind === 'tune') { const d = ED.WEAPONS[c.id] || {}, o = TUNE_ORD[this.sh('tune:' + c.id) % TUNE_ORD.length]; return (d.support ? 600 : 1000) - 10 * o.indexOf(c.tk | 0); }
+    if (c.kind === 'path') { const d = ED.WEAPONS[c.id] || {}; return (d.support ? 600 : 1000) + 30 * (c.lvl - 1); } // support paths below a new support
     if (c.kind === 'support') return 800;
     if (c.kind === 'passive' || c.kind === 'plvl') {
       const id = c.id, isNew = c.kind === 'passive';
       let s = ((PASSIVE_PREF[id] || 150) + (this.pj[id] || 0)) * (isNew ? 1 : 0.9);
       if (hpF < 0.5 && (id === 'vigor' || id === 'plating' || id === 'mending')) s += 120;
+      if (isNew && p.passives.length < Math.min(ED.MAX_PASSIVES || 6, 1 + Math.floor(w.time / this.pq))) s = 700 + s / 10; // below the quota: above support tune / path ranks, below a new support
       return s;
     }
     if (c.kind === 'skill') return 270;
@@ -478,7 +489,7 @@
     for (let i = 0; i < O.length; i++) {
       const s = this.cardScore(ED, w, p, O[i]);
       if (s > bs) { bs = s; bi = i; }
-      if (O[i].kind !== 'gold' && O[i].kind !== 'heal' && s < ws) { ws = s; wi = i; }
+      if (ED.World.prototype.canBanish(O, O[i]) && s < ws) { ws = s; wi = i; }
     }
     if (bs < 200 && p.rerolls > 0) { this.f.reroll = true; return; }
     if (bs < 300 && wi >= 0 && ws < 160 && p.banishes > 0) { this.f.banish = wi + 1; return; }

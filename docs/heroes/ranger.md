@@ -45,24 +45,19 @@ Zero damage. Leap 160 px toward the cursor over 0.34 s, over foes and obstacles,
 | 3 | 2 charges | two leaps stored, one recharge per 9 s |
 | 4 | Caltrops at takeoff slow pursuers | a 56 px caltrop field at the takeoff for 3 s: foes inside slowed 50% for 2 s |
 
-## dps.js (`node tools/dps.js ranger`: weapon only, no Q casts, build fixed, no level-ups)
+## dps.js (`node tools/dps.js ranger`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 
 | build | form | kind | crowd wpn | kills/s | single wpn |
 |---|---|---|---|---|---|
-| base | - |  | 338 | 0.4 | 54 |
-| p0 | - |  | 846 | 2.7 | 143 |
-| p1 | - |  | 1,087 | 3.3 | 116 |
-| p2 | - |  | 698 | 1.9 | 68 |
-| all | - |  | 2,288 | 9.8 | 226 |
-| f0 | hail | dir | 4,419 | 22.6 | 557 |
-| f1 | ballista | dir | 5,287 | 27.6 | 251 |
-| f2 | seeker | dir | 3,470 | 17.9 | 491 |
-| h0 | galeshot | dir | 4,245 | 20.4 | 675 |
-| h1 | rebound | dir | 3,802 | 18.9 | 454 |
-| F0 | hail | dir | 6,660 | 33.6 | 848 |
-| F1 | ballista | dir | 6,771 | 35.3 | 669 |
-| F2 | seeker | dir | 6,914 | 35.0 | 914 |
-| H0 | galeshot | dir | 4,575 | 22.0 | 772 |
-| H1 | rebound | dir | 6,039 | 29.6 | 582 |
+| base | - |  | 305 | 3.3 | 59 |
+| t5 | - |  | 475 | 5.9 | 92 |
+| p0 | - |  | 1,431 | 19.3 | 333 |
+| p1 | - |  | 1,441 | 20.4 | 265 |
+| p2 | - |  | 1,467 | 20.1 | 157 |
+| f00 | hail | dir | 4,480 | 63.6 | 1,093 |
+| f01 | galeshot | dir | 2,512 | 33.3 | 888 |
+| f10 | ballista | dir | 2,668 | 38.5 | 509 |
+| f20 | seeker | dir | 4,890 | 68.8 | 970 |
+| f21 | rebound | dir | 2,581 | 36.2 | 657 |
 
-All Forms directional; f / h rows within ±25% of their mean.
+All Forms directional; mean 3,426. Outside ±25%: Seeker 4,890 (+43%), Hail of Arrows 4,480 (+31%), Gale Barrage 2,512 (−27%).

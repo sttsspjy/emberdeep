@@ -34,7 +34,7 @@ const formOf = (id) => ED.WEAPONS[id].paths[0].forms[0];
 // 1. Registration, slot 1, firing.
 for (const id of IDS) {
   const d = ED.WEAPONS[id], f = d && ED.WEAPONS[formOf(id)];
-  ok(d && d.support && ['horde', 'control', 'lane'].indexOf(d.role) >= 0 && d.paths.length === 3 && d.paths.every(pa => pa.ranks.length === 3 && pa.forms.join() === formOf(id)), `${id}: support def, role ${d && d.role}, 3 paths x 3 shape ranks listing ${d && d.paths[0].form}`);
+  ok(d && d.support && ['horde', 'control', 'lane'].indexOf(d.role) >= 0 && d.paths.length === 3 && d.paths.every(pa => pa.ranks.length === 3 && pa.forms.join() === formOf(id)), `${id}: support def, role ${d && d.role}, 3 paths x 3 shape ranks listing ${d && d.paths[0].forms}`);
   ok(f && f.support && f.form && f.evolved && f.from === id && f.refine.length === 2, `${id}: Form ${f && f.id} (2 refines)`);
   const lines = [d.txt, f.txt].concat(...d.paths.map(pa => pa.ranks.map(r => r.txt)), f.refine.map(r => r.txt));
   ok(lines.every(s => s.length <= 40), `${id}: card lines <= 40 chars`);

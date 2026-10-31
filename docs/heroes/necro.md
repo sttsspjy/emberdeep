@@ -38,24 +38,19 @@ Zero damage. A curved bone wall at the cursor for 5 s (scales with duration): a 
 | 3 | The wall closes into a ring | a full ring of radius 80 around the cursor: foes inside stay in, foes outside stay out |
 | 4 | Nearby foes target the wall | non-boss foes within 160 px of the wall walk to it and hold there instead of chasing the hero |
 
-## dps.js (`node tools/dps.js necro`: weapon only, no Q casts, build fixed, no level-ups)
+## dps.js (`node tools/dps.js necro`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 
 | build | form | kind | crowd wpn | kills/s | single wpn |
 |---|---|---|---|---|---|
-| base | - |  | 587 | 1.9 | 49 |
-| p0 | - |  | 1,710 | 8.3 | 94 |
-| p1 | - |  | 1,048 | 4.8 | 108 |
-| p2 | - |  | 1,811 | 8.8 | 68 |
-| all | - |  | 3,258 | 16.1 | 211 |
-| f0 | bonelord | dir | 3,901 | 18.5 | 333 |
-| f1 | bonestorm | 360° | 2,331 | 11.1 | 117 |
-| f2 | plaguefield | dir | 5,369 | 26.8 | 390 |
-| h0 | lich | dir | 4,650 | 23.0 | 358 |
-| h1 | ossuary | dir | 3,979 | 18.9 | 447 |
-| F0 | bonelord | dir | 5,288 | 25.6 | 557 |
-| F1 | bonestorm | 360° | 3,173 | 14.9 | 178 |
-| F2 | plaguefield | dir | 6,671 | 33.1 | 468 |
-| H0 | lich | dir | 5,677 | 27.9 | 524 |
-| H1 | ossuary | dir | 4,949 | 24.0 | 526 |
+| base | - |  | 642 | 8.8 | 61 |
+| t5 | - |  | 771 | 10.8 | 85 |
+| p0 | - |  | 1,525 | 21.4 | 187 |
+| p1 | - |  | 1,349 | 18.6 | 246 |
+| p2 | - |  | 1,652 | 22.9 | 140 |
+| f00 | bonelord | dir | 3,689 | 50.9 | 536 |
+| f01 | ossuary | dir | 3,572 | 49.0 | 521 |
+| f10 | bonestorm | 360° | 1,792 | 23.9 | 225 |
+| f20 | plaguefield | dir | 3,493 | 49.1 | 779 |
+| f21 | lich | dir | 2,430 | 34.0 | 522 |
 
-Role rule (f / h rows): Bone Storm (360° orbit) crowd ≤ 0.6 × directional mean (4,475 → ≤ 2,685); directional single ≥ 2 × Bone Storm (117 → ≥ 234).
+Role rule (f rows): Bone Storm (360° orbit) crowd ≤ 0.6 × directional mean (3,296 → ≤ 1,978): met; directional single ≥ 2 × Bone Storm (225 → ≥ 450): met. Outside ±25%: Lich 2,430 (−26%).

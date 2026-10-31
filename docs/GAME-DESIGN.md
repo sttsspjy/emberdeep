@@ -84,7 +84,7 @@ Each hero has one own weapon (slot 1, fixed for the run) and gains up to 2 **sup
 | Shade | Flurry → Thousand Cuts | Lethality → Assassinate, Death Lotus | Return → Shadow Fan, Reaper's Return |
 | Bell | Peal → Cathedral, Undertow | Resonance → Glacier Toll, Windchime | Pendulum → Carillon |
 
-- **Power yardstick** (`tools/dps.js`, weapon only, minute-10 crowd, no passives, no Q): builds follow the lifecycle (tune 5, one path at rank 1–5, its Form refined twice); numbers to be re-measured. Old 3 × 3 model, for reference: base 300–750 crowd dps; all 9 ranks 2,000–4,000; Form base: directional Forms 3,400–5,600. **Role rule** at Form base: 360° Forms (spins, auras, orbits, every Bell Form) are Garlic-tier: crowd ≤ 0.6 × the hero's directional Form mean (Bell: 0.6 × the cross-hero directional mean, ≈ 2,780), reach ≤ 60 px, strong push; directional Forms deal ≥ 2 × the hero's best 360° Form on a single target. Forms of one kind (360° / directional) of one hero sit within ±25% of each other.
+- **Power yardstick** (`tools/dps.js`, weapon only, minute-10 crowd, no passives, no Q). Builds: **base**; **t5** (tune 5: damage 2, haste 2, area 1); **p<i>** (t5 + path i at rank 5); **f<i><j>** (p<i> + Form j of path i, refined twice). Measured hero crowd dps: base 305–680; t5 475–1,050; p 1,270–2,440; f directional 2,430–5,260 (cross-hero mean 3,575); f 360° 1,790–2,500 (Bell 1,960–3,700). **Role rule** on f rows: 360° Forms (spins, auras, orbits, every Bell Form) are Garlic-tier: crowd ≤ 0.6 × the hero's directional f mean (Bell: 0.6 × the cross-hero directional f mean, ≈ 2,145), reach ≤ 60 px, strong push; directional Forms deal ≥ 2 × the hero's best 360° Form on a single target. Forms of one kind (360° / directional) of one hero sit within ±25% of their mean. `dps.js` prints this check after the hero tables.
 
 ## 5. Passives (12, levels 1–5)
 
@@ -134,7 +134,7 @@ Max 6 passives. Passives are generic stats: they evolve nothing and name no weap
 
 ## 8. Bosses
 
-Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (minute / 5)^2 × players factor × stage HP` (1500 / 6000 / 13500 / 24000 at 5:00 / 10:00 / 15:00 / 20:00; a multi-body boss splits it, e.g. the Twins two halves). Bosses drop a chest that opens a Form offer (one extra level-up offer when no Form is ready; §9). While a boss lives, normal spawns run at 50% rate.
+Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (minute / 5)^2 × players factor × stage HP` (1500 / 6000 / 13500 / 24000 at 5:00 / 10:00 / 15:00 / 20:00; a multi-body boss splits it, e.g. the Twins two halves). Bosses drop a chest: a Form fork when a weapon is Form-ready, else a path pick when one is path-ready, else an extra level-up (§9). While a boss lives, normal spawns run at 50% rate.
 
 - **Roster** (5:00 · 10:00 · 15:00 · final 20:00): Ossuary — Bone Warden · The Twins · Demon Cyclops · Hollow King. Glowmire — Sporemother · Demon Cyclops · Rift Weaver · Drowned King. Abyss — Blue Samurai · Rift Weaver · The Twins · The Wick-Eater. The 15:00 mid-boss is borrowed from another stage for now.
 - **Adds**: boss adds come from the host stage's roster by kind (same brain; a swarmer becomes the stage's flock foe; home-stage adds stay as written) and respect the brain caps (§7): a ranged, summoner or dasher add at its cap is skipped.

@@ -35,24 +35,19 @@ Tables give the 3 shape ranks at path ranks 1 / 3 / 5; path ranks 2 and 4 are ge
 - Zero damage. cd 14 s. Holy ground at the cursor, radius 80, 4 s: a cast burst knocks foes out; foes inside slowed 45%; every living hero inside heals 5 HP/s.
 - L2: +35% area, wards foes out (shoved from the centre every 0.25 s). L3: lasts 50% longer, downed allies inside revive in about 1.3 s. L4: holy pillars rain inside (one every 0.25 s, 20 px, stun 0.6 s).
 
-## dps.js (`node tools/dps.js cleric`: weapon only, no Q casts, build fixed, no level-ups)
+## dps.js (`node tools/dps.js cleric`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 
 | build | form | kind | crowd wpn | kills/s | single wpn |
 |---|---|---|---|---|---|
-| base | - |  | 410 | 0.0 | 20 |
-| p0 | - |  | 1,226 | 3.4 | 73 |
-| p1 | - |  | 1,180 | 3.1 | 32 |
-| p2 | - |  | 1,091 | 1.9 | 28 |
-| all | - |  | 2,204 | 8.6 | 98 |
-| f0 | wrath | dir | 4,787 | 23.0 | 267 |
-| f1 | halo | 360° | 2,564 | 12.0 | 105 |
-| f2 | jray | 360° | 2,931 | 13.1 | 106 |
-| h0 | consecration | dir | 5,143 | 24.1 | 480 |
-| h1 | verdict | dir | 5,135 | 24.5 | 294 |
-| F0 | wrath | dir | 5,575 | 27.4 | 310 |
-| F1 | halo | 360° | 3,729 | 17.4 | 231 |
-| F2 | jray | 360° | 3,994 | 19.2 | 244 |
-| H0 | consecration | dir | 5,250 | 25.0 | 498 |
-| H1 | verdict | dir | 5,400 | 26.2 | 320 |
+| base | - |  | 440 | 4.4 | 23 |
+| t5 | - |  | 614 | 6.8 | 36 |
+| p0 | - |  | 1,269 | 15.7 | 174 |
+| p1 | - |  | 1,369 | 17.4 | 71 |
+| p2 | - |  | 1,398 | 18.0 | 62 |
+| f00 | wrath | dir | 5,262 | 74.0 | 546 |
+| f10 | halo | 360° | 2,486 | 33.9 | 195 |
+| f11 | consecration | dir | 4,574 | 62.3 | 564 |
+| f20 | jray | 360° | 2,373 | 31.9 | 211 |
+| f21 | verdict | dir | 4,124 | 57.4 | 271 |
 
-Role rule (f / h rows): 360° Forms (Halo, Judgment Ray) crowd ≤ 0.6 × directional mean (5,022 → ≤ 3,013); directional single ≥ 2 × the 360° best (106 → ≥ 212).
+Role rule (f rows): 360° Forms (Halo, Judgment Ray) crowd ≤ 0.6 × directional mean (4,653 → ≤ 2,792): met; directional single ≥ 2 × the 360° best (211 → ≥ 422): Verdict 271 misses; each kind within ±25% of its mean.

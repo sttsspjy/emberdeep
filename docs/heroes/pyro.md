@@ -40,24 +40,19 @@ Zero damage. cd 10 s. A flash at the pyro: every foe within 140 px (r, scales wi
 | 3 | Foes flee 1.5 s longer | flee 3.5 s |
 | 4 | The flash pulls in gems | xp gems within 200 px fly to the pyro |
 
-## dps.js (`node tools/dps.js pyro`: weapon only, no Q casts, build fixed, no level-ups)
+## dps.js (`node tools/dps.js pyro`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 
 | build | form | kind | crowd wpn | kills/s | single wpn |
 |---|---|---|---|---|---|
-| base | - |  | 481 | 1.9 | 34 |
-| p0 | - |  | 1,246 | 5.8 | 51 |
-| p1 | - |  | 1,393 | 5.1 | 62 |
-| p2 | - |  | 1,224 | 5.5 | 35 |
-| all | - |  | 3,483 | 17.3 | 112 |
-| f0 | inferno | dir | 4,296 | 20.8 | 141 |
-| f1 | firestorm | dir | 5,066 | 24.9 | 139 |
-| f2 | wildfire | dir | 4,930 | 25.0 | 136 |
-| h0 | pyre | dir | 5,025 | 24.9 | 174 |
-| h1 | napalm | dir | 4,976 | 22.7 | 248 |
-| F0 | inferno | dir | 6,909 | 34.1 | 245 |
-| F1 | firestorm | dir | 8,279 | 41.0 | 229 |
-| F2 | wildfire | dir | 6,995 | 35.0 | 248 |
-| H0 | pyre | dir | 6,044 | 29.6 | 234 |
-| H1 | napalm | dir | 5,916 | 28.1 | 290 |
+| base | - |  | 447 | 6.2 | 38 |
+| t5 | - |  | 733 | 10.2 | 59 |
+| p0 | - |  | 1,489 | 21.0 | 132 |
+| p1 | - |  | 1,624 | 22.6 | 144 |
+| p2 | - |  | 1,541 | 21.9 | 90 |
+| f00 | inferno | dir | 3,697 | 51.3 | 282 |
+| f10 | firestorm | dir | 4,028 | 56.4 | 267 |
+| f11 | napalm | dir | 3,387 | 45.3 | 298 |
+| f20 | wildfire | dir | 4,121 | 57.1 | 268 |
+| f21 | pyre | dir | 2,781 | 38.5 | 209 |
 
-All Forms directional; f / h rows within ±25% of their mean.
+All Forms directional; f rows within ±25% of their mean (3,603).

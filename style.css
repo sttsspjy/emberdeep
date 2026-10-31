@@ -248,9 +248,11 @@ input[type="range"]::-moz-range-thumb { width: 0.9em; height: 1.4em; background:
 .offer-card .badge.new { color: var(--green); background: rgba(127, 227, 154, 0.12); }
 .offer-card .badge.lv { color: var(--blue); }
 .offer-card .badge.sk { color: var(--violet); }
+.offer-card .badge.perm { color: #2a1408; background: var(--gold); border-color: #000; }
 .offer-card .card-txt { font-size: calc(var(--u) * 1.1); line-height: 1.2; color: #fff; }
 .offer-card .pips { margin-top: auto; }
-.offer-card.k-path, .offer-card.k-support, .offer-card.k-form, .offer-card.k-refine { border-color: #a0603a; }
+.offer-card.k-tune, .offer-card.k-path, .offer-card.k-support, .offer-card.k-form, .offer-card.k-refine { border-color: #a0603a; }
+.offer-card.k-pathpick { border-color: var(--gold); box-shadow: 0 0 0 3px #000, 0 0 22px rgba(255, 210, 122, 0.45); }
 .offer-card.k-passive, .offer-card.k-plvl { border-color: #3a7a8a; }
 .offer-card.k-skill { border-color: #6a5ad0; }
 .offer-card.k-gold, .offer-card.k-heal { border-color: #6a5020; }

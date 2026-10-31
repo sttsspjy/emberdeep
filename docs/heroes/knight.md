@@ -36,24 +36,19 @@ Zero damage. Every foe within 120 px of the knight (r, scales with reach) slides
 | 3 | Shoved foes are stunned 1 s | stun 1 s, then the slow |
 | 4 | Leaves a ring foes cannot cross | a ring at the shove edge holds 3 s at the cast point; non-boss foes cannot enter it (they can leave) |
 
-## dps.js (`node tools/dps.js knight`: weapon only, no Q casts, build fixed, no level-ups)
+## dps.js (`node tools/dps.js knight`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 
 | build | form | kind | crowd wpn | kills/s | single wpn |
 |---|---|---|---|---|---|
 | base | - |  | 679 | 8.6 | 25 |
-| p0 | - |  | 1,176 | 16.1 | 52 |
-| p1 | - |  | 1,228 | 16.6 | 37 |
-| p2 | - |  | 1,596 | 21.9 | 164 |
-| all | - |  | 2,191 | 29.9 | 216 |
-| f0 | colossus | dir | 2,821 | 39.0 | 268 |
-| f1 | whirlwind | 360° | 1,442 | 19.9 | 36 |
-| f2 | gale | dir | 2,519 | 34.5 | 510 |
-| h0 | earthsplitter | 360° | 1,668 | 21.8 | 96 |
-| h1 | tempest | 360° | 1,391 | 16.8 | 35 |
-| F0 | colossus | dir | 3,531 | 48.1 | 486 |
-| F1 | whirlwind | 360° | 1,678 | 22.1 | 135 |
-| F2 | gale | dir | 3,345 | 47.0 | 1,071 |
-| H0 | earthsplitter | 360° | 2,220 | 29.8 | 138 |
-| H1 | tempest | 360° | 2,072 | 26.5 | 80 |
+| t5 | - |  | 1,049 | 14.3 | 40 |
+| p0 | - |  | 1,571 | 21.8 | 107 |
+| p1 | - |  | 1,610 | 22.5 | 78 |
+| p2 | - |  | 2,436 | 34.8 | 336 |
+| f00 | colossus | dir | 4,720 | 68.1 | 552 |
+| f01 | earthsplitter | 360° | 2,501 | 34.7 | 166 |
+| f10 | whirlwind | 360° | 1,884 | 26.5 | 147 |
+| f20 | gale | dir | 4,167 | 58.0 | 1,036 |
+| f21 | tempest | 360° | 1,881 | 23.9 | 69 |
 
-Role rule (f / h rows): 360° Forms (Whirlwind, Earthsplitter, Blade Tempest) crowd ≤ 0.6 × directional mean (2,670 → ≤ 1,602); directional single ≥ 2 × the 360° best (96 → ≥ 192). Whirlwind's numbers are standing still; moving spins 1.3× faster.
+Role rule (f rows): 360° Forms (Earthsplitter, Whirlwind, Blade Tempest) crowd ≤ 0.6 × directional mean (4,443 → ≤ 2,666): met; directional single ≥ 2 × the 360° best (166 → ≥ 332): met; each kind within ±25% of its mean. Whirlwind's numbers are standing still; moving spins 1.3× faster.

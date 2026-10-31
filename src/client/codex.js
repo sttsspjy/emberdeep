@@ -107,11 +107,15 @@
     ref(box, d.icon, d.name, d.txt + (d.cd ? ' (' + d.cd + ' s cooldown)' : ''), key);
     lvls(box, (d.levels || []).map((l, i) => ['Lv ' + (i + 2), l.txt]));
   };
-  // Forms of root weapon d: name and line once discovered, else ???; how to reach them stays hidden.
-  const formLine = (box, d) => {
-    const F = ED.weaponForms(d.id); if (!F.length) return;
-    h3(box, F.length > 1 ? 'Forms (one per weapon, from chests)' : 'Form (from a chest)');
-    for (const f of F) { const e = ED.WEAPONS[f.id]; ref(box, e.icon, e.name, e.txt, '', !seen('weapons', e.id)); }
+  // Weapon tree of root weapon d: tune kinds, then per path its shape ranks (path ranks 1 / 3 / 5) and its Forms (name and line once discovered, else ???).
+  const weaponTree = (box, d) => {
+    h3(box, 'Tune (' + (ED.TUNE_MAX || 5) + ' level-ups, at most ' + (ED.TUNE_KIND_MAX || 3) + ' of one)');
+    lvls(box, (ED.TUNE || []).map(t => ['Tune', t.txt]));
+    (d.paths || []).forEach((pa, i) => {
+      h3(box, 'Path: ' + pa.name);
+      lvls(box, pa.ranks.map((l, k) => ['Rank ' + (2 * k + 1), l.txt]).concat(ED.PATH_STEP ? [['Rank 2, 4', ED.PATH_STEP.txt]] : []));
+      for (const id of ED.pathForms(d.id, i)) { const e = ED.WEAPONS[id]; ref(box, e.icon, e.name, e.txt, '', !seen('weapons', e.id)); }
+    });
   };
 
   const heroDetail = (box, cls) => {
@@ -133,8 +137,7 @@
     head(box, d.icon, d.name, tag, d.txt);
     if (MODE[d.mode]) chips(box, [['Aims', MODE[d.mode]]]);
     if (d.form) { if (d.refine) { h3(box, 'Refine'); lvls(box, d.refine.map((l, i) => ['Rank ' + (i + 1), l.txt])); } return; }
-    for (const pa of d.paths || []) { h3(box, 'Path: ' + pa.name); lvls(box, pa.ranks.map((l, i) => ['Rank ' + (i + 1), l.txt])); }
-    formLine(box, d);
+    weaponTree(box, d);
   };
   // '+10% damage' at level n: every number in the line times n.
   const scaled = (txt, n) => txt.replace(/\d+(\.\d+)?/g, (v) => String(Math.round(+v * n * 100) / 100));
@@ -195,7 +198,7 @@
     h3(box, 'Attacks');
     lvls(box, (BOSS_TXT[b.id] || []).map((t, i) => [String(i + 1), t]));
     para(box, 'Every attack is telegraphed: a red outline marks where it lands.', 'mut');
-    para(box, b.final ? 'Beat it to win the stage. Still alive at ' + U.fmtTime(ED.CONST.ENRAGE_T) + ', it enrages: x3 damage and speed.' : 'Drops a chest: pick a Form for a ready weapon, else an extra level-up.');
+    para(box, b.final ? 'Beat it to win the stage. Still alive at ' + U.fmtTime(ED.CONST.ENRAGE_T) + ', it enrages: x3 damage and speed.' : 'Drops a chest: pick a Form for a ready weapon, else a path, else an extra level-up.');
     para(box, 'HP grows with the party size.', 'mut');
   };
   const stageDetail = (box, i) => {

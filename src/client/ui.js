@@ -278,13 +278,18 @@
   // ---------------- level-up offer ----------------
   // A Form shows as ??? until the profile has seen it (Encyclopedia record).
   const formKnown = UI.formKnown = (id) => !!(ED.Meta && ED.Meta.seen && ED.Meta.seen('weapons', id));
-  // Card face: name, line, badge, rank pips, Form flag. Path: weapon + path name, rank line; support: support name, line; Form: name or ??? (line names the weapon it evolves); refine: Form name.
+  // Card face: name, line, badge, rank pips, Form flag. Tune: weapon name, tune line, 'TUNE n/5'; path rank: weapon + path name, rank line, 'RANK n/5'; path pick: path name,
+  // rank-1 line, 'PERMANENT'; support: support name, line; Form: name or ??? (line names the weapon it evolves); refine: Form name.
   function cardInfo(me, c) {
     const o = { name: c.name, txt: c.txt, badge: '', bcls: '', max: 0, lvl: c.lvl || 0, ready: false };
-    if (c.kind === 'path') {
+    if (c.kind === 'tune') {
+      o.max = ED.TUNE_MAX || 5; o.badge = 'TUNE ' + c.lvl + '/' + o.max; o.bcls = 'lv';
+    } else if (c.kind === 'path') {
       const d = ED.WEAPONS[c.id];
-      o.name = (d ? d.name + ': ' : '') + c.name; o.max = ED.PATH_MAX || 3;
-      o.badge = 'RANK ' + c.lvl; o.bcls = 'lv';
+      o.name = (d ? d.name + ': ' : '') + c.name; o.max = ED.PATH_MAX || 5;
+      o.badge = 'RANK ' + c.lvl + '/' + o.max; o.bcls = 'lv';
+    } else if (c.kind === 'pathpick') {
+      o.max = ED.PATH_MAX || 5; o.badge = 'PERMANENT'; o.bcls = 'perm';
     } else if (c.kind === 'support') {
       o.badge = 'NEW SUPPORT'; o.bcls = 'new';
     } else if (c.kind === 'form') {
@@ -293,7 +298,7 @@
       o.badge = 'FORM'; o.bcls = 'new'; o.ready = true;
     } else if (c.kind === 'refine') {
       const d = ED.WEAPONS[c.id]; o.max = d && d.refine ? d.refine.length : 2;
-      o.badge = 'REFINE ' + c.lvl; o.bcls = 'lv';
+      o.badge = 'REFINE ' + c.lvl + '/' + o.max; o.bcls = 'lv';
     } else if (c.kind === 'passive' || c.kind === 'plvl') {
       const d = ED.PASSIVES[c.id]; o.max = d ? d.max : 5;
       o.badge = c.kind === 'passive' ? 'NEW' : 'LV ' + c.lvl; o.bcls = c.kind === 'passive' ? 'new' : 'lv';
@@ -307,18 +312,19 @@
   UI.syncOffer = (me, solo) => {
     const ov = $('ov-offer'), offer = me && !me.dead ? me.offer : null;
     if (!offer || !(me.banishes > 0)) UI.banishOn = false;
-    const sig = offer ? offer.map(c => c.kind + c.id + (c.path | 0) + c.lvl).join('|') + '|' + me.rerolls + me.skips + (me.banishes | 0) + (UI.banishOn ? 'b' : '') + (solo ? 's' : 'c') : '';
+    const sig = offer ? offer.map(c => c.kind + c.id + (c.path | 0) + ':' + (c.tk | 0) + c.lvl).join('|') + '|' + me.rerolls + me.skips + (me.banishes | 0) + (UI.banishOn ? 'b' : '') + (solo ? 's' : 'c') : '';
     if (sig === UI.offerSig) return;
     UI.offerSig = sig;
     ov.hidden = !offer;
     ov.classList.toggle('strip', !solo);
     if (!offer) return;
-    const v = ED.Game.view, form = offer[0].kind === 'form'; // Form offer (chest): picks only
-    $('offer-title').textContent = form ? (solo ? 'Choose a Form' : 'Choose a Form: press 1-' + offer.length) : solo ? 'Level ' + (v ? v.level : '') + '!' : 'Level up: press 1-' + offer.length;
+    const v = ED.Game.view, W = ED.World.prototype, chest = W.isChestOffer(offer); // chest offer (path pick, Form fork): picks only
+    const wd = chest && ED.WEAPONS[ED.weaponRoot(offer[0].id)], head = chest ? (offer[0].kind === 'form' ? 'Choose a Form' : 'Choose a path') + (wd ? ' · ' + wd.name : '') : '';
+    $('offer-title').textContent = chest ? head + (solo ? '' : ': press 1-' + offer.length) : solo ? 'Level ' + (v ? v.level : '') + '!' : 'Level up: press 1-' + offer.length;
     const box = $('offer-cards'); box.textContent = '';
     offer.forEach((c, i) => {
       const f = cardInfo(me, c), b = document.createElement('button');
-      const banOk = UI.banishOn && !form && c.kind !== 'gold' && c.kind !== 'heal';
+      const banOk = UI.banishOn && W.canBanish(offer, c);
       b.className = 'offer-card k-' + c.kind + (f.ready ? ' evo-ready' : '') + (banOk ? ' banish' : '');
       b.insertAdjacentHTML('beforeend', `<span class="key">${keyOf('pick' + (i + 1), String(i + 1))}</span>`);
       b.appendChild(UI.iconCanvas(c.kind === 'form' && f.name === '???' ? 'fx.spark.magic' : c.icon, 64, 'ic'));
@@ -331,8 +337,9 @@
     rr.textContent = 'Reroll (' + keyOf('reroll', 'R') + ') ' + me.rerolls; rr.disabled = !(me.rerolls > 0);
     sk.textContent = 'Skip (' + keyOf('skip', 'X') + ') ' + me.skips; sk.disabled = !(me.skips > 0);
     const bn = $('btn-banish');
-    bn.textContent = (UI.banishOn ? 'Pick a card to banish ' : 'Banish ') + (me.banishes | 0); bn.disabled = !(me.banishes > 0); bn.classList.toggle('on', UI.banishOn);
-    $('offer-foot').hidden = form || !(me.rerolls > 0 || me.skips > 0 || me.banishes > 0);
+    const banAny = me.banishes > 0 && offer.some(c => W.canBanish(offer, c)); // Banish shows only with a banishable card on offer
+    bn.textContent = (UI.banishOn ? 'Pick a card to banish ' : 'Banish ') + (me.banishes | 0); bn.disabled = !banAny; bn.hidden = !banAny; bn.classList.toggle('on', UI.banishOn);
+    $('offer-foot').hidden = chest || !(me.rerolls > 0 || me.skips > 0 || banAny);
   };
 
   // ---------------- chest popup ----------------
@@ -343,17 +350,17 @@
     if (now) { el.hidden = true; el.classList.remove('out'); return; }
     el.classList.add('out'); chestOut = setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, 350);
   }
-  // Chest popup for results (chestFor); val 2: boss chest. A 'form' / 'offer' row (an offer follows) keeps the popup up longer.
+  // Chest popup for results (chestFor); val 2: boss chest. A 'pathpick' / 'form' / 'offer' row (an offer follows) keeps the popup up longer.
   UI.showChest = (results, val) => {
     const me = ED.Game.view && ED.Game.view.me, list = $('chest-list'), el = $('ov-chest');
     list.textContent = '';
     let evo = false;
     for (const r of results) {
       const row = document.createElement('div'); row.className = 'chest-row';
-      if (r.kind === 'offer' || r.kind === 'form') {
+      if (r.kind === 'offer' || r.kind === 'form' || r.kind === 'pathpick') {
         evo = true; row.classList.add('evo');
         row.appendChild(UI.iconCanvas(r.icon || 'fx.spark.magic', 48));
-        row.insertAdjacentHTML('beforeend', `<span>${esc(r.txt || (r.kind === 'form' ? 'Choose a Form' : 'An extra level-up'))}</span>`);
+        row.insertAdjacentHTML('beforeend', `<span>${esc(r.txt || (r.kind === 'form' ? 'Choose a Form' : r.kind === 'pathpick' ? 'Choose a path' : 'An extra level-up'))}</span>`);
       } else if (r.kind === 'plvl' || r.kind === 'skill') {
         const d = r.kind === 'plvl' ? ED.PASSIVES[r.id] : ED.SKILLS[r.id], slot = me && (r.kind === 'plvl' ? me.passives : me.skills).find(x => x.id === r.id);
         if (d) row.appendChild(UI.iconCanvas(d.icon, 48));
@@ -376,12 +383,17 @@
   };
 
   // ---------------- pause ----------------
-  // Weapon line of a build: 'Name  Path 3 · Path 1 · Path 0' (+ '  Refine n' with a Form). ws: { id, pr, fl } or a summary build entry.
+  // Weapon line of a slot: 'Weapon: Tune n/5 · Path n/5 · Form Refine n/2'; a path-ready slot ends '· path: pick at a chest', a Form-ready one '· Form: boss chest'.
+  // ws: { id, tune, path, pr, fl } (a net slot or a summary build entry).
   const buildLine = UI.buildLine = (ws) => {
-    const d = ED.WEAPONS[ws.id], root = ED.WEAPONS[ED.weaponRoot ? ED.weaponRoot(ws.id) : ws.id];
-    if (!d) return '';
-    const P = (root && root.paths) || [], pr = ws.pr || [];
-    return d.name + '  ' + P.map((pa, i) => pa.name + ' ' + (pr[i] | 0)).join(' · ') + (d.form ? '  Refine ' + (ws.fl | 0) : '');
+    const d = ED.WEAPONS[ws.id], root = ED.WEAPONS[ED.weaponRoot(ws.id)];
+    if (!d || !root) return '';
+    const TM = ED.TUNE_MAX || 5, PM = ED.PATH_MAX || 5, pa = ws.path >= 0 && root.paths ? root.paths[ws.path] : null, out = ['Tune ' + (ws.tune | 0) + '/' + TM];
+    if (pa) out.push(pa.name + ' ' + ((ws.pr && ws.pr[ws.path]) | 0) + '/' + PM);
+    else if ((ws.tune | 0) >= TM && root.paths && root.paths.length) out.push('path: pick at a chest');
+    if (d.form) out.push(d.name + ' Refine ' + (ws.fl | 0) + '/' + (d.refine ? d.refine.length : 2));
+    else if (pa && ws.pr[ws.path] >= PM && ED.pathForms(root.id, ws.path).length) out.push('Form: boss chest');
+    return root.name + ': ' + out.join(' · ');
   };
   function renderPauseBuild() {
     const me = ED.Game.view && ED.Game.view.me, box = $('pause-build');

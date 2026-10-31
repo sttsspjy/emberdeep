@@ -34,24 +34,19 @@ Zero damage. Cooldown 16 s at every level. A ring from the hero to 370 px (about
 - L3: Shields you and allies for 1.5 s (every living hero inside the ring is invulnerable).
 - L4: Pulls gems; stuns 0.5 s longer.
 
-## dps.js (`node tools/dps.js bell`: weapon only, no Q casts, build fixed, no level-ups)
+## dps.js (`node tools/dps.js bell`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 
 | build | form | kind | crowd wpn | kills/s | single wpn |
 |---|---|---|---|---|---|
 | base | - |  | 579 | 6.1 | 19 |
-| p0 | - |  | 951 | 11.0 | 37 |
-| p1 | - |  | 983 | 12.4 | 29 |
-| p2 | - |  | 1,027 | 11.8 | 37 |
-| all | - |  | 2,047 | 26.6 | 117 |
-| f0 | cathedral | 360° | 1,746 | 20.8 | 78 |
-| f1 | glaciertoll | 360° | 1,638 | 20.9 | 105 |
-| f2 | carillon | 360° | 2,031 | 26.5 | 173 |
-| h0 | undertow | 360° | 2,519 | 32.9 | 86 |
-| h1 | windchime | 360° | 1,674 | 22.1 | 91 |
-| F0 | cathedral | 360° | 3,215 | 41.3 | 126 |
-| F1 | glaciertoll | 360° | 3,373 | 44.5 | 179 |
-| F2 | carillon | 360° | 2,470 | 32.2 | 269 |
-| H0 | undertow | 360° | 3,130 | 41.5 | 117 |
-| H1 | windchime | 360° | 2,298 | 29.8 | 141 |
+| t5 | - |  | 897 | 10.5 | 33 |
+| p0 | - |  | 1,539 | 19.3 | 77 |
+| p1 | - |  | 1,528 | 20.3 | 65 |
+| p2 | - |  | 1,651 | 21.6 | 77 |
+| f00 | cathedral | 360° | 3,698 | 47.9 | 159 |
+| f01 | undertow | 360° | 3,032 | 40.0 | 208 |
+| f10 | glaciertoll | 360° | 2,926 | 39.5 | 215 |
+| f11 | windchime | 360° | 1,955 | 27.1 | 261 |
+| f20 | carillon | 360° | 3,188 | 43.7 | 230 |
 
-Role rule: every Bell Form is 360°; crowd ceiling 0.6 × the cross-hero directional Form mean (f / h rows, 4,626 → ≤ 2,776). Crowd damage drops when pushes hold the horde at the rings' rims; that is the role's trade.
+Role rule: every Bell Form is 360°; crowd ceiling 0.6 × the cross-hero directional f mean (3,575 → ≤ 2,145): only Windchime (1,955) meets it; Cathedral 3,698, Carillon 3,188, Undertow 3,032 and Glacier Toll 2,926 exceed it. Outside ±25% of the Bell mean (2,960): Windchime (−34%). Crowd damage drops when pushes hold the horde at the rings' rims; that is the role's trade.

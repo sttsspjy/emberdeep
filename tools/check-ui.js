@@ -247,21 +247,33 @@ async function main() {
     console.log('run: HUD, level-up, chest, pause');
     await page.evaluate(() => { ED.App.startSolo({ cls: 'knight', stage: 0, seed: 7, cheats: { god: true } }); });
     await wait(1500);
-    await page.evaluate(() => { const w = ED.Game.w; w.addXp(w.xpNext - w.xp + 1); });
+    // level 2 with every support banned: the weapon-card guarantee draws a tune card
+    await page.evaluate(() => { const w = ED.Game.w, p = w.heroes[0]; for (const id of ED.WEAPON_IDS) if (ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved) p.banned.push('w:' + id); w.addXp(w.xpNext - w.xp + 1); });
     await page.waitForFunction(() => !document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(await vis(page, 'ov-offer'), 'level-up cards shown (solo)');
     const nCards = await page.locator('.offer-card').count();
     check(nCards >= 3 && nCards <= 4, '3-4 cards');
+    check(/^Level \d+!$/.test(await page.locator('#offer-title').innerText()) && /^TUNE 1\/5$/.test(await page.locator('.offer-card.k-tune .badge').first().innerText().catch(() => '')), 'level-up title; tune card badge TUNE 1/5');
+    await page.evaluate(() => { ED.Game.w.heroes[0].banned.length = 0; });
     check(await minFont(page, '.offer-card .card-txt, .offer-card .card-name, .offer-card .card-sub, .offer-card .badge') >= 20, 'card text >= 20 px');
     await shot(page, 'offer');
     await page.keyboard.press('Digit1');
     await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(!(await vis(page, 'ov-offer')), 'key 1 picks a card');
+    // elite chest with the hero weapon path-ready: chest popup, then a path-pick offer (header names the weapon, 3 PERMANENT cards, no foot); key 1 picks path 0
+    await page.evaluate(() => { const w = ED.Game.w, p = w.heroes[0]; p.offer = null; p.pend = 0; w.setRanks(p, p.weapons[0], ED.TUNE_MAX); p.rerolls = 1; w.openChest(p, 1); });
+    await page.waitForFunction(() => !document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
+    check(/Chest!/.test(await page.locator('#ov-chest').innerText()) && /Choose a path/.test(await page.locator('#ov-chest').innerText()), 'elite chest popup: Choose a path');
+    check(await vis(page, 'ov-offer') && (await page.locator('#offer-title').innerText()) === 'Choose a path · Cleave' && (await page.locator('.offer-card.k-pathpick .badge.perm').count()) === 3 && !(await vis(page, 'offer-foot')), 'path-pick offer: header, 3 permanent path cards, no reroll / skip / banish');
+    await shot(page, 'path-offer');
+    await page.keyboard.press('Digit1');
+    await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
+    check(await page.evaluate(() => ED.Game.w.heroes[0].weapons[0].path === 0), 'key 1 picks path 0');
     // boss chest with a ready Form: chest popup says so, then a Form offer (header, no reroll / skip / banish foot); key 1 takes it
     await page.evaluate(() => { const w = ED.Game.w, p = w.heroes[0]; p.offer = null; p.pend = 0; w.setRanks(p, p.weapons[0], ED.TUNE_MAX, 0, ED.PATH_MAX); p.rerolls = 1; w.openChest(p, 2); });
     await page.waitForFunction(() => !document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(/Boss chest!/.test(await page.locator('#ov-chest').innerText()) && /Choose a Form/.test(await page.locator('#ov-chest').innerText()), 'boss chest popup: Choose a Form');
-    check(await vis(page, 'ov-offer') && (await page.locator('#offer-title').innerText()) === 'Choose a Form' && (await page.locator('.offer-card.k-form').count()) >= 1 && !(await vis(page, 'offer-foot')), 'Form offer: header, Form cards, no reroll / skip / banish');
+    check(await vis(page, 'ov-offer') && (await page.locator('#offer-title').innerText()) === 'Choose a Form · Cleave' && (await page.locator('.offer-card.k-form').count()) >= 1 && !(await vis(page, 'offer-foot')), 'Form offer: header, Form cards, no reroll / skip / banish');
     await shot(page, 'form-offer');
     await page.keyboard.press('Digit1');
     await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
@@ -286,7 +298,7 @@ async function main() {
     await page.keyboard.press('Escape');
     await wait(150);
     check(await vis(page, 'ov-pause'), 'Esc pauses');
-    check(await page.locator('#pause-build .pslot canvas').count() >= 5 && /Colossus Blade .*Greatblade 5/.test(await page.locator('#pause-build .pb-line').first().innerText()) && (await page.locator('#pause-build .pb-line').count()) === (await page.evaluate(() => ED.Game.w.heroes[0].weapons.length)), 'pause shows the build (weapon slots, one line per weapon: Form, path ranks; passives)');
+    check(await page.locator('#pause-build .pslot canvas').count() >= 5 && /^Cleave: Tune 5\/5 · Greatblade 5\/5 · Colossus Blade Refine 2\/2$/.test(await page.locator('#pause-build .pb-line').first().innerText()) && (await page.locator('#pause-build .pb-line').count()) === (await page.evaluate(() => ED.Game.w.heroes[0].weapons.length)), 'pause shows the build (weapon slots, one line per weapon: tune, path rank, Form + refine; passives)');
     await shot(page, 'pause');
     await page.locator('#btn-pause-settings').click();
     check(await vis(page, 'ov-settings') && !(await vis(page, 'ov-pause')), 'settings from pause');

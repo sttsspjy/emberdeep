@@ -45,24 +45,19 @@ Zero damage. Blink toward the cursor (40–130 px, through foes and over obstacl
 | 3 | The decoy lasts 3.5 s | decoy 3.5 s |
 | 4 | 2 charges | two blinks stored, one recharge per 8 s |
 
-## dps.js (`node tools/dps.js shade`: weapon only, no Q casts, build fixed, no level-ups)
+## dps.js (`node tools/dps.js shade`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 
 | build | form | kind | crowd wpn | kills/s | single wpn |
 |---|---|---|---|---|---|
-| base | - |  | 663 | 1.4 | 62 |
-| p0 | - |  | 1,713 | 7.2 | 150 |
-| p1 | - |  | 1,691 | 7.8 | 70 |
-| p2 | - |  | 1,254 | 4.4 | 97 |
-| all | - |  | 3,525 | 17.1 | 203 |
-| f0 | thousand | dir | 4,838 | 24.1 | 522 |
-| f1 | assassinate | dir | 3,640 | 17.6 | 470 |
-| f2 | shadowfan | dir | 4,562 | 22.1 | 248 |
-| h0 | lotus | dir | 5,573 | 28.0 | 451 |
-| h1 | reaper | dir | 4,297 | 22.1 | 421 |
-| F0 | thousand | dir | 6,328 | 31.5 | 626 |
-| F1 | assassinate | dir | 5,209 | 25.9 | 766 |
-| F2 | shadowfan | dir | 6,482 | 32.1 | 461 |
-| H0 | lotus | dir | 5,702 | 28.8 | 510 |
-| H1 | reaper | dir | 5,126 | 26.1 | 636 |
+| base | - |  | 680 | 8.7 | 77 |
+| t5 | - |  | 1,020 | 13.4 | 125 |
+| p0 | - |  | 1,799 | 25.4 | 371 |
+| p1 | - |  | 1,490 | 20.3 | 186 |
+| p2 | - |  | 1,539 | 21.3 | 227 |
+| f00 | thousand | dir | 2,988 | 42.1 | 1,080 |
+| f10 | assassinate | dir | 3,177 | 44.8 | 818 |
+| f11 | lotus | dir | 2,720 | 38.4 | 517 |
+| f20 | shadowfan | dir | 3,265 | 44.0 | 467 |
+| f21 | reaper | dir | 2,471 | 35.0 | 722 |
 
-All Forms directional; f / h rows within ±25% of their mean.
+All Forms directional; f rows within ±25% of their mean (2,924).

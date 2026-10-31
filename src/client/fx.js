@@ -243,7 +243,7 @@
         for (const r of ev.results || []) {
           if (r.kind === 'evo') continue;
           const d = r.kind === 'skill' ? ED.SKILLS[r.id] : r.kind === 'plvl' ? ED.PASSIVES[r.id] : null;
-          const txt = r.kind === 'gold' ? '+' + (r.val | 0) + ' GOLD' : r.kind === 'offer' ? 'EXTRA PICK' : up(d ? d.name : r.id) + ' UP';
+          const txt = r.kind === 'gold' ? '+' + (r.val | 0) + ' GOLD' : r.kind === 'offer' ? 'EXTRA PICK' : r.kind === 'pathpick' ? 'NEW PATH' : r.kind === 'form' ? 'NEW FORM' : up(d ? d.name : r.id) + ' UP';
           floatText(txt, p.x, p.y - 34 - i * 11, r.kind === 'gold' ? 0xffd24a : 0xbfefff, 1.6 + i * 0.25);
           i++;
         }

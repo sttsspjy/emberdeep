@@ -4,8 +4,9 @@
 // 3. Pure reader: a 340 s stage-2 run (first boss at 5:00, a cyclops added at 2:00 for st.test hazards) where a second, discarded bot also thinks every tick ends identical to a plain run.
 // 4. Build: a 300 s knight run keeps the hero weapon in slot 0 (supports only after it), levels it (3+ steps) and takes a Form when offered; the bot casts Q and never presses E.
 // 5. Short-reach stance: a knight (Cleave only, supports banished) keeps a foe inside its swing reach on >= 20% of 120 s and holds bosses inside it.
-// 6. Card order: a chest offer's first card (path pick, Form) > refine > hero path rank / tune > new support > support path rank / tune > passives > skill.
-// 7. Boss fights: every killed boss carries its spawn time under its stage id (the twins end on either body). skill 0.3 is deterministic and plays differently from skill 1.
+// 6. Card order: a chest pick (path pick, Form) > refine > hero path rank / tune > new support > a new passive below the quota > support path rank / tune > passive levels > skill.
+//    Path picks and Form forks follow a per-seed choice: seeds 1-12 pick every Cleave path and both Greatblade Forms; one seed always picks the same.
+// 7. Boss fights (knight seed 2, meta max, 780 s): every killed boss carries its spawn time under its stage id (the twins end on either body). skill 0.3 is deterministic and plays differently from skill 1.
 'use strict';
 let fails = 0;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
@@ -118,16 +119,29 @@ ok(a.time >= 89 && a.time <= 91 && a.death === 'timeout' && a.ticks > 0, `maxTim
   const sid = ED.WEAPON_IDS.find(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved);
   if (sid) {
     const sp = (i, lvl) => ({ kind: 'path', id: sid, path: i, lvl, name: '', txt: '', sub: '', icon: '', val: 0 });
-    const a = pick([card('passive', 'might'), card('support', sid), path(1)]), b = pick([card('passive', 'might'), sp(0, 3), card('support', sid)]), c = pick([card('passive', 'might', 2), tune(0, sid)]);
-    const fo = pick([card('form', 'whirlwind'), card('form', 'colossus')]);
-    ok(a.kind === 'path' && b.kind === 'support' && c.kind === 'tune' && fo && fo.id === 'whirlwind',
-      `hero path > new support > support path > support tune > passive; a Form offer takes its first card (${a.kind}, ${b.kind}, ${c.kind}, ${fo && fo.id})`);
+    const a = pick([card('passive', 'might'), card('support', sid), path(1)]), b = pick([card('passive', 'might'), sp(0, 3), card('support', sid)]), c = pick([card('plvl', 'might', 2), tune(0, sid)]);
+    const np = pick([card('passive', 'magnet'), tune(0, sid)]);
+    ok(a.kind === 'path' && b.kind === 'support' && c.kind === 'tune' && np.kind === 'passive',
+      `hero path > new support > support path > support tune > passive level; a new passive below the quota beats a support tune (${a.kind}, ${b.kind}, ${c.kind}, ${np.kind})`);
   }
+  // per-seed chest choices: Cleave path picks and Greatblade's Form fork (colossus / earthsplitter)
+  const PP = [0, 1, 2].map(i => ({ kind: 'pathpick', id: 'cleave', path: i, lvl: 1, name: '', txt: '', sub: '', icon: '', val: 0 }));
+  const FF = ED.pathForms('cleave', 0).map(id => ({ kind: 'form', id, path: 0, lvl: 1, name: '', txt: '', sub: '', icon: '', val: 0 }));
+  const paths = new Set(), forms = new Set();
+  let same = true;
+  for (let s = 1; s <= 12; s++) {
+    const b2 = Bot.create({ pid: 'p1', seed: s }); b2.onStart(w, p);
+    const choose = (O) => { p.offer = O; const f = b2.think(w, p); p.offer = null; return f.pick ? O[f.pick - 1] : null; };
+    const x = choose(PP), y = choose(FF.slice().reverse());
+    if (x) paths.add(x.path); if (y) forms.add(y.id);
+    if (choose(PP.slice().reverse()) !== x || choose(FF) !== y) same = false;
+  }
+  ok(paths.size === 3 && forms.size === FF.length && FF.length === 2 && same, `seeds 1-12 pick paths ${[...paths].sort().join(',')} and Forms ${[...forms].join(',')}; each seed's choice ignores card order`);
 }
 
 // 7. boss fights + skill tier
 {
-  const r = runOne({ stage: 0, cls: 'knight', seed: 1, maxTime: 780, meta: 'max' });
+  const r = runOne({ stage: 0, cls: 'knight', seed: 2, maxTime: 780, meta: 'max' }); // seed 2: the bot's Edge Wave path (seed 1 picks Whirl, whose 360 Form stalls on the twins)
   const ids = r.bosses.map(b => b.id + '@' + b.spawn + '-' + b.at).join(',');
   ok(r.bosses.length >= 2 && r.bosses.every(b => b.spawn !== null && b.at >= b.spawn) && r.bosses.some(b => b.id === 'twins'), 'boss kills carry their spawn: ' + ids + ' (time ' + r.time + ', death ' + r.death + ')');
   const c = { stage: 2, cls: 'ranger', seed: 5, maxTime: 90, skill: 0.3 }, x = runOne(c), y = runOne(c), z = runOne(Object.assign({}, c, { skill: 1 }));

@@ -3,8 +3,9 @@
 //                             [--software] [--quality=high|low] [--gate] [--prof] [--ff=480] [--timeout=600]
 //   smoke: for each hero (--cls, default all 7) a solo stage-1 run driven ~--seconds (10) s (circling, aim at the nearest foe, Q / E, dash, first card picked); fails on a page or console error,
 //          a stalled sim, no Q or E cast, or a signature weapon that dealt nothing.
-//   shots: PNGs of title, hero select, stage select, camp, each hero mid-fight at --ff (480) s of sim (ED.Debug.fastForward, god cheat), a level-up overlay, a chest
-//          (evolution), a boss fight and the results screen, into a fresh folder <outdir>/shots-<stamp> (printed).
+//   shots: PNGs of title, hero select, stage select, camp, the slot lifecycle on a fresh knight run (a level-up with a tune card, an elite-chest path-pick offer, a boss-chest
+//          Form offer, the pause build line), each hero mid-fight at --ff (480) s of sim (ED.Debug.fastForward, god cheat), a level-up overlay, a chest, a boss fight and the
+//          results screen, into a fresh folder <outdir>/shots-<stamp> (printed).
 //   crowdN: a knight run (god cheat) held at N live foes; after 2 s of warm-up measures --seconds (6) s, p50 / p95 / max: frame time (rAF interval; the browser runs uncapped,
 //          no vsync, when a crowd scenario is requested), main-thread work (all rAF callbacks of a frame), sim ms per 60 Hz tick and Render.frame ms.
 //          --software launches without the GPU (software GL: the Canvas2D fallback path). --gate fails crowd900 when GPU-path frame p95 > 8 ms (ARCHITECTURE §11; report-only by default).
@@ -149,7 +150,7 @@ function pageBoot(cfg) {
       return D.state();
     };
     // Gives weapon or passive id to the local hero. Weapon: a hero root replaces the hero weapon, a support root takes a free support slot (else replaces the last support);
-    // a root spends lvl - 1 path ranks (path 0 first; default all 9), a Form ranks the paths it needs, takes it and refines it fully. Passive: level lvl (default max).
+    // a root spends lvl - 1 steps (tune first, then the picked path's ranks, else path 0; default all), a Form fills its path, takes it and refines it fully. Passive: level lvl (default max).
     D.give = (id, lvl) => {
       const w = run(); if (!w) return null;
       const p = meOf(w);
@@ -482,8 +483,43 @@ async function scenShots() {
     need(await call(page, 'visible', 'scr-camp'), 'camp not shown');
     await shot('04-camp');
     await page.click('#btn-camp-back');
-    // heroes mid-fight; the first hero's run also gives the level-up, chest, boss and results shots
+    // slot lifecycle on a fresh knight run (first card picked; chest popups awaited out so the offer header shows)
     let k = 5;
+    const offerShot = async (name, prep, want) => {
+      const got = await page.evaluate(prep);
+      await page.waitForFunction(() => { const el = document.getElementById('ov-offer'); return el && !el.hidden; }, null, { timeout: 3000 }).catch(() => {});
+      await page.waitForFunction(() => document.getElementById('ov-chest').hidden, null, { timeout: 6000 }).catch(() => {});
+      await wait(700);
+      const title = await page.locator('#offer-title').innerText().catch(() => '');
+      need(await call(page, 'visible', 'ov-offer') && want.test(title), name + ': offer "' + title + '" (' + got + ')');
+      res.notes.push(name + ': ' + title + ' | ' + got);
+      await shot(`${String(k++).padStart(2, '0')}-${name}`);
+      await page.evaluate(() => { window.__BR.autoPick = true; }); // scripted input owns the pick key while driving
+      await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 3000 }).catch(() => {});
+      await page.evaluate(() => { window.__BR.autoPick = false; });
+    };
+    await call(page, 'start', 'knight', 0, { god: true });
+    await page.evaluate(() => { window.__BR.autoPick = false; window.__BR.still = true; });
+    await wait(800);
+    await offerShot('levelup-tune', () => { const E = window.ED, w = E.Game.w, p = w.heroes[0]; for (const id of E.WEAPON_IDS) if (E.WEAPONS[id].support && !E.WEAPONS[id].evolved) p.banned.push('w:' + id); w.addXp(w.xpNext - w.xp + 1); return 'supports banned: the level-2 weapon card is a tune card'; }, /^Level \d+!$/);
+    await offerShot('path-pick', () => { const w = window.ED.Game.w, p = w.heroes[0]; p.banned.length = 0; w.setRanks(p, p.weapons[0], window.ED.TUNE_MAX); w.openChest(p, 1); return 'tune ' + p.weapons[0].tune; }, /^Choose a path · /);
+    await offerShot('form-fork', () => { const w = window.ED.Game.w, p = w.heroes[0], ws = p.weapons[0]; w.setRanks(p, ws, window.ED.TUNE_MAX, ws.path, window.ED.PATH_MAX); w.openChest(p, 2); return 'path ' + ws.path + ' rank ' + ws.pr[ws.path]; }, /^Choose a Form · /);
+    await page.evaluate(() => {
+      const E = window.ED, w = E.Game.w, p = w.heroes[0], ws = p.weapons[0], sup = E.WEAPON_IDS.filter(id => E.WEAPONS[id].support && !E.WEAPONS[id].evolved);
+      w.refineForm(p, ws);
+      const a = w.addWeapon(p, sup[0]), b = w.addWeapon(p, sup[1]);
+      if (a) w.setRanks(p, a, E.TUNE_MAX); // path-ready: 'path: pick at a chest'
+      if (b) w.setRanks(p, b, 3);
+    });
+    await page.keyboard.press('Escape');
+    await wait(400);
+    const lines = await page.locator('#pause-build .pb-line').allInnerTexts().catch(() => []);
+    need(await call(page, 'visible', 'ov-pause') && lines.length === 3, 'pause build: ' + lines.length + ' weapon lines');
+    res.notes.push('pause build: ' + lines.join(' / '));
+    await shot(`${String(k++).padStart(2, '0')}-pause-build`);
+    await page.keyboard.press('Escape');
+    await call(page, 'stop'); await wait(200);
+    // heroes mid-fight; the first hero's run also gives the level-up, chest, boss and results shots
     for (let i = 0; i < o.classes.length; i++) {
       const cls = o.classes[i], tag = String(k++).padStart(2, '0');
       await call(page, 'start', cls, 0, { god: true });
