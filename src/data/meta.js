@@ -3,7 +3,7 @@
 //   Price of rank r + 1 (r ranks owned): cost x (r + 1)^2 (ED.shopPrice).
 // ED.UNLOCKS: heroes: { cls: rule } where rule is { start } | { survive: s } (one run) | { beat: stage index } | { buy: gold } (Camp purchase) | { pure: true } (win any stage
 //   with 0 Camp ranks at run start), txt = the lock line; stages: { index: rule }.
-// ED.ACHIEVEMENTS: save order (append only): { id, name, txt, icon ('' = derived from the rule by the UI), gold (paid once when earned), reward (cosmetic id, '' = none), rule }.
+// ED.ACHIEVEMENTS: save order (append only): { id, name, txt, icon ('' = derived from the rule by the UI), gold (paid once when earned), reward (ED.COSMETICS id granted when earned, '' = none), rule }.
 //   Rule kinds (ED.Save.achProgress): { time: s } best run time | { beat: i } stage i beaten | { winWith: cls } a win as cls | { form: cls } cls's weapon reached a Form |
 //   { runKills: n } own kills in one run | { kills: n } lifetime kills | { level: n } one run | { wins: n } lifetime | { pure: true } a win with 0 Camp ranks |
 //   { coop: n } co-op wins | { heroes: true } every hero unlocked | { camp: true } every Camp rank maxed.
@@ -44,27 +44,28 @@
     stages: { 0: { start: true }, 1: { beat: 0, txt: 'Beat stage 1' }, 2: { beat: 1, txt: 'Beat stage 2' } },
   };
   const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
-  const A = (id, name, txt, gold, rule, icon) => ({ id, name, txt, icon: icon || '', gold, reward: '', rule });
+  const A = (id, name, txt, gold, rule, icon, reward) => ({ id, name, txt, icon: icon || '', gold, reward: reward || '', rule });
+  const VICTOR_SKIN = { knight: 'gilded', ranger: 'frost', pyro: 'azure', necro: 'bloodbound', cleric: 'dawn', shade: 'ghost', bell: 'golden' };
   ED.ACHIEVEMENTS = [
     A('time5', 'Still Standing', 'Survive 5 minutes', 50, { time: 300 }),
     A('beat0', 'Ossuary Cleared', 'Beat stage 1', 200, { beat: 0 }),
     A('beat1', 'Glowmire Cleared', 'Beat stage 2', 300, { beat: 1 }),
-    A('beat2', 'Abyss Cleared', 'Beat stage 3', 400, { beat: 2 }),
+    A('beat2', 'Abyss Cleared', 'Beat stage 3', 400, { beat: 2 }, '', 'tint.abyss'),
   ].concat(
-    HEROES.map(c => A('win.' + c, '', '', 150, { winWith: c })), // name / txt from the hero name (ED.Save.achText)
+    HEROES.map(c => A('win.' + c, '', '', 150, { winWith: c }, '', 'skin.' + c + '.' + VICTOR_SKIN[c])), // name / txt from the hero name (ED.Save.achText)
     HEROES.map(c => A('form.' + c, '', '', 100, { form: c })),
     [
-      A('kills5k', 'Reaper', 'Kill 5000 foes in one run', 100, { runKills: 5000 }, 'fx.sigil.skull'),
-      A('kills15k', 'Blender', 'Kill 15000 foes in one run', 200, { runKills: 15000 }, 'fx.sigil.skull'),
+      A('kills5k', 'Reaper', 'Kill 5000 foes in one run', 100, { runKills: 5000 }, 'fx.sigil.skull', 'title.reaper'),
+      A('kills15k', 'Blender', 'Kill 15000 foes in one run', 200, { runKills: 15000 }, 'fx.sigil.skull', 'title.blender'),
       A('life25k', 'Exterminator', 'Kill 25000 foes in total', 150, { kills: 25000 }, 'fx.blast.red'),
       A('life100k', 'Scourge', 'Kill 100000 foes in total', 300, { kills: 100000 }, 'fx.blast.red'),
-      A('life250k', 'Extinction', 'Kill 250000 foes in total', 500, { kills: 250000 }, 'fx.blast.red'),
-      A('level40', 'Ascended', 'Reach level 40 in one run', 200, { level: 40 }, 'fx.spark.magic'),
-      A('wins10', 'Veteran', 'Win 10 runs', 300, { wins: 10 }, 'pickup.chest'),
-      A('pure', 'Purist', 'Win with no Camp ranks', 400, { pure: true }, 'fx.circle.white'),
-      A('coop', 'Fellowship', 'Win a co-op run', 200, { coop: 1 }, 'fx.shield.gold'),
-      A('heroes', 'Full Roster', 'Unlock every hero', 300, { heroes: true }, 'fx.star.stun'),
-      A('camp', 'Fully Stocked', 'Max every Camp rank', 0, { camp: true }, 'pickup.gold'),
+      A('life250k', 'Extinction', 'Kill 250000 foes in total', 500, { kills: 250000 }, 'fx.blast.red', 'kill.supernova'),
+      A('level40', 'Ascended', 'Reach level 40 in one run', 200, { level: 40 }, 'fx.spark.magic', 'lvl.ascension'),
+      A('wins10', 'Veteran', 'Win 10 runs', 300, { wins: 10 }, 'pickup.chest', 'title.veteran'),
+      A('pure', 'Purist', 'Win with no Camp ranks', 400, { pure: true }, 'fx.circle.white', 'title.purist'),
+      A('coop', 'Fellowship', 'Win a co-op run', 200, { coop: 1 }, 'fx.shield.gold', 'title.companion'),
+      A('heroes', 'Full Roster', 'Unlock every hero', 300, { heroes: true }, 'fx.star.stun', 'title.paragon'),
+      A('camp', 'Fully Stocked', 'Max every Camp rank', 0, { camp: true }, 'pickup.gold', 'ncol.prism'),
     ]);
   ED.ACH_IDS = ED.ACHIEVEMENTS.map(a => a.id);
 })(globalThis.ED || (globalThis.ED = {}));

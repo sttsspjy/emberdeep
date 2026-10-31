@@ -61,9 +61,11 @@ Each hero has one weapon of their own (three paths, hidden Forms), room for two 
 
 Every run pays gold, win or lose: bosses, minutes survived and a small kill bounty, more on later stages. Gold buys permanent ranks at Camp (damage, health, armor, regen, speed, pickup radius, XP, gold, luck, revivals, rerolls, skips, banishes, attack speed, area, duration, projectile speed, +1 projectile, skill cooldown). First ranks are cheap, top ranks expensive; maxing everything takes about 15 full runs. Refund all gives every coin back.
 
-**Achievements** (main menu) lists every unlock and 29 achievements with your progress and their gold reward (each pays once; new ones show on the results screen), plus your records: runs, wins, lifetime kills, best time, kills and level, and each stage's best run. **Encyclopedia** (main menu) describes every hero, weapon and support weapon (with its paths and the Forms you found), passive, foe, boss and stage you have met: heroes and stages you started a run with, weapons, Forms and passives you owned, foes you saw and bosses you fought. The rest shows as a dark "???" until you find it; locked heroes and stages still show how to unlock them.
+**Wardrobe** (Camp → Wardrobe) sells looks, never power: two skins per hero (a third comes from winning a run with that hero), weapon tints that recolour your hero's weapon effects, kill and level-up effects, titles and name colours shown above your hero and in the co-op lobby. Some items are achievement rewards. Your party sees your skin, tint, level-up effect, title and name colour; kill effects show on your own screen.
 
-Progress saves in the browser automatically. Camp → **Show my code** gives a save code you can paste into **Load code** on another browser or device. The code carries your Encyclopedia discoveries too; an older code still loads.
+**Achievements** (main menu) lists every unlock and 29 achievements with your progress and their gold and Wardrobe rewards (each pays once; new ones show on the results screen), plus your records: runs, wins, lifetime kills, best time, kills and level, and each stage's best run. **Encyclopedia** (main menu) describes every hero, weapon and support weapon (with its paths and the Forms you found), passive, foe, boss and stage you have met: heroes and stages you started a run with, weapons, Forms and passives you owned, foes you saw and bosses you fought. The rest shows as a dark "???" until you find it; locked heroes and stages still show how to unlock them.
+
+Progress saves in the browser automatically. Camp → **Show my code** gives a save code you can paste into **Load code** on another browser or device. The code carries your Encyclopedia discoveries and Wardrobe too; an older code still loads.
 
 ## Hosting it
 

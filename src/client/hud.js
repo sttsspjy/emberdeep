@@ -28,12 +28,16 @@
     frame(x, y, w, h, '#000', Math.max(2, Math.round(2 * k)));
   };
   // Atlas icon `id` (frame i) fitted into a size x size box at (x, y).
-  const icon = (id, x, y, size, i) => {
+  const IO = { variant: '' };
+  // vk: Atlas variant key (hero skins).
+  const icon = (id, x, y, size, i, vk) => {
     const A = ED.Atlas, r = A && A.ok && A.anim(id); if (!r) return;
     const f = r.f[0], s = Math.max(1, Math.floor(size / Math.max(f.w, f.h)));
     c.save(); c.translate(Math.round(x + size / 2 - (f.ox + f.w / 2 - r.ax) * s), Math.round(y + size / 2 - (f.oy + f.h / 2 - r.ay) * s)); c.scale(s, s);
-    A.draw(c, id, i | 0, 0, 0); c.restore();
+    IO.variant = vk || ''; A.draw(c, id, i | 0, 0, 0, IO); c.restore();
   };
+  // Skin variant of hero p's anim id ('' = the default look).
+  const skinOf = (id, p) => (ED.Cos ? ED.Cos.skinVar(id, ED.Cos.of(p.pid).skin) : '');
   H.icon = (ctx, id, x, y, size) => { const oc = c; c = ctx; icon(id, x, y, size); c = oc; };
   H.show = (text, col, secs) => { H.banner = { text, col: col || '#ffd27a', t: secs || 2.5, max: secs || 2.5 }; };
 
@@ -54,9 +58,9 @@
   // ---------------- pieces ----------------
   const ready = [0, 0, 0], readyT = [0, 0, 0];
   // Cooldown dial: icon, dark pie for the remaining fraction, seconds, key badge; flashes when it comes back.
-  function dial(i, x, y, s, id, cd, cdMax, key, col) {
+  function dial(i, x, y, s, id, cd, cdMax, key, col, vk) {
     c.fillStyle = 'rgba(10,7,6,0.82)'; c.fillRect(x, y, s, s);
-    icon(id, x + R(5), y + R(5), s - R(10));
+    icon(id, x + R(5), y + R(5), s - R(10), 0, vk);
     const f = cdMax > 0 ? U.clamp(cd / cdMax, 0, 1) : 0, up = cd <= 0;
     if (!up) {
       c.save(); c.beginPath(); c.rect(x, y, s, s); c.clip();
@@ -100,7 +104,7 @@
       const yy = y + n * R(34), col = SLOT_COL[p.slot & 3];
       c.fillStyle = 'rgba(10,7,6,0.6)'; c.fillRect(x, yy, R(196), R(30));
       c.fillStyle = col; c.fillRect(x, yy, R(4), R(30));
-      icon(heroIcon(p.cls), x + R(6), yy + R(1), R(28));
+      icon(heroIcon(p.cls), x + R(6), yy + R(1), R(28), 0, skinOf(heroIcon(p.cls), p));
       txt(p.name, x + R(38), yy + R(1), p.dead ? '#7d6c58' : '#fff1d6', 16);
       if (p.dead) txt('dead', x + R(190), yy + R(1), '#7d6c58', 16, 'right');
       else if (p.downed) {
@@ -126,7 +130,7 @@
       c.restore();
       c.fillStyle = 'rgba(10,7,6,0.75)'; c.beginPath(); c.arc(ax, ay, R(17), 0, TAU); c.fill();
       c.strokeStyle = col; c.lineWidth = R(2); c.stroke();
-      icon(heroIcon(p.cls), ax - R(14), ay - R(14), R(28));
+      icon(heroIcon(p.cls), ax - R(14), ay - R(14), R(28), 0, skinOf(heroIcon(p.cls), p));
       if (p.downed) txt('!', ax, ay - R(34), col, 22, 'center');
     }
   }
@@ -187,7 +191,7 @@
     // Q charge pips (multi-charge skills: chN slots, ch lit), left of the dial
     if (q && q.chN > 1) { const pw = R(10); for (let i = 0; i < q.chN; i++) { const px = kx - pw - R(6), py = ky + ds - (i + 1) * (pw + R(3)); c.fillStyle = '#000'; c.fillRect(px, py, pw, pw); c.fillStyle = i < q.ch ? '#ffd27a' : '#48382a'; c.fillRect(px + R(2), py + R(2), pw - R(4), pw - R(4)); } }
     const dx = kx + ds + gap, dy = ky + ds - dd;
-    dial(2, dx, dy, dd, runIcon(me.cls), me.dashCd, C.cd, keyLbl.dash, '#6ad7ff');
+    dial(2, dx, dy, dd, runIcon(me.cls), me.dashCd, C.cd, keyLbl.dash, '#6ad7ff', skinOf(runIcon(me.cls), me));
     // dash charge pips (one per charge; C.charges when the sim grows more)
     const nch = C.charges || 1, pw = R(10);
     for (let i = 0; i < nch; i++) { const px = dx + dd + R(6), py = dy + dd - (i + 1) * (pw + R(3)); c.fillStyle = '#000'; c.fillRect(px, py, pw, pw); c.fillStyle = me.dashCd <= 0 ? '#6ad7ff' : '#2a3a48'; c.fillRect(px + R(2), py + R(2), pw - R(4), pw - R(4)); }

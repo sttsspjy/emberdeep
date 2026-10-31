@@ -123,6 +123,46 @@ async function main() {
     await page.keyboard.press('Escape');
     check(await vis(page, 'scr-title'), 'Esc leaves the camp');
 
+    console.log('wardrobe');
+    await page.evaluate(() => { ED.App.profile.gold = 3000; ED.App.persist(); ED.App.sel.cls = 'knight'; });
+    await page.locator('#btn-camp').click();
+    await page.locator('#btn-wardrobe').click();
+    check(await vis(page, 'scr-wardrobe'), 'Wardrobe opens from the Camp');
+    check(await page.locator('#wd-tabs button').count() === 6 && await page.locator('#wd-heroes .pick-btn').count() === 7, '6 tabs, 7 heroes on the skin tab');
+    const nKs = await page.evaluate(() => ED.COSMETICS.filter(d => d.kind === 'skin' && d.hero === 'knight').length);
+    check(await page.locator('.wd-item').count() === nKs + 1, 'knight: default + ' + nKs + ' skin cards');
+    // preview canvases paint, and a skin paints different pixels from the default look
+    const pxOf = (i) => page.evaluate((k) => { const cv = document.querySelectorAll('.wd-item canvas')[k], d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let n = 0, h = 0; for (let j = 0; j < d.length; j += 4) if (d[j + 3]) { n++; h = (h * 31 + d[j] * 7 + d[j + 1] * 3 + d[j + 2]) >>> 0; } return { n, h }; }, i);
+    { const a = await pxOf(0), b = await pxOf(1); check(a.n > 100 && b.n === a.n && b.h !== a.h, 'preview canvases paint; the skin recolours the same sprite (' + a.n + ' px)'); }
+    const VG = 'skin.knight.verdigris', pv = await page.evaluate(() => ED.COS_BY['skin.knight.verdigris'].price);
+    await page.locator('.wd-item button[data-id="' + VG + '"]').click();
+    let wd = await page.evaluate(() => ({ g: ED.App.profile.gold, own: ED.App.profile.cos.slice(), worn: ED.Save.worn(ED.App.profile, 'skin', 'knight'), saved: ED.Save.load().wear }));
+    check(wd.g === 3000 - pv && wd.own.indexOf(VG) >= 0 && wd.worn === VG && wd.saved.indexOf(VG) >= 0, 'buy Verdigris: ' + pv + ' gold, owned, worn, saved');
+    check(/Worn/.test(await page.locator('.wd-item.worn').innerText()) && (await page.locator('.wd-item.worn button').innerText()) === 'Take off', 'the worn card says Worn / Take off');
+    { const t = await page.locator('.wd-item button[data-id="skin.knight.gilded"]'); check(await t.isDisabled() && /Reward: Knight Victor/.test(await page.locator('.wd-item', { has: page.locator('button[data-id="skin.knight.gilded"]') }).innerText()), 'the reward skin is locked and names its achievement'); }
+    await page.locator('.wd-item button[data-id="default"]').click();
+    check(await page.evaluate(() => ED.Save.worn(ED.App.profile, 'skin', 'knight')) === '' && (await page.locator('.wd-item button[data-id="' + VG + '"]').innerText()) === 'Wear', 'Default takes the skin off; the owned card offers Wear');
+    await page.locator('.wd-item button[data-id="' + VG + '"]').click();
+    check(await page.evaluate(() => ED.Save.worn(ED.App.profile, 'skin', 'knight')) === 'skin.knight.verdigris', 'Wear puts it back on');
+    await shot(page, 'wardrobe');
+    for (const [tab, id] of [['tint', 'tint.crimson'], ['kill', 'kill.embers'], ['lvl', 'lvl.pillar'], ['title', 'title.lamplighter'], ['ncol', 'ncol.ember']]) {
+      await page.locator('#wd-tabs [data-tab="' + tab + '"]').click();
+      await page.locator('.wd-item button[data-id="' + id + '"]').click();
+      check(await page.evaluate((a) => ED.Save.worn(ED.App.profile, a[0]) === a[1], [tab, id]) && !(await vis(page, 'wd-heroes')), tab + ': bought and worn ' + id);
+      if (tab === 'tint') await shot(page, 'wardrobe-tint');
+    }
+    check(/Lamplighter/.test(await page.locator('.wd-tag').first().innerText()), 'name colour previews show the worn title over the name');
+    check(await minFont(page, '.wd-item span, .wd-item button, #wd-tabs button, #wd-hint') >= 20, 'wardrobe text >= 20 px');
+    check(await page.evaluate(() => document.getElementById('scr-wardrobe').scrollWidth <= innerWidth), 'wardrobe: no horizontal scroll');
+    await shot(page, 'wardrobe-ncol');
+    await page.keyboard.press('Escape');
+    check(await vis(page, 'scr-camp'), 'Esc returns to the Camp');
+    await page.keyboard.press('Escape');
+    await page.locator('#btn-play').click();
+    check(await page.evaluate(() => document.querySelector('.hero-tile[data-cls="knight"] canvas')._var === 'pal:skin.knight.verdigris'), 'hero select portrait wears the skin');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => { ED.App.profile.gold = 1000; ED.App.persist(); }); // the gold left after Shade (achievements below count on it)
+
     console.log('achievements');
     await page.evaluate(() => { const p = ED.App.profile; p.stats.bestTime = 432; p.stats.bestKills = 1840; p.stats.bestLevel = 21; p.played = ['knight']; ED.App.persist(); });
     await page.locator('#btn-achieve').click();
@@ -246,6 +286,8 @@ async function main() {
     await page.waitForFunction(() => !document.getElementById('btn-lobby-go').disabled, null, { timeout: 5000 }).catch(() => {});
     check(!(await page.locator('#btn-lobby-go').isDisabled()), 'Start enabled when everyone is ready');
     check(/Pyro/.test(await page.locator('#lobby-slots').innerText()), 'guest hero pick reaches the host');
+    check(await g.evaluate(() => { const s = document.querySelector('#lobby-slots .slot:not(.empty)'), t = s && s.querySelector('.sl-title'), n = s && s.querySelector('.sl-name'), cv = s && s.querySelector('canvas');
+      return !!t && t.textContent === 'Lamplighter' && n.style.color !== '' && cv._var === 'pal:skin.knight.verdigris'; }), 'the guest lobby shows the host title, name colour and skin');
     await shot(page, 'lobby-host'); await shot(g, 'lobby-guest');
     await g.locator('#btn-lobby-leave').click();
     check(await vis(g, 'scr-title'), 'guest leaves to the title');
@@ -256,6 +298,7 @@ async function main() {
     console.log('run: HUD, level-up, chest, pause');
     await page.evaluate(() => { ED.App.startSolo({ cls: 'knight', stage: 0, seed: 7, cheats: { god: true } }); });
     await wait(1500);
+    check(await page.evaluate(() => { const c = ED.Game.cos.p1; return c.skin === 'skin.knight.verdigris' && c.tint === 'tint.crimson' && c.title === 'title.lamplighter' && c.ncol === 'ncol.ember'; }), 'the solo run wears the profile cosmetics');
     // level 2 with every support banned: the weapon-card guarantee draws a tune card
     await page.evaluate(() => { const w = ED.Game.w, p = w.heroes[0]; for (const id of ED.WEAPON_IDS) if (ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved) p.banned.push('w:' + id); w.addXp(w.xpNext - w.xp + 1); });
     await page.waitForFunction(() => !document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
@@ -364,7 +407,7 @@ async function main() {
     check(await vis(page, 'scr-results'), 'results screen');
     check(await page.locator('.bar-row').count() === 4, 'per-weapon damage bars');
     check(/Victory/.test(await page.locator('#res-title').innerText()), 'victory title');
-    check(/Achievement: Ascended \(\+200 gold\)/.test(await page.locator('#res-unlocks').innerText()), 'results announce a new achievement');
+    check(/Achievement: Ascended \(\+200 gold, Ascension level-up effect\)/.test(await page.locator('#res-unlocks').innerText()), 'results announce a new achievement and its cosmetic reward');
     await wait(800);
     await shot(page, 'results');
     await page.locator('#btn-res-back').click();

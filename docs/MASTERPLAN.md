@@ -28,6 +28,17 @@ North-star: a co-op browser survivors-like (solo or up to 4 friends, zero instal
 - [x] 20-minute runs: a third mid-boss at 15:00 (borrowed from another stage for now), the final boss at 20:00, the benchmark surge at 17:00
 - [ ] Your playtest of the redesign
 
+## Playtest round 3 (balance and meta)
+- [x] Gems always drop where foes die; magnets drop from foes with a blue ring
+- [x] Tougher elites, softer regular foes, fewer brutes with smaller slams
+- [x] Knight Aegis Ward; every skill gets a level-5 upgrade
+- [x] Slower levelling after level 15: 2 Forms + 2 passives win, a 3rd Form needs luck
+- [x] Bigger Camp (19 upgrades, ~5 h to max), survival pays more gold
+- [x] Harder unlocks: Shade costs 4,000 gold, Bell needs a win with no Camp upgrades
+- [x] 29 achievements; Wardrobe with skins, weapon tints, kill and level-up effects, titles, name colours
+- [ ] Your playtest of round 3
+- [ ] A second Form for the 7 paths that have one; one Form per support path
+
 ## Next
 - [ ] Balance from your playtest (difficulty, Form strength, skill value)
 - [ ] Co-op test over a real internet connection

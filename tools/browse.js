@@ -1,6 +1,7 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it. Never opens a visible window.
 // Usage: node tools/browse.js [smoke|shots|forms|crowdN|coop|botwatch ...] [--scen=a,b] [--cls=knight,...] [--form=id,...] [--support=id,...|all] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1]
-//                             [--software] [--quality=high|low] [--gate] [--prof] [--ff=480] [--timeout=600]
+//                             [--software] [--quality=high|low] [--gate] [--prof] [--ff=480] [--timeout=600] [--cos=id,...]
+//   --cos: cosmetic ids (src/data/cosmetics.js) the profile owns and wears in every solo run the harness starts (skins apply to their own hero).
 //   smoke: for each hero (--cls, default all 7) a solo stage-1 run driven ~--seconds (10) s (circling, aim at the nearest foe, Q / E, dash, first card picked); fails on a page or console error,
 //          a stalled sim, no Q or E cast, or a signature weapon that dealt nothing.
 //   shots: PNGs of title, hero select, stage select, camp, the slot lifecycle on a fresh knight run (a level-up with a tune card, an elite-chest path-pick offer, a boss-chest
@@ -29,12 +30,12 @@
 const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
 
 // ---------------- arguments ----------------
-const FLAGS = { scen: 's', cls: 's', form: 's', support: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', prof: 'b', json: 'b', help: 'b' };
+const FLAGS = { scen: 's', cls: 's', form: 's', support: 's', cos: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', prof: 'b', json: 'b', help: 'b' };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
 const SCEN_RE = /^(smoke|shots|coop|botwatch|crowd\d{1,4}|late[abc]?|forms)$/;
 function parseArgs(argv) {
-  const o = { scen: '', cls: HEROES.join(','), form: '', support: '', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
+  const o = { scen: '', cls: HEROES.join(','), form: '', support: '', cos: '', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
   const pos = [];
   for (const a of argv) {
     if (!a.startsWith('--')) { pos.push(a); continue; }
@@ -284,6 +285,7 @@ function pageBoot(cfg) {
   BR.settings = (q) => { const E = ED(); E.App.settings.quality = q; E.App.applySettings(); };
   BR.start = (cls, stage, cheats) => {
     const E = ED(); if (!E.App.hasProfile) E.App.createProfile('Bot');
+    if (cfg.cos) { const p = E.App.profile; for (const id of cfg.cos.split(',')) if (E.COS_BY[id] && p.cos.indexOf(id) < 0) p.cos.push(id); for (const id of cfg.cos.split(',')) E.Save.wear(p, id); }
     E.App.startSolo({ cls, stage: stage | 0, seed: cfg.seed, cheats: cheats || null });
     BR.drive = true; BR.still = false; BR.autoPick = true; BR.ev = {}; BR.mine = {};
     return E.App.state;
@@ -393,7 +395,7 @@ async function launch() {
 async function newContext() {
   const o = S.opt;
   const ctx = await S.browser.newContext({ viewport: { width: o.vw, height: o.vh }, deviceScaleFactor: 1, serviceWorkers: 'block', locale: 'en-US' });
-  await ctx.addInitScript({ content: '(' + pageBoot.toString() + ')(' + JSON.stringify({ seed: o.seed }) + ')' });
+  await ctx.addInitScript({ content: '(' + pageBoot.toString() + ')(' + JSON.stringify({ seed: o.seed, cos: o.cos }) + ')' });
   const local = S.server.base;
   await ctx.route((u) => u.protocol.startsWith('http') && u.origin !== local, (route) => route.abort('blockedbyclient'));
   return ctx;
@@ -503,7 +505,7 @@ async function scenShots() {
     await wait(800);
     await offerShot('levelup-tune', () => { const E = window.ED, w = E.Game.w, p = w.heroes[0]; for (const id of E.WEAPON_IDS) if (E.WEAPONS[id].support && !E.WEAPONS[id].evolved) p.banned.push('w:' + id); w.addXp(w.xpNext - w.xp + 1); return 'supports banned: the level-2 weapon card is a tune card'; }, /^Level \d+!$/);
     await offerShot('path-pick', () => { const w = window.ED.Game.w, p = w.heroes[0]; p.banned.length = 0; w.setRanks(p, p.weapons[0], window.ED.TUNE_MAX); w.openChest(p, 1); return 'tune ' + p.weapons[0].tune; }, /^Choose a path · /);
-    await offerShot('form-fork', () => { const w = window.ED.Game.w, p = w.heroes[0], ws = p.weapons[0]; w.setRanks(p, ws, window.ED.TUNE_MAX, ws.path, window.ED.PATH_MAX); w.openChest(p, 2); return 'path ' + ws.path + ' rank ' + ws.pr[ws.path]; }, /^Choose a Form · /);
+    await offerShot('form-fork', () => { const w = window.ED.Game.w, p = w.heroes[0], ws = p.weapons[0]; w.setRanks(p, ws, window.ED.TUNE_MAX, ws.path, window.ED.PATH_MAX); w.time = Math.max(w.time, 600); w.openChest(p, 2); return 'path ' + ws.path + ' rank ' + ws.pr[ws.path]; }, /^Choose a Form · /);
     await page.evaluate(() => {
       const E = window.ED, w = E.Game.w, p = w.heroes[0], ws = p.weapons[0], sup = E.WEAPON_IDS.filter(id => E.WEAPONS[id].support && !E.WEAPONS[id].evolved);
       w.refineForm(p, ws);

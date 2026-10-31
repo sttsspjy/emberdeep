@@ -13,6 +13,16 @@ Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with th
 - ui: gamepad does not drive DOM menus.
 - codex: boss attack lines are a client copy (codex.js BOSS_TXT) of boss-*.js headers.
 
+- forms: 7 hero paths have 1 Form (add a 2nd each); 16 support paths need 1 Form each.
+- bot: passive policy spreads picks over 6 passives; rarely maxes 2 by 17:00.
+- cosmetics: weapon tints miss hero-fx private pools (knight spin fans, slam rims); kill style is the viewer's own (die events carry no killer).
+- tools: dps.js crowd uses HPK 3.4 (minute-10 HP is 2.1x since 0.11 growth); supports.md numbers depend on it.
+
+- forms: 7 hero paths have 1 Form (add a 2nd each); 16 support paths need 1 Form each.
+- bot: passive policy spreads picks over 6 passives; rarely maxes 2 by 17:00.
+- cosmetics: weapon tints miss hero-fx private pools (knight spin fans, slam rims); kill style is the viewer's own (die events carry no killer).
+- tools: dps.js crowd uses HPK 3.4 (minute-10 HP is 2.1x since 0.11 growth); supports.md numbers depend on it.
+
 ## In progress
 
 
@@ -57,3 +67,5 @@ Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with th
 - 2026-10-31 playtest fixes (fix/horde-balance): hero hits push foes away from the hitter (meteors no longer shove foes in); heroes 78–84 px/s, non-swarm foe walk ×0.9; splitter children on the far side from the hero; hero damage hitbox 6 px (HERO_BODY 10 for walls/pickups); Cathedral one hit per toll + dmg 15→11 (F0 crowd 7574→3215; bench: Cathedral 19/19 wins, Bell without it 3/29); Carillon dmg 8 knock 110 (outward push had dropped it 24%).
 - 2026-10-31 flocks fly through (fix/horde-balance): flock = pack or line (×1.5, 14 px apart) at 120 px/s × pace on a fixed heading through the hero's spot; flock/ring/stampede members never chase, despawn 360 px outside every view (no gem/kill), never recycled. Rending Gale cone ±30° (F2 crowd 4381→3345, single 612→1071). Next: progression redesign (Phase 1: 5 stat → elite-chest path pick → path ranks 1–5 → boss-chest Form fork of 2; 20-min runs, 4 bosses).
 - 2026-10-31 progression v2 (feat/progression-v2): slot lifecycle tune 5 → elite-chest path pick (permanent) → path ranks 2–5 (shape 1/3/5, +10% dmg/+5% speed at 2/4) → boss-chest Form fork (from the 10:00 boss; hybrids re-homed as 2nd path Forms; 7 paths still have 1 Form) → refine 2; per-item card weights, guarantee only levels 2–3; 20-min runs (bosses 5/10/15/20, 15:00 borrowed with host-stage adds, bench 17:00, enrage 22:00); Forms tuned to the role rule (Bell 1,855–1,996). Bot (meta max) lv 45–56 at 20:00, first Form 10:00–14:00; meta none dies 9–13 min to brutes + ghouls. Next: Phase 2 (7 new hero Forms), Phase 3 (16 support Forms), Phase 4 meta scale-up.
+- 2026-10-31 playtest round 3 (feat/balance-and-meta): gems at the cap merge within 80 px else absorb the farthest gem at the drop spot; magnets from hero kills (first 140 s, gap 100 s, p 0.003, replaces an uncollected one), braziers drop none; non-swarm HP growth 0.11/min; elite HP x15 x max(1, 60/def.hp); brute slam r = 34 + def.r, elite slam x1.35; W.bruteCap 2+0.35/min (max 8, elite brutes +2); Knight Aegis Ward (r 50, 6.5 s, cd 25; L5 follows); every Q 4 level mods (L5 capstone); xpFor +300 per level past 15; Camp 19 rows, price cost x (r+1)^2, total 43,360; gold 1 per 100 kills + 10/min + boss/win, stage gold 1/1.25/1.5; Shade buy 4000, Bell pure win, Necro survive 15:00; 29 achievements; Wardrobe 54 cosmetics (31,300 gold + 17 rewards), lobby cos bundle (NET 12).
+- 2026-10-31 playtest round 3 (feat/balance-and-meta): gems at the cap merge within 80 px else absorb the farthest gem at the drop spot; magnets from hero kills (first 140 s, gap 100 s, p 0.003, replaces an uncollected one), braziers drop none; non-swarm HP growth 0.11/min; elite HP x15 x max(1, 60/def.hp); brute slam r = 34 + def.r, elite slam x1.35; W.bruteCap 2+0.35/min (max 8, elite brutes +2); Knight Aegis Ward (r 50, 6.5 s, cd 25; L5 follows); every Q has 4 level mods (L5 capstone); xpFor +300 per level past 15; Camp 19 rows, price cost x (r+1)^2, total 43,360; gold 1 per 100 kills + 10/min + boss/win, stage gold 1/1.25/1.5; Shade buy 4000, Bell no-Camp win, Necro survive 15:00; 29 achievements; Wardrobe 54 cosmetics (31,300 gold + 17 rewards), lobby cos bundle (NET 12).

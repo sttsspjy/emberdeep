@@ -8,7 +8,7 @@
   const N = ED.Net = {};
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const PREFIX = 'wickdeep-sv-';
-  N.VERSION = ED.NET_VERSION = 11; // bump on any wire change: mixed versions would desync
+  N.VERSION = ED.NET_VERSION = 12; // bump on any wire change: mixed versions would desync
   // Heartbeat: PeerJS 'close' does not fire when a tab crashes or a network drops, so both ends ping and
   // treat a few seconds of silence as a disconnect (longer in the lobby, where little else is sent).
   const PING_MS = 2000, TIMEOUT_RUN = 6000, TIMEOUT_LOBBY = 10000;
@@ -126,13 +126,13 @@
     return 'Connection failed' + (t ? ' (' + t + ')' : '') + '.';
   };
 
-  // A guest's hero choice, made safe for the host's simulation: { cls, meta: { shop, sigs } } with unknown ids dropped and ranks clamped.
+  // A guest's hero choice, made safe for the host's simulation: { cls, meta: { shop, sigs }, cos (worn cosmetics, ED.Save.cosClean) } with unknown ids dropped and ranks clamped.
   const cleanPick = (d) => {
     const cls = ED.HERO_IDS.indexOf(d.cls) >= 0 ? d.cls : ED.HERO_IDS[0];
     const m = d.meta && typeof d.meta === 'object' ? d.meta : {}, shop = {};
     for (const s of ED.SHOP) { const r = m.shop ? Math.floor(+m.shop[s.id] || 0) : 0; if (r > 0) shop[s.id] = U.clamp(r, 0, s.max); }
     const sigs = Array.isArray(m.sigs) ? m.sigs.filter((c, i, a) => ED.HERO_IDS.indexOf(c) >= 0 && a.indexOf(c) === i) : [];
-    return { cls, meta: { shop, sigs } };
+    return { cls, meta: { shop, sigs }, cos: ED.Save.cosClean(d.cos, cls) };
   };
   N.cleanPick = cleanPick;
 
@@ -178,7 +178,7 @@
         c.pid = pid;
         this.conns.set(pid, c);
         const pk = cleanPick(d);
-        this.members.push({ pid, slot, name: ED.Save.sanitizeName(d.name), cls: pk.cls, meta: pk.meta, ready: false, isHost: false });
+        this.members.push({ pid, slot, name: ED.Save.sanitizeName(d.name), cls: pk.cls, meta: pk.meta, cos: pk.cos, ready: false, isHost: false });
         c.send({ t: 'welcome', pid, slot, code: this.code });
         this.broadcastLobby();
         this.handlers.joined && this.handlers.joined(pid);
@@ -216,7 +216,7 @@
   };
   N.Host.prototype.setMe = function (patch) { Object.assign(this.members[0], patch); this.broadcastLobby(); };
   N.Host.prototype.setStage = function (i) { this.stage = U.clamp(i | 0, 0, ED.STAGES.length - 1); this.broadcastLobby(); };
-  N.Host.prototype.lobbyState = function () { return { t: 'lobby', code: this.code, stage: this.stage, started: this.started, members: this.members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls, ready: m.ready, isHost: m.isHost })) }; };
+  N.Host.prototype.lobbyState = function () { return { t: 'lobby', code: this.code, stage: this.stage, started: this.started, members: this.members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls, cos: m.cos, ready: m.ready, isHost: m.isHost })) }; };
   N.Host.prototype.broadcastLobby = function () { const s = this.lobbyState(); this.broadcast(s); this.handlers.lobby && this.handlers.lobby(s); };
   N.Host.prototype.broadcast = function (o) { for (const c of this.conns.values()) c.send(o); };
   N.Host.prototype.sendTo = function (pid, o) { const c = this.conns.get(pid); if (c) c.send(o); };
@@ -792,7 +792,7 @@
 
   // ---------------- party (lobby flow API) ----------------
   // N.Party(game): one lobby session bound to a game session (ED.Game by default). ED.Net.host / join / setHero / setReady / setStage / start / leave and ED.Net.lobby use the default party.
-  // lobby: { role: '' | 'host' | 'client', code, me (own pid), status: 'idle' | 'connecting' | 'open' | 'closed' | 'error', error, stage, members: [{ pid, slot, name, cls, ready, isHost }], inRun, canStart }.
+  // lobby: { role: '' | 'host' | 'client', code, me (own pid), status: 'idle' | 'connecting' | 'open' | 'closed' | 'error', error, stage, members: [{ pid, slot, name, cls, cos, ready, isHost }], inRun, canStart }.
   // Callbacks (UI): N.onChange(lobby) on any lobby change, N.onError(msg) when hosting / joining fails or the host refuses, N.onClosed(msg) when the party ends outside a run
   // (a host leaving mid-run ends the run with sum.note instead). A run starts on every peer through ED.App.enterRun(stage) after the session is built.
   N.Party = function (game, cb) {
@@ -807,11 +807,11 @@
     if (this.cb.onChange) this.cb.onChange(L);
   };
   PP.fail = function (msg) { this.lobby.error = msg; if (this.cb.onError) this.cb.onError(msg); this.changed(); };
-  // Own lobby pick: hero cls (default: the hero selected in the menus) and permanent ranks from the profile.
+  // Own lobby pick: hero cls (default: the hero selected in the menus), permanent ranks and worn cosmetics from the profile.
   PP.pick = function (cls) {
     const A = ED.App, prof = A && A.profile;
     cls = cls || (A && A.sel && A.sel.cls) || ED.HERO_IDS[0];
-    return cleanPick({ cls, meta: prof && ED.Save.metaBundle ? ED.Save.metaBundle(prof) : { shop: {}, sigs: [] } });
+    return cleanPick({ cls, meta: prof && ED.Save.metaBundle ? ED.Save.metaBundle(prof) : { shop: {}, sigs: [] }, cos: prof && prof.wear ? ED.Save.cosBundle(prof, cls) : null });
   };
   PP.setLobby = function (st) {
     const L = this.lobby;
@@ -823,7 +823,7 @@
     this.leave();
     const pk = this.pick(cls), L = this.lobby, tok = this.tok = {}, live = () => this.tok === tok;
     L.role = 'host'; L.me = 'host'; L.status = 'connecting'; L.error = ''; L.inRun = false; L.stage = 0;
-    const s = this.sess = new N.Host({ name: ED.Save.sanitizeName(name), cls: pk.cls, meta: pk.meta }, {
+    const s = this.sess = new N.Host({ name: ED.Save.sanitizeName(name), cls: pk.cls, meta: pk.meta, cos: pk.cos }, {
       status: (st, msg) => { if (!live()) return; if (st === 'open') { L.status = 'open'; this.changed(); } else { L.status = 'error'; this.fail(msg); } },
       code: (c) => { if (live()) { L.code = c; this.changed(); } },
       lobby: (st) => { if (live()) this.setLobby(st); },
@@ -838,7 +838,7 @@
     this.leave();
     const pk = this.pick(cls), L = this.lobby, tok = this.tok = {}, live = () => this.tok === tok;
     L.role = 'client'; L.status = 'connecting'; L.error = ''; L.code = N.cleanCode(code); L.inRun = false;
-    const s = this.sess = new N.Client(L.code, { name: ED.Save.sanitizeName(name), cls: pk.cls, meta: pk.meta }, {
+    const s = this.sess = new N.Client(L.code, { name: ED.Save.sanitizeName(name), cls: pk.cls, meta: pk.meta, cos: pk.cos }, {
       welcome: (d) => { if (!live()) return; L.me = d.pid; L.status = 'open'; this.changed(); },
       error: (msg) => { if (!live()) return; L.status = 'error'; this.tok = null; this.sess = null; s.close(); this.fail(msg); },
       lobby: (st) => { if (live()) this.setLobby(st); },
@@ -862,7 +862,7 @@
   PP.setHero = function (cls) {
     const s = this.sess; if (!s || this.lobby.inRun) return;
     const pk = this.pick(cls);
-    if (this.lobby.role === 'host') s.setMe({ cls: pk.cls, meta: pk.meta }); else s.send({ t: 'pick', cls: pk.cls, meta: pk.meta });
+    if (this.lobby.role === 'host') s.setMe({ cls: pk.cls, meta: pk.meta, cos: pk.cos }); else s.send({ t: 'pick', cls: pk.cls, meta: pk.meta, cos: pk.cos });
   };
   PP.setReady = function (v) { const s = this.sess; if (s && this.lobby.role === 'client' && !this.lobby.inRun) s.send({ t: 'ready', v: !!v }); };
   PP.setStage = function (i) { const s = this.sess; if (s && this.lobby.role === 'host' && !this.lobby.inRun) s.setStage(i); };
@@ -872,12 +872,12 @@
     if (!s || L.role !== 'host' || L.inRun || !s.allReady()) return false;
     seed = seed ? seed >>> 0 : ((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0) || 1;
     const members = s.members.slice().sort((a, b) => a.slot - b.slot);
-    const roster = members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls }));
+    const roster = members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls, cos: m.cos }));
     s.started = true;
     s.broadcast({ t: 'start', seed, stage: s.stage, roster, ver: N.VERSION });
     L.inRun = true;
     const G = this.G();
-    G.startNet({ mode: 'host', seed, stage: s.stage, myPid: 'host', players: members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls, meta: m.meta })), cheats, net: this.hostNet(s) });
+    G.startNet({ mode: 'host', seed, stage: s.stage, myPid: 'host', players: members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls, meta: m.meta, cos: m.cos })), cheats, net: this.hostNet(s) });
     this.enter(s.stage);
     this.changed();
     return true;

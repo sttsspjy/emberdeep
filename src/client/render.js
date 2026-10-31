@@ -3,7 +3,8 @@
 // presented through Post (upload) when it is usable, else a nearest-neighbour 2D blit.
 // Layer order (ARCHITECTURE §10): floor chunks -> own-team zones (faded by coverage) -> enemy zones / telegraph fills -> pickups -> y-sorted actors (heroes, foes, bosses, obstacles, braziers)
 // -> projectiles -> zone overlays -> FX -> hostile telegraph outlines (over the horde) -> hero markers (Actors.heroTop) -> overlays (names, bars, numbers).
-// Every list is culled to the view rect; the y-sort is an allocation-free radix sort on typed arrays.
+// Every list is culled to the view rect; the y-sort is an allocation-free radix sort on typed arrays. Weapon tints (ED.Cos): each owner's projectiles, weapon zones, zone overlays and
+// HeroFx draw inside its tint scope; name tags (title + name colour) show in co-op and for a solo hero that wears either.
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST;
@@ -202,7 +203,9 @@
     for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (z.dead || !zoneInView(z)) continue; if (z.team === 1) { if (hostile(z)) tele++; } else { zn++; za += zoneArea(z); } }
     const zl = za / (R.bw * R.bh), zf = zl <= ZFADE ? 1 : Math.max(0.4, Math.sqrt(ZFADE / zl));
     B.zoneLoad = zl; B.zoneN = zn; B.zoneLite = !gpu && (zl > 1 || zn > 40); B.zoneUnion = B.zoneLite && !!(P && P.soft); // 2D zone LOD: the hooks draw a fill + rim through B.zcirc (union per colour at B.zflush on a software canvas)
-    if (zn) { if (zf < 1) B.fade(zf); for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && z.team !== 1 && zoneInView(z)) drawZone(B, z, t); } B.zflush(); if (zf < 1) B.fade(1); }
+    const Cs = ED.Cos;
+    if (Cs) Cs.frame(view);
+    if (zn) { if (zf < 1) B.fade(zf); for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && z.team !== 1 && zoneInView(z)) { if (Cs) Cs.tint(Cs.zoneTint(z)); drawZone(B, z, t); } } if (Cs) Cs.tint(''); B.zflush(); if (zf < 1) B.fade(1); }
     for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && z.team === 1 && zoneInView(z)) drawZone(B, z, t); }
     const pk = view.pickups;
     for (let i = 0; i < pk.length; i++) { const g = pk[i]; if (!g.dead && inView(g)) ED.Actors.pickup(B, g, t); }
@@ -221,28 +224,31 @@
     for (let i = 0; i < n; i++) {
       const a = items[iA[i]];
       if (a.def) ED.Actors.foe(B, a, t, heroes);
-      else if (a.pid !== undefined) { ED.Actors.hero(B, a, t, heroes.length > 1); const h = ED.HeroFx && ED.HeroFx[a.cls]; if (h) h(B, a, t); }
-      else if (a.dur !== undefined) ED.ZoneActor[a.k](B, a, t);
+      else if (a.pid !== undefined) { ED.Actors.hero(B, a, t, heroes.length > 1); const h = ED.HeroFx && ED.HeroFx[a.cls]; if (h) { if (Cs) Cs.tint(Cs.heroTint(a)); h(B, a, t); if (Cs) Cs.tint(''); } }
+      else if (a.dur !== undefined) { if (Cs) Cs.tint(Cs.zoneTint(a)); ED.ZoneActor[a.k](B, a, t); if (Cs) Cs.tint(''); }
       else if (a.hp !== undefined) ED.Actors.brazier(B, a, t);
       else ED.Actors.obstacle(B, a, wallRgba);
     }
     if (tele) for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && hostile(z) && lowTele(z) && zoneInView(z)) drawTele(B, z, t); }
     const prs = view.projs;
-    for (let i = 0; i < prs.length; i++) { const pr = prs[i]; if (!pr.dead && inView(pr)) drawProj(B, pr, t); }
+    for (let i = 0; i < prs.length; i++) { const pr = prs[i]; if (!pr.dead && inView(pr)) { if (Cs) Cs.tint(Cs.projTint(pr)); drawProj(B, pr, t); } }
+    if (Cs) Cs.tint('');
     for (let i = 0; i < zones.length; i++) { // zone overlays above actors (own-team ones share the zone fade)
       const z = zones[i]; if (z.dead || !zoneInView(z)) continue;
       const h = ED.WeaponFx[z.wid] || ED.SkillFx[z.wid]; if (!h || !h.top) continue;
-      const f = z.team === 1 ? 1 : zf; if (f < 1) B.fade(f); h.top(B, z, t); if (f < 1) B.fade(1);
+      const f = z.team === 1 ? 1 : zf; if (f < 1) B.fade(f); if (Cs) Cs.tint(Cs.zoneTint(z)); h.top(B, z, t); if (f < 1) B.fade(1);
     }
+    if (Cs) Cs.tint('');
     ED.FX.draw(B, t);
     if (tele) for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && hostile(z) && !lowTele(z) && zoneInView(z)) drawTele(B, z, t); }
     const busy = heroes.length === 1 && (tele > 0 || zl > 0.5 || crowd > 150);
     for (let i = 0; i < heroes.length; i++) { const p = heroes[i]; if (!p.dead && inView(p)) ED.Actors.heroTop(B, p, t, p === me, busy); } // hero markers over FX and telegraphs
-    // overlays: hero names / revive bars (co-op), elite HP bars
-    if (heroes.length > 1) for (const p of heroes) {
-      if (p.dead || !inView(p)) continue;
-      B.text(p.name, p.x, p.y - 30, p === me ? 0xfff1d6 : 0xb8d8ff, 1);
-      if (p.downed) { B.rect(p.x - 12, p.y - 24, 24, 3, 0x000000aa); B.rect(p.x - 12, p.y - 24, 24 * p.revive, 3, 0x7fe39aff); }
+    // overlays: name tags (co-op, or a solo hero wearing a title / name colour), revive bars (co-op), elite HP bars
+    const coopN = heroes.length > 1;
+    for (const p of heroes) {
+      if (p.dead || !inView(p) || !(coopN || (Cs && Cs.tagged(p.pid)))) continue;
+      if (Cs) Cs.nameTag(B, p, p === me, t); else B.text(p.name, p.x, p.y - 30, p === me ? 0xfff1d6 : 0xb8d8ff, 1);
+      if (coopN && p.downed) { B.rect(p.x - 12, p.y - 24, 24, 3, 0x000000aa); B.rect(p.x - 12, p.y - 24, 24 * p.revive, 3, 0x7fe39aff); }
     }
     for (let i = 0; i < n; i++) { const e = items[i]; if (e.def && e.elite && e.hpQ < 255) { const w = 24; B.rect(e.x - w / 2, e.y - e.r * 2 - 8, w, 2, 0x000000aa); B.rect(e.x - w / 2, e.y - e.r * 2 - 8, w * e.hpQ / 255, 2, 0xffc94aff); } }
     ED.FX.drawTop(B);

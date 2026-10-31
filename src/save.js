@@ -2,9 +2,10 @@
 // Profile: { v, name, gold, lifetime, shop: { shopId: rank }, spent (gold paid for the owned ranks; Refund All returns it), heroes: [unlocked cls], played: [cls with a finished run],
 //   won: [cls with a win], formed: [cls whose hero weapon reached a Form], beat: [stage indices beaten], pure: [stage indices won with 0 Camp ranks], ach: [achievement ids earned],
 //   best: { stageId: { time, kills, level, won } }, stats: { runs, wins, kills (lifetime), bestLevel, bestKills (one run, own hero), bestTime (one run, s), coopWins },
-//   seen: { heroes: [cls], weapons: [wid, evolved included], passives: [id], foes: [foe id, bosses included], stages: [stage id] } (Encyclopedia reveals) }. Settings live under their own key.
+//   seen: { heroes: [cls], weapons: [wid, evolved included], passives: [id], foes: [foe id, bosses included], stages: [stage id] } (Encyclopedia reveals),
+//   cos: [owned cosmetic ids], wear: [worn cosmetic ids: one per ED.COS_KINDS slot, skins one per hero] (both in ED.COS_IDS order) }. Settings live under their own key.
 // Save code: 'WK1-' + base32(scramble(positional bytes + CRC16)) in groups of 5. Positional lists (SHOP order, hero order ED.HERO_IDS, stage order, STAT_KEYS, SEEN_KEYS and each
-// seen list's order, ED.ACH_IDS) carry a count prefix: append only; a reorder or removal bumps CODE_VERSION. Rules: ED.UNLOCKS, ED.ACHIEVEMENTS (src/data/meta.js).
+// seen list's order, ED.ACH_IDS, ED.COS_IDS) carry a count prefix: append only; a reorder or removal bumps CODE_VERSION. Rules: ED.UNLOCKS, ED.ACHIEVEMENTS (src/data/meta.js).
 (function (ED) {
   'use strict';
   const U = ED.U;
@@ -35,7 +36,7 @@
   S.defaultProfile = () => {
     const stats = {}; for (const k of STAT_KEYS) stats[k] = 0;
     const seen = {}; for (const k of SEEN_KEYS) seen[k] = [];
-    return { v: 1, name: 'Wanderer', gold: 0, lifetime: 0, shop: {}, spent: 0, heroes: startHeroes(), played: [], won: [], formed: [], beat: [], pure: [], ach: [], best: {}, stats, seen };
+    return { v: 1, name: 'Wanderer', gold: 0, lifetime: 0, shop: {}, spent: 0, heroes: startHeroes(), played: [], won: [], formed: [], beat: [], pure: [], ach: [], best: {}, stats, seen, cos: [], wear: [] };
   };
   const startHeroes = () => Object.keys(ED.UNLOCKS.heroes).filter(c => ED.UNLOCKS.heroes[c].start);
   S.sanitizeName = (n) => { n = String(n || '').split('').filter(ch => NAME_CHARS.indexOf(ch) >= 0).join('').trim().slice(0, 12); return n || 'Wanderer'; };
@@ -66,6 +67,11 @@
     for (const i of p.beat) want.stages.add(ED.STAGE_IDS[i]);
     for (const id in p.best) want.stages.add(id);
     for (const k of SEEN_KEYS) p.seen[k] = seenOrder(k).filter(id => want[k].has(id));
+    // cosmetics: known gold items, plus the reward of every earned achievement; worn ids must be owned, the last one listed per slot wins
+    const own = new Set(Array.isArray(o.cos) ? o.cos.filter(id => { const d = cosDef(id); return d && d.price > 0; }) : []);
+    for (const id of p.ach) { const r = achReward(id); if (r) own.add(r); }
+    p.cos = cosIds().filter(id => own.has(id));
+    if (Array.isArray(o.wear)) for (const id of o.wear) if (own.has(id)) setWear(p, id);
     return p;
   };
 
@@ -126,8 +132,42 @@
     return { done: S.heroUnlocked(p, cls) || (!r.buy && cur >= need), prog: Math.min(1, cur / need), cur: Math.min(cur, need), need };
   };
 
+  // ---------------- cosmetics (Wardrobe) ----------------
+  const cosIds = () => ED.COS_IDS || [];
+  const cosDef = (id) => (ED.COS_BY && ED.COS_BY[id]) || null;
+  const achReward = (achId) => { const a = ED.ACHIEVEMENTS.find(x => x.id === achId); return a && a.reward && cosDef(a.reward) ? a.reward : ''; };
+  const sameSlot = (a, b) => a.kind === b.kind && (a.kind !== 'skin' || a.hero === b.hero);
+  const cosSort = (list) => { const ord = cosIds(); list.sort((x, y) => ord.indexOf(x) - ord.indexOf(y)); return list; };
+  // Wears owned item id in place of whatever was worn in its slot (skins: per hero).
+  function setWear(p, id) { const d = cosDef(id); if (!d) return; p.wear = p.wear.filter(w => { const e = cosDef(w); return e && !sameSlot(e, d); }); p.wear.push(id); cosSort(p.wear); }
+  S.cosOwned = (p, id) => p.cos.indexOf(id) >= 0;
+  // Gold price of item id for profile p: 0 when owned, unknown or an achievement reward.
+  S.cosCost = (p, id) => { const d = cosDef(id); return d && d.price > 0 && !S.cosOwned(p, id) ? d.price : 0; };
+  S.buyCos = (p, id) => { const c = S.cosCost(p, id); if (!c || p.gold < c) return false; p.gold -= c; p.cos.push(id); cosSort(p.cos); return true; };
+  // Wears owned item id (true), or with id '' takes off what slot (kind, cls for skins) holds.
+  S.wear = (p, id, kind, cls) => {
+    if (id) { if (!S.cosOwned(p, id)) return false; setWear(p, id); return true; }
+    p.wear = p.wear.filter(w => { const e = cosDef(w); return e && !(e.kind === kind && (kind !== 'skin' || e.hero === cls)); });
+    return true;
+  };
+  // Worn id of slot kind (skins: of hero cls), '' for the default look.
+  S.worn = (p, kind, cls) => { for (const w of p.wear) { const d = cosDef(w); if (d && d.kind === kind && (kind !== 'skin' || d.hero === cls)) return w; } return ''; };
+  // Achievement id whose reward is item id ('' when bought with gold).
+  S.cosAch = (id) => { const a = ED.ACHIEVEMENTS.find(x => x.reward === id); return a ? a.id : ''; };
+  // Gold of every item not yet owned (the Wardrobe total when nothing is owned; rewards excluded).
+  S.cosLeft = (p) => { let t = 0; for (const d of ED.COSMETICS || []) t += S.cosCost(p, d.id); return t; };
+  // What a run shows of profile p playing hero cls: { skin, tint, kill, lvl, title, ncol } (ids, '' = default).
+  S.cosBundle = (p, cls) => { const o = {}; for (const k of ED.COS_KINDS || []) o[k] = S.worn(p, k, cls); return o; };
+  // Any peer-sent bundle -> a valid one for hero cls (unknown ids, wrong kinds and another hero's skin become '').
+  S.cosClean = (o, cls) => {
+    const out = {}; o = o && typeof o === 'object' ? o : {};
+    for (const k of ED.COS_KINDS || []) { const d = cosDef(o[k]); out[k] = d && d.kind === k && (k !== 'skin' || d.hero === cls) ? d.id : ''; }
+    return out;
+  };
+
   // ---------------- achievements ----------------
   const heroName = (c) => (ED.HEROES && ED.HEROES[c] ? ED.HEROES[c].name : c);
+  const COS_NOUN = S.COS_NOUN = { skin: 'skin', tint: 'weapon tint', kill: 'kill effect', lvl: 'level-up effect', title: 'title', ncol: 'name colour' };
   // { name, txt } of achievement a (per-hero rows are named after the hero).
   S.achText = (a) => {
     const r = a.rule;
@@ -154,14 +194,16 @@
     const done = p.ach.indexOf(a.id) >= 0;
     return { done, met: cur >= need, cur: done ? need : Math.min(cur, need), need, k: done ? 1 : Math.min(1, cur / need) };
   };
-  // Earns every achievement profile p now meets: marks it, pays its gold (gold and lifetime). Returns [{ kind: 'ach', id, name, txt, gold, reward }] in ED.ACH_IDS order.
+  // Earns every achievement profile p now meets: marks it, pays its gold (gold and lifetime), grants its cosmetic reward. Returns [{ kind: 'ach', id, name, txt, gold, reward }] in ED.ACH_IDS order.
   S.evalAch = (p) => {
     const out = [];
     for (const a of ED.ACHIEVEMENTS) {
       if (p.ach.indexOf(a.id) >= 0 || !S.achProgress(p, a).met) continue;
       p.ach.push(a.id); p.gold += a.gold; p.lifetime += a.gold;
-      const t = S.achText(a);
-      out.push({ kind: 'ach', id: a.id, name: t.name, txt: 'Achievement: ' + t.name + (a.gold ? ' (+' + a.gold + ' gold)' : ''), gold: a.gold, reward: a.reward || '' });
+      const t = S.achText(a), rw = achReward(a.id), rd = cosDef(rw);
+      if (rw && !S.cosOwned(p, rw)) { p.cos.push(rw); cosSort(p.cos); }
+      const extra = [a.gold ? '+' + a.gold + ' gold' : '', rd ? rd.name + ' ' + COS_NOUN[rd.kind] : ''].filter(Boolean).join(', ');
+      out.push({ kind: 'ach', id: a.id, name: t.name, txt: 'Achievement: ' + t.name + (extra ? ' (' + extra + ')' : ''), gold: a.gold, reward: rw });
     }
     if (out.length) p.ach = ED.ACH_IDS.filter(id => p.ach.indexOf(id) >= 0);
     return out;
@@ -292,7 +334,8 @@
   S._writeBits = writeBits;
   // Layout v1: version, name (len + NAME_CHARS indices), gold, lifetime, [n shop ranks], [n heroes: flags bit0 unlocked, bit1 played, bit2 won, bit3 formed],
   // [n stages: flags bit0 beat, bit1 best won, bit2 has best, bit3 pure win; best time, kills, level], [n stats], then sections absent in older codes, in this order:
-  // [n seen lists in SEEN_KEYS order: each a bit list], achievements (bit list over ED.ACH_IDS), spent. Every [list] starts with its count; new sections append after spent;
+  // [n seen lists in SEEN_KEYS order: each a bit list], achievements (bit list over ED.ACH_IDS), spent, owned cosmetics, worn cosmetics (bit lists over ED.COS_IDS).
+  // Every [list] starts with its count; new sections append after the worn cosmetics;
   // bytes past what a decoder knows are ignored.
   S.encode = (p) => {
     const q = S.normalize(p), o = writer(), heroes = heroOrder();
@@ -309,6 +352,8 @@
     for (const k of SEEN_KEYS) writeBits(o, codeOrder(k), new Set(q.seen[k]));
     writeBits(o, ED.ACH_IDS, new Set(q.ach));
     o.vu(q.spent);
+    writeBits(o, cosIds(), new Set(q.cos));
+    writeBits(o, cosIds(), new Set(q.wear));
     return pack(o.b);
   };
   // Returns a normalized profile or throws an Error with a readable message. Entries beyond the lists this build knows are read and dropped.
@@ -343,6 +388,8 @@
       for (let li = 0; li < n; li++) { const k = SEEN_KEYS[li], ids = readBits(r, k ? codeOrder(k) : []); if (k) o.seen[k] = ids; }
       if (r.left()) o.ach = readBits(r, ED.ACH_IDS);
       if (r.left()) o.spent = r.vu();
+      if (r.left()) o.cos = readBits(r, cosIds());
+      if (r.left()) o.wear = readBits(r, cosIds());
     } catch (e) {
       if (e.message === 'newer') throw new Error('That code was made by a newer Wickdeep. Reload the page.');
       throw new Error('That code is damaged.');

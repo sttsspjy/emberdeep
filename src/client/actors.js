@@ -320,14 +320,16 @@
     return ED.Atlas.variant(id, PCK[s], mk[s]) ? PCK[s] : '';
   }
   // Hero p (feet at p.x, p.y): idle / run / hit by state, faces its aim, weapon in hand (swing on 'swing', recoil on ranged 'shoot'), dash afterimages,
-  // blinks while invulnerable, white flash on a hit, downed: lies down with a pulsing bleed-out ring and a revive progress ring. coop: player-colour recolour.
+  // blinks while invulnerable, white flash on a hit, downed: lies down with a pulsing bleed-out ring and a revive progress ring. A worn skin (ED.Cos) recolours it;
+  // without one, coop: player-colour recolour.
   // The drawn pose is kept for Ac.heroTop.
   Ac.hero = (B, p, t, coop) => {
     const cls = ED.HEROES[p.cls] ? p.cls : 'knight', A = ED.Atlas, h = heroSt(p.pid);
     let id = 'hero.' + cls + (p.hurtT > 0 ? '.hit' : p.moving ? '.run' : '.idle');
     if (!A.has(id)) id = 'hero.' + cls + '.idle';
     const o = reset(), flip = Math.cos(p.face) < 0, fi = A.frameAt(id, t + p.slot * 0.31);
-    o.flip = flip; o.variant = coop ? slotVar(id, cls, p.slot) : '';
+    const Cs = ED.Cos, sk = Cs ? Cs.skinVar(id, Cs.of(p.pid).skin) : '';
+    o.flip = flip; o.variant = sk || (coop ? slotVar(id, cls, p.slot) : '');
     // dash afterimages
     if (p.dashT > 0 && now - h.gT > 0.03) { const g = h.ghosts[h.gi]; h.gi = (h.gi + 1) % h.ghosts.length; g.x = p.x; g.y = p.y; g.id = id; g.fi = fi; g.flip = flip; g.t = now; h.gT = now; }
     for (const g of h.ghosts) {

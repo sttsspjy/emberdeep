@@ -19,8 +19,9 @@ src/util.js                 U (math, RNG, hash3), ED.CONST, ED.regLook / ED.LOOK
 src/data/foes.js            ED.FOES, ED.FOE_IDS, ED.FOE_IDX (append-only wire index)
 src/data/stages.js          ED.STAGES (theme {floor, deco, features, brazier, pal}, arena, foe {hp, dmg} stage multipliers, timeline [{rate, cap, floor, roster}] per minute, events {swarm {ring, stampede}, flock {id, first, every, n}}, elites, bosses)
 src/data/passives.js        ED.PASSIVES, ED.PASSIVE_IDS
-src/data/meta.js            ED.SHOP / ED.SHOP_IDS (permanent ranks), ED.shopPrice, ED.UNLOCKS, ED.ACHIEVEMENTS / ED.ACH_IDS
-src/save.js                 profile load/save, binary save code (v1, count-prefixed lists, append-only), Encyclopedia seen record, ED.Meta (profile facade)
+src/data/meta.js            ED.SHOP / ED.SHOP_IDS (permanent ranks), ED.shopPrice, ED.UNLOCKS, ED.ACHIEVEMENTS / ED.ACH_IDS (reward = cosmetic id)
+src/data/cosmetics.js       ED.COSMETICS / ED.COS_IDS (save order, append only) / ED.COS_BY / ED.COS_KINDS: Wardrobe items (skin maps, tint ramps, kill / level-up styles, titles, name colours); the sim never reads them
+src/save.js                 profile load/save, binary save code (v1, count-prefixed lists, append-only), Encyclopedia seen record, Wardrobe (cos owned, wear worn; buyCos, wear, worn, cosBundle, cosClean), ED.Meta (profile facade)
 src/sim/stats.js            ED.Stats: hero stat block, weapon effective numbers
 src/sim/arena.js            ED.Arena: arena gen (obstacles, braziers), collision (bounds + circles), movement helpers
 src/sim/grid.js             ED.Grid (mixed into World.prototype): foe spatial grid + separation; ED.HERO_VIEW, ED.inView (hero view rect)
@@ -46,18 +47,20 @@ src/client/actors.js        picks anim/frame/flip/tint for heroes, foes, bosses,
 src/client/fx.js            juice: particles, death bursts, damage numbers, hit-stop, shake, flashes, rings, banners, offscreen arrows
 src/client/hfx-<cls>.js     7 files: weapon / Form / skill visuals (hfx-necro registers ED.ZoneActor minions); bfx-b wraps ED.FX.handle/update/draw/clear (calls the original first)
 src/client/bfx-a.js bfx-b.js bfx-c.js  boss bodies (ED.BossFx) and boss zones (ED.ZoneFx)
+src/client/cosfx.js         ED.Cos: worn bundles per pid (ED.Game.cos), skin variants 'pal:<skin id>', the weapon-tint scope (wraps ED.Batch shape / sprite calls and ED.FX part / ring / flash / sprite / col while open), kill / level-up effects, name tags; outermost ED.FX.handle wrapper
 src/client/audio.js         SFX: synth recipes pre-rendered per cue; ED.Audio.event(ev, myPid) (per-frame aggregation), flush(), play(name, vol, rate, pan), def(name, spec, recipe), setVolumes, preview
 src/client/music.js         synthesized per-stage tracks (run / mid-boss / final), intensity from alive count and boss state; ED.Music.update(view, dt)
 src/client/input.js aim.js  keyboard/mouse (e.code), aim
 src/client/hud.js           in-run HUD (canvas)
 src/client/ui.js            DOM screens
 src/client/codex.js         Achievements (unlock progress, records) and Encyclopedia (heroes, weapons, passives, foes, bosses, stages) screens (ED.Codex)
+src/client/wardrobe.js      Wardrobe screen (ED.Wardrobe, from the Camp): tabs per kind, skins per hero, preview, Buy / Wear / Take off
 src/main.js                 app state machine + frame loop
 ```
 
-Node load order (`tools/sim.js` FILES): util, data/foes, data/stages, data/passives, data/meta, save, sim/stats, sim/arena, sim/grid, sim/world, sim/combat, sim/foes, sim/ai, sim/spawner, sim/weapons, sim/skills, sim/progress, sim/bosses, sim/boss-{warden, spore, king, hollow, twins, cyclops, samurai, weaver, wickeater}, heroes/{knight, ranger, pyro, necro, cleric, shade, bell}. `require('./tools/sim.js').load()` resets `globalThis.ED`, runs FILES and returns ED.
+Node load order (`tools/sim.js` FILES): util, data/foes, data/stages, data/passives, data/meta, data/cosmetics, save, sim/stats, sim/arena, sim/grid, sim/world, sim/combat, sim/foes, sim/ai, sim/spawner, sim/weapons, sim/skills, sim/progress, sim/bosses, sim/boss-{warden, spore, king, hollow, twins, cyclops, samurai, weaver, wickeater}, heroes/{knight, ranger, pyro, necro, cleric, shade, bell}. `require('./tools/sim.js').load()` resets `globalThis.ED`, runs FILES and returns ED.
 
-Browser order (index.html): vendor/peerjs.min.js, the sim list above, src/net.js, src/game.js, src/art/*.js, client atlas, pixfx, gl, render, post, actors, fx, hfx-{knight, ranger, pyro, necro, cleric, shade, bell}, bfx-a, bfx-b, bfx-c, audio, music, input, aim, hud, ui, src/main.js.
+Browser order (index.html): vendor/peerjs.min.js, the sim list above, src/net.js, src/game.js, src/art/*.js, client atlas, pixfx, gl, render, post, actors, fx, hfx-{knight, ranger, pyro, necro, cleric, shade, bell}, wfx-a, wfx-b, bfx-a, bfx-b, bfx-c, cosfx, audio, music, input, aim, hud, ui, codex, wardrobe, src/main.js.
 
 ## 3. Registries (how lanes plug in without editing core files)
 
@@ -136,8 +139,8 @@ Supports register after the heroes (`src/weapons/support-a.js`, `support-b.js`; 
 - Transports: PeerJS (`serialization: 'raw'`; text = JSON, snapshots and inputs = ArrayBuffer), BroadcastChannel (`?net=local`), or a test transport (`N.useTransport(T)`). The host runs the World; clients send inputs at 30 Hz (one frame per local 60 Hz tick: i8 move, i16 aim, u16 edges dash/q/e (e unused)/reroll/skip, pick << 5, banish << 8) and get snapshots at 20 Hz.
 - Snapshot (`N.encodeSnap(w, cc)`, `apply(buf)` on `ED.Net.Mirror`): header, boss + boss bar, broken braziers, heroes (full; weapons: id, u8 lvl | evo << 7, u16 tk0 | tk1 << 2 | tk2 << 4 | (path + 1) << 6 | pr[path] << 8 | fl << 11 (the mirror rebuilds tune, tk, path, pr); skills: Q only), then zones spawn-once per client (full record when a zone enters the client's rect or changes; a moved zone sends only its position; unchanged zones send nothing and age on the client; then ids of zones that died or left; the host keeps what each client holds in `cc.zc`), foes / projectiles / pickups inside the client's view + 160 px (3-byte positions, delta ids), capped events (100 hits, 120 deaths, 80 misc binary, 24 pickups, 48 JSON of other types). A busy channel skips a snapshot; its JSON events carry over. Offers go as JSON `{t:'offer', cards}`, the end as `{t:'end', summary}`.
 - Host: remote inputs play from a 3-frame jitter buffer (missing frames repeat the newest; the hero stops after 6). Client: own hero movement and dash predicted with the sim's arithmetic and reconciled on each snapshot (blend); everything else interpolated 0.1 s behind; events released at that render time. Host-only displacement (Vault leap, whirlpool pull) arrives through the correction blend.
-- Lobby API (default party): `ED.Net.host(name, cls)` → code, `join(code, name, cls)`, `setHero(cls)`, `setReady(v)`, `setStage(i)`, `start(cheats?, seed?)` → bool, `leave()`; state `ED.Net.lobby {role, code, me, status, error, stage, members[{pid, slot, name, cls, ready, isHost}], inRun, canStart}`; callbacks `ED.Net.onChange(lobby)`, `onError(msg)`, `onClosed(msg)` (set by ui.js). A start builds the run on every peer and calls `ED.App.enterRun(stage)`. Late joins are refused; a leaving client's hero dies; a lost host ends the run with `sum.note`.
-- `ED.NET_VERSION` (= `ED.Net.VERSION`, now 11) bumps on any wire change. Wire ids (looks, weapons, skills, foes, passives) are registration order, so they must be registered at script load.
+- Lobby API (default party): `ED.Net.host(name, cls)` → code, `join(code, name, cls)`, `setHero(cls)`, `setReady(v)`, `setStage(i)`, `start(cheats?, seed?)` → bool, `leave()`; state `ED.Net.lobby {role, code, me, status, error, stage, members[{pid, slot, name, cls, cos, ready, isHost}], inRun, canStart}`; callbacks `ED.Net.onChange(lobby)`, `onError(msg)`, `onClosed(msg)` (set by ui.js). A start builds the run on every peer and calls `ED.App.enterRun(stage)`. Cosmetics: `cos` = the worn bundle `{skin, tint, kill, lvl, title, ncol}` (ED.Save.cosBundle of the profile for the picked hero) rides hello / pick / lobby members and the start roster (`ED.Save.cosClean` on receipt), never snapshots; `ED.Game.cos[pid]` holds it for the run (solo: `players[].cos`; bot runs and checks: defaults). Late joins are refused; a leaving client's hero dies; a lost host ends the run with `sum.note`.
+- `ED.NET_VERSION` (= `ED.Net.VERSION`, now 12) bumps on any wire change. Wire ids (looks, weapons, skills, foes, passives) are registration order, so they must be registered at script load.
 
 ## 10. Client
 
@@ -146,7 +149,8 @@ Supports register after the heroes (`src/weapons/support-a.js`, `support-b.js`; 
 - **render.js** layer order: floor (cached 256 px chunk canvases) → zones / telegraph fills → pickups → y-sorted actors (heroes, foes, ED.ZoneActor zones, bosses, props; radix sort on typed arrays) → projectiles → zone `top` overlays → FX → hostile telegraph outlines (over the horde) → hero markers (`Actors.heroTop`: local hero slot-colour ring, outline and sprite again; allies outline) → overlays (names, bars) → post. Own-team zones (team 0) draw before enemy zones and fade together once their coverage passes 0.6 of the view (alpha √(0.6 / coverage), floor 0.4), `top` overlays included. Every list is culled to the view. `Render.gpu`, `Render.crowd`.
 - Telegraphs must be readable over a dense horde (bright outline + fill pulse).
 - Hit flash: a sprite shows white at most 60 ms per 250 ms (600 ms for foes above 250 on screen); BossFx draw hooks read `ED.Actors.hitFlash(e)`, not `e.flash`.
-- Hero art: `ED.ART.swaps[cls].key` = player-colour key colours (the per-hero palette swap is baked into `hero.<cls>.*` by tools/art.js); in co-op `Actors.hero` draws Atlas variant `pal:pc<slot>` (key colours → shades of the slot colour, `Actors.SLOT_COL`).
+- Hero art: `ED.ART.swaps[cls].key` = player-colour key colours (the per-hero palette swap is baked into `hero.<cls>.*` by tools/art.js); in co-op `Actors.hero` draws Atlas variant `pal:pc<slot>` (key colours → shades of the slot colour, `Actors.SLOT_COL`). A worn skin (`ED.Cos.skinVar`, Atlas variant `pal:<skin id>` built once per anim from the skin map, both backends) replaces it; the slot outline and name tag still mark the player.
+- Weapon tints: render.js opens `ED.Cos.tint(id)` around each owner's projectiles, weapon zones (ground, `top`, ZoneActor) and HeroFx; owner = `pr.owner` / `z.p` (World) or the one hero holding that weapon id (client mirror; a weapon id held by two heroes is not tinted). Nothing is wrapped while no hero wears a tint.
 - Text sizes: card text ≥ 20 px CSS, HUD numbers ≥ 16 px CSS, plain pixel font ('Pixel Operator').
 
 ## 11. Performance gates

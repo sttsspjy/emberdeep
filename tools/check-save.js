@@ -3,7 +3,7 @@
 // 4. normalize clamps junk. 5. applyRun: gold, records, each hero unlock rule, stage unlocks, no weapon news. 6. ED.Meta API with a mock localStorage.
 // 7. Meta ranks reach ED.Stats and the run's reroll / skip / banish counts. 8. seen: back-fill, run record (view rect, boss), merge, save code round trip, old / future codes.
 // 9. Settings: old LMB / RMB skill binds cleared once, other mouse binds kept. 10. Achievements: data, earn once, applyRun news, save code, Camp-full / every-hero rules.
-// 11. Economy: price table total, run-end gold of World.end per stage.
+// 11. Economy: price table total, run-end gold of World.end per stage. 12. Cosmetics: data, buy / wear / take off, save code, old codes, peer bundles, achievement rewards.
 'use strict';
 const store = new Map();
 globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
@@ -245,6 +245,50 @@ ok(C.GOLD.bounty === 100 && C.GOLD.minute === 10 && C.GOLD.mid === 100 && C.GOLD
 const endGold = (stage, kills, time, won) => { const w = new ED.World({ seed: 3, stage, players: [{ pid: 'p1', cls: 'knight', meta: { shop: {}, sigs: [] } }] }); w.kills = kills; w.time = time; w.end(won); return w.gold; };
 ok(endGold(0, 5000, 630, false) === 150 && endGold(2, 5000, 630, false) === 225, 'a 10:30 loss with 5000 kills pays 50 + 100 (x1.5 on stage 3)');
 ok(endGold(1, 20000, 1205, true) === Math.round(400 * 1.25) + Math.round(300 * 1.25), 'a win pays bounty + minutes, then the win bonus');
+
+// 12. cosmetics (Wardrobe)
+const CI = ED.COS_IDS, CB = ED.COS_BY, cosOf = (k) => ED.COSMETICS.filter(d => d.kind === k);
+ok(new Set(CI).size === CI.length && ED.COSMETICS.every(d => ED.COS_KINDS.indexOf(d.kind) >= 0 && typeof d.price === 'number' && d.name && (d.price === 0 || (d.price >= 200 && d.price <= 2500))),
+  CI.length + ' cosmetics: unique ids, known kinds, price 0 (reward) or 200-2500');
+ok(ED.HERO_IDS.every(c => cosOf('skin').filter(d => d.hero === c).length >= 2) && cosOf('tint').length >= 6 && cosOf('kill').length >= 4 && cosOf('lvl').length >= 3 && cosOf('title').length >= 10 && cosOf('ncol').length >= 8,
+  'every hero has 2+ skins; 6 tints, 4+ kill and 3+ level-up effects, 10 titles, 8 name colours');
+ok(cosOf('skin').every(d => Object.keys(d.map).every(h => ED.HERO_IDS.indexOf(d.hero) >= 0 && /^#[0-9a-f]{6}$/.test(h) && /^#[0-9a-f]{6}$/.test(d.map[h]))) && cosOf('tint').every(d => d.ramp.length === 5),
+  'skin maps are #rrggbb -> #rrggbb; tint ramps have 5 colours');
+const rewards = ED.ACHIEVEMENTS.filter(a => a.reward);
+ok(rewards.every(a => CB[a.reward] && CB[a.reward].price === 0) && ED.COSMETICS.filter(d => !d.price).every(d => S.cosAch(d.id)) && new Set(rewards.map(a => a.reward)).size === rewards.length,
+  rewards.length + ' achievement rewards: each a distinct price-0 cosmetic, every price-0 cosmetic is the reward of an achievement');
+const cosTotal = S.cosLeft(S.defaultProfile());
+ok(cosTotal >= 25000 && cosTotal <= 35000, 'Wardrobe total (gold items) = ' + cosTotal + ' (25,000-35,000)');
+const cp = S.defaultProfile(); cp.gold = 1000;
+const OB = 'skin.knight.obsidian', VG = 'skin.knight.verdigris', RW = 'skin.knight.gilded';
+ok(S.cosCost(cp, OB) === CB[OB].price && !S.buyCos(cp, OB) && cp.gold === 1000 && !S.cosOwned(cp, OB), 'a skin over the gold is refused');
+ok(S.buyCos(cp, VG) && cp.gold === 1000 - CB[VG].price && S.cosOwned(cp, VG) && S.cosCost(cp, VG) === 0 && !S.buyCos(cp, VG), 'buy Verdigris once; owned costs 0');
+ok(S.cosCost(cp, RW) === 0 && !S.buyCos(cp, RW) && !S.wear(cp, RW) && S.worn(cp, 'skin', 'knight') === '', 'a reward skin cannot be bought or worn before its achievement');
+ok(S.wear(cp, VG) && S.worn(cp, 'skin', 'knight') === VG && S.worn(cp, 'skin', 'ranger') === '', 'wear Verdigris on the knight only');
+cp.gold = 1e5; S.buyCos(cp, OB); S.buyCos(cp, 'skin.ranger.autumn'); S.buyCos(cp, 'tint.crimson'); S.buyCos(cp, 'tint.azure'); S.buyCos(cp, 'title.lamplighter'); S.buyCos(cp, 'ncol.gold'); S.buyCos(cp, 'kill.embers'); S.buyCos(cp, 'lvl.pillar');
+S.wear(cp, OB); S.wear(cp, 'skin.ranger.autumn'); S.wear(cp, 'tint.crimson'); S.wear(cp, 'tint.azure'); S.wear(cp, 'title.lamplighter'); S.wear(cp, 'ncol.gold'); S.wear(cp, 'kill.embers'); S.wear(cp, 'lvl.pillar');
+ok(S.worn(cp, 'skin', 'knight') === OB && S.worn(cp, 'skin', 'ranger') === 'skin.ranger.autumn' && S.worn(cp, 'tint') === 'tint.azure' && cp.wear.length === 7, 'one worn per slot (a new tint replaces the old), skins per hero');
+ok(eq(S.cosBundle(cp, 'knight'), { skin: OB, tint: 'tint.azure', kill: 'kill.embers', lvl: 'lvl.pillar', title: 'title.lamplighter', ncol: 'ncol.gold' }) && S.cosBundle(cp, 'pyro').skin === '', 'run bundle: own skin of the hero plus the global slots');
+S.wear(cp, '', 'tint'); S.wear(cp, '', 'skin', 'ranger');
+ok(S.worn(cp, 'tint') === '' && S.worn(cp, 'skin', 'ranger') === '' && S.worn(cp, 'skin', 'knight') === OB, 'take off a tint and the skin of one hero');
+const cpb = S.decode(S.encode(cp));
+ok(eq(cpb.cos, cp.cos) && eq(cpb.wear, cp.wear) && eq(cpb, S.normalize(cp)), 'save code carries owned and worn cosmetics (' + cp.cos.length + ' owned, ' + cp.wear.length + ' worn)');
+ok(eq(S.cosClean({ skin: OB, tint: 'tint.azure', kill: 'title.reaper', title: 'nope', ncol: 'ncol.gold' }, 'knight'), { skin: OB, tint: 'tint.azure', kill: '', lvl: '', title: '', ncol: 'ncol.gold' }) && S.cosClean({ skin: OB }, 'ranger').skin === '' && eq(S.cosClean(null, 'knight'), { skin: '', tint: '', kill: '', lvl: '', title: '', ncol: '' }),
+  'peer bundles cleaned: wrong kinds, unknown ids and the skin of another hero dropped');
+const jn = S.normalize({ cos: ['nope', VG, RW], wear: [RW, VG, 'tint.crimson'] });
+ok(eq(jn.cos, [VG]) && eq(jn.wear, [VG]), 'normalize: unknown and unearned ids dropped, only owned items worn');
+// rewards: earned achievements grant their item, also for profiles that earned them before cosmetics existed
+const rp = S.defaultProfile(); rp.won = ['knight'];
+const rn = S.evalAch(rp).find(x => x.id === 'win.knight');
+ok(rn && rn.reward === RW && S.cosOwned(rp, RW) && /Gilded skin/.test(rn.txt) && S.wear(rp, RW), 'Knight Victor grants and announces the Gilded skin; it can be worn');
+ok(S.cosOwned(S.normalize({ ach: ['camp', 'kills5k'] }), 'ncol.prism') && S.cosOwned(S.normalize({ ach: ['camp', 'kills5k'] }), 'title.reaper'), 'achievements earned earlier grant their rewards on load');
+// a code from before cosmetics (sections end at spent) decodes with nothing worn and the rewards of its achievements
+const wp = S._writer();
+wp.u8(1); wp.vu(1); wp.u8(0); wp.vu(500); wp.vu(900); wp.vu(0); wp.vu(0); wp.vu(0); wp.vu(0); wp.vu(0);
+const achBits = (ids) => { const m = ED.ACH_IDS.indexOf(ids[ids.length - 1]) + 1; wp.vu(m); for (let i = 0; i < m; i += 8) { let v = 0; for (let j = 0; j < 8 && i + j < m; j++) if (ids.indexOf(ED.ACH_IDS[i + j]) >= 0) v |= 1 << j; wp.u8(v); } };
+achBits(['beat2']); wp.vu(77);
+const pc = S.decode(S._pack(wp.b));
+ok(pc.gold === 500 && pc.spent === 77 && eq(pc.ach, ['beat2']) && eq(pc.cos, ['tint.abyss']) && eq(pc.wear, []), 'a pre-Wardrobe code: gold and spent kept, nothing worn, the Abyss tint from its achievement');
 
 console.log(`check-save: ${fails ? fails + ' failure(s)' : 'all passed'}`);
 process.exitCode = fails ? 1 : 0;

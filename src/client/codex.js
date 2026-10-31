@@ -40,7 +40,7 @@
   };
   // Progress text of achievement a: time or counts as 'cur / need', single goals 'Done' / 'Not yet'.
   const achTxt = (a, g) => (g.done ? 'Done' : g.need === 1 ? 'Not yet' : a.rule.time ? U.fmtTime(g.cur) + ' / ' + U.fmtTime(g.need) : U.fmtNum(g.cur) + ' / ' + U.fmtNum(g.need));
-  // Rows: { sec, icon, name, rule, k (0..1), txt, done, gold (achievements: reward, else undefined) }; unlock rows first.
+  // Rows: { sec, icon, name, rule, k (0..1), txt, done, gold (achievements: reward, else undefined), reward (achievements: cosmetic id or '') }; unlock rows first.
   C.achievements = (p) => {
     const out = [], U0 = ED.UNLOCKS;
     for (const cls of ED.HERO_IDS) {
@@ -55,7 +55,7 @@
     });
     for (const a of ED.ACHIEVEMENTS) {
       const g = SV.achProgress(p, a), t = SV.achText(a);
-      out.push({ sec: 'Achievements', icon: C.achIcon(a.id), name: t.name, rule: t.txt, k: g.k, txt: achTxt(a, g), done: g.done, gold: a.gold });
+      out.push({ sec: 'Achievements', icon: C.achIcon(a.id), name: t.name, rule: t.txt, k: g.k, txt: achTxt(a, g), done: g.done, gold: a.gold, reward: a.reward || '' });
     }
     return out;
   };
@@ -67,7 +67,7 @@
       if (a.sec !== sec) { sec = a.sec; list.appendChild(div('cx-sec', esc(sec))); }
       const r = div('ach-row' + (a.done ? ' done' : ''));
       r.appendChild(UI.iconCanvas(a.icon, 64));
-      const rw = a.gold ? '+' + a.gold + ' gold' : '';
+      const rd = a.reward && ED.COS_BY ? ED.COS_BY[a.reward] : null, rw = [a.gold ? '+' + a.gold + ' gold' : '', rd ? rd.name + ' ' + SV.COS_NOUN[rd.kind] : ''].filter(Boolean).join(' · ');
       r.insertAdjacentHTML('beforeend', `<span class="ach-name">${esc(a.name)}</span><span class="ach-rule">${esc(a.rule)}${rw ? ` <span class="ach-gold">${rw}</span>` : ''}</span>` +
         `<span class="ach-prog">${meter(a.k)}<span class="ach-v">${esc(a.txt)}</span></span>`);
       r.setAttribute('aria-label', a.name + ': ' + a.rule + (rw ? ', ' + rw : '') + ', ' + a.txt);

@@ -55,6 +55,7 @@
     <div class="msg" id="camp-msg" role="status"></div>
     <div class="shop" id="shop-list"></div>
     <div class="row">
+      <button class="btn" id="btn-wardrobe">Wardrobe</button>
       <button class="btn" id="btn-refund">Refund all</button>
       <button class="btn" id="btn-code-toggle" aria-expanded="false">Save code</button>
       <button class="btn btn-primary" id="btn-camp-back" data-back data-focus>Back</button>
@@ -65,6 +66,16 @@
       <div class="row"><button class="btn btn-sm" id="btn-code-copy">Show my code</button><button class="btn btn-sm" id="btn-code-load">Load code</button></div>
       <div class="msg" id="code-msg" role="status"></div>
     </div>
+  </section>
+
+  <section id="scr-wardrobe" class="screen tall" hidden>
+    <div class="camp-head"><h2>Wardrobe</h2><div class="gold-pill"><canvas class="icon icon-sm" id="wd-coin" width="32" height="32"></canvas><b id="wd-gold">0</b></div></div>
+    <p class="hint" id="wd-hint">Looks only: skins, weapon tints, kill and level-up effects, titles and name colours.</p>
+    <div class="cx-tabs" id="wd-tabs" role="tablist" aria-label="Wardrobe sections"></div>
+    <div class="pick-row" id="wd-heroes" role="radiogroup" aria-label="Hero"></div>
+    <div class="msg" id="wd-msg" role="status"></div>
+    <div class="wd-list" id="wd-list"></div>
+    <div class="row"><button class="btn btn-primary" id="btn-wd-back" data-back data-focus>Back</button></div>
   </section>
 
   <section id="scr-achieve" class="screen tall" hidden>
@@ -172,6 +183,7 @@
 <script src="src/data/stages.js" defer></script>
 <script src="src/data/passives.js" defer></script>
 <script src="src/data/meta.js" defer></script>
+<script src="src/data/cosmetics.js" defer></script>
 <script src="src/save.js" defer></script>
 <script src="src/sim/stats.js" defer></script>
 <script src="src/sim/arena.js" defer></script>
@@ -230,6 +242,7 @@
 <script src="src/client/bfx-a.js" defer></script>
 <script src="src/client/bfx-b.js" defer></script>
 <script src="src/client/bfx-c.js" defer></script>
+<script src="src/client/cosfx.js" defer></script>
 <script src="src/client/audio.js" defer></script>
 <script src="src/client/music.js" defer></script>
 <script src="src/client/input.js" defer></script>
@@ -237,6 +250,7 @@
 <script src="src/client/hud.js" defer></script>
 <script src="src/client/ui.js" defer></script>
 <script src="src/client/codex.js" defer></script>
+<script src="src/client/wardrobe.js" defer></script>
 <script src="src/main.js" defer></script>
 </body>
 </html>

@@ -141,6 +141,19 @@ h1.logo {
 .shop-row.maxed { border-color: #6a5020; }
 .shop-row.can .btn { border-color: var(--gold); }
 .shop-row.hero-row { border-color: var(--blue); }
+/* ---------- wardrobe (wardrobe.js) ---------- */
+.wd-list { flex: 1 1 0; min-height: 0; overflow-y: auto; width: min(1500px, 100%); display: grid; grid-template-columns: repeat(auto-fill, calc(var(--u) * 10.5)); justify-content: center; gap: calc(var(--u) * 0.6); align-content: start; padding: 3px; }
+.wd-item { display: flex; flex-direction: column; align-items: center; gap: 0.2em; background: var(--plate); border: 3px solid var(--edge); box-shadow: 0 0 0 3px #000; padding: 0.5em; }
+.wd-item.owned { border-color: #6a5020; }
+.wd-item.worn { border-color: var(--ember); background: #3a2416; }
+.wd-prev { width: calc(var(--u) * 4.4); height: calc(var(--u) * 4.4); }
+.wd-prev.wd-fx { width: calc(var(--u) * 6); height: calc(var(--u) * 6); margin: calc(var(--u) * -0.8) 0; }
+.wd-tag { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.1em; background: #120d0a; border: 2px solid #000; }
+.wd-tag .wd-title { color: #d8c08a; }
+.wd-tag .wd-name { color: var(--ink); font-size: calc(var(--u) * 1.15); }
+.wd-iname { color: var(--gold); font-size: calc(var(--u) * 1.1); text-align: center; }
+.wd-state { color: var(--mut); text-align: center; }
+.slot .sl-title { color: #d8c08a; font-size: var(--u); }
 .pips { display: flex; gap: 3px; }
 .pips i { width: 0.75em; height: 0.75em; background: #120d0a; border: 2px solid #000; box-shadow: inset 0 0 0 1px var(--edge); }
 .pips i.f { background: var(--gold); box-shadow: inset 0 -3px 0 #b07a20; }

@@ -1,6 +1,6 @@
 // Co-op net check (exit 1 on failure). Host and client game sessions (ED.Game.Session) and parties (ED.Net.Party) run in one process over a fake transport
 // (one-way latency 40 ms + 0-25 ms jitter, ordered; control messages go through JSON, binary messages are copied). Usage: node tools/check-net.js
-// 1. Lobby: host, join, hero change, ready, stage; start builds the run on both peers.
+// 1. Lobby: host, join, hero change, ready, stage; start builds the run on both peers; worn cosmetics (profile bundles) reach every lobby and both run sessions.
 // 2. 60 s co-op run (god cheat), scripted inputs on both heroes (walk, dash, Q, card picks by key): client foes match the host's within tolerance at render time,
 //    nearly every host foe inside the client's view is shown, own-hero prediction corrections stay small, vitals / weapon (id, path ranks, refine) / one skill / level match, offers resolve.
 // 3. Downed / revive reach the client. 4. A late join is refused. 5. The host leaving ends the client's run with a note; a client quitting drops its hero on the host.
@@ -30,7 +30,7 @@ const N = ED.Net;
 { const r = U.RNG(4242); Math.random = r.next; } // party codes and pids: same every run
 const GATE = 12 * 1024;
 let fails = 0;
-const okV = N.VERSION === 11 && ED.NET_VERSION === 11;
+const okV = N.VERSION === 12 && ED.NET_VERSION === 12;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
 const t0 = Date.now();
 
@@ -77,7 +77,12 @@ cbH.onError = (m) => cbH.errors.push(m); cbC.onError = (m) => cbC.errors.push(m)
 const pH = new N.Party(gH, cbH), pC = new N.Party(gC, cbC);
 let endH = null, endC = null;
 gH.onEnd = (s) => { endH = s; }; gC.onEnd = (s) => { endC = s; };
+// worn cosmetics come from ED.App.profile at host / join / hero change: the host wears a knight skin and a title, the guest a pyro skin, a tint and a name colour
+const cosProf = (ids) => { const p = ED.Save.defaultProfile(); p.gold = 1e5; for (const id of ids) { ED.Save.buyCos(p, id); ED.Save.wear(p, id); } return p; };
+const profH = cosProf(['skin.knight.obsidian', 'title.lamplighter', 'lvl.pillar']), profC = cosProf(['skin.pyro.ashen', 'skin.ranger.autumn', 'tint.crimson', 'ncol.ember', 'kill.embers']);
+ED.App = { profile: profH, sel: { cls: 'knight' } };
 const code = pH.host('Hosty', 'knight');
+ED.App.profile = profC;
 pumpFor(100);
 ok(pH.lobby.status === 'open' && pH.lobby.code === code && pH.lobby.members.length === 1, 'host lobby open (' + code + ')');
 pC.join(code, 'Guesty', 'ranger');
@@ -85,6 +90,11 @@ pumpFor(300);
 ok(pC.lobby.status === 'open' && pC.lobby.me && pH.lobby.members.length === 2 && pC.lobby.members.length === 2, 'client joined: both lobbies list 2 members');
 pC.setHero('pyro'); pumpFor(200);
 ok(pH.lobby.members[1].cls === 'pyro' && pC.lobby.members[1].cls === 'pyro', 'hero change reaches both lobbies');
+{
+  const cH = pC.lobby.members[0].cos || {}, cC = pH.lobby.members[1].cos || {};
+  ok(cH.skin === 'skin.knight.obsidian' && cH.title === 'title.lamplighter' && cH.lvl === 'lvl.pillar' && cC.skin === 'skin.pyro.ashen' && cC.tint === 'tint.crimson' && cC.ncol === 'ncol.ember' && cC.kill === 'kill.embers',
+    'worn cosmetics reach the other lobby; the guest skin follows its hero change (ranger -> pyro)');
+}
 ok(!pH.lobby.canStart && !pH.start(), 'start refused while the guest is not ready');
 pC.setReady(true); pH.setStage(1); pumpFor(200);
 ok(pH.lobby.canStart && pC.lobby.stage === 1 && pC.lobby.members[1].ready, 'ready + stage reach both lobbies; host can start');
@@ -94,6 +104,9 @@ pumpFor(200, () => { gH.update(1 / 60); gC.update(1 / 60); });
 ok(gH.mode === 'host' && gC.mode === 'client' && pC.lobby.inRun && gC.view && gC.mir.ready, 'both peers run (client mirror has snapshots)');
 const w = gH.w, hostHero = w.hero('host'), cliPid = pC.lobby.me, cliHero = w.hero(cliPid);
 ok(!!cliHero && cliHero.cls === 'pyro' && gC.view.props.obstacles.length === w.arena.obstacles.length, 'client hero exists on the host; arena rebuilt from the seed');
+ok([gH, gC].every(g => g.cos.host && g.cos.host.skin === 'skin.knight.obsidian' && g.cos.host.title === 'title.lamplighter' && g.cos[cliPid] && g.cos[cliPid].skin === 'skin.pyro.ashen' && g.cos[cliPid].tint === 'tint.crimson' && g.cos[cliPid].ncol === 'ncol.ember'),
+  'both run sessions know every hero’s worn cosmetics (from the start roster, not snapshots)');
+delete ED.App;
 
 // ---------------- 2. 60 s run ----------------
 w.cheats.xp = 8; // enough level-ups in 60 s under the run XP curve
@@ -186,7 +199,7 @@ const atSnap = ring[Math.round(gC.mir.T / C.TICK) % RING];
 ok(atSnap && atSnap.tick === Math.round(gC.mir.T / C.TICK) && Math.abs(me.hp - atSnap.hp) < 0.01 && me.maxHp === cliHero.maxHp && gC.view.level === atSnap.level && gC.view.kills === atSnap.kills && gC.view.gold === atSnap.gold, `vitals / level / kills / gold match the host at the snapshot tick (lv ${w.level}, kills ${w.kills})`);
 const sig = (p) => p.weapons.map(x => x.id + x.lvl + ':' + x.tune + '/' + x.path + '/' + x.pr.join('') + x.fl + (x.evo ? 'F' : '')).join(',') + '|' + p.passives.map(x => x.id + x.lvl).join(',') + '|' + p.skills.map(x => x.id + x.lvl).join(',');
 ok(sig(me) === sig(cliHero) && me.skills.length === 1 && me.weapons.length >= 1 && me.weapons[0].root === ED.HEROES[me.cls].sig && me.weapons[0].lvl > 1, 'client hero weapon (tune, path ranks, refine) / passives / one skill match the host: ' + sig(me));
-ok(okV, 'NET_VERSION 11');
+ok(okV, 'NET_VERSION 12');
 const cq = me.skills[0], hq = cliHero.skills[0];
 ok(cq && hq.chN === 2 && cq.chN === hq.chN && cq.ch === hq.ch && hq.ch === 2, `Q charges on the wire (host ${hq.ch}/${hq.chN}, client ${cq && cq.ch}/${cq && cq.chN})`);
 ok(cliPicks >= 5 && hostPicks >= 5 && !pendLive, `co-op level-ups resolve without pause (client picks ${cliPicks}, host picks ${hostPicks}, client pending ${pendLive} while picking)`);

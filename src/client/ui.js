@@ -1,6 +1,7 @@
-// DOM screens (client only): title, hero select, stage select, Camp shop (+ save code), join, lobby, results; achievements and encyclopedia are filled by codex.js (ED.Codex);
+// DOM screens (client only): title, hero select, stage select, Camp shop (+ save code), join, lobby, results; achievements and encyclopedia are filled by codex.js (ED.Codex),
+//   the Wardrobe by wardrobe.js (ED.Wardrobe); hero portraits wear the profile's skin (lobby: each member's);
 //   overlays: level-up cards, chest popup, pause, settings, credits.
-// ED.UI.show(name) shows one screen ('title' | 'hero' | 'stage' | 'camp' | 'achieve' | 'codex' | 'join' | 'lobby' | 'results' | 'none'); overlays toggle separately.
+// ED.UI.show(name) shows one screen ('title' | 'hero' | 'stage' | 'camp' | 'wardrobe' | 'achieve' | 'codex' | 'join' | 'lobby' | 'results' | 'none'); overlays toggle separately.
 // Menus work with mouse and keyboard: arrows / WASD move focus spatially inside the top layer, Enter / Space press, Esc presses the layer's [data-back] button.
 //   A focused [data-scroll] box (a stop only while it overflows) scrolls on up / down until its edge, then focus moves on.
 // Shop and unlock rules go through ED.Save with A.profile. Co-op goes through the ED.Net lobby API (host / join / setHero / setReady / setStage / start / leave, ED.Net.onChange).
@@ -9,7 +10,7 @@
   const U = ED.U;
   const $ = (id) => document.getElementById(id);
   const UI = ED.UI = { offerSig: '', lastMode: 'solo', banishOn: false };
-  const SCREENS = ['title', 'hero', 'stage', 'camp', 'achieve', 'codex', 'join', 'lobby', 'results'];
+  const SCREENS = ['title', 'hero', 'stage', 'camp', 'wardrobe', 'achieve', 'codex', 'join', 'lobby', 'results'];
   const LAYERS = ['ov-settings', 'ov-credits', 'ov-pause', 'ov-offer']; // top-most first
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   UI.esc = esc;
@@ -47,8 +48,9 @@
   UI.evalAch = () => { const A = App(), n = M.evalAch(A.profile); if (n.length) A.persist(); return n; };
 
   // ---------------- atlas icons ----------------
-  // Draws frame i of anim id fitted into canvas cv (integer scale fixed by frame 0, so animated frames never jump).
-  const paint = (cv, id, i) => {
+  // Draws frame i of anim id fitted into canvas cv (integer scale fixed by frame 0, so animated frames never jump); vk: Atlas variant key (skins, recolours).
+  const VO = { variant: '' };
+  const paint = UI.paint = (cv, id, i, vk) => {
     const A = ED.Atlas, g = cv.getContext('2d');
     g.clearRect(0, 0, cv.width, cv.height);
     if (!A || !A.ok || !id) return;
@@ -56,17 +58,18 @@
     const f = r.f[0], size = Math.min(cv.width, cv.height), s = Math.max(1, Math.floor(size / Math.max(f.w, f.h)));
     g.imageSmoothingEnabled = false;
     g.save(); g.translate(Math.round(cv.width / 2 - (f.ox + f.w / 2 - r.ax) * s), Math.round(cv.height / 2 - (f.oy + f.h / 2 - r.ay) * s)); g.scale(s, s);
-    A.draw(g, id, i | 0, 0, 0); g.restore();
+    VO.variant = vk || ''; A.draw(g, id, i | 0, 0, 0, VO); g.restore();
   };
-  UI.iconCanvas = (id, size, cls) => {
+  UI.iconCanvas = (id, size, cls, vk) => {
     const cv = document.createElement('canvas'); cv.width = cv.height = size; cv.className = 'icon' + (cls ? ' ' + cls : '');
-    paint(cv, id, 0);
+    cv._var = vk || '';
+    paint(cv, id, 0, cv._var);
     return cv;
   };
   // Animated portraits: redrawn by one rAF loop while a menu shows them.
   const anims = [];
   let animOn = false;
-  const animCanvas = UI.animCanvas = (id, size, cls) => { const cv = UI.iconCanvas(id, size, cls); cv._anim = id; cv._f = 0; anims.push(cv); kick(); return cv; };
+  const animCanvas = UI.animCanvas = (id, size, cls, vk) => { const cv = UI.iconCanvas(id, size, cls, vk); cv._anim = id; cv._f = 0; anims.push(cv); kick(); return cv; };
   const kick = () => { if (!animOn) { animOn = true; requestAnimationFrame(animLoop); } };
   function animLoop(now) {
     const A = ED.Atlas, t = now / 1000;
@@ -75,11 +78,13 @@
       if (!cv.isConnected) { anims.splice(i, 1); continue; }
       if (!A || !A.ok || cv.offsetParent === null) continue;
       const f = A.frameAt(cv._anim, t + (cv._off || 0));
-      if (f !== cv._f) { cv._f = f; paint(cv, cv._anim, f); }
+      if (f !== cv._f) { cv._f = f; paint(cv, cv._anim, f, cv._var); }
     }
     if (anims.length && !(App() && App().state === 'run')) requestAnimationFrame(animLoop); else animOn = false;
   }
   const heroIcon = UI.heroIcon = (cls) => (ED.HEROES[cls] && ED.HEROES[cls].icon) || 'hero.' + cls + '.idle';
+  // Variant key of hero cls's portrait in skin id (default: the profile's worn skin; '' = the default look).
+  const heroVar = UI.heroVar = (cls, skin) => { const p = App() && App().profile; if (skin === undefined) skin = p && p.wear ? SV.worn(p, 'skin', cls) : ''; return skin && ED.Cos ? ED.Cos.skinVar(heroIcon(cls), skin) : ''; };
   const keyOf = UI.keyOf = (action, dflt) => { const I = ED.Input, l = I && I.labels ? I.labels(action) : null; return (l && l[0]) || dflt; };
 
   // ---------------- screens ----------------
@@ -107,7 +112,7 @@
     const th = $('title-heroes'); th.textContent = '';
     ED.HERO_IDS.forEach((cls, i) => {
       if (!ED.HEROES[cls]) return;
-      const cv = animCanvas(heroIcon(cls), 64); cv._off = i * 0.37;
+      const cv = animCanvas(heroIcon(cls), 64, '', heroVar(cls)); cv._off = i * 0.37;
       if (!M.heroOpen(p, cls)) cv.classList.add('locked');
       th.appendChild(cv);
     });
@@ -125,7 +130,7 @@
       const b = document.createElement('button');
       b.className = 'hero-tile' + (on ? ' on' : '') + (open ? '' : ' locked');
       b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', on ? 'true' : 'false'); b.dataset.cls = cls;
-      b.appendChild(animCanvas(heroIcon(cls), 96));
+      b.appendChild(animCanvas(heroIcon(cls), 96, '', heroVar(cls)));
       b.insertAdjacentHTML('beforeend', `<span class="t-name">${esc(h.name)}</span><span class="t-lock">${open ? '' : 'Locked'}</span>`);
       b.setAttribute('aria-label', h.name + (open ? '' : ', locked: ' + (rule.txt || '')));
       b.onclick = (e) => {
@@ -149,7 +154,7 @@
     if (!h) return;
     const open = M.heroOpen(A.profile, cls), rule = ED.UNLOCKS.heroes[cls] || {};
     box.classList.toggle('locked', !open);
-    const big = animCanvas(heroIcon(cls), 192, 'big'); big._off = 0.3; box.appendChild(big);
+    const big = animCanvas(heroIcon(cls), 192, 'big', heroVar(cls)); big._off = 0.3; box.appendChild(big);
     const head = document.createElement('div'); head.className = 'hd-head';
     const hpK = U.clamp(h.hp / 130, 0, 1), spK = U.clamp((h.speed - 70) / 30, 0.1, 1);
     head.innerHTML = `<span class="hd-name">${esc(h.name)}</span><span class="hd-txt">${esc(h.txt || '')}</span>` +
@@ -561,9 +566,11 @@
       if (!m) { d.className = 'slot empty'; d.innerHTML = `<span class="pnum">P${i + 1}</span><span>Waiting...</span>`; slots.appendChild(d); continue; }
       d.className = 'slot' + (m.pid === me ? ' me' : '');
       d.insertAdjacentHTML('beforeend', `<span class="pnum">P${i + 1}</span>`);
-      d.appendChild(animCanvas(heroIcon(m.cls), 96));
+      const cs = m.cos || {}, nc = ED.COS_BY && ED.COS_BY[cs.ncol], tt = ED.COS_BY && ED.COS_BY[cs.title];
+      d.appendChild(animCanvas(heroIcon(m.cls), 96, '', heroVar(m.cls, cs.skin || '')));
       const st2 = m.isHost ? ['host', 'Host'] : m.ready ? ['ready', 'Ready'] : ['wait', 'Not ready'];
-      d.insertAdjacentHTML('beforeend', `<span class="sl-name">${esc(m.name)}${m.pid === me ? ' (you)' : ''}</span><span class="sl-hero">${esc(ED.HEROES[m.cls] ? ED.HEROES[m.cls].name : m.cls)}</span><span class="sl-st ${st2[0]}">${st2[1]}</span>`);
+      d.insertAdjacentHTML('beforeend', (tt && tt.kind === 'title' ? `<span class="sl-title">${esc(tt.name)}</span>` : '') +
+        `<span class="sl-name"${nc && nc.kind === 'ncol' ? ` style="color:${nc.col}"` : ''}>${esc(m.name)}${m.pid === me ? ' (you)' : ''}</span><span class="sl-hero">${esc(ED.HEROES[m.cls] ? ED.HEROES[m.cls].name : m.cls)}</span><span class="sl-st ${st2[0]}">${st2[1]}</span>`);
       slots.appendChild(d);
     }
     const mine = mem.find(x => x.pid === me), cur = mine ? mine.cls : A.sel.cls;
@@ -573,7 +580,7 @@
       const open = M.heroOpen(A.profile, cls), b = document.createElement('button');
       b.className = 'pick-btn' + (cur === cls ? ' on' : ''); b.disabled = !open; b.title = h.name + (open ? '' : ' (locked)');
       b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', cur === cls ? 'true' : 'false'); b.setAttribute('aria-label', h.name);
-      b.appendChild(UI.iconCanvas(heroIcon(cls), 48));
+      b.appendChild(UI.iconCanvas(heroIcon(cls), 48, '', heroVar(cls)));
       b.onclick = () => { if (cur === cls) return; A.sel.cls = cls; A.saveSel(); sendPick(cls); UI.renderLobby(); const n = $('lobby-heroes').children[ED.HERO_IDS.indexOf(cls)]; if (n) n.focus(); };
       hr.appendChild(b);
     }
@@ -682,6 +689,8 @@
     $('btn-stage-back').onclick = () => { UI.renderHeroes(); UI.show('hero'); };
     $('btn-start').onclick = () => { if (!M.stageOpen(A.profile, A.sel.stage) || !M.heroOpen(A.profile, A.sel.cls)) return; A.startSolo(); };
     $('btn-camp-back').onclick = () => { UI.renderTitle(); UI.show('title'); };
+    $('btn-wardrobe').onclick = () => { ED.Wardrobe.render(); UI.show('wardrobe'); };
+    $('btn-wd-back').onclick = () => { UI.renderCamp(); UI.show('camp'); $('btn-wardrobe').focus(); };
     $('btn-refund').onclick = () => { M.refundAll(A.profile); A.persist(); UI.renderCamp(); };
     $('btn-code-toggle').onclick = () => { const b = $('code-box'), open = b.hidden; b.hidden = !open; $('btn-code-toggle').setAttribute('aria-expanded', open ? 'true' : 'false'); if (open) { $('inp-code').value = ED.Save.encode(A.profile); say('code-msg', ''); } };
     $('btn-code-copy').onclick = () => {

@@ -5,6 +5,7 @@
 // tick and reconciled on every snapshot (server state at the acked input, then the newer inputs replayed; the visible jump blends out); everything else is interpolated
 // INTERP behind the newest snapshot, and snapshot events are released at that render time.
 // Bot watch (solo, set by main.js): ED.Game.bot.think(w, hero) is the local hero's input frame once per sim tick; sfxLite: only SFX_KEEP events reach the audio.
+// ED.Game.cos { pid: worn cosmetics bundle } from the run config (players[].cos / roster[].cos, cleaned by ED.Save.cosClean); the World never sees it.
 (function (ED) {
   'use strict';
   const C = ED.CONST, U = ED.U, STEP = C.TICK, MAX_STEPS = 8;
@@ -26,15 +27,16 @@
   const S = Session.prototype;
   S.clear = function () {
     this.w = null; this.bot = null; this.sfxLite = false; this.mode = 'off'; this.myPid = 'p1'; this.view = null; this.paused = false; this.acc = 0; this.ended = false;
-    this.net = null; this.mir = null; this.rem = null; this.netEv = []; this.pidIdx = {}; this.snapTick = 0;
+    this.net = null; this.mir = null; this.rem = null; this.netEv = []; this.pidIdx = {}; this.snapTick = 0; this.cos = {};
     if (this.bg) { clearInterval(this.bg); this.bg = 0; }
   };
   S.active = function () { return !!this.view; };
   S.coop = function () { return this.mode === 'host' || this.mode === 'client'; };
 
-  // cfg: { mode: 'solo' | 'host', seed, stage, players: [{ pid, name, slot, cls, meta }], myPid, cheats, net (host: { send(pid, d), busy(pid), ended() }) }
+  // cfg: { mode: 'solo' | 'host', seed, stage, players: [{ pid, name, slot, cls, meta, cos }], myPid, cheats, net (host: { send(pid, d), busy(pid), ended() }) }
   S.start = function (cfg) {
     this.clear();
+    this.setCos(cfg.players);
     this.mode = cfg.mode || 'solo'; this.myPid = cfg.myPid || cfg.players[0].pid;
     const w = this.w = new ED.World({ seed: cfg.seed, stage: cfg.stage, players: cfg.players, cheats: cfg.cheats });
     const v = this.view = blankView();
@@ -45,7 +47,9 @@
     this.syncView();
     return w;
   };
-  // A co-op run from the party (ED.Net.Party): cfg.mode 'host' (as start) or 'client' ({ seed, stage, myPid, roster: [{ pid, slot, name, cls }], net: { send(d), leave() } }).
+  // Worn cosmetics of list [{ pid, cls, cos }] into this.cos.
+  S.setCos = function (list) { this.cos = {}; for (const r of list || []) if (r && r.pid) this.cos[r.pid] = ED.Save.cosClean(r.cos, r.cls); };
+  // A co-op run from the party (ED.Net.Party): cfg.mode 'host' (as start) or 'client' ({ seed, stage, myPid, roster: [{ pid, slot, name, cls, cos }], net: { send(d), leave() } }).
   S.startNet = function (cfg) { return cfg.mode === 'client' ? this.startClient(cfg) : this.start(cfg); };
   S.stop = function () { this.clear(); };
   S.syncView = function () {
@@ -212,6 +216,7 @@
   S.startClient = function (cfg) {
     this.clear();
     this.mode = 'client'; this.myPid = cfg.myPid; this.net = cfg.net || null;
+    this.setCos(cfg.roster);
     const M = this.mir = new ED.Net.Mirror({ stage: cfg.stage, seed: cfg.seed, roster: cfg.roster, myPid: cfg.myPid });
     this.view = M.view;
     this.P = { x: 0, y: 0, dashT: 0, dashCd: 0, dashDx: 1, dashDy: 0, mdir: 0, mvx: 0, mvy: 0, moving: false };
