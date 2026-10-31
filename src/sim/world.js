@@ -197,19 +197,22 @@
     let m = 0; for (const p of this.heroes) m += this.goldMul(p);
     this.gold += Math.round(v * (this.sdef.gold || 1) * m / Math.max(1, this.heroes.length));
   };
-  // Ends the run once; pays the kill bounty (1 per GOLD.bounty kills, win or loss) and a win ED.CONST.GOLD.win (payGold) before the summary.
+  // Ends the run once; pays (payGold, win or loss) 1 per GOLD.bounty kills + GOLD.minute per full minute survived, plus GOLD.win on a win, before the summary.
   W.prototype.end = function (won) {
     if (this.state !== 'play') return;
     this.state = won ? 'won' : 'lost';
-    this.payGold(Math.floor(this.kills / C.GOLD.bounty));
+    this.payGold(Math.floor(this.kills / C.GOLD.bounty) + C.GOLD.minute * Math.floor(this.time / 60));
     if (won) this.payGold(C.GOLD.win);
     this.emit({ t: 'end', won, summary: this.summary() });
   };
+  // perHero.ranks: Camp ranks the hero brought (sum of its meta.shop ranks at run start); form: its hero weapon (slot 0) is a Form.
   W.prototype.summary = function () {
+    const ranks = (p) => { let n = 0; const s = (p.meta && p.meta.shop) || {}; for (const k in s) n += s[k] | 0; return n; };
     return {
       won: this.state === 'won', time: this.time, kills: this.kills, level: this.level, gold: this.gold, stage: this.stage,
       perHero: this.heroes.map(p => ({ pid: p.pid, cls: p.cls, name: p.name, kills: p.kills, dealt: Object.assign({}, p.dealt), weapons: p.weapons.map(ws => ws.id),
-        build: p.weapons.map(ws => ({ id: ws.id, tune: ws.tune, path: ws.path, pr: ws.pr.slice(), fl: ws.fl })) })),
+        build: p.weapons.map(ws => ({ id: ws.id, tune: ws.tune, path: ws.path, pr: ws.pr.slice(), fl: ws.fl })), ranks: ranks(p),
+        form: !!(p.weapons[0] && ED.WEAPONS[p.weapons[0].id] && ED.WEAPONS[p.weapons[0].id].form) })),
     };
   };
 })(globalThis.ED || (globalThis.ED = {}));

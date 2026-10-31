@@ -25,13 +25,17 @@ function pickIdx(p) {
   if (k < 0) k = O.findIndex(c => c.kind === 'tune');
   return (k < 0 ? 0 : k) + 1;
 }
-// Scripted player: circles, aims at the nearest foe in its view (else 80 px ahead), Q every 7 s, E pressed every 11 s (unbound), dash every 5 s (phase per slot), picks by pickIdx. seek: walks to a living boss outside its view, else the nearest chest within 700 px.
+// Scripted player: circles, aims at the nearest foe in its view (else 80 px ahead), Q every 7 s, E pressed every 11 s (unbound), dash every 5 s (phase per slot), picks by pickIdx. seek: walks to a living boss outside its view,
+// else the nearest chest or magnet within 700 px; a pickup it walks at without moving 4 px in 2 s (blocked by obstacles) is skipped from then on.
+const SEEK = new WeakMap(); // hero -> { x, y, id (pickup walked at), skip (ids) }
 function drive(w, p, tick, seek) {
   const t = tick / 60, a = t * 0.7 + p.slot * 1.6;
   let mx = Math.cos(a), my = Math.sin(a);
   if (seek) {
+    let s = SEEK.get(p); if (!s) { s = { x: p.x, y: p.y, id: 0, skip: new Set() }; SEEK.set(p, s); }
     let bd = 700 * 700, ch = null;
-    for (const g of w.pickups) if (!g.dead && g.k === 'chest') { const d = U.dist2(p.x, p.y, g.x, g.y); if (d < bd) { bd = d; ch = g; } }
+    for (const g of w.pickups) if (!g.dead && (g.k === 'chest' || g.k === 'magnet') && !s.skip.has(g.id)) { const d = U.dist2(p.x, p.y, g.x, g.y); if (d < bd) { bd = d; ch = g; } }
+    if (tick % 120 === 0) { if (ch && ch.id === s.id && U.dist2(p.x, p.y, s.x, s.y) < 16) s.skip.add(ch.id); s.x = p.x; s.y = p.y; s.id = ch ? ch.id : 0; }
     const b = w.bossList.find(x => !x.dead && !ED.inView(p, x.x, x.y, x.r));
     if (b) ch = b;
     if (ch) { const d = Math.hypot(ch.x - p.x, ch.y - p.y) || 1; mx = (ch.x - p.x) / d; my = (ch.y - p.y) / d; }
@@ -158,8 +162,8 @@ console.log('     hero x stage digest ' + mdig);
 const S = ED.Save, p = S.defaultProfile();
 p.name = 'Tester'; p.gold = 450; S.buy(p, 'might');
 const back = S.decode(S.encode(p));
-ok(back.name === 'Tester' && back.gold === 450 - ED.SHOP_BASE && back.shop.might === 1, 'save code round trip');
-const g = S.applyRun(p, Object.assign({}, sum, { time: 700, level: 41 }), 0, 'p1');
+ok(back.name === 'Tester' && back.gold === 450 - ED.shopPrice(ED.SHOP[0], 0) && back.shop.might === 1, 'save code round trip');
+const g = S.applyRun(p, Object.assign({}, sum, { time: 900, level: 41 }), 0, 'p1');
 ok(g.unlocked.includes('necro') && g.unlocked.includes('cleric') && g.unlocked.includes('bell') && p.beat.includes(0) && S.stageUnlocked(p, 1), 'applyRun unlocks heroes and stage 2: ' + g.unlocked.join(','));
 let bad = false; try { S.decode('WK1-AAAAA-AAAAA'); bad = true; } catch (e) { /* rejected */ }
 ok(!bad, 'a broken code is rejected');

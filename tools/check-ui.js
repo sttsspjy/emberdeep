@@ -74,7 +74,10 @@ async function main() {
     check(await page.locator('.hero-tile').count() === 7, '7 hero tiles');
     check(await page.locator('.hero-tile.locked').count() === 4, '4 locked heroes at start');
     await page.locator('.hero-tile[data-cls="necro"]').click();
-    check(/Survive 10 minutes/.test(await page.locator('#hero-detail').innerText()), 'locked hero shows its unlock rule');
+    check(/Survive 15 minutes/.test(await page.locator('#hero-detail').innerText()), 'locked hero shows its unlock rule');
+    await page.locator('.hero-tile[data-cls="shade"]').click();
+    check(/Buy at Camp for 4000 gold/.test(await page.locator('#hero-detail').innerText()) && await page.locator('#btn-hero-buy').isDisabled(), 'Shade: buy rule, unlock button disabled without 4000 gold');
+    await page.locator('.hero-tile[data-cls="necro"]').click();
     check(await page.locator('#btn-hero-next').isDisabled(), 'Next disabled on a locked hero');
     await shot(page, 'hero-locked');
     await page.locator('.hero-tile[data-cls="ranger"]').click();
@@ -98,17 +101,22 @@ async function main() {
     console.log('camp');
     await page.evaluate(() => { ED.App.profile.gold = 5000; ED.App.persist(); });
     await page.locator('#btn-camp').click();
-    const nShop = await page.evaluate(() => ED.SHOP.length);
-    check(await page.locator('.shop-row').count() === nShop, nShop + ' shop ranks');
+    const nShop = await page.evaluate(() => ED.SHOP.length), mc = await page.evaluate(() => ED.SHOP.find(s => s.id === 'might').cost);
+    check(await page.locator('.shop-row:not(.hero-row)').count() === nShop && await page.locator('.shop-row.hero-row').count() === 1, nShop + ' shop ranks + Shade for sale');
     await page.locator('.shop-row button[data-id="might"]').click();
     let pr = await page.evaluate(() => ({ g: ED.App.profile.gold, r: ED.App.profile.shop.might | 0 }));
-    check(pr.g === 4920 && pr.r === 1, 'buy Might: rank 1, gold 4920');
+    check(pr.g === 5000 - mc && pr.r === 1, 'buy Might: rank 1, gold ' + (5000 - mc));
     await page.locator('.shop-row button[data-id="might"]').click();
-    check(/Refund all \(\+240\)/.test(await page.locator('#btn-refund').innerText()), 'refund shows the total');
+    check(new RegExp('Refund all \\(\\+' + 5 * mc + '\\)').test(await page.locator('#btn-refund').innerText()), 'refund shows the total');
+    check(/Ranks 2 \/ \d+/.test(await page.locator('#camp-hint').innerText()), 'hint counts owned ranks');
     await shot(page, 'camp');
+    check(await page.evaluate(() => document.getElementById('scr-camp').scrollWidth <= innerWidth), 'camp: no horizontal scroll');
     await page.locator('#btn-refund').click();
     pr = await page.evaluate(() => ({ g: ED.App.profile.gold, r: ED.App.profile.shop.might | 0 }));
     check(pr.g === 5000 && pr.r === 0, 'refund returns all gold');
+    await page.locator('.shop-row button[data-id="hero.shade"]').click();
+    pr = await page.evaluate(() => ({ g: ED.App.profile.gold, s: ED.Save.heroUnlocked(ED.App.profile, 'shade') }));
+    check(pr.g === 1000 && pr.s && await page.locator('.shop-row.hero-row').count() === 0 && /New hero: Shade/.test(await page.locator('#camp-msg').innerText()), 'buy Shade at Camp: 4000 gold, row gone, news line');
     await page.locator('#btn-code-toggle').click();
     check(/^WK1-/.test(await page.locator('#inp-code').inputValue()), 'save code shown');
     check(await minFont(page, '.shop-row span, .shop-row button') >= 20, 'camp text >= 20 px');
@@ -119,12 +127,13 @@ async function main() {
     await page.evaluate(() => { const p = ED.App.profile; p.stats.bestTime = 432; p.stats.bestKills = 1840; p.stats.bestLevel = 21; p.played = ['knight']; ED.App.persist(); });
     await page.locator('#btn-achieve').click();
     check(await vis(page, 'scr-achieve'), 'Achievements opens');
-    const nAch = await page.evaluate(() => { const U0 = ED.UNLOCKS; return ED.HERO_IDS.filter(c => !U0.heroes[c].start).length + Object.keys(U0.stages).filter(i => !U0.stages[i].start).length; });
-    check(await page.locator('.ach-row').count() === nAch, nAch + ' unlock rows (heroes and stages only)');
-    check(await page.locator('.ach-row.done').count() === 0, 'none done yet');
+    const nAch = await page.evaluate(() => { const U0 = ED.UNLOCKS; return ED.HERO_IDS.filter(c => !U0.heroes[c].start).length + Object.keys(U0.stages).filter(i => !U0.stages[i].start).length + ED.ACHIEVEMENTS.length; });
+    check(await page.locator('.ach-row').count() === nAch, nAch + ' rows (hero and stage unlocks, achievements)');
+    check(await page.locator('.ach-row.done').count() === 2, 'done: Shade (bought) and Still Standing (best time 7:12)');
     const at = await page.locator('#ach-list').innerText();
-    check(/7:12 \/ 10:00/.test(at) && /1840 \/ 3000/.test(at) && /Level 21 \/ 25/.test(at), 'unlock progress texts (Bell: level 25)');
-    check(/0 \/ \d+ unlocked/.test(await page.locator('#ach-count').innerText()), 'header counts unlocks');
+    check(/7:12 \/ 15:00/.test(at) && /1840 \/ 5000/.test(at) && /21 \/ 40/.test(at) && /\+100 gold/.test(at), 'progress texts (Necro 15:00, one-run kills, level 40) and gold rewards');
+    check(/1 \/ \d+ unlocked, 1 \/ \d+ achievements\. New: Still Standing \+50/.test(await page.locator('#ach-count').innerText()), 'header counts unlocks and achievements, names the new one');
+    check(await page.evaluate(() => ED.App.profile.gold === 1050 && ED.Save.load().ach.indexOf('time5') >= 0), 'achievement gold paid and saved');
     check(/Lifetime kills/.test(await page.locator('#ach-rec').innerText()) && await page.locator('.rec-stage').count() === 3, 'records and 3 stage bests');
     check(await minFont(page, '#scr-achieve span, #scr-achieve b') >= 20, 'achievements text >= 20 px');
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.getElementById('scr-achieve').scrollWidth <= innerWidth), 'achievements: no horizontal scroll');
@@ -142,7 +151,7 @@ async function main() {
     await page.locator('.cx-item[data-key="ranger"]').click();
     { const t = await page.locator('#cx-detail').innerText(); check(/Not discovered yet/.test(t) && !t.includes(await page.evaluate(() => ED.SKILLS[ED.HEROES.ranger.skills[0]].name)) && !/Ranger/.test(t), 'unmet open hero: only "Not discovered yet"'); }
     await page.locator('.cx-item[data-key="necro"]').click();
-    { const t = await page.locator('#cx-detail').innerText(); check(/Not discovered yet/.test(t) && /Locked: Survive 10 minutes/.test(t) && !/Lv 4|Necro/.test(t), 'unmet locked hero: unlock line kept, nothing else'); }
+    { const t = await page.locator('#cx-detail').innerText(); check(/Not discovered yet/.test(t) && /Locked: Survive 15 minutes/.test(t) && !/Lv 4|Necro/.test(t), 'unmet locked hero: unlock line kept, nothing else'); }
     await shot(page, 'codex-unseen');
     await page.locator('#cx-tabs [data-tab="weapons"]').click();
     { const n = await cxNames(), nw = await page.evaluate(() => ED.WEAPON_IDS.length); check(n.filter(x => x[0] === '+').join() === '+Cleave' && n.length === nw, 'weapons: only Cleave named of ' + nw); }
@@ -168,7 +177,7 @@ async function main() {
     await page.keyboard.press('ArrowDown');
     check((await page.locator('#cx-detail').innerText()).includes(await page.evaluate(() => ED.SKILLS[ED.HEROES.ranger.skills[0]].name)), 'keyboard focus selects (Ranger: its Q skill)');
     await page.locator('.cx-item[data-key="necro"]').click();
-    check(/Locked: Survive 10 minutes/.test(await page.locator('#cx-detail').innerText()) && /Lv 4/.test(await page.locator('#cx-detail').innerText()), 'locked hero shows unlock line and skill levels');
+    check(/Locked: Survive 15 minutes/.test(await page.locator('#cx-detail').innerText()) && /Lv 4/.test(await page.locator('#cx-detail').innerText()), 'locked hero shows unlock line and skill levels');
     check(await minFont(page, '#scr-codex span, #scr-codex b, #scr-codex button') >= 20, 'encyclopedia text >= 20 px');
     await shot(page, 'codex-hero');
     const tabs = { weapons: /Path: /, passives: /Lv \d/, foes: /Appears in/, bosses: /Attacks/, stages: /Bosses/ };
@@ -355,6 +364,7 @@ async function main() {
     check(await vis(page, 'scr-results'), 'results screen');
     check(await page.locator('.bar-row').count() === 4, 'per-weapon damage bars');
     check(/Victory/.test(await page.locator('#res-title').innerText()), 'victory title');
+    check(/Achievement: Ascended \(\+200 gold\)/.test(await page.locator('#res-unlocks').innerText()), 'results announce a new achievement');
     await wait(800);
     await shot(page, 'results');
     await page.locator('#btn-res-back').click();

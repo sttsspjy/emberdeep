@@ -26,18 +26,25 @@
     refundAll: (p) => SV.refundAll(p),
     heroOpen: (p, cls) => SV.heroUnlocked(p, cls),
     stageOpen: (p, i) => SV.stageUnlocked(p, i),
+    heroCost: (p, cls) => SV.heroCost(p, cls),
+    buyHero: (p, cls) => SV.buyHero(p, cls),
+    evalAch: (p) => SV.evalAch(p),
   };
   UI.M = M;
-  // Progress toward an ED.UNLOCKS rule: { k (0..1), txt ('' for beat rules) } from the one-run records ED.Save.applyRun checks (p.stats bestTime / bestKills / bestLevel).
+  // Progress toward an ED.UNLOCKS rule: { k (0..1), txt ('' for beat / pure rules) } from the records ED.Save.applyRun checks (p.stats bestTime / bestKills / bestLevel) or gold for buy rules.
   const unlockProgress = UI.unlockProgress = (p, rule) => {
     if (!rule) return { k: 0, txt: '' };
     const st = p.stats, of = (cur, need, f) => ({ k: U.clamp(cur / need, 0, 1), txt: f(Math.min(cur, need)) + ' / ' + f(need) });
     if (rule.survive) return of(st.bestTime, rule.survive, U.fmtTime);
+    if (rule.buy) { const r = of(p.gold, rule.buy, String); r.txt += ' gold'; return r; }
     if (rule.kills) return of(st.bestKills, rule.kills, String);
     if (rule.level) { const r = of(st.bestLevel, rule.level, String); r.txt = 'Level ' + r.txt; return r; }
     if (rule.beat !== undefined) return { k: p.beat.indexOf(rule.beat) >= 0 ? 1 : 0, txt: '' };
+    if (rule.pure) return { k: p.pure.length ? 1 : 0, txt: SV.campRanks(p) ? 'Camp ranks owned: ' + SV.campRanks(p) + ' (Refund all at Camp)' : 'No Camp ranks owned' };
     return { k: 0, txt: '' };
   };
+  // Earns achievements the profile now meets (records from before they existed, Camp purchases), saves, and returns their news entries.
+  UI.evalAch = () => { const A = App(), n = M.evalAch(A.profile); if (n.length) A.persist(); return n; };
 
   // ---------------- atlas icons ----------------
   // Draws frame i of anim id fitted into canvas cv (integer scale fixed by frame 0, so animated frames never jump).
@@ -158,6 +165,13 @@
     } else {
       const pr = unlockProgress(A.profile, rule), lk = document.createElement('div'); lk.className = 'lock-box';
       lk.innerHTML = `<span>Locked: ${esc(rule.txt || 'not yet available')}</span>` + (pr.txt ? `<span class="hd-stats"><span class="meter" style="width:16em"><i style="width:${(U.clamp(pr.k, 0, 1) * 100).toFixed(0)}%"></i></span><span class="mut">${esc(pr.txt)}</span></span>` : '');
+      const cost = M.heroCost(A.profile, cls);
+      if (cost) {
+        const b = document.createElement('button'); b.className = 'btn btn-sm'; b.id = 'btn-hero-buy';
+        b.textContent = 'Unlock for ' + cost + ' gold'; b.disabled = A.profile.gold < cost;
+        b.onclick = () => { if (M.buyHero(A.profile, cls)) { UI.evalAch(); A.persist(); UI.renderHeroes(); $('btn-hero-next').focus(); } };
+        lk.appendChild(b);
+      }
       box.appendChild(lk);
     }
     const nx = $('btn-hero-next');
@@ -222,11 +236,28 @@
   // ---------------- camp ----------------
   const shopIcon = (s) => s.icon || (ED.PASSIVES[s.id] && ED.PASSIVES[s.id].icon) || 'pickup.coin';
   const pips = (n, max, next) => { let h = '<span class="pips">'; for (let k = 0; k < max; k++) h += `<i class="${k < n ? 'f' : k === n && next ? 'nx' : ''}"></i>`; return h + '</span>'; };
+  // Camp grid: heroes for sale (locked { buy } rules) first, then ED.SHOP rows. Earns achievements the profile meets (UI.evalAch) and names them in #camp-msg.
   UI.renderCamp = (flash) => {
-    const A = App(), p = A.profile, list = $('shop-list');
+    const A = App(), p = A.profile, list = $('shop-list'), got = UI.evalAch();
+    const cm = $('camp-msg');
+    if (got.length) cm.textContent = (flash && cm.textContent ? cm.textContent + '  ' : '') + got.map(a => a.txt).join('  '); else if (!flash) cm.textContent = '';
     $('camp-gold').textContent = p.gold;
     paint($('camp-coin'), 'pickup.coin', 0);
     list.textContent = '';
+    for (const cls of ED.HERO_IDS) {
+      const cost = M.heroCost(p, cls), h = ED.HEROES[cls]; if (!cost || !h) continue;
+      const row = document.createElement('div');
+      row.className = 'shop-row hero-row' + (p.gold >= cost ? ' can' : '');
+      row.appendChild(UI.iconCanvas(heroIcon(cls), 48));
+      row.insertAdjacentHTML('beforeend', `<span class="s-name">${esc(h.name)}</span><span class="s-txt">Unlock this hero</span>`);
+      const b = document.createElement('button');
+      b.className = 'btn btn-sm'; b.textContent = 'Buy ' + cost; b.dataset.id = 'hero.' + cls; b.disabled = p.gold < cost;
+      b.onclick = () => { if (M.buyHero(p, cls)) { A.persist(); $('camp-msg').textContent = 'New hero: ' + h.name; UI.renderCamp('hero.' + cls); } };
+      row.appendChild(b);
+      list.appendChild(row);
+    }
+    let own = 0, all = 0; for (const s of ED.SHOP) { own += M.rank(p, s.id); all += s.max; }
+    $('camp-hint').textContent = 'Permanent ranks for every run. Ranks ' + own + ' / ' + all + (own < all ? ', ' + U.fmtNum(SV.shopLeft(p)) + ' gold to max all.' : ', all maxed.') + ' Refund any time.';
     for (const s of ED.SHOP) {
       const r = M.rank(p, s.id), cost = M.cost(p, s.id), row = document.createElement('div');
       row.className = 'shop-row' + (cost ? '' : ' maxed') + (cost && p.gold >= cost ? ' can' : '');
@@ -303,7 +334,7 @@
       const d = ED.PASSIVES[c.id]; o.max = d ? d.max : 5;
       o.badge = c.kind === 'passive' ? 'NEW' : 'LV ' + c.lvl; o.bcls = c.kind === 'passive' ? 'new' : 'lv';
     } else if (c.kind === 'skill') {
-      const d = ED.SKILLS[c.id]; o.max = d && ED.skillMaxLvl ? ED.skillMaxLvl(d) : 4;
+      const d = ED.SKILLS[c.id]; o.max = d && ED.skillMaxLvl ? ED.skillMaxLvl(d) : 5;
       o.badge = keyOf('skill1', 'Q') + ' skill LV ' + c.lvl; o.bcls = 'sk';
     }
     return o;
@@ -451,7 +482,7 @@
     const add = (icon, text) => { const d = document.createElement('div'); d.className = 'unlock'; if (icon) d.appendChild(UI.iconCanvas(icon, 48)); d.insertAdjacentHTML('beforeend', `<span>${esc(text)}</span>`); un.appendChild(d); };
     if (sum.note) add('', sum.note);
     if (gained) {
-      for (const n of gained.news || []) add(n.kind === 'hero' ? heroIcon(n.id) : '', n.txt);
+      for (const n of gained.news || []) add(n.kind === 'hero' ? heroIcon(n.id) : n.kind === 'ach' && ED.Codex ? ED.Codex.achIcon(n.id) : '', n.txt);
       if (gained.records && gained.records.length) add('', 'New record: ' + gained.records.join(', '));
     }
     $('btn-res-again').hidden = UI.lastMode !== 'solo';

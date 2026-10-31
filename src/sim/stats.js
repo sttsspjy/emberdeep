@@ -1,15 +1,16 @@
 // Hero stat block and effective weapon / skill numbers (ARCHITECTURE §6-7).
-// ED.Stats.compute(p) -> { maxHp, armor, regen, speed, pickup, might, haste, reach, velocity, duration, amount, luck, growth, greed, crit, critMul, revival, rerolls, skips, banishes }.
+// ED.Stats.compute(p) -> { maxHp, armor, regen, speed, pickup, might, haste, reach, velocity, duration, amount, luck, growth, greed, crit, critMul, revival, rerolls, skips, banishes, focus }.
 // Sources: hero base + passives (ED.PASSIVES[id].per x level, or per[level-1] for arrays) + meta shop ranks (p.meta.shop) + ED.HOOK[cls].stats(p, add).
 // Additive keys add up; speed and pickup sums are fractions of the hero base; maxHp, armor, regen add flat.
 (function (ED) {
   'use strict';
   const St = ED.Stats = {};
-  const KEYS = ['maxHp', 'armor', 'regen', 'speed', 'pickup', 'might', 'haste', 'reach', 'velocity', 'duration', 'amount', 'luck', 'growth', 'greed', 'crit', 'critMul', 'revival', 'rerolls', 'skips', 'banishes'];
+  const KEYS = ['maxHp', 'armor', 'regen', 'speed', 'pickup', 'might', 'haste', 'reach', 'velocity', 'duration', 'amount', 'luck', 'growth', 'greed', 'crit', 'critMul', 'revival', 'rerolls', 'skips', 'banishes', 'focus'];
   St.KEYS = KEYS;
   St.PICKUP = 48; // base pickup radius (px)
   St.HASTE_CAP = 0.5;
   St.CD_MIN = 0.2;   // weapon cooldown floor (s)
+  St.FOCUS_CAP = 0.5; // skill cooldown reduction cap
   // Tune steps (GAME-DESIGN §4), card order = ws.tk order: damage x (1 + dmg x count), cooldown x cd^count, area x (1 + area x count).
   ED.TUNE = [{ id: 'dmg', dmg: 0.15, txt: '+15% damage' }, { id: 'haste', cd: 0.91, txt: '+10% attack speed' }, { id: 'area', area: 0.12, txt: '+12% area' }];
   // Generic path step (path ranks 2 and 4): damage x (1 + dmg x steps), cooldown x cd^steps.
@@ -31,7 +32,7 @@
       speed: (h.speed || 90) * (1 + add.speed), pickup: St.PICKUP * (1 + add.pickup),
       might: add.might, haste: Math.min(St.HASTE_CAP, add.haste), reach: add.reach, velocity: add.velocity, duration: add.duration, amount: add.amount,
       luck: Math.max(0, add.luck), growth: add.growth, greed: add.greed, crit: (h.crit !== undefined ? h.crit : 0.05) + add.crit, critMul: 2 + add.critMul,
-      revival: add.revival, rerolls: add.rerolls, skips: add.skips, banishes: add.banishes,
+      revival: add.revival, rerolls: add.rerolls, skips: add.skips, banishes: add.banishes, focus: Math.min(St.FOCUS_CAP, Math.max(0, add.focus)),
     };
     return st;
   };
@@ -83,14 +84,14 @@
     ws.Sv = p.statsV; ws.Sk = ED.weaponKey(ws); ws.Sid = ws.id;
     return S;
   };
-  // Effective numbers of hero skill `idx` into sk.N (reused): { cd, r, dur, n, ...custom } with reach on r, duration on dur, no haste on cd. Skills deal no damage (no dmg key).
+  // Effective numbers of hero skill `idx` into sk.N (reused): { cd, r, dur, n, ...custom } with reach on r, duration on dur, focus (not haste) on cd. Skills deal no damage (no dmg key).
   St.skill = (p, idx) => {
     const sk = p.skills[idx], def = ED.SKILLS[sk.id], b = def.base || {}, st = p.stats, sum = sumLevels(def, sk.lvl, SUM);
     const N = sk.N || (sk.N = {});
     clear(N);
     for (const k in b) N[k] = b[k];
     for (const k in sum) N[k] = typeof sum[k] === 'number' && typeof b[k] === 'number' ? b[k] + sum[k] : sum[k];
-    N.cd = Math.max(1, (def.cd || 10) * (1 + (sum.cd || 0)));
+    N.cd = Math.max(1, (def.cd || 10) * (1 + (sum.cd || 0)) * (1 - st.focus));
     if (b.r !== undefined) N.r = b.r * (1 + (sum.r || 0)) * (1 + st.reach);
     if (b.dur !== undefined) N.dur = b.dur * (1 + (sum.dur || 0)) * (1 + st.duration);
     N.crit = st.crit; N.critMul = st.critMul;

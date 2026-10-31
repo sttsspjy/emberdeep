@@ -32,7 +32,7 @@ Menus work with the keyboard too: arrows or WASD move between buttons, Enter pre
 3. Each weapon grows in stages: 5 tune steps (damage, attack speed or area), then an elite chest lets you pick one of its three paths for good, path ranks 2–5 change how it looks and fires, then a boss chest offers that path's **Forms**: a new shape of the weapon (most of its damage). Unknown Forms show as ???. Each weapon takes one Form; after that it can be refined twice.
 4. Chests: an elite chest offers a path pick when a weapon is ready for one, else levels a passive or your skill; a boss chest (from the 10:00 boss on) offers a Form when a weapon is ready for one, else a path pick or an extra level-up. In co-op every hero gets a chest reward, whoever opens it.
 5. Bosses arrive at 5:00, 10:00 and 15:00; the final boss at 20:00. Beat it to win.
-6. Break braziers for gold, food, a magnet or a holy bomb. A brazier relights a minute after it breaks once you are away from it; elites often drop food.
+6. Break braziers for gold, food or a holy bomb. Every couple of minutes a slain foe drops a magnet (blue halo) that pulls in every gem. A brazier relights a minute after it breaks once you are away from it; elites often drop food.
 7. The results screen shows your build and how much damage each weapon and your skill dealt.
 
 ## Stages and bosses
@@ -55,13 +55,13 @@ The host's browser runs the game, so the host needs the steadiest connection. Co
 
 ## Heroes
 
-Each hero has one weapon of their own (three paths, hidden Forms), room for two support weapons and one skill on Q, and each plays a different role: the Knight brawls inside the crowd, the Ranger shoots long piercing lines, the Pyro paints the ground with fire, the Necro grows an army, the Cleric heals and smites, the Shade stabs and crits up close, and the Bellwarden holds the horde back. Knight, Ranger and Pyro are open from the start. Necro: survive 10 minutes. Cleric: beat stage 1. Shade: kill 3000 foes in one run. Bellwarden: reach level 25 in one run. Stages 2 and 3 open when you beat the stage before.
+Each hero has one weapon of their own (three paths, hidden Forms), room for two support weapons and one skill on Q (level 5 changes how it works, e.g. the Knight's Aegis Ward walks with him), and each plays a different role: the Knight brawls inside the crowd, the Ranger shoots long piercing lines, the Pyro paints the ground with fire, the Necro grows an army, the Cleric heals and smites, the Shade stabs and crits up close, and the Bellwarden holds the horde back. Knight, Ranger and Pyro are open from the start. Necro: survive 15 minutes. Cleric: beat stage 1. Shade: buy for 4000 gold at Camp or on the hero select screen. Bellwarden: win any stage with no Camp ranks (Refund all first). Stages 2 and 3 open when you beat the stage before.
 
 ## Camp and saving
 
-Gold buys permanent ranks at Camp (damage, health, armor, regen, speed, pickup radius, XP, gold, luck, revivals, rerolls, skips, banishes). Refund all gives every coin back.
+Every run pays gold, win or lose: bosses, minutes survived and a small kill bounty, more on later stages. Gold buys permanent ranks at Camp (damage, health, armor, regen, speed, pickup radius, XP, gold, luck, revivals, rerolls, skips, banishes, attack speed, area, duration, projectile speed, +1 projectile, skill cooldown). First ranks are cheap, top ranks expensive; maxing everything takes about 15 full runs. Refund all gives every coin back.
 
-**Achievements** (main menu) lists every unlock with your progress toward it, plus your records: runs, wins, lifetime kills, best time, kills and level, and each stage's best run. **Encyclopedia** (main menu) describes every hero, weapon and support weapon (with its paths and the Forms you found), passive, foe, boss and stage you have met: heroes and stages you started a run with, weapons, Forms and passives you owned, foes you saw and bosses you fought. The rest shows as a dark "???" until you find it; locked heroes and stages still show how to unlock them.
+**Achievements** (main menu) lists every unlock and 29 achievements with your progress and their gold reward (each pays once; new ones show on the results screen), plus your records: runs, wins, lifetime kills, best time, kills and level, and each stage's best run. **Encyclopedia** (main menu) describes every hero, weapon and support weapon (with its paths and the Forms you found), passive, foe, boss and stage you have met: heroes and stages you started a run with, weapons, Forms and passives you owned, foes you saw and bosses you fought. The rest shows as a dark "???" until you find it; locked heroes and stages still show how to unlock them.
 
 Progress saves in the browser automatically. Camp → **Show my code** gives a save code you can paste into **Load code** on another browser or device. The code carries your Encyclopedia discoveries too; an older code still loads.
 

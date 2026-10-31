@@ -1,5 +1,6 @@
 // Achievements and Encyclopedia screens (client only; DOM in #scr-achieve / #scr-codex, shown through ED.UI.show).
-// ED.Codex.renderAchievements(): one row per ED.UNLOCKS unlock (non-start heroes, non-start stages) with progress from ED.App.profile, plus lifetime and per-stage records.
+// ED.Codex.renderAchievements(): earns what the profile now meets (ED.UI.evalAch), then one row per ED.UNLOCKS unlock (non-start heroes, non-start stages) and per ED.ACHIEVEMENTS entry
+// (progress, gold reward) from ED.App.profile, plus lifetime and per-stage records. ED.Codex.achIcon(id): atlas icon of an achievement.
 // ED.Codex.renderCodex(tab?): tab row (heroes | weapons (hero weapons, then a Supports section) | passives | foes | bosses | stages), entry list and detail pane, read from the data tables. Only what the profile has met
 // (profile.seen via ED.Save.isSeen; bosses by their foe id) is described: the rest lists as a '???' silhouette whose detail says 'Not discovered yet' (plus the unlock line for
 // locked heroes / stages), and cross-references to unmet entries read '???'.
@@ -31,36 +32,50 @@
   const supportRoots = () => ED.WEAPON_IDS.filter(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved);
 
   // ---------------- achievements ----------------
-  // Unlock rows: { sec, icon, name, rule, k (0..1), txt, done }.
+  // Icon of achievement id: its data icon, else from the rule (stage boss, hero, hero weapon), else a chest.
+  C.achIcon = (id) => {
+    const a = ED.ACHIEVEMENTS.find(x => x.id === id); if (!a) return 'pickup.chest';
+    const r = a.rule, h = ED.HEROES[r.winWith || r.form], w = h && r.form ? ED.WEAPONS[h.sig] : null;
+    return a.icon || (r.beat !== undefined ? stageIcon(r.beat) : w ? w.icon : h ? UI.heroIcon(h.id) : 'pickup.chest');
+  };
+  // Progress text of achievement a: time or counts as 'cur / need', single goals 'Done' / 'Not yet'.
+  const achTxt = (a, g) => (g.done ? 'Done' : g.need === 1 ? 'Not yet' : a.rule.time ? U.fmtTime(g.cur) + ' / ' + U.fmtTime(g.need) : U.fmtNum(g.cur) + ' / ' + U.fmtNum(g.need));
+  // Rows: { sec, icon, name, rule, k (0..1), txt, done, gold (achievements: reward, else undefined) }; unlock rows first.
   C.achievements = (p) => {
     const out = [], U0 = ED.UNLOCKS;
     for (const cls of ED.HERO_IDS) {
       const r = U0.heroes[cls], h = ED.HEROES[cls]; if (!r || r.start || !h) continue;
       const done = SV.heroUnlocked(p, cls), pr = UI.unlockProgress(p, r);
-      out.push({ sec: 'Heroes', icon: UI.heroIcon(cls), name: h.name, rule: r.txt || '', k: done ? 1 : pr.k, txt: pr.txt || (done ? 'Done' : 'Not yet'), done });
+      out.push({ sec: 'Heroes', icon: UI.heroIcon(cls), name: h.name, rule: r.txt || '', k: done ? 1 : pr.k, txt: done ? 'Done' : pr.txt || 'Not yet', done });
     }
     ED.STAGES.forEach((sd, i) => {
       const r = U0.stages[i]; if (!r || r.start) return;
       const done = SV.stageUnlocked(p, i);
       out.push({ sec: 'Stages', icon: stageIcon(i), name: (i + 1) + '. ' + sd.name, rule: r.txt || '', k: done ? 1 : 0, txt: done ? 'Done' : 'Not yet', done });
     });
+    for (const a of ED.ACHIEVEMENTS) {
+      const g = SV.achProgress(p, a), t = SV.achText(a);
+      out.push({ sec: 'Achievements', icon: C.achIcon(a.id), name: t.name, rule: t.txt, k: g.k, txt: achTxt(a, g), done: g.done, gold: a.gold });
+    }
     return out;
   };
   C.renderAchievements = () => {
-    const p = App().profile, rows = C.achievements(p), list = $('ach-list');
+    const got = UI.evalAch(), p = App().profile, rows = C.achievements(p), list = $('ach-list');
     list.textContent = '';
     let sec = '';
     for (const a of rows) {
       if (a.sec !== sec) { sec = a.sec; list.appendChild(div('cx-sec', esc(sec))); }
       const r = div('ach-row' + (a.done ? ' done' : ''));
       r.appendChild(UI.iconCanvas(a.icon, 64));
-      r.insertAdjacentHTML('beforeend', `<span class="ach-name">${esc(a.name)}</span><span class="ach-rule">${esc(a.rule)}</span>` +
+      const rw = a.gold ? '+' + a.gold + ' gold' : '';
+      r.insertAdjacentHTML('beforeend', `<span class="ach-name">${esc(a.name)}</span><span class="ach-rule">${esc(a.rule)}${rw ? ` <span class="ach-gold">${rw}</span>` : ''}</span>` +
         `<span class="ach-prog">${meter(a.k)}<span class="ach-v">${esc(a.txt)}</span></span>`);
-      r.setAttribute('aria-label', a.name + ': ' + a.rule + ', ' + a.txt);
+      r.setAttribute('aria-label', a.name + ': ' + a.rule + (rw ? ', ' + rw : '') + ', ' + a.txt);
       list.appendChild(r);
     }
-    const n = rows.filter(a => a.done).length;
-    $('ach-count').textContent = n + ' / ' + rows.length + ' unlocked';
+    const unl = rows.filter(a => a.sec !== 'Achievements'), ach = rows.filter(a => a.sec === 'Achievements');
+    $('ach-count').textContent = unl.filter(a => a.done).length + ' / ' + unl.length + ' unlocked, ' + ach.filter(a => a.done).length + ' / ' + ach.length + ' achievements' +
+      (got.length ? '. New: ' + got.map(a => a.name + (a.gold ? ' +' + a.gold : '')).join(', ') : '');
     const st = p.stats, box = $('ach-rec');
     let h = '<span class="cx-h">Records</span><div class="rec-grid">' +
       [['Runs', st.runs], ['Wins', st.wins], ['Lifetime kills', U.fmtNum(st.kills)], ['Best time', U.fmtTime(st.bestTime)], ['Best kills (one run)', U.fmtNum(st.bestKills)], ['Best level', st.bestLevel]]

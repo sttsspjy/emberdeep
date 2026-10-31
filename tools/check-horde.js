@@ -1,20 +1,21 @@
 // Horde regression check (exit 1 on failure): foe roster, stage timelines, brains, telegraphs, spawner events, recycling, arena layouts. Usage: node tools/check-horde.js
 // 1. Data: every roster / event / split id exists, has a brain and atlas art; timelines have 21 rows, caps 80 / 150 / 220 at 0:00-2:00 then 300 -> 700, rates rising until 19:00, density floors (none at 0:00); roster tiers (5:00 and 10:00 add kinds,
 //    early kinds fade out, 15:00 adds none; no charger or diver from 11:00); no swarm-brain flyer in any roster (flocks only); boss ids per stage; foe wire order (tier foes after the boss bodies); the XP curve;
-//    foe HP: base x (1 + 0.15 x minute) (swarm brain 0.06) x party x stage; swarmers and divers 10-11 HP.
+//    foe HP: base x (1 + 0.11 x minute) (swarm brain 0.06) x party x stage; swarmers and divers 10-11 HP; elite HP 15 x max(1, 60 / def.hp) x spawned HP.
 // 2. Brains: each attack kind (ranged, exploder, charger, diver, brute, blinker) shows a warn zone >= 0.6 s before it deals damage; a stun cancels a wind-up and drops its telegraph;
 //    ranged streams (one lane, 'aim' look, shot life), lobs (a fixed circle at the hero's spot, then a blast there; killing the caster cancels it), the per-hero attack budget, no retreat;
 //    charge / dive reach (start only within min(range, lane - 12), 'dash' look, rest after the dash), divers close in without a token, charge / dive / blink starts spend atkTok;
-//    guard (shield up, open after the bash), summoner (summons after its ring), pull slam (drags a still hero in), wall packs (a line across the approach).
+//    guard (shield up, open after the bash), summoner (summons after its ring), pull slam (drags a still hero in), wall packs (a line across the approach);
+//    slam radius vs Knight reach: a base Cleave hits each brute from 12 px outside its slam (elites: outside the x1.35 slam).
 // 3. Spawner: a weaponless god hero per stage reaches the alive cap by the mid-game, sees swarm events every 120 s from 2:00, elites every 60 s from 2:30, bosses at 5/10 min; the 15:00 mid-boss and the 20:00 final boss per stage (HP, flags), enrage at ENRAGE_T;
 //    a missing boss script spawns a stand-in;
 //    from an empty field at 6:00 / 8:00 (solo and a party of 4) the alive count refills to the density floor within 0.5 s without passing the cap; at the floor the rate is x1.
 //    benchmark phase: a 'surge' warning at 17:00, elites every 30 s. Curves at 15:00 / 20:00: contact damage 9 / 11, shot factor x1.8 / x2.1, swarm waves 50 by 12:00 -> 60 by 20:00.
 //    flocks: every 18 s from 0:40, 8 -> 40 swarmers by 10:00 -> 52 by 20:00 x party factor, a pack within 40 px or a line (x1.5, >= 300 px at 10:00) on the spawn ring; past the alive cap, not past the hard cap;
 //    flock, ring and stampede members fly through (fixed heading and speed, never back), despawn 360 px outside the view (no gem, kill or 'die'), never recycle, despawn at the arena bound.
-//    brain caps: shooters, summoners and dashers (charger / diver / blinker) never pass their alive caps; dasher packs and stampedes trim to the room left.
+//    brain caps: shooters, summoners, dashers (charger / diver / blinker) and brutes never pass their alive caps; dasher packs and stampedes trim to the room left.
 // 4. Recycling: a foe left 1000 px behind returns to the spawn ring. 5. Arena: deterministic, obstacle count in range, centre clear, features keep lanes.
-// 6. Gold: elite coins, mid-boss coin, final boss and victory gold x the stage gold multiplier; w.summary().gold carries it.
+// 6. Gold: elite coins, mid-boss coin, final boss, run-end pay (kill bounty + minutes survived) and victory gold x the stage gold multiplier; w.summary().gold carries it.
 // 7. Hero leeway: blasts, zero-damage blasts and projectiles push foes away from the hitting hero; splitter children start no closer to the hero than the parent; HERO_R 6 contact.
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
@@ -68,11 +69,17 @@ ok(['chaser', 'swarm', 'brute', 'ranged', 'exploder', 'splitter', 'diver', 'char
 }
 
 const players = (list) => list.map((cls, i) => ({ pid: 'p' + (i + 1), name: 'P' + (i + 1), slot: i, cls, meta: { shop: {}, sigs: [] } }));
-{ // foe HP: non-swarm base x (1 + 0.15 x minute), swarm brain x (1 + 0.06 x minute), x (1 + 0.5 x (players - 1)) x stage HP; boss parts keep 0.24
+{ // foe HP: non-swarm base x (1 + 0.11 x minute), swarm brain x (1 + 0.06 x minute), x (1 + 0.5 x (players - 1)) x stage HP; boss parts keep 0.24
   const hp = (stage, n, t, id) => { const w = new ED.World({ seed: 1, stage, players: players(Array(n).fill('knight')) }); w.time = t; return w.spawnFoe(id, 0, 0).maxHp; };
   const r = [hp(0, 1, 0, 'skeleton'), hp(0, 1, 600, 'skeleton'), hp(0, 1, 0, 'bat'), hp(0, 1, 600, 'bat'), hp(2, 1, 0, 'starspawn'), hp(1, 1, 0, 'glowlet'), hp(0, 4, 0, 'skeleton'), hp(0, 1, 0, 'skelknight'), hp(0, 1, 300, 'sporepod')];
   const swarmHp = ED.FOE_IDS.map(id => ED.FOES[id]).filter(d => (d.ai === 'swarm' || d.ai === 'diver') && !d.boss).map(d => d.hp);
-  ok(r.join() === '20,50,10,16,10,9,50,111,132' && swarmHp.every(v => v >= 10 && v <= 11), `foe HP: skeleton ${r[0]} / ${r[1]} at 0:00 / 10:00, bat ${r[2]} / ${r[3]}, starspawn ${r[4]} (x0.9), glowlet ${r[5]} (x0.85), skeleton x4 ${r[6]}, skeleton knight ${r[7]}, spore pod ${r[8]} at 5:00; swarmers and divers ${swarmHp.join(',')}`);
+  ok(r.join() === '20,42,10,16,10,9,50,111,132' && swarmHp.every(v => v >= 10 && v <= 11), `foe HP: skeleton ${r[0]} / ${r[1]} at 0:00 / 10:00, bat ${r[2]} / ${r[3]}, starspawn ${r[4]} (x0.9), glowlet ${r[5]} (x0.85), skeleton x4 ${r[6]}, skeleton knight ${r[7]}, spore pod ${r[8]} at 5:00; swarmers and divers ${swarmHp.join(',')}`);
+}
+{ // elite HP: 15 x max(1, 60 / def.hp) x spawned HP (small foes get the 60-HP floor, brutes 15x)
+  const w = new ED.World({ seed: 1, stage: 0, players: players(['knight']) }), el = (id) => w.spawnFoe(id, 0, 0, { elite: true }).maxHp;
+  const r = [el('skeleton'), el('icewolf'), el('skelknight')];
+  w.time = 600; r.push(el('skeleton'));
+  ok(r.join() === '900,900,1665,1890', `elite HP: skeleton ${r[0]}, grave hound ${r[1]}, skeleton knight ${r[2]} at 0:00; skeleton ${r[3]} at 10:00`);
 }
 
 // ---------------- 2. brains ----------------
@@ -228,6 +235,21 @@ for (const [id, d] of [['icewolf', 120], ['frostwisp', 100], ['stalker', 160]]) 
   let dMin = d0, pulled = 0;
   for (let i = 0; i < 240; i++) { const x0 = p.x; w.input('p1', { mx: 0, my: 0, ax: p.x + 50, ay: p.y }); w.update(C.TICK); w.events.length = 0; if (e.st === 1) pulled += Math.abs(p.x - x0); dMin = Math.min(dMin, Math.hypot(e.x - p.x, e.y - p.y)); }
   ok(pulled > 30 && p.hp < p.maxHp, `pull slam: hero dragged ${Math.round(pulled)} px in the wind-up, slammed`);
+}
+{ // slam radius vs Knight reach: a base Cleave (range x area from 4 px above the hero, + foe radius) hits a brute pinned straight below the hero with the hero's hitbox
+  // 12 px outside its slam circle (elites: 2x radius, slam x1.35, 4 px); a slam blast at that radius misses the hero
+  const B = ED.FOE_IDS.filter(id => ED.FOES[id].brute), CB = ED.WEAPONS.cleave.base, out = [];
+  for (const id of B) for (const elite of [false, true]) {
+    const w = new ED.World({ seed: 5, stage: 0, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];
+    w.sdef = Object.assign({}, w.sdef, { timeline: w.sdef.timeline.map(r => Object.assign({}, r, { rate: 0, floor: 0 })), events: {}, elites: null, bosses: [] });
+    w.arena.obstacles.length = 0; for (let i = 0; i < w.arena.cells.length; i++) w.arena.cells[i] = null;
+    const S = ED.FOES[id].slam, R = S.r * (elite ? 1.35 : 1), D = R + C.HERO_R + (elite ? 4 : 12), e = w.spawnFoe(id, p.x, p.y + D, { elite, hpMul: 100 });
+    const geo = CB.range * CB.area - 4 + e.r >= D;
+    for (let i = 0; i < 120 && e.hp === e.maxHp; i++) { e.x = p.x; e.y = p.y + D; e.acd = 9; w.input('p1', { mx: 0, my: 0, ax: e.x, ay: e.y }); w.update(C.TICK); w.events.length = 0; }
+    const hp0 = p.hp; w.foeBlast(e, e.x, e.y, R, 50, 'shock'); w.events.length = 0;
+    out.push({ id, elite, ok: geo && e.hp < e.maxHp && p.hp === hp0, s: `${id}${elite ? '*' : ''} slam ${R.toFixed(1)} at ${D.toFixed(1)} px` });
+  }
+  ok(out.every(o => o.ok), `slam vs base Knight reach (${CB.range * CB.area} px): ${out.map(o => o.s + (o.ok ? '' : ' FAIL')).join(', ')}`);
 }
 { // wall pack: a line across the approach, spacing def.wall, members keep their offsets
   const { w, p } = lab('skeleton', 2000); const n = w.spawnWall('mirecrab', p.x + 400, p.y, 4, p);
@@ -516,6 +538,33 @@ for (const st of [0, 1, 2]) {
   const full = stamp(7), part = stamp(5);
   ok(full.st > 0 && full.stalkers === 0 && part.stalkers === part.cap - 5, `stampede: ${full.st} members, ${full.stalkers} stalkers at the cap; ${part.stalkers} stalkers with room ${part.cap - 5}`);
 }
+{ // brute cap: round(min(8, 2 + 0.35 x minute) x party) brutes alive (elites count; elite brutes may exceed it by 2); a weaponless god hero never sees more (bosses off)
+  const cw = new ED.World({ seed: 77, stage: 0, players: players(['knight']) }), c4 = new ED.World({ seed: 77, stage: 0, players: players(['knight', 'knight', 'knight', 'knight']) });
+  const caps = [0, 300, 600, 900, 1200].map(t => (cw.time = t, cw.bruteCap())).join('/');
+  ok(caps === '2/4/6/7/8' && c4.bruteCap() === 4, `brute cap ${caps} at 0:00/5:00/10:00/15:00/20:00 solo, ${c4.bruteCap()} at 0:00 x4`);
+  const run = (stage, t0, t1) => {
+    const w = new ED.World({ seed: 77, stage, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];
+    p.weapons.length = 0; p.skills.length = 0; w.time = t0; w.sp.bossI = 99; w.sp.swarmT = t0 + 20; w.sp.eliteT = t0 + 5;
+    w.sdef = Object.assign({}, w.sdef, { elites: { first: 0, every: 10 } });
+    let over = 0, peak = 0;
+    for (let i = 0; w.time < t1; i++) {
+      const a = i / 60 * 0.4; w.input('p1', { mx: Math.cos(a) * 0.6, my: Math.sin(a) * 0.6, ax: p.x + 50, ay: p.y, pick: p.offer ? 1 : 0 });
+      w.update(C.TICK); w.events.length = 0;
+      let n = 0; for (const e of w.foes) if (!e.dead && !e.boss && e.def.ai === 'brute') n++;
+      peak = Math.max(peak, n); if (n > w.bruteCap() + 2) over++;
+    }
+    return { over, peak };
+  };
+  const r = [0, 1, 2].map(st => run(st, 780, 900));
+  ok(r.every(x => x.over === 0 && x.peak >= 5), `13:00-15:00 (elites every 10 s) brutes alive peak ${r.map(x => x.peak).join('/')} (stages 1/2/3), ticks over the cap ${r.map(x => x.over).join('/')}`);
+  { // an elite brute takes the last room (cap 2 at 0:00, one hulk alive, hulk-only roster); the next spawner tick adds no brute
+    const w = new ED.World({ seed: 77, stage: 1, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];
+    w.sdef = Object.assign({}, w.sdef, { timeline: w.sdef.timeline.map(row => Object.assign({}, row, { roster: [['shroomhulk', 1]], rate: 0, floor: 0 })), events: {}, elites: { first: 0, every: 999 }, bosses: [] });
+    w.spawnFoe('shroomhulk', p.x + 300, p.y); w.sp.eliteT = 0; w.updateSpawner(0);
+    const elite = w.foes.filter(e => e.elite).length; w.sp.acc = 8; w.updateSpawner(0);
+    ok(elite === 1 && w.foes.length === 2, `brute cap: an elite hulk fills the room (${elite} elite), then ${w.foes.length - 2} more brutes spawn`);
+  }
+}
 
 // ---------------- 4. recycling ----------------
 {
@@ -543,7 +592,8 @@ for (let s = 0; s < 3; s++) {
     w.time = 300; const mid = w.standInBoss({ t: 300, id: 'x' }); w.killFoe(mid, null); const midC = coins() - eliteC;
     w.time = 1200; const fin = w.standInBoss({ t: 1200, id: 'x', final: true }); w.killFoe(fin, null); const g0 = w.gold; w.update(C.TICK);
     const end = w.events.find(ev => ev.t === 'end');
-    return { ok: eliteC >= k && eliteC <= Math.round(5 * k) && midC === G.mid * k && g0 === G.final * k && w.state === 'won' && end && end.summary.gold === w.gold && w.gold === (G.final + G.win) * k, k, eliteC, midC, fin: g0, total: w.gold };
+    const runEnd = Math.round((Math.floor(w.kills / G.bounty) + G.minute * Math.floor(w.time / 60)) * k) + Math.round(G.win * k); // kill bounty + minutes survived, then the win
+    return { ok: eliteC >= k && eliteC <= Math.round(5 * k) && midC === Math.round(G.mid * k) && g0 === Math.round(G.final * k) && w.state === 'won' && end && end.summary.gold === w.gold && w.gold === g0 + runEnd, k, eliteC, midC, fin: g0, total: w.gold };
   };
   for (const s of [0, 1, 2]) { const r = goldRun(s); ok(r.ok, `${ED.STAGES[s].id} gold x${r.k}: elite coins ${r.eliteC}, mid-boss coin ${r.midC}, final boss ${r.fin}, summary ${r.total} with the win bonus`); }
 }

@@ -49,9 +49,10 @@
     <div class="row"><button class="btn" id="btn-stage-back" data-back>Back</button><button class="btn btn-primary btn-big" id="btn-start" data-focus>Start run</button></div>
   </section>
 
-  <section id="scr-camp" class="screen" hidden>
+  <section id="scr-camp" class="screen tall" hidden>
     <div class="camp-head"><h2>Camp shop</h2><div class="gold-pill"><canvas class="icon icon-sm" id="camp-coin" width="32" height="32"></canvas><b id="camp-gold">0</b></div></div>
-    <p class="hint">Permanent ranks for every run. Refund any time.</p>
+    <p class="hint" id="camp-hint">Permanent ranks for every run. Refund any time.</p>
+    <div class="msg" id="camp-msg" role="status"></div>
     <div class="shop" id="shop-list"></div>
     <div class="row">
       <button class="btn" id="btn-refund">Refund all</button>

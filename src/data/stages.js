@@ -80,7 +80,7 @@
         pal: { bg: '#07090b', wall: '#1d2a2a', accent: '#7fe39a', light: '#c9ffd9' },
       },
       arena: { size: 3200, obstacles: [30, 40], braziers: [40, 55], clear: 220 },
-      foe: { hp: 0.85, dmg: 1 }, gold: 1.5,
+      foe: { hp: 0.85, dmg: 1 }, gold: 1.25,
       timeline: timeline(
         RATE,
         {
@@ -111,7 +111,7 @@
         pal: { bg: '#08060c', wall: '#241c33', accent: '#c58aff', light: '#ffc6f0' },
       },
       arena: { size: 3200, obstacles: [30, 40], braziers: [40, 55], clear: 220 },
-      foe: { hp: 0.9, dmg: 1 }, gold: 2,
+      foe: { hp: 0.9, dmg: 1 }, gold: 1.5,
       timeline: timeline(
         RATE.map(r => Math.round(r * 1.05 * 10) / 10),
         {
