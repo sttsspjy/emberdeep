@@ -34,12 +34,16 @@ ok(S.shopCost(p, 'might') === 4 * B && S.buy(p, 'might') && p.gold === 9 * B - 1
 ok(!S.buy(p, 'might') && p.gold === 9 * B - 1 && S.rank(p, 'might') === 2, 'rank 3 (' + 9 * B + ') refused one coin short');
 p.gold = 1e6; for (let i = 0; i < 9; i++) S.buy(p, 'revival');
 const RV = ED.SHOP.find(s => s.id === 'revival');
-ok(S.rank(p, 'revival') === 2 && S.shopCost(p, 'revival') === 0 && !S.buy(p, 'revival'), 'revival caps at 2, cost 0 when maxed');
+ok(S.rank(p, 'revival') === 1 && S.shopCost(p, 'revival') === 0 && !S.buy(p, 'revival'), 'revival caps at 1, cost 0 when maxed');
 ok(S.shopCost(p, 'nope') === 0 && !S.buy(p, 'nope'), 'unknown shop id refused');
-const spent = 5 * B + 5 * RV.cost, before = p.gold;
+const spent = 5 * B + RV.cost, before = p.gold;
 ok(p.spent === spent && S.refundTotal(p) === spent && S.refundAll(p) === spent && p.gold === before + spent && eq(p.shop, {}) && p.spent === 0 && S.refundTotal(p) === 0, 'refund returns every coin spent (' + spent + ') and clears ranks');
 const leg = S.normalize({ gold: 7, shop: { might: 5, revival: 2 } });
-ok(leg.spent === 80 * 15 + 80 * 3 && S.refundTotal(leg) === 1440, 'a profile from before spent was kept refunds at the old 80 x rank prices (1440)');
+ok(leg.spent === 80 * 15 + 80 && S.refundTotal(leg) === 1280 && leg.shop.revival === 1 && leg.gold === 7 + 160, 'a profile from before spent was kept refunds at the old 80 x rank prices (1280; dropped Revival rank 2 paid back 160)');
+const rv2 = S.normalize({ gold: 10, lifetime: 50, spent: 3000, shop: { revival: 2, might: 1 } }), rv2b = S.normalize(JSON.parse(JSON.stringify(rv2)));
+ok(rv2.shop.revival === 1 && rv2.gold === 10 + 4 * RV.cost && rv2.spent === 3000 - 4 * RV.cost && rv2.lifetime === rv2.gold && eq(rv2b, rv2), 'Revival rank 2 clamps to 1 and refunds its price (' + 4 * RV.cost + ') once');
+const rv3 = S.normalize({ gold: 0, spent: 100, shop: { revival: 9 } });
+ok(rv3.shop.revival === 1 && rv3.gold === 100 && rv3.spent === 0, 'the Revival refund never exceeds spent; ranks past the former max are dropped unpaid');
 
 // 3. save code
 const rich = S.defaultProfile();
@@ -239,7 +243,7 @@ const olN = S.evalAch(ol);
 ok(olN.some(x => x.id === 'beat0') && olN.some(x => x.id === 'heroes') && eq(ol.heroes, ED.HERO_IDS), 'its achievements are earned on the next check; no hero is revoked');
 
 // 11. economy
-ok(S.shopLeft(S.defaultProfile()) === 43360, 'shop total (every rank) = 43360 gold: ' + S.shopLeft(S.defaultProfile()));
+ok(S.shopLeft(S.defaultProfile()) === 41160, 'shop total (every rank) = 41160 gold: ' + S.shopLeft(S.defaultProfile()));
 const C = ED.CONST;
 ok(C.GOLD.bounty === 100 && C.GOLD.minute === 10 && C.GOLD.mid === 100 && C.GOLD.final === 300 && C.GOLD.win === 300 && eq(ED.STAGES.map(s => s.gold), [1, 1.25, 1.5]), 'gold table: 1 per 100 kills, 10 per minute, mid-boss 100, final 300, win 300; stage gold 1 / 1.25 / 1.5');
 const endGold = (stage, kills, time, won) => { const w = new ED.World({ seed: 3, stage, players: [{ pid: 'p1', cls: 'knight', meta: { shop: {}, sigs: [] } }] }); w.kills = kills; w.time = time; w.end(won); return w.gold; };

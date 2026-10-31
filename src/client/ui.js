@@ -451,47 +451,281 @@
   }
 
   // ---------------- results ----------------
+  // Header, stat tiles (count up), weapon table (damage bar, share, DPS over the time owned, kills, build line), passives, timeline canvas, party / bosses tabs, unlocks.
+  // Input guard: for GUARD_MS after it opens the screen eats every key and click and focuses nothing; afterwards a key acts only after a fresh keydown seen here (a key held from the run
+  // never presses a button) and a pointer click only after a pointerdown seen here. A click outside the buttons finishes the animations.
+  const GUARD_MS = 1500, ANIM_MS = 1100, TILE_STAGGER = 70;
+  const R = { sum: null, anim: [], t0: 0, k: 1, skip: false, raf: 0, guardT: 0, fresh: new Set(), down: false, timer: 0, hover: -1 };
+  // 1.23M, 48.2k, else the integer.
+  const fmtBig = UI.fmtBig = (n) => { n = Math.max(0, +n || 0); const t = (v, d) => v.toFixed(d).replace(/\.0+$/, ''); return n >= 1e6 ? t(n / 1e6, n >= 1e7 ? 1 : 2) + 'M' : n >= 1e4 ? t(n / 1e3, 1) + 'k' : String(Math.round(n)); };
+  const dealtTotal = (h) => { let t = 0; for (const k in h.dealt || {}) t += +h.dealt[k] || 0; return t; };
+  const num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+  const resOn = () => !$('scr-results').hidden;
+  const guarded = () => performance.now() < R.guardT;
+  const eat = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
+  function armGuard() {
+    R.guardT = performance.now() + GUARD_MS; R.fresh.clear(); R.down = false;
+    const ae = document.activeElement; if (ae && ae.blur && ae !== document.body) ae.blur();
+    clearTimeout(R.timer);
+    R.timer = setTimeout(() => {
+      if (!resOn()) return;
+      const ae2 = document.activeElement; if (ae2 && ae2 !== document.body && $('scr-results').contains(ae2)) return;
+      const b = $('btn-res-again'); (visible(b) ? b : $('btn-res-back')).focus({ preventScroll: true });
+    }, GUARD_MS + 30);
+  }
+  const guardKey = (e) => {
+    if (!resOn() || (ED.Input && ED.Input.capturing && ED.Input.capturing())) return;
+    if (e.type === 'keydown') { if (guarded() || e.repeat) eat(e); else R.fresh.add(e.code); return; }
+    if (R.fresh.has(e.code)) R.fresh.delete(e.code); else eat(e);
+  };
+  const guardPtr = (e) => {
+    if (!resOn()) return;
+    if (e.type === 'pointerdown') { if (guarded()) eat(e); else R.down = true; return; }
+    if (guarded() || (e.detail > 0 && !R.down)) { eat(e); return; }
+    R.down = false;
+    if (e.detail > 0 && !(e.target.closest && e.target.closest('button'))) UI.resSkip();
+  };
+  UI.resGuarded = () => resOn() && guarded();
+  // Finishes the count-up, bar and timeline animations at once.
+  UI.resSkip = () => { if (R.k >= 1) return; R.skip = true; $('scr-results').classList.add('res-done'); if (!R.raf) R.raf = requestAnimationFrame(animStep); };
+  function animStep(now) {
+    R.raf = 0;
+    if (!R.sum || !resOn()) return;
+    const el = now - R.t0, ease = (k) => 1 - Math.pow(1 - k, 3);
+    R.anim.forEach((b, i) => { const k = R.skip ? 1 : U.clamp((el - i * TILE_STAGGER) / (ANIM_MS - 300), 0, 1); b.textContent = b._f(b._v * ease(k)); });
+    R.k = R.skip ? 1 : U.clamp(el / ANIM_MS, 0, 1);
+    drawTimeline();
+    if (R.k < 1 || (!R.skip && el < ANIM_MS + R.anim.length * TILE_STAGGER)) R.raf = requestAnimationFrame(animStep);
+    else R.k = 1;
+  }
+  const tile = (box, label, v, fmt, opt) => {
+    const o = opt || {}, d = document.createElement('div');
+    d.className = 'tile' + (o.cls ? ' ' + o.cls : '');
+    if (o.icon) d.appendChild(UI.iconCanvas(o.icon, 48));
+    const b = document.createElement('b');
+    if (num(v) === null) b.textContent = '-'; else { b._v = v; b._f = fmt; b.textContent = fmt(0); R.anim.push(b); }
+    d.appendChild(b);
+    d.insertAdjacentHTML('beforeend', `<span>${esc(label)}</span>`);
+    if (o.title) d.title = o.title;
+    d.style.animationDelay = (box.children.length * 0.05).toFixed(2) + 's';
+    box.appendChild(d);
+  };
   UI.renderResults = (sum, gained) => {
     hideChest(true);
-    const A = App(), won = !!sum.won, t = $('res-title');
-    t.textContent = won ? 'Victory!' : 'Fallen';
+    const scr = $('scr-results'), won = !!sum.won, t = $('res-title');
+    R.sum = sum; R.anim = []; R.skip = false; R.k = 0; R.hover = -1; R.t0 = performance.now();
+    scr.classList.remove('res-done');
+    armGuard();
+    t.textContent = won ? 'Victory' : 'Fallen';
     t.className = 'res-title ' + (won ? 'won' : 'lost');
-    const me = sum.perHero.find(h => h.pid === ED.Game.myPid) || sum.perHero[0], sd = ED.STAGES[sum.stage];
-    $('res-sub').textContent = (sd ? sd.name : '') + (me && ED.HEROES[me.cls] ? '  -  ' + ED.HEROES[me.cls].name : '');
-    $('res-build').textContent = me && me.build ? me.build.map(buildLine).join('\n') : ''; // one line per slot (#res-build: pre-line)
-    $('res-stats').innerHTML = `<div><b>${U.fmtTime(sum.time)}</b><span>Time</span></div><div><b>${U.fmtNum(sum.kills)}</b><span>Kills</span></div><div><b>${sum.level}</b><span>Level</span></div><div><b>+${sum.gold}</b><span>Gold</span></div>`;
-    const chart = $('res-chart');
-    chart.textContent = '';
-    if (me) {
-      const rows = ED.dmgRows(me).slice(0, 12);
-      let tot = 0; for (const r of rows) tot += r.dmg;
-      const max = rows.length ? rows[0].dmg : 1;
-      chart.insertAdjacentHTML('beforeend', `<span class="ch-head">Damage dealt${rows.length ? ': ' + U.fmtNum(tot) : ''}</span>`);
-      rows.forEach((r, i) => {
-        const wd = ED.WEAPONS[r.id], row = document.createElement('div');
-        row.className = 'bar-row' + (wd && wd.evolved ? ' evo' : '') + (r.kind === 'skill' ? ' skill' : '');
-        row.appendChild(UI.iconCanvas(r.icon || 'fx.hit.spark', 48));
-        row.insertAdjacentHTML('beforeend', `<span class="bar-name">${esc(r.name)}</span><span class="bar"><i style="width:${Math.max(1.5, 100 * r.dmg / max).toFixed(1)}%;animation-delay:${(i * 0.06).toFixed(2)}s"></i></span><span class="bar-v">${U.fmtNum(r.dmg)}</span><span class="bar-p">${Math.round(100 * r.frac)}%</span>`);
-        chart.appendChild(row);
-      });
-      chart.hidden = !rows.length;
+    const me = sum.perHero.find(h => h.pid === ED.Game.myPid) || sum.perHero[0], sd = ED.STAGES[sum.stage], hd = me && ED.HEROES[me.cls], coop = sum.perHero.length > 1, lap = sum.lap || null;
+    $('res-sub').innerHTML = [sd ? `<b>${esc(sd.name)}</b>` : '', hd ? `<b>${esc(hd.name)}</b>` : '', U.fmtTime(sum.time), coop ? sum.perHero.length + ' heroes' : ''].filter(Boolean).join('  ·  ');
+    // tiles
+    const tiles = $('res-tiles'), mine = me ? dealtTotal(me) : 0, top = me && me.top, topD = top && (ED.WEAPONS[top.id] || (ED.SKILLS && ED.SKILLS[top.id]));
+    tiles.textContent = ''; tiles.classList.toggle('lap', !!lap);
+    const plain = (v) => U.fmtNum(v), plus = (v) => '+' + Math.round(v);
+    tile(tiles, 'Time', sum.time, (v) => U.fmtTime(v));
+    tile(tiles, coop ? 'Party kills' : 'Kills', sum.kills, plain);
+    tile(tiles, 'Level', sum.level, (v) => String(Math.round(v)));
+    tile(tiles, 'Gold', sum.gold, plus, { icon: 'pickup.coin' });
+    tile(tiles, coop ? 'Your damage' : 'Damage', me && me.dealt ? mine : null, fmtBig);
+    tile(tiles, 'Best hit', top ? top.v : null, fmtBig, { icon: topD ? topD.icon : '', title: topD ? topD.name : '' });
+    tile(tiles, 'Damage taken', me ? num(me.taken) : null, fmtBig, { cls: 'hurt' });
+    tile(tiles, 'Healed', me ? num(me.healed) : null, fmtBig, { cls: 'heal' });
+    if (lap) {
+      const d = document.createElement('div'); d.className = 'tile lap';
+      d.insertAdjacentHTML('beforeend', '<span>Last Light</span>');
+      for (const [v, f] of [[lap.kills, (x) => '+' + U.fmtNum(x) + ' kills'], [lap.gold, (x) => '+' + Math.round(x) + ' gold']]) { const b = document.createElement('b'); b._v = +v || 0; b._f = f; b.textContent = f(0); R.anim.push(b); d.appendChild(b); }
+      tiles.appendChild(d);
     }
-    const party = $('res-party'); party.textContent = '';
-    if (sum.perHero.length > 1) for (const h of sum.perHero) {
-      const d = document.createElement('div'); d.className = 'pm';
-      d.appendChild(UI.iconCanvas(heroIcon(h.cls), 48));
-      d.insertAdjacentHTML('beforeend', `<span>${esc(h.name)}</span><span class="mut">${U.fmtNum(h.kills)} kills</span>`);
-      party.appendChild(d);
+    renderWeapons(sum, me);
+    renderHighlights(sum, me);
+    // passives
+    const pas = $('res-pas'); pas.textContent = '';
+    pas.insertAdjacentHTML('beforeend', '<span>Passives</span>');
+    const pl = (me && me.pas) || [];
+    for (const [id, lvl] of pl) {
+      const d = ED.PASSIVES[id]; if (!d) continue;
+      const s = document.createElement('div'); s.className = 'pslot'; s.title = d.name + ' ' + lvl + '/' + d.max;
+      s.appendChild(UI.iconCanvas(d.icon, 48)); s.insertAdjacentHTML('beforeend', `<b>${lvl | 0}</b>`);
+      pas.appendChild(s);
     }
+    if (!pl.length) pas.insertAdjacentHTML('beforeend', '<span class="mut">none</span>');
+    pas.hidden = !(me && me.pas);
+    // timeline legend: the lap key only with a lap
+    $('res-key-lap').hidden = $('res-key-lap-t').hidden = !lap;
+    hideTip();
+    // party / bosses
+    renderParty(sum, me);
+    renderBosses(sum);
+    $('res-tabbar').querySelector('[data-tab="party"]').hidden = !coop;
+    setTab(coop ? 'party' : 'bosses');
+    // unlocks
     const un = $('res-unlocks'); un.textContent = '';
-    const add = (icon, text) => { const d = document.createElement('div'); d.className = 'unlock'; if (icon) d.appendChild(UI.iconCanvas(icon, 48)); d.insertAdjacentHTML('beforeend', `<span>${esc(text)}</span>`); un.appendChild(d); };
-    if (sum.note) add('', sum.note);
+    const add = (icon, text, cls) => { const d = document.createElement('div'); d.className = 'unlock' + (cls ? ' ' + cls : ''); if (icon) d.appendChild(UI.iconCanvas(icon, 48)); d.insertAdjacentHTML('beforeend', `<span>${esc(text)}</span>`); un.appendChild(d); };
+    if (sum.note) add('', sum.note, 'note');
     if (gained) {
       for (const n of gained.news || []) add(n.kind === 'hero' ? heroIcon(n.id) : n.kind === 'ach' && ED.Codex ? ED.Codex.achIcon(n.id) : '', n.txt);
       if (gained.records && gained.records.length) add('', 'New record: ' + gained.records.join(', '));
     }
     $('btn-res-again').hidden = UI.lastMode !== 'solo';
+    cancelAnimationFrame(R.raf); R.raf = requestAnimationFrame(animStep);
   };
+  // Weapon table of hero h: damage rows (ED.dmgRows, kills folded into Forms) plus held slots / skills that dealt nothing; DPS = damage / seconds owned (slot t0; skills: the whole run).
+  function renderWeapons(sum, h) {
+    const box = $('res-chart'); box.textContent = '';
+    if (!h) { $('res-dmg-tot').textContent = ''; return; }
+    const rows = ED.dmgRows(h), build = h.build || [], sk = h.sk || [];
+    for (const b of build) if (!rows.some(r => r.id === b.id) && ED.WEAPONS[b.id]) rows.push({ id: b.id, kind: 'weapon', name: ED.WEAPONS[b.id].name, icon: ED.WEAPONS[b.id].icon, dmg: 0, frac: 0, kills: 0 });
+    for (const [id] of sk) if (!rows.some(r => r.id === id) && ED.SKILLS[id]) rows.push({ id, kind: 'skill', name: ED.SKILLS[id].name, icon: ED.SKILLS[id].icon, dmg: 0, frac: 0, kills: 0 });
+    let tot = 0, max = 1; for (const r of rows) { tot += r.dmg; max = Math.max(max, r.dmg); }
+    $('res-dmg-tot').textContent = tot ? fmtBig(tot) + ' total  ·  ' + fmtBig(tot / Math.max(1, sum.time)) + ' DPS' : '';
+    box.insertAdjacentHTML('beforeend', '<div class="wt-head"><span></span><span class="nm">Weapon</span><span class="dmg">Damage</span><span class="pc">%</span><span>DPS</span><span>Kills</span></div>');
+    const hasKw = !!h.kw;
+    rows.slice(0, 8).forEach((r, i) => {
+      const wd = ED.WEAPONS[r.id], b = r.kind === 'weapon' ? build.find(x => x.id === r.id) : null, s = r.kind === 'skill' ? sk.find(x => x[0] === r.id) : null;
+      const own = r.kind === 'skill' ? sum.time : b && num(b.t0) !== null ? sum.time - b.t0 : 0, dps = own >= 1 && r.dmg > 0 ? r.dmg / own : 0;
+      let line = '';
+      if (b) {
+        const root = ED.WEAPONS[ED.weaponRoot(b.id)];
+        line = buildLine(b);
+        if (root && root.id === b.id && line.startsWith(root.name + ': ')) line = line.slice(root.name.length + 2);
+        if (b.t0 > 0) line += ' · from ' + U.fmtTime(b.t0);
+      } else if (r.kind === 'skill') { const d = ED.SKILLS[r.id]; line = 'Skill' + (s && d ? ' · Level ' + s[1] + '/' + ED.skillMaxLvl(d) : ''); }
+      else if (r.id === 'bomb') line = 'Pickup';
+      const row = document.createElement('div');
+      row.className = 'bar-row' + (wd && wd.evolved ? ' evo' : '') + (r.kind === 'skill' ? ' skill' : '');
+      row.appendChild(UI.iconCanvas(r.icon || 'fx.hit.spark', 48));
+      row.insertAdjacentHTML('beforeend', `<span class="bar-name">${esc(r.name)}</span><span class="bar"><i style="width:${r.dmg > 0 ? Math.max(1.5, 100 * r.dmg / max).toFixed(1) : 0}%;animation-delay:${(0.25 + i * 0.07).toFixed(2)}s"></i></span>`
+        + `<span class="bar-v">${fmtBig(r.dmg)}</span><span class="bar-p">${Math.round(100 * r.frac)}%</span><span class="w-n">${dps ? fmtBig(dps) : '-'}</span><span class="w-n">${hasKw && r.kind !== 'other' ? U.fmtNum(r.kills || 0) : '-'}</span>`
+        + `<span class="w-line">${esc(line)}</span>`);
+      box.appendChild(row);
+    });
+  }
+  // Highlights under the weapon table (shown when the viewport is tall enough): peak minute, kills per minute, gold picked up, fastest boss, downs, revives / bosses killed.
+  function renderHighlights(sum, h) {
+    const box = $('res-hl'), tl = sum.tl || [], B = sum.bosses || [], out = [];
+    let pk = -1; tl.forEach((e, i) => { if (pk < 0 || e.k > tl[pk].k) pk = i; });
+    if (pk >= 0) out.push(['Peak minute', U.fmtNum(tl[pk].k) + ' kills at ' + U.fmtTime(pk * 60)]);
+    out.push(['Kills / min', U.fmtNum(sum.kills / Math.max(1, sum.time / 60))]);
+    if (h && num(h.goldGot) !== null) out.push(['Gold picked up', U.fmtNum(h.goldGot)]);
+    let fb = null; for (const b of B) if (b.t1 >= 0 && (!fb || b.t1 - b.t0 < fb.t1 - fb.t0)) fb = b;
+    if (fb) out.push(['Fastest boss', U.fmtTime(fb.t1 - fb.t0) + ' ' + (ED.FOES[fb.id] ? ED.FOES[fb.id].name : '')]);
+    if (h && num(h.downs) !== null) out.push(['Times downed', String(h.downs)]);
+    if (sum.perHero.length > 1 && h && num(h.revs) !== null) out.push(['Revives given', String(h.revs)]);
+    else if (B.length) out.push(['Bosses killed', B.filter(b => b.t1 >= 0).length + ' / ' + B.length]);
+    box.innerHTML = out.map(([k, v]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
+    box.hidden = !out.length;
+  }
+  function renderParty(sum, me) {
+    const box = $('res-pane-party'); box.textContent = '';
+    if (sum.perHero.length < 2) return;
+    const v = (x) => (num(x) === null ? '-' : U.fmtNum(x));
+    box.insertAdjacentHTML('beforeend', '<div class="ptab party hd"><span></span><span>Hero</span><span>Damage</span><span>Kills</span><span>Downs</span><span>Revives</span></div>');
+    for (const h of sum.perHero) {
+      const r = document.createElement('div'); r.className = 'ptab party' + (h === me ? ' me' : '');
+      r.appendChild(UI.iconCanvas(heroIcon(h.cls), 48, '', h === me ? heroVar(h.cls) : ''));
+      r.insertAdjacentHTML('beforeend', `<span>${esc(h.name)}</span><span>${h.dealt ? fmtBig(dealtTotal(h)) : '-'}</span><span>${v(h.kills)}</span><span>${v(h.downs)}</span><span>${v(h.revs)}</span>`);
+      box.appendChild(r);
+    }
+  }
+  function renderBosses(sum) {
+    const box = $('res-pane-bosses'); box.textContent = '';
+    const L = sum.bosses || [];
+    if (!L.length) { box.insertAdjacentHTML('beforeend', '<span class="mut">No boss reached.</span>'); return; }
+    box.insertAdjacentHTML('beforeend', '<div class="ptab boss hd"><span></span><span>Boss</span><span>Arrived</span><span>Killed in</span></div>');
+    for (const b of L) {
+      const d = ED.FOES[b.id], r = document.createElement('div'); r.className = 'ptab boss';
+      r.appendChild(UI.iconCanvas(ED.Codex && ED.Codex.foeIcon ? ED.Codex.foeIcon(b.id) : '', 48));
+      r.insertAdjacentHTML('beforeend', `<span>${esc(d ? d.name : b.id)}${b.f ? '<span class="tag">Final</span>' : ''}</span><span>${U.fmtTime(b.t0)}</span><span>${b.t1 >= 0 ? U.fmtTime(b.t1 - b.t0) : '<span class="no">alive</span>'}</span>`);
+      box.appendChild(r);
+    }
+  }
+  function setTab(id) {
+    for (const b of $('res-tabbar').querySelectorAll('.tab')) { const on = b.dataset.tab === id; b.classList.toggle('cur', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); }
+    $('res-pane-party').hidden = id !== 'party'; $('res-pane-bosses').hidden = id !== 'bosses';
+  }
+
+  // ---------------- results timeline ----------------
+  // Canvas at integer device pixels: kills per minute bars (Last Light minutes gold), party level step line (right scale), boss bands (spawn -> kill, diamond at the kill), the lap shaded.
+  // Grows left to right with R.k; hover shows that minute's kills, damage and level.
+  const TL = { L: 0, T: 0, pw: 0, ph: 0, span: 60, dpr: 1 };
+  const niceMax = (v) => { const p = Math.pow(10, Math.floor(Math.log10(Math.max(1, v)))); for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p; return 10 * p; };
+  function drawTimeline() {
+    const cv = $('res-tl'), sum = R.sum, box = cv.parentNode;
+    if (!sum || !box || !box.clientWidth || !box.clientHeight) return;
+    const dpr = TL.dpr = Math.max(1, Math.round(window.devicePixelRatio || 1)), W = Math.floor(box.clientWidth * dpr), H = Math.floor(box.clientHeight * dpr);
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H); g.imageSmoothingEnabled = false;
+    const tl = sum.tl || [], fs = 16 * dpr, css = getComputedStyle(document.documentElement), col = (n, d) => (css.getPropertyValue(n) || d).trim() || d;
+    const MUT = col('--mut', '#b9a68c'), GOLD = col('--gold', '#ffd27a'), EMB = col('--ember', '#ff8a3d'), VIO = col('--violet', '#b49cff'), EDGE = '#3a2c22';
+    g.font = fs + 'px "Pixel Operator", monospace'; g.textBaseline = 'alphabetic';
+    if (!tl.length) { g.fillStyle = MUT; g.fillText('No full minute played.', 4 * dpr, fs + 4 * dpr); return; }
+    let maxK = 1, maxLv = 1; for (const e of tl) { maxK = Math.max(maxK, e.k); maxLv = Math.max(maxLv, e.lv); }
+    maxK = niceMax(maxK); maxLv = Math.max(5, Math.ceil(maxLv / 5) * 5);
+    const lblK = fmtBig(maxK), lblLv = 'Lv ' + maxLv;
+    const L = Math.ceil(g.measureText(lblK).width) + 8 * dpr, Rr = Math.ceil(g.measureText(lblLv).width) + 8 * dpr, T = fs + 8 * dpr, B = fs + 8 * dpr;
+    const pw = Math.max(10, W - L - Rr), ph = Math.max(10, H - T - B), span = Math.max(60, sum.time, tl.length * 60 - 59);
+    Object.assign(TL, { L, T, pw, ph, span });
+    const x = (s) => L + Math.round(Math.min(s, span) / span * pw), yK = (k) => T + ph - Math.round(k / maxK * ph), yL = (lv) => T + ph - Math.round((lv - 1) / (maxLv - 1) * ph);
+    const reveal = L + Math.round(pw * R.k), lap = sum.lap;
+    // grid and axes
+    g.fillStyle = EDGE;
+    for (let i = 0; i <= 2; i++) g.fillRect(L, T + Math.round(ph * i / 2), pw, dpr);
+    g.fillStyle = MUT; g.textAlign = 'right';
+    g.fillText(lblK, L - 4 * dpr, T + fs * 0.4); g.fillText('0', L - 4 * dpr, T + ph + fs * 0.35);
+    g.textAlign = 'left'; g.fillStyle = VIO; g.fillText(lblLv, L + pw + 4 * dpr, T + fs * 0.4); g.fillText('1', L + pw + 4 * dpr, T + ph + fs * 0.35);
+    const mins = span / 60, step = [1, 2, 5, 10].find(s => pw / mins * s >= 64 * dpr) || 10;
+    g.fillStyle = MUT; g.textAlign = 'center';
+    for (let m = 0; m <= mins + 1e-6; m += step) { const xx = x(m * 60); g.fillRect(xx, T + ph, dpr, 4 * dpr); g.fillText(m + ':00', U.clamp(xx, L + 12 * dpr, L + pw - 12 * dpr), H - 3 * dpr); }
+    // Last Light
+    if (lap) { const a = x(lap.t0), b = x(lap.t0 + (lap.dur || 60)); g.fillStyle = 'rgba(255, 210, 122, 0.16)'; g.fillRect(a, T, Math.max(dpr, b - a), ph); }
+    g.save(); g.beginPath(); g.rect(0, 0, reveal + dpr, H); g.clip();
+    // bars
+    const gap = Math.max(dpr, Math.floor(pw / tl.length * 0.14));
+    tl.forEach((e, i) => {
+      const a = x(i * 60) + gap, b = x(Math.min((i + 1) * 60, span)) - gap, y = yK(e.k), inLap = lap && i * 60 >= lap.t0 - 30;
+      if (b <= a || e.k <= 0) return;
+      g.fillStyle = i === R.hover ? '#fff8e8' : inLap ? GOLD : EMB; g.fillRect(a, y, b - a, T + ph - y);
+      g.fillStyle = 'rgba(255, 255, 255, 0.35)'; g.fillRect(a, y, b - a, Math.min(2 * dpr, T + ph - y));
+    });
+    // level step line
+    g.fillStyle = VIO;
+    let px = x(0), py = yL(1);
+    const lw = 2 * dpr;
+    tl.forEach((e, i) => {
+      const nx = x(Math.min((i + 1) * 60, span)), ny = yL(e.lv);
+      g.fillRect(px, py - dpr, nx - px + dpr, lw);
+      g.fillRect(nx - dpr, Math.min(py, ny) - dpr, lw, Math.abs(ny - py) + lw);
+      px = nx; py = ny;
+    });
+    // bosses: band spawn -> kill on the top row, diamond and dotted drop line at the kill
+    for (const bs of sum.bosses || []) {
+      const a = x(bs.t0), b = x(bs.t1 >= 0 ? bs.t1 : span), yy = T - 6 * dpr;
+      g.fillStyle = bs.t1 >= 0 ? GOLD : '#ff6a5a'; g.fillRect(a, yy, Math.max(2 * dpr, b - a), 2 * dpr);
+      if (bs.t1 < 0) continue;
+      g.fillStyle = 'rgba(255, 210, 122, 0.55)';
+      for (let yd = T; yd < T + ph; yd += 6 * dpr) g.fillRect(b, yd, dpr, 3 * dpr);
+      g.fillStyle = GOLD; const r = 4 * dpr;
+      for (let k = 0; k <= r; k++) g.fillRect(b - k, yy + 1 * dpr - (r - k), 2 * k + dpr, 2 * (r - k) + dpr);
+    }
+    g.restore();
+  }
+  function hideTip() { const t = document.querySelector('.res-tl-tip'); if (t) t.remove(); }
+  function tlHover(ev) {
+    const sum = R.sum, cv = $('res-tl'); if (!sum || !sum.tl || !sum.tl.length) return;
+    const r = cv.getBoundingClientRect(), xs = (ev.clientX - r.left) * TL.dpr, s = (xs - TL.L) / TL.pw * TL.span, i = Math.floor(s / 60);
+    const e = i >= 0 && i < sum.tl.length && xs <= TL.L + TL.pw ? sum.tl[i] : null;
+    const was = R.hover; R.hover = e ? i : -1;
+    if (was !== R.hover && R.k >= 1) drawTimeline();
+    if (!e) { hideTip(); return; }
+    let tip = document.querySelector('.res-tl-tip');
+    if (!tip) { tip = document.createElement('div'); tip.className = 'res-tl-tip'; cv.parentNode.appendChild(tip); }
+    const end = Math.min((i + 1) * 60, sum.time), boss = (sum.bosses || []).filter(b => b.t1 >= i * 60 && b.t1 < (i + 1) * 60).map(b => (ED.FOES[b.id] ? ED.FOES[b.id].name : b.id) + ' down');
+    tip.textContent = U.fmtTime(i * 60) + '-' + U.fmtTime(end) + ':  ' + U.fmtNum(e.k) + ' kills · ' + fmtBig(e.d) + ' damage · Lv ' + e.lv + (boss.length ? ' · ' + boss.join(', ') : '');
+    const bw = cv.parentNode.clientWidth, tw = tip.offsetWidth, cx = ev.clientX - r.left;
+    tip.style.left = U.clamp(cx + 12, 0, Math.max(0, bw - tw)) + 'px';
+  }
 
   // ---------------- co-op lobby ----------------
   // Drives the ED.Net lobby API; ED.Net.lobby { role, code, me, status, stage, members, inRun, canStart } is the single source of truth, ED.Net.onChange re-renders.
@@ -619,7 +853,7 @@
   const scrolls = (el) => !el.hasAttribute('data-scroll') || el.scrollHeight > el.clientHeight + 1;
   const items = (layer) => [...layer.querySelectorAll(FOCUSABLE)].filter(el => visible(el) && scrolls(el));
   function focusLayer() {
-    const L0 = topLayer(); if (!L0) return;
+    const L0 = topLayer(); if (!L0 || (L0.id === 'scr-results' && guarded())) return;
     if (L0.contains(document.activeElement) && document.activeElement !== document.body) return;
     const f = [...L0.querySelectorAll('[data-focus], .on')].find(e => visible(e) && !e.disabled) || items(L0)[0];
     if (f) f.focus({ preventScroll: false });
@@ -742,13 +976,20 @@
       }
     });
     for (const id of LAYERS) mo.observe($(id), { attributes: true, attributeFilter: ['hidden'] });
+    // results: tabs, timeline hover, input guard (registered before onKey so it can eat keys first)
+    $('res-tabbar').onclick = (e) => { const b = e.target.closest && e.target.closest('.tab'); if (b) setTab(b.dataset.tab); };
+    $('res-tl').addEventListener('mousemove', tlHover);
+    $('res-tl').addEventListener('mouseleave', () => { hideTip(); if (R.hover >= 0) { R.hover = -1; drawTimeline(); } });
+    window.addEventListener('resize', () => { if (R.sum && resOn()) drawTimeline(); });
+    for (const t of ['keydown', 'keyup']) window.addEventListener(t, guardKey, true);
+    for (const t of ['pointerdown', 'click']) window.addEventListener(t, guardPtr, true);
     // keyboard and mouse share one highlight: moving the mouse over a button focuses it (a still cursor never steals focus when a screen changes under it)
     window.addEventListener('keydown', onKey, true);
     let lx = -1, ly = -1;
     $('ui').addEventListener('pointermove', (e) => {
       if (e.clientX === lx && e.clientY === ly) return;
       lx = e.clientX; ly = e.clientY;
-      const b = e.target.closest && e.target.closest('button'); if (!b || b.disabled) return;
+      const b = e.target.closest && e.target.closest('button'); if (!b || b.disabled || UI.resGuarded()) return;
       const ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' && ae.type !== 'range' || ae.tagName === 'TEXTAREA')) return;
       if (ae !== b) b.focus({ preventScroll: true });
     });

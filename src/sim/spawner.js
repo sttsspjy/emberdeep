@@ -13,6 +13,7 @@
 // Brain caps: a roster pick of a ranged-brain foe while alive ranged foes >= W.shooterCap (summoner: W.summonerCap; charger / diver / blinker together: W.dasherCap; brute: W.bruteCap) is re-picked among the uncapped roster rows;
 // packs shrink to the room left under their cap; elites never promote a capped kind (elite brutes may exceed the brute cap by 2); stampedes skip dasher members at the cap.
 // Elites: a non-swarm, non-exploder roster foe promoted. Bosses: a 5 s 'warn' event, then w.spawnBoss; a stage boss id without an ED.Bosses script spawns the stage's brute as an elite boss stand-in.
+// Last Light lap (lap.js): alive cap = hard cap, density floor 100%, the final-minute roster; no flocks, swarm events, elites or bosses; nothing spawns during the calm before it.
 // Stage kin (boss adds, bosses.js W.addKin): w.stageKin(id) maps a foe id to this stage's foe of the same kind, from a table built once at initSpawner; w.foeAtCap(def) counts its brain cap fresh.
 (function (ED) {
   'use strict';
@@ -205,11 +206,11 @@
   };
 
   W.updateSpawner = function (dt) {
-    const L = this.living;
-    if (!L.length) return;
-    const sd = this.sdef, row = this.timelineRow(), party = 1 + 0.25 * (this.partyN - 1), cap = this.aliveCap(), sp = this.sp;
+    const L = this.living, lap = this.lap;
+    if (!L.length || (lap && !lap.ph)) return;
+    const sd = this.sdef, row = lap ? sd.timeline[sd.timeline.length - 1] : this.timelineRow(), party = 1 + 0.25 * (this.partyN - 1), cap = lap ? HARD_CAP : this.aliveCap(), sp = this.sp;
     sp.nR = sp.nS = sp.nD = sp.nB = -1;
-    const deficit = (row.floor || 0) * cap - this.foes.length;
+    const deficit = (lap ? 1 : row.floor || 0) * cap - this.foes.length;
     sp.acc = Math.min(10, sp.acc + row.rate * party * (this.boss ? 0.5 : 1) * dt);
     if (deficit > 0) sp.acc = Math.max(sp.acc, Math.min(REFILL_MAX, Math.max(REFILL_MIN, deficit * REFILL)));
     while (sp.acc >= 1 && this.foes.length < cap) {
@@ -225,6 +226,7 @@
         sp.acc -= Math.max(1, n);
       } else { this.spawnFoe(id, x, y); counted(sp, def, 1); sp.acc -= 1; }
     }
+    if (lap) return;
     // flock
     const fl = sd.events && sd.events.flock;
     if (fl && this.time >= sp.flockT) { sp.flockT += fl.every; this.flockEvent(fl, randHero(this)); }

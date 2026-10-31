@@ -5,7 +5,7 @@
 // Slot lifecycle (GAME-DESIGN §4): tune 0 -> ED.TUNE_MAX (level-up tune cards, ED.TUNE kinds, ED.TUNE_KIND_MAX each) -> path-ready -> pickPath (chest path-pick offer: ws.path, rank 1, permanent)
 // -> path ranks 2 -> ED.PATH_MAX (level-up cards) -> Form-ready -> takeForm (chest Form offer: one of the path's forms; locks the slot) -> refine 1-2 (level-up cards).
 // Slot ws = { id (root, then the Form once taken), root, lvl (display: 1 + tune + pr[path] + evo + fl), tune (0-5), tk: [dmg, haste, area] tune counts, path (-1 or index),
-//   pr: [rank x 3] (only pr[path] is ever nonzero, 0-5), fl (refine 0-2), evo, cd, st (impl state), S (cached numbers) }.
+//   pr: [rank x 3] (only pr[path] is ever nonzero, 0-5), fl (refine 0-2), evo, cd, st (impl state), S (cached numbers), t0 (sim s acquired) }.
 // Each tick per living hero and slot: impl.tick?(w, p, ws, S, dt); ws.cd -= dt; at <= 0 impl.fire(w, p, ws, S) -> true resets cd = S.cd and emits { t: 'shoot', pid, wid }, false retries in 0.1 s.
 // Aim rule (GAME-DESIGN §3): directional patterns fire along w.aimDir(p) (the cursor), foe or no foe; targeted patterns (shells, pillars, globs, minions, the mark) pick foes and fall back to w.aimDir(p).
 // Weapons fire on cooldown with no foe in range. Targeting sees only the holder's view (w.vclamp, combat.js).
@@ -45,7 +45,7 @@
     const d = ED.WEAPONS[id], rid = d ? ED.weaponRoot(id) : '';
     if (!d || p.weapons.length >= ED.MAX_WEAPONS || p.weapons.some(ws => ws.root === rid)) return null;
     if (ED.WEAPONS[rid].support ? p.weapons.filter(ws => ED.WEAPONS[ws.root].support).length >= ED.MAX_WEAPONS - 1 : p.weapons.length > 0) return null;
-    const ws = { id, root: rid, lvl: 1, tune: 0, tk: [0, 0, 0], path: -1, pr: [0, 0, 0], fl: 0, evo: !!ED.WEAPONS[id].evolved, cd: 0.4, st: {}, S: null, Sv: -1, Sk: -1, Sid: '' };
+    const ws = { id, root: rid, lvl: 1, tune: 0, tk: [0, 0, 0], path: -1, pr: [0, 0, 0], fl: 0, evo: !!ED.WEAPONS[id].evolved, cd: 0.4, st: {}, S: null, Sv: -1, Sk: -1, Sid: '', t0: this.time };
     setLvl(ws);
     p.weapons.push(ws);
     const im = ED.WIMPL[id]; if (im && im.init) im.init(this, p, ws);

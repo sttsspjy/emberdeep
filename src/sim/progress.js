@@ -94,14 +94,14 @@
     }
   };
 
-  // Hero p collects pickup g: gems -> party XP (x the collector's growth), gold (x goldMul), food heal, magnet (vacuums every gem on the map), holy bomb (kills every non-elite, non-boss foe in view), chest.
+  // Hero p collects pickup g: gems -> party XP (x the collector's growth), gold (x goldMul), food heal, magnet (vacuums every gem on the map; during the Last Light every coin too), holy bomb (kills every non-elite, non-boss foe in view), chest.
   W.collect = function (p, g) {
     g.dead = true;
     const k = g.k;
     if (isGem(k)) this.addXp(g.val * (1 + p.stats.growth) * (this.cheats.xp || 1));
-    else if (k === 'gold') this.gold += Math.round(g.val * this.goldMul(p));
+    else if (k === 'gold') { const v = Math.round(g.val * this.goldMul(p)); this.gold += v; p.goldGot += v; if (this.lap && this.lap.ph) this.lap.gold += v; }
     else if (k === 'food') this.heal(p, g.val);
-    else if (k === 'magnet') { for (const q of this.pickups) if (!q.dead && isGem(q.k)) { q.pull = p.pid; q.t = 0; } }
+    else if (k === 'magnet') { for (const q of this.pickups) if (!q.dead && (isGem(q.k) || (this.lap && q.k === 'gold'))) { q.pull = p.pid; q.t = 0; } }
     else if (k === 'bomb') {
       const hw = C.VIEW_W / 2 + 20, hh = C.VIEW_H / 2 + 20;
       for (const e of this.foes) if (!e.dead && !e.elite && !e.boss && Math.abs(e.x - p.x) <= hw && Math.abs(e.y - p.y) <= hh) { const s = this.src(p, 'bomb', 'bomb'); s.crit = false; this.hitFoe(e, e.hp, s); }
@@ -113,6 +113,7 @@
   // ---------------- XP and offers ----------------
   // Party XP: every level-up queues one card offer (p.pend) for each hero that is not dead (downed heroes pick after revival).
   W.addXp = function (v) {
+    if (this.lap && this.lap.ph) return; // no XP during the Last Light lap
     this.xp += v;
     while (this.xp >= this.xpNext) {
       this.xp -= this.xpNext; this.level++; this.xpNext = ED.World.xpFor(this.level);
@@ -286,7 +287,7 @@
     else if (c.kind === 'passive') { if (p.passives.length < ED.MAX_PASSIVES && !ownsP(p, c.id)) p.passives.push({ id: c.id, lvl: 1 }); }
     else if (c.kind === 'plvl') { const ps = p.passives.find(x => x.id === c.id); if (ps) ps.lvl = Math.min(ED.PASSIVES[ps.id].max, ps.lvl + 1); }
     else if (c.kind === 'skill') { const sk = p.skills.find(x => x.id === c.id); if (sk) sk.lvl = Math.min(ED.skillMaxLvl(ED.SKILLS[sk.id]), sk.lvl + 1); }
-    else if (c.kind === 'gold') this.gold += c.val || GOLD_CARD;
+    else if (c.kind === 'gold') { const v = c.val || GOLD_CARD; this.gold += v; p.goldGot += v; }
     else if (c.kind === 'heal') this.heal(p, c.val || HEAL_CARD);
   };
 
@@ -316,7 +317,7 @@
       const opts = [];
       for (const ps of p.passives) if (ps.lvl < ED.PASSIVES[ps.id].max) opts.push({ w: 1, kind: 'plvl', id: ps.id });
       for (const sk of p.skills) { const d = ED.SKILLS[sk.id]; if (d && sk.lvl < ED.skillMaxLvl(d)) opts.push({ w: 1, kind: 'skill', id: sk.id }); }
-      if (!opts.length) { const g = Math.round(GOLD_CARD * this.goldMul(p)); this.gold += g; results.push({ kind: 'gold', id: 'gold', lvl: 0, name: 'Gold', icon: 'pickup.coin', txt: '+' + g + ' gold', val: g }); }
+      if (!opts.length) { const g = Math.round(GOLD_CARD * this.goldMul(p)); this.gold += g; p.goldGot += g; results.push({ kind: 'gold', id: 'gold', lvl: 0, name: 'Gold', icon: 'pickup.coin', txt: '+' + g + ' gold', val: g }); }
       else {
         const o = this.rng.weighted(opts, x => x.w);
         if (o.kind === 'plvl') {
@@ -336,11 +337,15 @@
   };
 
   // ---------------- results ----------------
-  // Damage table of one hero (a World.summary() perHero entry or a live hero): [{ id, kind: 'weapon'|'skill'|'other', name, icon, dmg, frac (share of the total) }], largest first.
-  // Damage dealt by a weapon before its evolution is folded into the evolved weapon's row.
+  // Damage table of one hero (a World.summary() perHero entry or a live hero): [{ id, kind: 'weapon'|'skill'|'other', name, icon, dmg, frac (share of the total), kills (h.kw) }], largest first.
+  // Damage and kills of a weapon before its evolution are folded into the evolved weapon's row.
   ED.dmgRows = (h) => {
-    const m = Object.assign({}, h.dealt || {}), ids = (h.weapons || []).map(x => (typeof x === 'string' ? x : x.id));
-    for (const id of ids) { const d = ED.WEAPONS[id]; if (d && d.evolved && d.from && m[d.from]) { m[id] = (m[id] || 0) + m[d.from]; delete m[d.from]; } }
+    const m = Object.assign({}, h.dealt || {}), kw = Object.assign({}, h.kw || {}), ids = (h.weapons || []).map(x => (typeof x === 'string' ? x : x.id));
+    for (const id of ids) {
+      const d = ED.WEAPONS[id]; if (!(d && d.evolved && d.from)) continue;
+      if (m[d.from]) { m[id] = (m[id] || 0) + m[d.from]; delete m[d.from]; }
+      if (kw[d.from]) { kw[id] = (kw[id] || 0) + kw[d.from]; delete kw[d.from]; }
+    }
     let total = 0;
     const rows = [];
     for (const id in m) {
@@ -351,7 +356,7 @@
         : sd ? { id, kind: 'skill', name: sd.name, icon: sd.icon, dmg: Math.round(v), frac: 0 }
           : { id, kind: 'other', name: id === 'bomb' ? 'Holy Bomb' : 'Other', icon: id === 'bomb' ? 'pickup.bomb' : '', dmg: Math.round(v), frac: 0 });
     }
-    for (const r of rows) r.frac = total > 0 ? r.dmg / total : 0;
+    for (const r of rows) { r.frac = total > 0 ? r.dmg / total : 0; r.kills = kw[r.id] | 0; }
     rows.sort((a, b) => b.dmg - a.dmg || (a.id < b.id ? -1 : 1));
     return rows;
   };

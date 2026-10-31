@@ -21,8 +21,8 @@
   W.foeHp = function (def) { return def.hp * (1 + (def.ai === 'swarm' ? 0.06 : def.boss ? 0.24 : 0.11) * this.time / 60) * this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1); };
   // Walk speed factor of foes spawned now: 0.8 at 0:00 rising to 1 at 4:00; fixed at spawn, bosses exempt, telegraphed dashes keep their own speed.
   W.foePace = function () { return 0.8 + 0.2 * Math.min(1, this.time / 240); };
-  // Boss HP for a boss due at t s (GAME-DESIGN §8): 1500 x (t / 300)^2 (1500 / 6000 / 13500 / 24000 at 5 / 10 / 15 / 20 min) x k (party factor x the stage HP factor).
-  ED.bossHp = (t, k) => Math.round(1500 * Math.pow(t / 300, 2) * k);
+  // Boss HP for a boss due at t s (GAME-DESIGN §8): 1500 x (t / 300)^2, x2 from 15:00 (1500 / 6000 / 27000 / 48000 at 5 / 10 / 15 / 20 min) x k (party factor x the stage HP factor).
+  ED.bossHp = (t, k) => Math.round(1500 * Math.pow(t / 300, 2) * (t >= 900 ? 2 : 1) * k);
   W.bossHp = function (t) { return ED.bossHp(t, this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1)); };
 
   // Spawns foe k (id string or FOE_IDX) at (x, y). opts: { elite, hpMul, rush: [dx, dy, s, v] (fly-through: heading (dx, dy) at v px/s, rush time s) }. Returns the foe.
@@ -141,15 +141,16 @@
     }
   };
 
-  // Foe e dies: kill credit, 'die' event, drops (gem by def.xp; elites a chest, 1-5 gold x stage gold, a large gem and food at 50%; bosses via onBossKilled; a hero kill of a non-boss rolls a magnet), splitter children, the killer's weapon kill callbacks, then its hero kill hook.
+  // Foe e dies: kill credit, 'die' event, drops (after the final boss: lap coins only, lap.js lapKill; else gem by def.xp; elites a chest, 1-5 gold x stage gold, a large gem and food at 50%; bosses via onBossKilled; a hero kill of a non-boss rolls a magnet), splitter children, the killer's weapon kill callbacks, then its hero kill hook.
   W.killFoe = function (e, src) {
     if (e.dead) return;
     e.dead = true; e.hp = 0; e.hpQ = 0;
     this.kills++;
     const p = src && src.p;
-    if (p) p.kills++;
+    if (p) { p.kills++; const k = src.wid || 'other'; p.kw[k] = (p.kw[k] || 0) + 1; }
     this.emit({ t: 'die', id: e.id, k: e.k, x: Math.round(e.x), y: Math.round(e.y), elite: e.elite, boss: e.boss });
-    if (e.boss) this.onBossKilled(e, p);
+    if (this.lap) this.lapKill(e, p);
+    else if (e.boss) this.onBossKilled(e, p);
     else if (e.elite) { this.spawnPickup('chest', e.x, e.y, 1); this.spawnPickup('gold', e.x + 8, e.y, Math.round(this.rng.int(1, 5) * (this.sdef.gold || 1))); this.dropGem(e.x - 8, e.y, 25); if (this.rng.chance(0.5)) this.spawnPickup('food', e.x, e.y + 10, 30); }
     else this.dropGem(e.x, e.y, e.def.xp || 1);
     if (p && !e.boss) this.rollMagnet(e.x, e.y);

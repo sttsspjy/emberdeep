@@ -144,7 +144,7 @@ ok(a.time >= 89 && a.time <= 91 && a.death === 'timeout' && a.ticks > 0, `maxTim
   const r = runOne({ stage: 0, cls: 'knight', seed: 2, maxTime: 780, meta: 'max' }); // seed 2: the bot's Edge Wave path (seed 1 picks Whirl, whose 360 Form stalls on the twins)
   const ids = r.bosses.map(b => b.id + '@' + b.spawn + '-' + b.at).join(',');
   ok(r.bosses.length >= 2 && r.bosses.every(b => b.spawn !== null && b.at >= b.spawn) && r.bosses.some(b => b.id === 'twins'), 'boss kills carry their spawn: ' + ids + ' (time ' + r.time + ', death ' + r.death + ')');
-  const c = { stage: 2, cls: 'ranger', seed: 5, maxTime: 90, skill: 0.3 }, x = runOne(c), y = runOne(c), z = runOne(Object.assign({}, c, { skill: 1 }));
+  const c = { stage: 2, cls: 'ranger', seed: 5, maxTime: 150, skill: 0.3 }, x = runOne(c), y = runOne(c), z = runOne(Object.assign({}, c, { skill: 1 }));
   ok(strip(x) === strip(y) && x.skill === 0.3, `skill 0.3 deterministic (kills ${x.kills} / ${y.kills})`);
   ok(x.hurt !== z.hurt || x.kills !== z.kills, `skill 0.3 plays differently from 1 (hurt ${x.hurt} / ${z.hurt}, kills ${x.kills} / ${z.kills})`);
 }

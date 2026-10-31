@@ -1,8 +1,8 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it. Never opens a visible window.
-// Usage: node tools/browse.js [smoke|shots|forms|crowdN|coop|botwatch ...] [--scen=a,b] [--cls=knight,...] [--form=id,...] [--support=id,...|all] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1]
+// Usage: node tools/browse.js [smoke|shots|forms|crowdN|coop|botwatch|lap ...] [--scen=a,b] [--cls=knight,...] [--form=id,...] [--support=id,...|all] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1]
 //                             [--software] [--quality=high|low] [--gate] [--prof] [--ff=480] [--timeout=600] [--cos=id,...]
 //   --cos: cosmetic ids (src/data/cosmetics.js) the profile owns and wears in every solo run the harness starts (skins apply to their own hero).
-//   smoke: for each hero (--cls, default all 7) a solo stage-1 run driven ~--seconds (10) s (circling, aim at the nearest foe, Q / E, dash, first card picked); fails on a page or console error,
+//   smoke: for each hero (--cls, default all 7) a solo stage-1 run driven ~--seconds (16) s (circling, aim at the nearest foe, Q / E, dash, first card picked); fails on a page or console error,
 //          a stalled sim, no Q or E cast, or a signature weapon that dealt nothing.
 //   shots: PNGs of title, hero select, stage select, camp, the slot lifecycle on a fresh knight run (a level-up with a tune card, an elite-chest path-pick offer, a boss-chest
 //          Form offer, the pause build line), each hero mid-fight at --ff (480) s of sim (ED.Debug.fastForward, god cheat), a level-up overlay, a chest, a boss fight and the
@@ -18,12 +18,16 @@
 //   forms: one PNG per hero (--cls) x Form (--form=id,... filters): tune 5, the Form's path at rank 5, the Form refined twice, six max passives, clock 20:00, 400 last-roster foes held at
 //          real HP, no boss, no level-ups or offers, --seconds (4) s of play; into a fresh folder <outdir>/forms-<stamp>-<browser>[-soft] (printed). Fails on a page / console error or a Form not taken.
 //          --support=id,... (support root or Form id; all: every support root): one PNG per hero Form x support, the support's Form (a root: its first Form) beside the hero's.
+//   lap: a knight run (god cheat) with a horde at 19:50, the final boss downed (ED.Debug.lap): PNGs of the VICTORY beat, the Last Light lap ~6 s in (HUD countdown, lap gold) and the results;
+//        fails on a page / console error, no lap state or no results screen after the lap.
+//   results: the results screen from synthetic summaries (solo victory with the Last Light lap, 4-hero co-op victory, solo loss) at --viewport; fails on page scroll,
+//            Enter inside the input guard leaving the screen, a wrong default focus after it, text below 16 px or a page / console error.
 //   coop: two pages of one browser context on ?net=local (BroadcastChannel transport): host + guest through the ED.Net lobby API (host, join, ready, start), then the real co-op
 //         run on both peers for --seconds (6) s: the guest's mirror shows 2 heroes and foes, snapshots <= 12 KB.
 //   botwatch: ?bot=1&speed=8&seed=--seed with the real tools/bot-brain.js; a knight solo run on stage 0 watched --seconds (20) s: fails on sim time < 3x real time (notes < 6x),
 //         a hero that never left a 40 px radius, no automatic level-up pick, no BOT tag, [ / ] not changing the speed, Esc not pausing, a missing file or a page / console error.
 // In-page debug API (injected only by this harness, absent in normal play; every call is a no-op without a solo / host run): ED.Debug.{fastForward(sec), give(id, lvl), evolve(wid?),
-//   spawnBoss(id?), setTime(sec), levelUp(n), chest(), win(), lose(), god(on), state()}.
+//   spawnBoss(id?), setTime(sec), levelUp(n), chest(), win() (the run ends won now), lap() (the final boss down now: the Last Light), lose(), god(on), state()}.
 // Mechanism: a read-only http server on 127.0.0.1 (random port) serves the repo; Playwright resolves via require('playwright'), else the npx cache (%LOCALAPPDATA%\npm-cache\_npx).
 //   The page runs with a seeded Math.random. Output: a table on stdout, PNGs and result-<browser>.json in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 'use strict';
@@ -33,7 +37,7 @@ const fs = require('fs'), os = require('os'), path = require('path'), http = req
 const FLAGS = { scen: 's', cls: 's', form: 's', support: 's', cos: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', prof: 'b', json: 'b', help: 'b' };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
-const SCEN_RE = /^(smoke|shots|coop|botwatch|crowd\d{1,4}|late[abc]?|forms)$/;
+const SCEN_RE = /^(smoke|shots|coop|botwatch|lap|results|crowd\d{1,4}|late[abc]?|forms)$/;
 function parseArgs(argv) {
   const o = { scen: '', cls: HEROES.join(','), form: '', support: '', cos: '', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
   const pos = [];
@@ -49,7 +53,7 @@ function parseArgs(argv) {
   }
   o.scens = (o.scen ? o.scen.split(',') : []).concat(pos).map(s => s.trim()).filter(Boolean);
   if (!o.scens.length) o.scens = ['smoke'];
-  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, forms, crowdN, late[a|b|c], coop, botwatch)');
+  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, forms, crowdN, late[a|b|c], coop, botwatch, lap, results)');
   if (!['chromium', 'firefox'].includes(o.browser)) throw new Fail('--browser is chromium or firefox');
   const vp = /^(\d{3,5})x(\d{3,5})$/.exec(o.viewport);
   if (!vp) throw new Fail('--viewport is WxH');
@@ -225,7 +229,9 @@ function pageBoot(cfg) {
       for (let i = n; i < w.events.length; i++) if (w.events[i].t === 'chest') return w.events[i].results;
       return [];
     };
-    D.win = () => { const w = run(); if (!w) return false; w.finalDown = true; return true; };
+    D.win = () => { const w = run(); if (!w) return false; w.end(true); return true; };
+    // Final boss down now (the Last Light: victory beat, calm, lap) 120 px right of the local hero; the run clock jumps to 20:00 first when earlier.
+    D.lap = () => { const w = run(); if (!w) return false; if (w.time < 1200) D.setTime(1200); const p = meOf(w); w.payGold(E.CONST.GOLD.final); w.startLap(p.x + 120, p.y); return true; };
     D.lose = () => { const w = run(); if (!w) return false; w.end(false); return true; };
     D.god = (on) => { const w = run(); if (!w) return false; w.cheats.god = on !== false; return w.cheats.god; };
     D.state = () => {
@@ -432,7 +438,7 @@ const bootNote = (info) => `boot: atlas ${info.atlas}, batch ${info.batch}, webg
 
 // ---------------- scenarios ----------------
 async function scenSmoke() {
-  const o = S.opt, res = newResult('smoke'), secs = o.seconds || 10;
+  const o = S.opt, res = newResult('smoke'), secs = o.seconds || 16;
   const { ctx, page, errors, info } = await openPage();
   try {
     res.notes.push(bootNote(info));
@@ -560,9 +566,38 @@ async function scenShots() {
       await dbg(page, 'win');
       await page.waitForFunction(() => window.ED.App.state === 'results', null, { timeout: 5000 }).catch(() => {});
       need(await call(page, 'visible', 'scr-results'), 'results screen not shown');
+      await wait(1700); // input guard and count-up
       await shot(`${String(k++).padStart(2, '0')}-results`);
       await page.click('#btn-res-back').catch(() => {});
     }
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+// Last Light: VICTORY beat and lap PNGs, then the run's end.
+async function scenLap() {
+  const o = S.opt, res = newResult('lap');
+  const { ctx, page, errors, info } = await openPage();
+  try {
+    res.notes.push(bootNote(info));
+    await call(page, 'settings', o.quality);
+    await call(page, 'start', 'knight', 0, { god: true, might: 40 });
+    await dbg(page, 'setTime', 1190);
+    await wait(4000); // the horde at 19:5x
+    if (!(await dbg(page, 'lap'))) fail(res, 'lap did not start');
+    await wait(500);
+    await shoot(page, res, 'victory');
+    await wait(8500);
+    const st = await page.evaluate(() => { const w = window.ED.Game.w, v = window.ED.Game.view; return { lap: w.lap && Object.assign({}, w.lap), won: w.won, state: w.state, foes: w.foes.length, view: v.lap && Object.assign({}, v.lap) }; });
+    res.notes.push('lap: ' + JSON.stringify(st));
+    if (!st.lap || !st.won || !st.view || st.view.ph !== 2) fail(res, 'no Last Light lap state');
+    await shoot(page, res, 'lastlight');
+    await page.evaluate(() => { const w = window.ED.Game.w; w.time = w.lap.t0 + w.lap.dur - 0.5; });
+    await page.waitForFunction(() => window.ED.App.state === 'results', null, { timeout: 8000 }).catch(() => {});
+    if (!(await call(page, 'visible', 'scr-results'))) fail(res, 'results screen not shown after the lap');
+    await shoot(page, res, 'results');
+    await call(page, 'stop');
   } finally { res.errors = errors; await ctx.close(); }
   if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
   return res;
@@ -818,6 +853,65 @@ function table(results) {
   return out.join('\n');
 }
 
+// Results screen from synthetic summaries (no run): a solo 21:05 knight victory with a Form, two supports, six passives, four bosses and the Last Light lap, a 4-hero co-op victory,
+// and a solo 7:30 loss; one PNG each. Fails on page scroll, Enter pressed at once leaving the screen, no default focus once the guard ends, or a page / console error.
+async function scenResults() {
+  const o = S.opt, res = newResult('results');
+  const { ctx, page, errors, info } = await openPage();
+  try {
+    res.notes.push(bootNote(info));
+    const show = (variant) => page.evaluate((v) => {
+      const E = window.ED, U = E.U, hero = E.HEROES.knight, root = hero.sig, form = (E.weaponForms(root)[0] || {}).id || root;
+      const sup = E.WEAPON_IDS.filter(id => E.WEAPONS[id].support && !E.WEAPONS[id].evolved).slice(0, 2), pas = Object.keys(E.PASSIVES).slice(0, 6), sk = hero.skills[0];
+      const won = v !== 'lost', time = won ? 1265 : 450, mins = Math.floor(time / 60) + (time % 60 >= 1 ? 1 : 0);
+      const tl = []; for (let i = 0; i < Math.min(25, mins); i++) tl.push({ k: Math.round(40 + i * i * 9 + (i % 3) * 60 + (i >= 20 ? 2600 : 0)), d: Math.round(9000 * (i + 1) * (i + 1)), lv: Math.min(40, 2 + Math.round(i * 1.75)) });
+      const stage = E.STAGES[0], bosses = stage.bosses.filter(b => b.t <= time).map((b, i) => ({ id: b.id, f: b.final ? 1 : 0, t0: b.t, t1: won || i < 1 ? b.t + 28 + i * 9 : -1 }));
+      const heroOf = (pid, cls, name, k) => {
+        const h = E.HEROES[cls], r = h.sig, f = (E.weaponForms(r)[0] || {}).id;
+        const main = won && f ? f : r, dealt = {}; dealt[main] = Math.round(1.8e6 * k); dealt[h.skills[0]] = Math.round(2.4e5 * k);
+        sup.forEach((s, i) => { dealt[s] = Math.round((3.1e5 - i * 1.2e5) * k); });
+        dealt.bomb = Math.round(21000 * k);
+        const kw = {}; kw[main] = Math.round(31000 * k); kw[h.skills[0]] = Math.round(2100 * k); sup.forEach((s, i) => { kw[s] = Math.round((5400 - i * 2000) * k); }); kw.bomb = 600;
+        return { pid, cls, name, kills: Object.values(kw).reduce((a, b) => a + b, 0), dealt, kw, weapons: [main].concat(sup),
+          build: [{ id: main, tune: 5, path: 0, pr: [5, 0, 0], fl: won ? 2 : 0, t0: 0 }].concat(sup.map((s, i) => ({ id: s, tune: 5 - i * 2, path: i ? -1 : 1, pr: i ? [0, 0, 0] : [0, 3, 0], fl: 0, t0: 140 + i * 260 }))),
+          ranks: 4, form: won, pas: pas.map((id, i) => [id, Math.max(1, E.PASSIVES[id].max - i % 3)]), sk: [[h.skills[0], 3]],
+          taken: Math.round(1840 * k), healed: Math.round(960 * k), top: { v: Math.round(48210 * k), id: main }, downs: k < 1 ? 1 : 0, revs: k < 1 ? 0 : 2, goldGot: Math.round(310 * k) };
+      };
+      const perHero = v === 'coop' ? [heroOf('host', 'knight', 'Tester', 1), heroOf('p2', 'ranger', 'Robin', 0.8), heroOf('p3', 'pyro', 'Ash', 0.6), heroOf('p4', 'cleric', 'Mira', 0.4)] : [heroOf('host', 'knight', 'Tester', 1)];
+      const kills = tl.reduce((a, e) => a + e.k, 0);
+      const sum = { won, time, kills, level: tl[tl.length - 1].lv, gold: won ? 612 : 88, stage: 0, tl, bosses, lap: won ? { t0: 1205, dur: 60, kills: 8551, gold: 57 } : null, perHero };
+      const gained = { news: won ? [{ kind: 'ach', id: (E.ACHIEVEMENTS && E.ACHIEVEMENTS[0] || {}).id || '', txt: 'Achievement: First Light (+50 gold)' }, { kind: 'hero', id: 'shade', txt: 'Hero unlocked: Shade' }] : [], records: won ? ['time', 'kills'] : [] };
+      E.Game.myPid = 'host'; E.UI.lastMode = v === 'coop' ? 'host' : 'solo'; E.App.state = 'results';
+      E.UI.renderResults(sum, gained); E.UI.show('results');
+      return { form, root, sup, sk, tl: tl.length, bosses: bosses.length };
+    }, variant);
+    for (const v of ['solo', 'coop', 'lost']) {
+      const got = await show(v);
+      await page.keyboard.press('Enter'); // inside the input guard: must do nothing
+      await wait(200);
+      if (!(await call(page, 'visible', 'scr-results'))) { fail(res, v + ': Enter inside the guard left the results screen'); continue; }
+      const early = await page.evaluate(() => document.activeElement && document.activeElement.id);
+      await wait(1700);
+      const st = await page.evaluate(() => {
+        const s = document.getElementById('scr-results'), q = (sel) => [...s.querySelectorAll(sel)];
+        const over = q('.res-panel, .res-pane').filter(el => el.scrollHeight > el.clientHeight + 2).map(el => el.className + ' ' + el.scrollHeight + '/' + el.clientHeight);
+        return { scroll: s.scrollHeight - s.clientHeight, body: document.documentElement.scrollHeight - innerHeight, focus: document.activeElement && document.activeElement.id, rows: q('.bar-row').length, tiles: q('.tile').length, over,
+          minFont: Math.min(...q('span, b, button').filter(el => el.offsetParent && el.textContent.trim()).map(el => parseFloat(getComputedStyle(el).fontSize))) };
+      });
+      res.notes.push(`${v}: ${JSON.stringify(got)} | rows ${st.rows}, tiles ${st.tiles}, min font ${st.minFont}px, focus ${early || '-'} -> ${st.focus}${st.over.length ? ', inner scroll ' + st.over.join('; ') : ''}`);
+      if (st.scroll > 1 || st.body > 1) fail(res, `${v}: page scrolls (${st.scroll} / ${st.body} px)`);
+      if (early && early !== '') fail(res, `${v}: ${early} focused inside the guard`);
+      if (st.focus !== (v === 'coop' ? 'btn-res-back' : 'btn-res-again')) fail(res, `${v}: default focus after the guard is ${st.focus}`);
+      if (st.minFont < 16) fail(res, `${v}: text below 16 px (${st.minFont})`);
+      await page.mouse.move(Math.round(o.vw * 0.3), Math.round(o.vh * 0.98));
+      await shoot(page, res, v);
+      if (v === 'solo') { await page.mouse.move(Math.round(o.vw * 0.75), Math.round(o.vh * 0.45)); await shoot(page, res, v + '-hover'); }
+    }
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function main() {
   delete process.env.PWDEBUG; // Playwright's debug mode would open a headed browser
   S.opt = parseArgs(process.argv.slice(2));
@@ -833,7 +927,7 @@ async function main() {
     for (const sc of S.opt.scens) {
       const t0 = Date.now();
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'forms' ? await scenForms() : sc === 'coop' ? await scenCoop() : sc === 'botwatch' ? await scenBotwatch() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'forms' ? await scenForms() : sc === 'coop' ? await scenCoop() : sc === 'botwatch' ? await scenBotwatch() : sc === 'lap' ? await scenLap() : sc === 'results' ? await scenResults() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
       catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); fail(r, 'harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); }
       r.wallMs = Date.now() - t0;
       if (S.server.missing.size) { r.missing = [...S.server.missing]; fail(r, 'missing files: ' + r.missing.join(', ')); S.server.missing.clear(); }

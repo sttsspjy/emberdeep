@@ -15,7 +15,8 @@
     this.heroes = []; this.byPid = {}; this.living = [];
     this.foes = []; this.projs = []; this.zones = []; this.pickups = []; this.events = [];
     this.xp = 0; this.level = 1; this.xpNext = W.xpFor(1); this.gold = 0; this.kills = 0;
-    this.boss = null; this.bossId = 0; this.finalDown = false;
+    this.boss = null; this.bossId = 0; this.won = false; this.lap = null; // won: the win is banked (final boss dead, lap.js); lap: Last Light state
+    this.tl = []; this.tlK = 0; this.tlD = 0; this.dmgAll = 0; this.bossLog = []; // run stats for summary(): per-minute timeline, party damage, boss spawn / kill times
     this.cheats = cfg.cheats || {};
     this.initCombat(); this.initFoes(); this.initSpawner(); this.initProgress(); this.initBosses();
     for (const pd of cfg.players || []) this.addHero(pd);
@@ -29,7 +30,16 @@
 
   W.prototype.nextId = function () { return this.nid++; };
   W.prototype.minute = function () { return Math.floor(this.time / 60); };
-  W.prototype.emit = function (ev) { this.events.push(ev); return ev; };
+  W.prototype.emit = function (ev) { this.events.push(ev); if (ev.t === 'boss') this.logBoss(ev); return ev; };
+  // Boss log entry { id, f (final), t0 (spawn s), t1 (kill s, -1 alive) }: opened by a phase 0 'boss' event, closed by phase -1 (same id, else the newest open entry).
+  W.prototype.logBoss = function (ev) {
+    const L = this.bossLog;
+    if (ev.phase === 0) { L.push({ id: ev.id, f: ev.final ? 1 : 0, t0: Math.round(this.time), t1: -1 }); return; }
+    if (ev.phase !== -1) return;
+    let b = null;
+    for (let i = L.length - 1; i >= 0; i--) if (L[i].t1 < 0 && (L[i].id === ev.id || !b)) { b = L[i]; if (b.id === ev.id) break; }
+    if (b) b.t1 = Math.round(this.time);
+  };
   W.prototype.solo = function () { return this.heroes.length === 1; };
   W.prototype.hero = function (pid) { return this.byPid[pid] || null; };
   W.prototype.alive = function (p) { return !!p && !p.dead && !p.downed; };
@@ -51,7 +61,7 @@
       x: c + (slot % 2 ? 24 : -24) * (slot > 0 ? 1 : 0), y: c + (slot >= 2 ? 24 : 0), vx: 0, vy: 0, face: 0, mdir: 0, mvx: 0, mvy: 0, moving: false, r: C.HERO_R,
       hp: 1, maxHp: 1, stats: null, statsV: 0, weapons: [], passives: [], skills: [],
       dashCd: 0, dashT: 0, dashDx: 1, dashDy: 0, invuln: 0, hurtT: 0, dr: 0, slowT: 0, slowK: 0, downed: false, bleed: 0, revive: 0, dead: false, revUsed: 0, atkTok: 1,
-      kills: 0, dealt: {}, offer: null, pend: 0, rerolls: 0, skips: 0, pickInv: 0,
+      kills: 0, dealt: {}, kw: {}, taken: 0, healed: 0, top: 0, topId: '', downs: 0, revs: 0, goldGot: 0, offer: null, pend: 0, rerolls: 0, skips: 0, pickInv: 0,
       in: { mx: 0, my: 0, ax: c + 100, ay: c, dash: false, q: false, e: false, pick: 0, reroll: false, skip: false },
     };
     this.heroes.push(p); this.byPid[p.pid] = p;
@@ -71,7 +81,7 @@
   };
   W.prototype.heal = function (p, v) {
     if (!this.alive(p)) return 0;
-    const h = Math.min(v, p.maxHp - p.hp); p.hp += h;
+    const h = Math.min(v, p.maxHp - p.hp); p.hp += h; if (h > 0) p.healed += h;
     if (h >= 1) this.emit({ t: 'heal', pid: p.pid, v: Math.round(h) });
     return h;
   };
@@ -102,12 +112,12 @@
         let helpers = 0;
         for (const q of this.living) if (q !== p && U.dist2(q.x, q.y, p.x, p.y) <= 40 * 40) helpers++;
         p.revive = helpers ? p.revive + dt / 2.5 : Math.max(0, p.revive - dt / 2.5);
-        if (p.revive >= 1) { p.downed = false; p.revive = 0; p.hp = Math.round(p.maxHp * 0.4); p.invuln = 2; this.emit({ t: 'revive', pid: p.pid }); }
+        if (p.revive >= 1) { for (const q of this.living) if (q !== p && U.dist2(q.x, q.y, p.x, p.y) <= 40 * 40) q.revs++; p.downed = false; p.revive = 0; p.hp = Math.round(p.maxHp * 0.4); p.invuln = 2; this.emit({ t: 'revive', pid: p.pid }); }
         else if (p.bleed <= 0) { p.dead = true; this.emit({ t: 'dead', pid: p.pid }); }
         I.dash = I.q = I.e = false;
         continue;
       }
-      if (p.stats.regen > 0 && p.hp < p.maxHp) p.hp = Math.min(p.maxHp, p.hp + p.stats.regen * dt);
+      if (p.stats.regen > 0 && p.hp < p.maxHp) { const g = Math.min(p.maxHp - p.hp, p.stats.regen * dt); p.hp += g; p.healed += g; }
       p.face = Math.atan2(I.ay - p.y, I.ax - p.x);
       if (I.dash && p.dashCd <= 0 && p.dashT <= 0) {
         const l = Math.hypot(I.mx, I.my);
@@ -141,7 +151,7 @@
       this.emit({ t: 'revive', pid: p.pid, charge: true });
       return;
     }
-    p.hp = 0; p.dashT = 0;
+    p.hp = 0; p.dashT = 0; p.downs++;
     if (this.solo()) { p.dead = true; this.emit({ t: 'dead', pid: p.pid }); return; }
     p.downed = true; p.bleed = 20; p.revive = 0;
     this.emit({ t: 'down', pid: p.pid });
@@ -170,7 +180,14 @@
     this.updateBosses(dt);
     this.flushHits();
     this.compact();
+    if (this.tick % 3600 === 0) this.trackMinute();
     this.runState();
+  };
+  // Closes one timeline minute (at most TL_MAX entries): { k: kills, d: party damage dealt in it, lv: party level at its end }.
+  const TL_MAX = 25;
+  W.prototype.trackMinute = function () {
+    if (this.tl.length < TL_MAX) this.tl.push({ k: this.kills - this.tlK, d: Math.round(this.dmgAll - this.tlD), lv: this.level });
+    this.tlK = this.kills; this.tlD = this.dmgAll;
   };
 
   const compactArr = (arr, pool) => {
@@ -189,8 +206,8 @@
 
   W.prototype.runState = function () {
     this.refreshLiving();
-    if (this.finalDown) { this.end(true); return; }
-    if (!this.living.length && !this.cheats.god) this.end(false);
+    if (this.lap && this.updateLap()) return;
+    if (!this.living.length && !this.cheats.god) this.end(this.won);
   };
   // Gold paid straight to the party (final boss, victory): v x the stage gold multiplier x the heroes' mean gold multiplier (progress.js goldMul), rounded.
   W.prototype.payGold = function (v) {
@@ -200,19 +217,29 @@
   // Ends the run once; pays (payGold, win or loss) 1 per GOLD.bounty kills + GOLD.minute per full minute survived, plus GOLD.win on a win, before the summary.
   W.prototype.end = function (won) {
     if (this.state !== 'play') return;
+    won = won || this.won; // a banked win (final boss dead) cannot be lost
     this.state = won ? 'won' : 'lost';
     this.payGold(Math.floor(this.kills / C.GOLD.bounty) + C.GOLD.minute * Math.floor(this.time / 60));
     if (won) this.payGold(C.GOLD.win);
     this.emit({ t: 'end', won, summary: this.summary() });
   };
-  // perHero.ranks: Camp ranks the hero brought (sum of its meta.shop ranks at run start); form: its hero weapon (slot 0) is a Form.
+  // Run summary (also sent to co-op clients as JSON). tl: per-minute timeline (trackMinute entries plus the unfinished minute when >= 1 s); bosses: boss log (logBoss);
+  // lap: the Last Light lap { t0, dur, kills, gold } or null. perHero: ranks (Camp ranks brought: sum of meta.shop ranks), form (slot 0 is a Form), dealt / kw (damage / kills per weapon or skill id),
+  // build (slots, t0: sim s acquired), pas / sk ([id, lvl]), taken (after armor), healed, top { v, id } (highest single hit), downs, revs (revives given), goldGot (gold picked up).
   W.prototype.summary = function () {
     const ranks = (p) => { let n = 0; const s = (p.meta && p.meta.shop) || {}; for (const k in s) n += s[k] | 0; return n; };
+    const rmap = (m) => { const o = {}; for (const k in m) o[k] = Math.round(m[k]); return o; };
+    const tl = this.tl.slice(), rem = this.tick % 3600, L = this.lap;
+    if (rem >= 60 && tl.length < TL_MAX) tl.push({ k: this.kills - this.tlK, d: Math.round(this.dmgAll - this.tlD), lv: this.level });
     return {
       won: this.state === 'won', time: this.time, kills: this.kills, level: this.level, gold: this.gold, stage: this.stage,
-      perHero: this.heroes.map(p => ({ pid: p.pid, cls: p.cls, name: p.name, kills: p.kills, dealt: Object.assign({}, p.dealt), weapons: p.weapons.map(ws => ws.id),
-        build: p.weapons.map(ws => ({ id: ws.id, tune: ws.tune, path: ws.path, pr: ws.pr.slice(), fl: ws.fl })), ranks: ranks(p),
-        form: !!(p.weapons[0] && ED.WEAPONS[p.weapons[0].id] && ED.WEAPONS[p.weapons[0].id].form) })),
+      tl, bosses: this.bossLog.map(b => ({ id: b.id, f: b.f, t0: b.t0, t1: b.t1 })),
+      lap: L ? { t0: Math.round(L.t0), dur: L.dur, kills: L.kills | 0, gold: L.gold | 0 } : null,
+      perHero: this.heroes.map(p => ({ pid: p.pid, cls: p.cls, name: p.name, kills: p.kills, dealt: rmap(p.dealt), kw: Object.assign({}, p.kw), weapons: p.weapons.map(ws => ws.id),
+        build: p.weapons.map(ws => ({ id: ws.id, tune: ws.tune, path: ws.path, pr: ws.pr.slice(), fl: ws.fl, t0: Math.round(ws.t0 || 0) })), ranks: ranks(p),
+        form: !!(p.weapons[0] && ED.WEAPONS[p.weapons[0].id] && ED.WEAPONS[p.weapons[0].id].form),
+        pas: p.passives.map(x => [x.id, x.lvl]), sk: p.skills.map(x => [x.id, x.lvl]),
+        taken: Math.round(p.taken), healed: Math.round(p.healed), top: { v: Math.round(p.top), id: p.topId }, downs: p.downs, revs: p.revs, goldGot: p.goldGot })),
     };
   };
 })(globalThis.ED || (globalThis.ED = {}));

@@ -247,7 +247,7 @@
   // Wrath: every pillar starts a chain that hops to the next foe outward (S.hop hops, 85% damage each).
   ED.addWeapon({
     id: 'wrath', name: 'Wrath', icon: 'weapon.dawnhammer', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Pillars hop from foe to foe',
-    base: base({ dmg: 30, cd: 1.0, n: 2, r: 28, hop: 5, knock: 90 }),
+    base: base({ dmg: 21, cd: 1.0, n: 2, r: 28, hop: 5, knock: 90 }),
     refine: [
       { mods: { hop: 2 }, txt: 'Chains hop 2 more times' },
       { mods: { n: 1, dmg: 0.2 }, txt: '+1 pillar, +20% damage' },
@@ -256,7 +256,7 @@
   // Halo: the aura becomes a ring wall that burns, slows and shoves out foes crossing it.
   ED.addWeapon({
     id: 'halo', name: 'Halo', icon: 'weapon.lantern', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'A ring of light walls foes out',
-    base: base({ dmg: 24, cd: 1.0, n: 2, hr: 0, bandK: 0.35, heal: 0.6, swing: 1, auraK: 0.8 }),
+    base: base({ dmg: 16.8, cd: 1.0, n: 2, hr: 0, bandK: 0.35, heal: 0.6, swing: 1, auraK: 0.8 }),
     refine: [
       { mods: { hr: 0.3 }, txt: 'The ring is 30% wider' },
       { mods: { swing: 2, dmg: 0.2 }, txt: '+2 censers, +20% damage' },
@@ -265,7 +265,7 @@
   // Judgment Ray: holy beams turn around the hero without pause.
   ED.addWeapon({
     id: 'jray', name: 'Judgment Ray', icon: 'weapon.glaive', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Holy beams turn around you',
-    base: base({ dmg: 23, cd: 1.0, n: 3, rays: 1, rayK: 0.35 }),
+    base: base({ dmg: 16.1, cd: 1.0, n: 3, rays: 1, rayK: 0.35 }),
     refine: [
       { mods: { blen: 0.3 }, txt: 'Beams reach 30% farther' },
       { mods: { rays: 1, dmg: 0.2 }, txt: '+1 beam, +20% damage' },
@@ -274,7 +274,7 @@
   // Consecration (Censer): every volley pillar leaves holy ground that burns and slows foes and heals allies standing in it.
   ED.addWeapon({
     id: 'consecration', name: 'Consecration', icon: 'weapon.mace', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Pillars leave holy ground',
-    base: base({ dmg: 30, cd: 1.0, n: 2, groundK: 0.3, gheal: 1.2 }),
+    base: base({ dmg: 21, cd: 1.0, n: 2, groundK: 0.3, gheal: 1.2 }),
     refine: [
       { mods: { n: 1 }, txt: '+1 pillar' },
       { mods: { groundK: 0.1, dmg: 0.2 }, txt: '+20% damage, ground burns hotter' },
@@ -283,7 +283,7 @@
   // Verdict (Lance): the beam sweeps more often and calls pillars down along its path.
   ED.addWeapon({
     id: 'verdict', name: 'Verdict', icon: 'weapon.warhammer', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Beams call pillars as they sweep',
-    base: base({ dmg: 48, cd: 1.0, n: 2, bcd: 1.6, vpK: 0.6 }),
+    base: base({ dmg: 33.6, cd: 1.0, n: 2, bcd: 1.6, vpK: 0.6 }),
     refine: [
       { mods: { blen: 0.3 }, txt: 'Beams reach 30% farther' },
       { mods: { n: 1, dmg: 0.2 }, txt: '+1 pillar, +20% damage' },

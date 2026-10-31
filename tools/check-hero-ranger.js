@@ -1,7 +1,8 @@
 // Headless check of the Ranger tree (exit 1 on failure). Usage: node tools/check-hero-ranger.js
 // 1. Every path rank 1-5 (tune full) changes the effective numbers or the fired pattern (arrows and foe hits of three volleys); card lines <= 40 chars.
 // 2. Every Form (1-2 per path) is ready only with its own path at rank 5, locks the others once taken, refines twice and deals damage in a foe ring.
-// 3. Mechanics: arrows fly along the cursor past nearer foes and elites; the split fan (two) aims its second half at a foe off the cursor line, else 0.35 rad off it; bounces turn arrows to unhit foes; kill shots fire from kills; Ballista bolts pierce a whole line; Rebound arrows turn at the view edge.
+// 3. Mechanics: arrows fly along the cursor past nearer foes and elites; the split fan (two) aims its second half at a foe off the cursor line, else 0.35 rad off it; bounces turn arrows to unhit foes; kill shots fire from kills; Ballista bolts pierce a whole line; Rebound arrows turn at the view edge;
+//    Seeker homing and bounces pass over a nearer elite / boss for another foe in view and hunt the elite / boss when it is alone.
 // 4. Damage only in view: every Longbow path at rank 5 and every refined Form never hurts a pinned foe 340 px away (outside the 320 px half view) while hurting a near one.
 // 5. Vault at levels 1..5: zero damage leap toward the cursor, untouchable, gem pull on landing; L2 farther, L3 2 charges, L4 caltrops, L5 pulls every gem in view; obstacle-safe landing.
 // 6. Determinism: the same seed and inputs give the same digest for every Form; client draw hooks run on a mock batch without non-finite args.
@@ -116,6 +117,26 @@ for (const f of FORMS) {
   const line = []; for (let i = 0; i < 12; i++) { const e = w.spawnFoe('skeleton', p.x + 40 + i * 20, p.y - 6, { hpMul: 1e4 }); e.spd = 0; line.push(e); }
   ws.cd = 0; w.update(C.TICK); ws.cd = 99; step(w, 90);
   ok(line.every(e => e.hp < e.maxHp), `Ballista: one bolt hits all 12 foes of a line (${line.filter(e => e.hp < e.maxHp).length})`);
+}
+{ // Seeker homing: every live arrow chases the normal foe past a nearer elite or boss; alone, the elite or boss is chased
+  for (const kind of ['elite', 'boss']) for (const alone of [false, true]) {
+    const w = world(2), p = w.heroes[0], ws = form(w, p, p.weapons[0], 'seeker');
+    const big = w.spawnFoe('skeleton', p.x + 90, p.y - 6, { hpMul: 1e4, elite: kind === 'elite' }); big.spd = 0; if (kind === 'boss') big.boss = true;
+    const nf = alone ? null : w.spawnFoe('skeleton', p.x - 40, p.y - 150, { hpMul: 1e4 }); if (nf) nf.spd = 0;
+    aimAt(p, 0); ws.cd = 0; w.update(C.TICK); ws.cd = 99; step(w, 7);
+    const qs = w.projs.filter(x => !x.dead && x.p === p && x.homing > 0), want = alone ? big : nf;
+    ok(qs.length > 0 && qs.every(q => q.tgt === want), `Seeker homing ${alone ? 'with the ' + kind + ' alone hunts it' : 'passes over a nearer ' + kind + ' for a foe in view'} (${qs.filter(q => q.tgt === want).length}/${qs.length} arrows)`);
+  }
+}
+{ // Seeker bounce: from the hit foe the arrow turns to an unhit normal foe, not the nearer elite
+  const w = world(2), p = w.heroes[0], ws = form(w, p, p.weapons[0], 'seeker');
+  const a = w.spawnFoe('skeleton', p.x + 80, p.y - 6, { hpMul: 1e4 }), el = w.spawnFoe('skeleton', p.x + 120, p.y + 64, { hpMul: 1e4, elite: true });
+  const b = w.spawnFoe('skeleton', p.x + 120, p.y - 140, { hpMul: 1e4 });
+  a.spd = el.spd = b.spd = 0; aimAt(p, 0); ws.cd = 0; w.update(C.TICK); ws.cd = 99;
+  const qs = w.projs.filter(x => !x.dead && x.p === p), q = qs.reduce((m, x) => (Math.abs(x.a) < Math.abs(m.a) ? x : m));
+  for (const x of qs) if (x !== q) x.dead = true;
+  q.pierce = 0; step(w, 60);
+  ok(a.hp < a.maxHp && b.hp < b.maxHp && el.hp === el.maxHp, `Seeker bounce: past the nearer elite to the other foe (hurt a ${a.hp < a.maxHp}, other ${b.hp < b.maxHp}, elite ${el.hp < el.maxHp})`);
 }
 { // Rebound: arrows turn at the view edge and fly back
   const w = world(2), p = w.heroes[0], ws = form(w, p, p.weapons[0], 'rebound');

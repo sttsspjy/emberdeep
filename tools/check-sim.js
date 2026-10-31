@@ -3,7 +3,7 @@
 // 1. Solo knight, 20:00 (C.RUN_LEN) with scripted inputs (circle walk, Q / dash on timers), god cheat: reaches the final boss spawn; run twice -> same digest.
 // 2. 4 heroes (knight, ranger, pyro, cleric), same script, god cheat: no exceptions, reaches the final boss; run twice -> same digest.
 // 3. Victory runs (full: all 7 heroes, stages 1 / 2 / 3 in turn; quick: knight on stage 1): a cheat build (six passives at max, weapon unranked) with { god, might: 40 }, walking to chests:
-//    4 bosses met (5:00 / 10:00 / 15:00 / final 20:00), the stage's final boss dies (state 'won', one 'end' event, summary), the hero reaches a Form through its own picks; the stage 3 ranger run twice -> same digest.
+//    4 bosses met (5:00 / 10:00 / 15:00 / final 20:00), the stage's final boss dies and the Last Light lap runs out (state 'won', one 'end' event, summary), the hero reaches a Form through its own picks; the stage 3 ranger run twice -> same digest.
 //    Quick mode adds a Form reach run per hero up to 420 s ({ god, might: 40, xp: 4 }, same build; path picks from elite chests, Forms from boss chest Form offers, the first at 5:00): every hero takes a Form.
 // 4. Mortal solo knight run until it ends (no cheats): state 'lost' with one 'end' event, or survives.
 // 5. Every hero x every stage, 90 s, god cheat: no exceptions, Q casts (E is unbound: never cast), the signature weapon deals damage, foes die; combined digest printed.
@@ -122,7 +122,7 @@ const build = (v) => v.w.heroes[0].weapons.map(x => x.id + ' t' + x.tune + ' ' +
 let sum = null;
 const formed = new Set();
 for (const [cls, st, seed] of VICTORY) {
-  const v = run(vcfg(cls, st, seed), C.RUN_LEN + 150, vopt), fin = ED.STAGES[st].bosses.find(b => b.final), tag = `stage ${st + 1} ${cls}`;
+  const v = run(vcfg(cls, st, seed), C.RUN_LEN + 150 + C.LAP.calm + C.LAP.dur, vopt), fin = ED.STAGES[st].bosses.find(b => b.final), tag = `stage ${st + 1} ${cls}`;
   ok(!v.err, tag + ': victory run throws nothing' + errOf(v));
   ok(v.w.state === 'won' && v.ends === 1 && v.killed.includes(fin.id + '!'), `${tag}: victory (state ${v.w.state}, t ${v.w.time.toFixed(0)} s, level ${v.w.level}, kills ${v.w.kills}; met ${v.bosses.join(', ')}; killed ${v.killed.join(', ')}; digest ${v.digest})`);
   ok(v.bosses.length >= 4, `${tag}: meets ${v.bosses.length} bosses`);
@@ -134,8 +134,17 @@ for (const [cls, st, seed] of VICTORY) {
     sum = v.w.summary();
     const dealt = sum.perHero[0].dealt;
     ok(sum.won && sum.perHero.length === 1 && Object.keys(dealt).some(k => ED.WEAPONS[k] && dealt[k] > 0), 'summary carries per-weapon damage (' + Object.keys(dealt).join(',') + ')');
+    const h = sum.perHero[0], kwSum = Object.values(h.kw).reduce((x, y) => x + y, 0), tlK = sum.tl.reduce((x, e) => x + e.k, 0), fb = sum.bosses.find(b => b.f);
+    ok(sum.tl.length >= Math.floor(sum.time / 60) && sum.tl.length <= 25 && tlK === sum.kills && sum.tl.every(e => e.k >= 0 && e.d >= 0 && e.lv >= 1) && sum.tl[sum.tl.length - 1].lv === sum.level,
+      `summary timeline: ${sum.tl.length} minutes, kills ${tlK} / ${sum.kills}, last level ${sum.tl[sum.tl.length - 1].lv}`);
+    ok(sum.bosses.length >= 4 && !!fb && fb.t1 >= fb.t0 && sum.bosses.every(b => b.t0 >= 0 && (b.t1 < 0 || b.t1 >= b.t0)), 'summary boss log (' + sum.bosses.map(b => b.id + ' ' + b.t0 + '-' + b.t1).join(', ') + ')');
+    ok(kwSum === h.kills && h.top.v > 0 && !!h.top.id && h.build.every(b => b.t0 >= 0 && b.t0 <= sum.time) && h.build[0].t0 === 0 && h.pas.length > 0 && h.sk.length > 0 && h.goldGot >= 0 && h.downs === 0 && h.revs === 0,
+      `summary hero stats: kills by weapon ${kwSum} / ${h.kills}, top hit ${h.top.v} (${h.top.id}), slot t0 ${h.build.map(b => b.t0).join('/')}, gold picked ${h.goldGot}`);
+    ok(sum.lap === null || (sum.lap.dur > 0 && sum.lap.t0 > 0 && sum.lap.kills >= 0), 'summary lap ' + JSON.stringify(sum.lap));
+    const rows = ED.dmgRows(h);
+    ok(rows.length && rows.reduce((x, r) => x + r.kills, 0) <= h.kills && rows[0].kills > 0, 'damage rows carry kills (' + rows.map(r => r.id + ' ' + r.kills).join(', ') + ')');
   }
-  if (cls === 'ranger') { const v2 = run(vcfg(cls, st, seed), C.RUN_LEN + 150, vopt); ok(!v2.err && v2.digest === v.digest, `${tag}: victory digest equal (${v.digest} / ${v2.digest})`); }
+  if (cls === 'ranger') { const v2 = run(vcfg(cls, st, seed), C.RUN_LEN + 150 + C.LAP.calm + C.LAP.dur, vopt); ok(!v2.err && v2.digest === v.digest, `${tag}: victory digest equal (${v.digest} / ${v2.digest})`); }
 }
 if (QUICK) for (const cls of ED.HERO_IDS) {
   if (formed.has(cls)) continue;
@@ -148,6 +157,7 @@ ok(ED.HERO_IDS.every(c => formed.has(c)), `every hero reaches a Form (${[...form
 const m = run({ seed: 5, stage: 0, players: players(['knight']) }, LEN);
 ok(!m.err, `mortal run throws nothing (state ${m.w.state} at ${m.w.time.toFixed(0)} s, level ${m.w.level})` + errOf(m));
 ok(m.w.state !== 'lost' || m.ends === 1, 'a lost run emits one end event');
+{ const ms = m.w.summary(), h = ms.perHero[0]; ok(h.taken > 0 && (m.w.state !== 'lost' || h.downs === 1) && h.healed >= 0, `mortal summary: taken ${h.taken}, healed ${h.healed}, downs ${h.downs}`); }
 // 5. every hero x every stage
 let mdig = 0;
 for (let st = 0; st < ED.STAGES.length; st++) for (const cls of ED.HERO_IDS) {

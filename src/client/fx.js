@@ -2,7 +2,7 @@
 // Everything is pooled and capped: particles, fx sprites, rings, flashes, slashes, chains, death pops, damage numbers, delayed bursts. Per-frame budgets scale bursts down when many foes die at once
 // and with the on-screen crowd. Damage numbers merge per foe per 150 ms, at most 60 alive (oldest dropped), crits big and yellow, off when FX.numbers is false.
 // Hit-stop (FX.hold, solo only; main.js skips sim steps while it runs) and screen shake (scaled down with the crowd, off when FX.shakeOn is false) only on skills, elite deaths and boss hits.
-// Overlays: boss intro banner + letterbox, swarm / elite / phase / evolution banners, offscreen arrows to elites and bosses, level-up text, screen flashes, low-HP and hurt vignette.
+// Overlays: Last Light ('victory' shockwave + flash, 'lap' banner and final flash), boss intro banner + letterbox, swarm / elite / phase / evolution banners, offscreen arrows to elites and bosses, level-up text, screen flashes, low-HP and hurt vignette.
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU, PI = Math.PI;
@@ -273,8 +273,21 @@
           letterT = 2.6; F.addShake(6, 0); F.hitStop(0.08); F.screen(0xff302000, 0.35, 0.5);
           if (ev.fid) track(ev.fid, 9999, 0xff5a4aff);
         } else if (ev.phase === 'enrage') { F.banner('ENRAGED!', 0xff3a2a, 2.2, { k: 3 }); F.screen(0xff302000, 0.5, 0.6); F.addShake(6, 0); }
-        else if (ev.phase === -1) { F.banner(up(foeName(ev.id)) + ' FALLS', 0xffd27a, 2.2, { big: true, k: 3, band: true }); for (const q of tracks) if (q.id === ev.fid) q.t = 0; }
+        else if (ev.phase === -1) { if (!ev.final) F.banner(up(foeName(ev.id)) + ' FALLS', 0xffd27a, 2.2, { big: true, k: 3, band: true }); for (const q of tracks) if (q.id === ev.fid) q.t = 0; } // a final boss: the HUD's VICTORY banner
         else if (ev.phase > 0) { F.banner('PHASE ' + ev.phase, 0xff7a6a, 1.6, { k: 2 }); F.addShake(5, 0); F.hitStop(0.06); const v = view(), b = v && v.boss; if (b) { F.ring(b.x, b.y - 20, 120, 0xff5a4aff, 0.5, 10, 4); F.flash(b.x, b.y - 20, 50, 0xffffff00, 0.15, 0.7); } }
+        break;
+      }
+      case 'victory': { // Last Light: the final boss died at (x, y): light shockwave rings, flash, shake (no hit-stop: the sim never slows)
+        F.ring(ev.x, ev.y - 20, 900, 0xfff1d6ff, 1.6, 20, 8); F.ring(ev.x, ev.y - 20, 520, 0xffd27aff, 1.1, 12, 5); F.ring(ev.x, ev.y - 20, 260, 0xffffffff, 0.7, 6, 3);
+        F.flash(ev.x, ev.y - 20, 160, 0xffffff00, 0.6, 1); F.burst(ev.x, ev.y - 20, 70, 0xffd27a00, 260, 1.2, 3, 10); F.burst(ev.x, ev.y - 20, 40, 0xffffff00, 180, 0.9, 2, 0);
+        F.screen(0xfff6dc00, 0.9, 0.9); F.addShake(10, 0); letterT = 0;
+        for (const q of tracks) q.t = 0;
+        break;
+      }
+      case 'lap': { // Last Light: ph 1 the lap starts, ph 2 its timer ran out (every foe vanishes)
+        const me = heroOf(ctx.me);
+        if (ev.ph === 1) { F.banner('LAST LIGHT', 0xffd27a, 2.8, { big: true, sub: 'EVERY ' + ED.CONST.LAP.coin + ' KILLS DROP GOLD', subCol: 0xfff1d6, k: 3, band: true }); F.screen(0xffd27a00, 0.35, 0.6); F.addShake(5, 0); if (me) F.ring(me.x, me.y - 10, 300, 0xffd27aff, 0.8, 20, 4); }
+        else if (ev.ph === 2) { F.screen(0xffffff00, 1, 1.2); if (me) { F.ring(me.x, me.y - 10, 700, 0xfff1d6ff, 1.2, 20, 8); F.flash(me.x, me.y - 10, 200, 0xffffff00, 0.8, 1); } }
         break;
       }
       case 'down': { const p = heroOf(ev.pid); if (p) { F.ring(p.x, p.y - 8, 50, 0xff3a2aff, 0.5, 6, 3); F.burst(p.x, p.y - 8, 16, 0xff4a4a00, 90, 0.6, 2, 20); } if (mine) { F.screen(0xff202000, 0.5, 0.5); F.addShake(5, 0); hurtV = 1; } break; }

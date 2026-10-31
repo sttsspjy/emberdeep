@@ -69,7 +69,7 @@ async function pageEvents() {
     { t: 'offer', pid: 'p1' }, { t: 'offer', pid: 'p1', reroll: true }, { t: 'pick', pid: 'p1', kind: 'weapon', id: wid, lvl: 1 }, { t: 'pick', pid: 'p1', kind: 'wlvl', id: wid, lvl: 2 }, { t: 'pick', pid: 'p1', kind: 'passive', id: 'might', lvl: 1 },
     { t: 'pick', pid: 'p1', kind: 'skill', id: sk, lvl: 2 }, { t: 'pick', pid: 'p1', kind: 'gold', id: '' }, { t: 'evolve', pid: 'p1', wid, from: wid }, { t: 'hurt', pid: 'p1', dmg: 6, x: 0, y: 0 }, { t: 'down', pid: 'p1' },
     { t: 'dead', pid: 'p1' }, { t: 'revive', pid: 'p1' }, { t: 'boss', id: 'warden', fid: 9, phase: 0 }, { t: 'boss', id: 'warden', fid: 9, phase: 1 }, { t: 'boss', id: 'warden', fid: 9, phase: 'enrage' },
-    { t: 'boss', id: 'warden', fid: 9, phase: -1 }, { t: 'brazier', id: 5, x: 0, y: 0, pid: 'p1' }, { t: 'chest', pid: 'p1', results: [] }, { t: 'warn', kind: 'swarm' }, { t: 'warn', kind: 'elite' }, { t: 'warn', kind: 'boss', id: 'warden' }];
+    { t: 'boss', id: 'warden', fid: 9, phase: -1 }, { t: 'brazier', id: 5, x: 0, y: 0, pid: 'p1' }, { t: 'chest', pid: 'p1', results: [] }, { t: 'warn', kind: 'swarm' }, { t: 'warn', kind: 'elite' }, { t: 'warn', kind: 'boss', id: 'warden' }, { t: 'victory', x: 0, y: 0 }, { t: 'lap', ph: 1, dur: 60 }, { t: 'lap', ph: 2 }];
   const silent = [];
   for (const ev of EV) {
     A.hush(); for (const c of Object.values(A.CUES)) c.last = -9; // each event alone: no live voices, no gaps
@@ -96,6 +96,7 @@ function pageMusic() {
   v.stage = 1; v.foes.length = 10; me.hp = 100; M.update(v, 1 / 60); want(M.track === 'run2' && M.lv === 0 && M.mu === 20000, 'stage 2, 10 foes, full HP: new track at level 0');
   v.stage = 2; v.boss = { hp: 90, maxHp: 100 }; M.update(v, 1 / 60); want(M.track === 'boss4', 'stage 3 boss');
   v.boss = { hp: 10, maxHp: 100, final: true }; M.update(v, 1 / 60); want(M.track === 'final4' && M.lv === 3, 'final boss at 10%');
+  v.boss = null; v.foes.length = 0; v.lap = { ph: 2, rem: 30, gold: 0, kills: 0 }; M.update(v, 1 / 60); want(M.track === 'final4' && M.lv === 3, 'Last Light lap: final track at full intensity'); v.lap = null;
   M.onEvent({ t: 'end', won: true }); want(M.track === null && M.hold > t() + 3, 'victory stinger hold');
   M.hold = 0;
   return bad;

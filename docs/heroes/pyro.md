@@ -22,11 +22,11 @@ Path effects keep working after any Form (shells only outside Firestorm / Napalm
 
 | Form | Rule | Pattern | Base | Refine 1 | Refine 2 |
 |---|---|---|---|---|---|
-| **Inferno** | Blaze 5 | Bolts make pools that merge into one growing pool (to 95 px) and each spreads once toward foes outside it (2 generations) | dmg 16, cd 1.0, 3 bolts, pierce 1, area 1.5, dur 3.5 | +1 bolt | +25% pool size, last 30% longer |
-| **Firestorm** | Mortar 5 | A walking salvo: 3 + shells land in a line across the densest cluster (26 px × area apart, 0.08 s apart), each blasts and leaves a pool | dmg 24, cd 1.6, 3 shells, area 1.2 | +2 shells per salvo | Blasts 25% wider, +2 bomblets |
-| **Wildfire** | Combustion 5 | Homing seeds: hit = blast + heavy burn (0.6 × dmg/s, 3 s), split into 3 sparks; death blasts 1.4×, budget 5/s (+path), 4 generations, 2 embers | dmg 16, cd 1.0, 3 seeds, area 1.2 | +1 seed, +1 ember per blast | Blasts 30% wider, fire leaps more |
-| **Pyre** | Combustion 5 | Bolts plant pyres that smoulder 1.2 s, then erupt (1.4 r, dmg × (1 + flare/2)) and leave a pool | dmg 14, cd 1.1, 2 bolts, area 1.3 | +1 bolt | Eruptions 30% wider, +2 embers |
-| **Napalm** | Mortar 5 | Canisters (2 + shells) on the densest cluster and random foes; each splashes and leaves a fire wall across the throw (90 px × area, 0.45 × dmg/s, 1.3 × dur) | dmg 16, cd 1.4, 2 canisters, area 1.2, dur 3 | +1 canister | Fire walls 25% longer, last longer |
+| **Inferno** | Blaze 5 | Bolts make pools that merge into one growing pool (to 95 px) and each spreads once toward foes outside it (2 generations) | dmg 11.2, cd 1.0, 3 bolts, pierce 1, area 1.5, dur 3.5 | +1 bolt | +25% pool size, last 30% longer |
+| **Firestorm** | Mortar 5 | A walking salvo: 3 + shells land in a line across the densest cluster (26 px × area apart, 0.08 s apart), each blasts and leaves a pool | dmg 16.8, cd 1.6, 3 shells, area 1.2 | +2 shells per salvo | Blasts 25% wider, +2 bomblets |
+| **Wildfire** | Combustion 5 | Homing seeds: hit = blast + heavy burn (0.6 × dmg/s, 3 s), split into 3 sparks; death blasts 1.4×, budget 5/s (+path), 4 generations, 2 embers | dmg 11.2, cd 1.0, 3 seeds, area 1.2 | +1 seed, +1 ember per blast | Blasts 30% wider, fire leaps more |
+| **Pyre** | Combustion 5 | Bolts plant pyres that smoulder 1.2 s, then erupt (1.4 r, dmg × (1 + flare/2)) and leave a pool | dmg 9.8, cd 1.1, 2 bolts, area 1.3 | +1 bolt | Eruptions 30% wider, +2 embers |
+| **Napalm** | Mortar 5 | Canisters (2 + shells) on the densest cluster and random foes; each splashes and leaves a fire wall across the throw (90 px × area, 0.45 × dmg/s, 1.3 × dur) | dmg 11.2, cd 1.4, 2 canisters, area 1.2, dur 3 | +1 canister | Fire walls 25% longer, last longer |
 
 Mortar shells, Firestorm and Napalm stay targeted (densest cluster, then random foes). No foe in range: bolts / seeds burst where they land; Firestorm and Napalm land 120 px out along the cursor direction; Mortar shells wait for a foe.
 
@@ -46,14 +46,14 @@ Zero damage. cd 10 s. A flash at the pyro: every foe within 140 px (r, scales wi
 | build | form | kind | crowd wpn | kills/s | single wpn |
 |---|---|---|---|---|---|
 | base | - |  | 447 | 6.2 | 38 |
-| t5 | - |  | 733 | 10.2 | 59 |
-| p0 | - |  | 1,489 | 21.0 | 132 |
-| p1 | - |  | 1,624 | 22.6 | 144 |
-| p2 | - |  | 1,541 | 21.9 | 90 |
-| f00 | inferno | dir | 3,697 | 51.3 | 282 |
-| f10 | firestorm | dir | 4,028 | 56.4 | 267 |
-| f11 | napalm | dir | 3,387 | 45.3 | 298 |
-| f20 | wildfire | dir | 4,121 | 57.1 | 268 |
-| f21 | pyre | dir | 2,781 | 38.5 | 209 |
+| t5 | - |  | 734 | 10.2 | 59 |
+| p0 | - |  | 1,496 | 21.1 | 132 |
+| p1 | - |  | 1,632 | 22.4 | 144 |
+| p2 | - |  | 1,513 | 21.3 | 90 |
+| f00 | inferno | dir | 2,974 | 41.4 | 196 |
+| f10 | firestorm | dir | 3,557 | 49.8 | 190 |
+| f11 | napalm | dir | 2,593 | 34.6 | 201 |
+| f20 | wildfire | dir | 3,345 | 46.9 | 186 |
+| f21 | pyre | dir | 2,472 | 34.4 | 150 |
 
-All Forms directional; f rows within ±25% of their mean (3,603).
+All Forms directional; f rows within ±25% of their mean (2,988).

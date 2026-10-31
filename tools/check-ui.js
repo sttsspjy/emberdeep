@@ -403,12 +403,18 @@ async function main() {
       ED.Game.onEnd = (s) => ED.App.onRunEnd(s);
       w.end(true); ED.Game.drain();
     });
+    await page.keyboard.press('Enter'); // inside the input guard: ignored
     await wait(400);
-    check(await vis(page, 'scr-results'), 'results screen');
-    check(await page.locator('.bar-row').count() === 4, 'per-weapon damage bars');
-    check(/Victory/.test(await page.locator('#res-title').innerText()), 'victory title');
+    check(await vis(page, 'scr-results'), 'results screen (Enter inside the input guard ignored)');
+    check(await page.evaluate(() => !document.getElementById('scr-results').contains(document.activeElement)), 'nothing focused inside the results input guard');
+    check(await page.locator('.bar-row').count() >= 5 && await page.locator('.bar-row.skill').count() === 1, 'weapon table: damage rows plus the Q skill row');
+    check(await page.locator('#res-tiles .tile').count() === 8, 'eight stat tiles');
+    check(await page.locator('#res-pane-party .ptab:not(.hd)').count() === 3 && await vis(page, 'res-pane-party'), 'co-op party table shown first');
+    check(await page.evaluate(() => { const c = document.getElementById('res-tl'); return c.width > 100 && c.height > 50; }), 'timeline canvas sized');
+    check(/victory/i.test(await page.locator('#res-title').innerText()), 'victory title');
     check(/Achievement: Ascended \(\+200 gold, Ascension level-up effect\)/.test(await page.locator('#res-unlocks').innerText()), 'results announce a new achievement and its cosmetic reward');
-    await wait(800);
+    await wait(1300);
+    check(await page.evaluate(() => document.activeElement && document.activeElement.id === 'btn-res-back'), 'Title focused once the guard ends (co-op: no Play again)');
     await shot(page, 'results');
     await page.locator('#btn-res-back').click();
     check(await vis(page, 'scr-title'), 'results back to title');

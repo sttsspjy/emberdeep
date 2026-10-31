@@ -1,6 +1,6 @@
 // In-run HUD on the screen canvas (device px). Sizes are CSS px at 1280x720 scaled by k = dpr x clamp(viewport / 1280x720, 1, 2), so text never drops below its CSS size (numbers >= 16 px).
 // Draws: XP bar across the top with the level, timer, kills / gold, 3 weapon slots (hero weapon + 2 supports, empty ones dim; level; Form = gold frame) + 6 passive slots with levels,
-// HP bar, Q cooldown dial and the dash dial with charge pips, boss bar, teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
+// HP bar, Q cooldown dial and the dash dial with charge pips, boss bar, Last Light (view.lap: a VICTORY banner during the calm; the lap countdown and lap gold in place of the timer), teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
 // low-HP edge glow, banners and the bot-watch tag (view.botTag / view.botPick, bottom-left). No per-frame allocation: strings are cached by value. Font 'Pixel Operator'.
 (function (ED) {
   'use strict';
@@ -44,7 +44,7 @@
   // value -> string caches (one slot per call site)
   const cache = {};
   const cs = (key, v, fmt) => { let e = cache[key]; if (!e) e = cache[key] = { v: NaN, s: '' }; if (e.v !== v) { e.v = v; e.s = fmt(v); } return e.s; };
-  const fmtLv = (v) => 'LV ' + v, fmtKills = (v) => U.fmtNum(v), fmtHp = (v) => (v >> 12) + ' / ' + (v & 4095), fmtSec = (v) => String(v), fmtBleed = (v) => 'DOWN  ' + v, fmtT = (v) => U.fmtTime(v);
+  const fmtLv = (v) => 'LV ' + v, fmtKills = (v) => U.fmtNum(v), fmtHp = (v) => (v >> 12) + ' / ' + (v & 4095), fmtSec = (v) => String(v), fmtBleed = (v) => 'DOWN  ' + v, fmtT = (v) => U.fmtTime(v), fmtLapG = (v) => '+' + U.fmtNum(v);
   const heroIcon = (cls) => (ED.HEROES[cls] && ED.HEROES[cls].icon) || '';
   const RUN = {}; const runIcon = (cls) => RUN[cls] || (RUN[cls] = ED.Atlas && ED.Atlas.has('hero.' + cls + '.run') ? 'hero.' + cls + '.run' : 'fx.smoke');
   const bossName = (v) => { const def = ED.FOES[ED.FOE_IDS[v >> 1]]; return (def ? def.name : 'Boss') + (v & 1 ? '  ENRAGED' : ''); };
@@ -156,8 +156,14 @@
     const xh = R(20);
     bar(0, 0, W, xh, view.xpNext ? view.xp / view.xpNext : 0, '#3aa8e8', '#9fe6ff', 'rgba(10,7,6,0.85)');
     txt(cs('lv', view.level, fmtLv), W - R(10), R(2), '#ffffff', 16, 'right');
-    // timer, kills, gold
-    txt(cs('time', Math.floor(view.time), fmtT), W / 2, xh + R(6), '#fff1d6', 36, 'center');
+    // timer (Last Light lap: its countdown and the lap's coin gold instead), kills, gold
+    const lp = view.lap;
+    if (lp && lp.ph === 2) {
+      txt('LAST LIGHT', W / 2, xh + R(4), '#ffd27a', 20, 'center');
+      txt(cs('lap', Math.ceil(lp.rem), fmtT), W / 2, xh + R(26), lp.rem <= 10 && (now * 4 | 0) % 2 ? '#ff8a6a' : '#fff1d6', 36, 'center');
+      icon('pickup.coin', W / 2 - R(46), xh + R(68), R(22));
+      txt(cs('lapg', lp.gold, fmtLapG), W / 2 - R(20), xh + R(68), '#ffd24a', 22, 'left');
+    } else txt(cs('time', Math.floor(view.time), fmtT), W / 2, xh + R(6), '#fff1d6', 36, 'center');
     icon('fx.sigil.skull', W - R(40), xh + R(8), R(24));
     txt(cs('kills', view.kills, fmtKills), W - R(46), xh + R(8), '#f0e0c8', 22, 'right');
     icon('pickup.coin', W - R(40), xh + R(36), R(24));
@@ -172,6 +178,7 @@
       const k = on ? Math.max(0, ED.FOE_IDS.indexOf(bb.id)) : b.k;
       txt(cs('boss', (k << 1) | (en ? 1 : 0), bossName), W / 2, by + R(21) + (on && bb.rev >= 0 ? R(4) : 0), en ? '#ff8a7a' : '#ffd27a', 20, 'center');
     }
+    if (lp && lp.ph === 1) victory(lp.rem);
     if (!me) { banner(dt); return; }
     // weapon and passive slots (top-left)
     const x0 = R(10), ws = R(42), ps = R(32);
@@ -210,6 +217,14 @@
     }
     banner(dt);
   };
+  // VICTORY banner of the Last Light calm (rem: s left of it): pops in, pulses, fades out over the last 0.3 s.
+  function victory(rem) {
+    const age = Math.max(0, ED.CONST.LAP.calm - rem), s = 1 + Math.max(0, 0.3 - age) * 1.5 + 0.04 * Math.sin(now * 6), a = Math.min(1, age / 0.12, rem / 0.3 + 0.15), y = Math.round(Hh * 0.22);
+    c.globalAlpha = a;
+    txt('VICTORY', W / 2, y, '#ffd27a', 72 * s, 'center', 'middle');
+    txt('THE LAST LIGHT IS COMING', W / 2, y + R(58), '#fff1d6', 24, 'center', 'middle');
+    c.globalAlpha = 1;
+  }
   function banner(dt) {
     const bn = H.banner; if (!bn) return;
     bn.t -= dt;

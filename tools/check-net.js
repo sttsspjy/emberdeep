@@ -5,7 +5,7 @@
 //    nearly every host foe inside the client's view is shown, own-hero prediction corrections stay small, vitals / weapon (id, path ranks, refine) / one skill / level match, offers resolve.
 // 3. Downed / revive reach the client. 4. A late join is refused. 5. The host leaving ends the client's run with a note; a client quitting drops its hero on the host.
 // 6. Snapshot bytes at 300 / 900 foes (+600 projectiles, 400 gems, a busy event window): reported; gate <= 12 KB at 900 (ARCHITECTURE §11); decode round trip exact to 0.25 px;
-//    all 3 weapon slots (hero weapon + 2 supports, Forms refined) decode.
+//    all 3 weapon slots (hero weapon + 2 supports, Forms refined) decode; braziers and the Last Light lap state decode.
 // 7. Late-game zones: 4 zone-heavy heroes (cleric, pyro, necro, bell) with their Form maxed (its path at rank 5, refine 2), max passives, 900 foes, 3 clients: every snapshot <= 12 KB;
 //    client 1's mirrored zones equal the host's in-rect zones at every snapshot. 8. A client's banish reaches it as a new offer.
 'use strict';
@@ -30,7 +30,7 @@ const N = ED.Net;
 { const r = U.RNG(4242); Math.random = r.next; } // party codes and pids: same every run
 const GATE = 12 * 1024;
 let fails = 0;
-const okV = N.VERSION === 12 && ED.NET_VERSION === 12;
+const okV = N.VERSION === 13 && ED.NET_VERSION === 13;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
 const t0 = Date.now();
 
@@ -199,7 +199,7 @@ const atSnap = ring[Math.round(gC.mir.T / C.TICK) % RING];
 ok(atSnap && atSnap.tick === Math.round(gC.mir.T / C.TICK) && Math.abs(me.hp - atSnap.hp) < 0.01 && me.maxHp === cliHero.maxHp && gC.view.level === atSnap.level && gC.view.kills === atSnap.kills && gC.view.gold === atSnap.gold, `vitals / level / kills / gold match the host at the snapshot tick (lv ${w.level}, kills ${w.kills})`);
 const sig = (p) => p.weapons.map(x => x.id + x.lvl + ':' + x.tune + '/' + x.path + '/' + x.pr.join('') + x.fl + (x.evo ? 'F' : '')).join(',') + '|' + p.passives.map(x => x.id + x.lvl).join(',') + '|' + p.skills.map(x => x.id + x.lvl).join(',');
 ok(sig(me) === sig(cliHero) && me.skills.length === 1 && me.weapons.length >= 1 && me.weapons[0].root === ED.HEROES[me.cls].sig && me.weapons[0].lvl > 1, 'client hero weapon (tune, path ranks, refine) / passives / one skill match the host: ' + sig(me));
-ok(okV, 'NET_VERSION 12');
+ok(okV, 'NET_VERSION 13');
 const cq = me.skills[0], hq = cliHero.skills[0];
 ok(cq && hq.chN === 2 && cq.chN === hq.chN && cq.ch === hq.ch && hq.ch === 2, `Q charges on the wire (host ${hq.ch}/${hq.chN}, client ${cq && cq.ch}/${cq && cq.chN})`);
 ok(cliPicks >= 5 && hostPicks >= 5 && !pendLive, `co-op level-ups resolve without pause (client picks ${cliPicks}, host picks ${hostPicks}, client pending ${pendLive} while picking)`);
@@ -245,6 +245,9 @@ ok(pC.lobby.status === 'closed' && !pC.lobby.inRun, 'client party closed');
   const step = (sec) => { const end = simMs + sec * 1000; while (simMs < end) { simMs += 1000 / 60; gH3.update(1 / 60); gC3.update(1 / 60); pump(); } };
   step(3); gH3.quit(); step(0.5);
   ok(e3 && !e3.note && e3.perHero.length === 2 && !pH3.lobby.inRun && !pC3.lobby.inRun && pC3.lobby.status === 'open' && !pH3.lobby.members[1].ready, 'host quits: client gets the host summary, both lobbies back (guest not ready)');
+  const sb = JSON.stringify(e3 || {}).length;
+  ok(e3 && Array.isArray(e3.tl) && Array.isArray(e3.bosses) && e3.lap === null && e3.perHero.every(h => h.kw && h.top && typeof h.taken === 'number' && typeof h.revs === 'number' && Array.isArray(h.pas) && h.build.every(b => b.t0 >= 0)) && sb < 4096,
+    'client summary carries the run stats (' + sb + ' B of JSON)');
   pH3.leave(); step(0.3);
 }
 
@@ -322,6 +325,11 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
     const brokeOk = same() && MB.some(b => b.broken);
     HB.forEach(b => { b.broken = false; b.hp = 1; }); snap();
     ok(brokeOk && same() && MB.every(b => !b.broken), `braziers: ${HB.length} decode broken, then relit`);
+    // Last Light: none, then the lap (phase, s left, lap gold, lap kills) reach view.lap
+    const lap0 = M.view.lap && M.view.lap.ph === 0;
+    r.W2.lap = { t0: r.W2.time - 3, dur: 60, kills: 1234, gold: 157, ph: 1 }; snap();
+    const L = M.view.lap; r.W2.lap = null;
+    ok(lap0 && L && L.ph === 2 && Math.abs(L.rem - 57) < 0.011 && L.gold === 157 && L.kills === 1234, `Last Light lap state decodes (${JSON.stringify(L)})`);
   }
 }
 

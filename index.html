@@ -119,15 +119,35 @@
     <div class="row"><button class="btn" id="btn-lobby-leave" data-back>Leave</button><button class="btn btn-primary btn-big" id="btn-lobby-go" data-focus>Ready</button></div>
   </section>
 
-  <section id="scr-results" class="screen" hidden>
-    <h2 id="res-title" class="res-title">Victory</h2>
-    <p class="hint" id="res-sub"></p>
-    <p class="hint" id="res-build"></p>
-    <div class="res-stats" id="res-stats"></div>
-    <div class="res-chart plate" id="res-chart"></div>
-    <div class="res-party" id="res-party"></div>
-    <div class="res-unlocks" id="res-unlocks"></div>
-    <div class="row"><button class="btn" id="btn-res-back">Title</button><button class="btn btn-primary btn-big" id="btn-res-again" data-focus>Play again</button></div>
+  <section id="scr-results" class="screen res" hidden>
+    <div class="res-wrap">
+      <header class="res-head"><h2 id="res-title" class="res-title">Victory</h2><div class="res-sub" id="res-sub"></div></header>
+      <div class="res-tiles" id="res-tiles"></div>
+      <div class="res-main">
+        <section class="plate res-panel res-load" aria-label="Weapons and build">
+          <div class="res-cap"><span>Weapons</span><span class="mut" id="res-dmg-tot"></span></div>
+          <div class="res-wt" id="res-chart"></div>
+          <div class="res-hl" id="res-hl"></div>
+          <div class="res-pas" id="res-pas"></div>
+        </section>
+        <div class="res-side">
+          <section class="plate res-panel res-tl" aria-label="Timeline">
+            <div class="res-cap"><span>Timeline</span><span class="res-key"><i class="k-kill"></i>Kills / min <i class="k-lv"></i>Level <i class="k-boss"></i>Boss down <i class="k-lap" id="res-key-lap"></i><span id="res-key-lap-t">Last Light</span></span></div>
+            <div class="res-tl-box"><canvas id="res-tl" class="res-tl-cv"></canvas></div>
+            <div class="res-tl-info mut" id="res-tl-info"></div>
+          </section>
+          <section class="plate res-panel res-tabs">
+            <div class="res-tabbar" role="tablist" id="res-tabbar"><button class="tab" data-tab="party" role="tab">Party</button><button class="tab" data-tab="bosses" role="tab">Bosses</button></div>
+            <div class="res-pane" id="res-pane-party" role="tabpanel"></div>
+            <div class="res-pane" id="res-pane-bosses" role="tabpanel"></div>
+          </section>
+        </div>
+      </div>
+      <footer class="res-foot">
+        <div class="res-unlocks" id="res-unlocks"></div>
+        <div class="row res-btns"><button class="btn" id="btn-res-back">Title</button><button class="btn btn-primary btn-big" id="btn-res-again" data-focus>Play again</button></div>
+      </footer>
+    </div>
   </section>
 
   <div id="ov-offer" class="overlay offer" hidden>
@@ -197,6 +217,7 @@
 <script src="src/sim/skills.js" defer></script>
 <script src="src/sim/progress.js" defer></script>
 <script src="src/sim/bosses.js" defer></script>
+<script src="src/sim/lap.js" defer></script>
 <script src="src/sim/boss-warden.js" defer></script>
 <script src="src/sim/boss-spore.js" defer></script>
 <script src="src/sim/boss-king.js" defer></script>

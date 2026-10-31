@@ -20,10 +20,10 @@ Blight pool: radius 22 × area, 3 s, 0.3 × weapon damage per second to every fo
 
 | Form | Needs | Pattern | Refine 1 | Refine 2 |
 |---|---|---|---|---|
-| **Bone Lord** | Legion 5 | The army rises as Bone Knights: 16 dmg base, cap 4, 12 s life, 3.0 rad stunning cleave (0.6 × dmg), every 3rd swing a ground slam (radius 50, 2.8 × dmg, stun 0.4) | +2 Bone Knights | Knights slam more often (every 2nd), +25% damage |
-| **Bone Storm** | Shards 5 | 6 shards (7 dmg, knock 80) orbit the hero (radius 30, 1 s, re-hitting every 0.25 s at 0.3×), then launch along the cursor direction at full damage and home; splinters as Shards 2 | +2 orbiting shards | +25% damage, pierce 2 more |
+| **Bone Lord** | Legion 5 | The army rises as Bone Knights: 11.2 dmg base, cap 4, 12 s life, 3.0 rad stunning cleave (0.6 × dmg), every 3rd swing a ground slam (radius 50, 2.8 × dmg, stun 0.4) | +2 Bone Knights | Knights slam more often (every 2nd), +25% damage |
+| **Bone Storm** | Shards 5 | 6 shards (4.9 dmg, knock 80) orbit the hero (radius 30, 1 s, re-hitting every 0.25 s at 0.3×), then launch along the cursor direction at full damage and home; splinters as Shards 2 | +2 orbiting shards | +25% damage, pierce 2 more |
 | **Plague Field** | Plague 5 | Lobs 2 blight globs at the densest cluster (the rest around it; no foe: 90 px out along the cursor direction); plague pools 1.35 × dmg per second, 3.5 s, area +20%; a foe dying in a pool seeds a new pool where it fell | +1 glob, pools grow larger | +25% damage, pools last longer (+1.5 s) |
-| **Lich** | Plague 5 | The army rises as ghouls: 20 dmg base, cap 5, raise 2 per volley, 5 s life, 140 px/s) that rush a foe and burst on contact (radius 34, 1.15 × dmg), leaving a blight pool | +2 ghouls, raised faster | +25% damage, bigger bursts (+10 px) |
+| **Lich** | Plague 5 | The army rises as ghouls: 14 dmg base, cap 5, raise 2 per volley, 5 s life, 140 px/s) that rush a foe and burst on contact (radius 34, 1.15 × dmg), leaving a blight pool | +2 ghouls, raised faster | +25% damage, bigger bursts (+10 px) |
 | **Ossuary** | Legion 5 | The army rises as skeleton archers (cap 4, raise 2): hold 60–110 px off, loose a homing shard every 0.6 s (0.55 × dmg, pierce 9) | +2 skeleton archers | Archers loose 2 shards, +25% damage |
 
 All Forms keep the hero's own shards except Plague Field (globs) and Bone Storm (orbit).
@@ -43,15 +43,15 @@ Zero damage. A curved bone wall at the cursor for 5 s (scales with duration): a 
 
 | build | form | kind | crowd wpn | kills/s | single wpn |
 |---|---|---|---|---|---|
-| base | - |  | 642 | 8.8 | 61 |
-| t5 | - |  | 771 | 10.8 | 85 |
-| p0 | - |  | 1,525 | 21.4 | 187 |
-| p1 | - |  | 1,349 | 18.6 | 246 |
-| p2 | - |  | 1,652 | 22.9 | 140 |
-| f00 | bonelord | dir | 3,689 | 50.9 | 536 |
-| f01 | ossuary | dir | 3,572 | 49.0 | 521 |
-| f10 | bonestorm | 360° | 1,792 | 23.9 | 225 |
-| f20 | plaguefield | dir | 3,493 | 49.1 | 779 |
-| f21 | lich | dir | 2,879 | 39.6 | 640 |
+| base | - |  | 643 | 8.8 | 61 |
+| t5 | - |  | 770 | 10.8 | 85 |
+| p0 | - |  | 1,521 | 21.4 | 187 |
+| p1 | - |  | 1,321 | 18.8 | 246 |
+| p2 | - |  | 1,648 | 22.6 | 140 |
+| f00 | bonelord | dir | 2,798 | 38.4 | 379 |
+| f01 | ossuary | dir | 2,555 | 34.3 | 374 |
+| f10 | bonestorm | 360° | 1,488 | 19.7 | 152 |
+| f20 | plaguefield | dir | 3,154 | 44.4 | 556 |
+| f21 | lich | dir | 2,463 | 34.3 | 452 |
 
-Role rule (f rows): Bone Storm (360° orbit) crowd ≤ 0.6 × directional mean (3,408 → ≤ 2,045): met; directional single ≥ 2 × Bone Storm (225 → ≥ 450): met; each kind within ±25% of its mean.
+Role rule (f rows): Bone Storm (360° orbit) crowd ≤ 0.6 × directional mean (2,742 → ≤ 1,645): met; directional single ≥ 2 × Bone Storm (152 → ≥ 304): met; each kind within ±25% of its mean.

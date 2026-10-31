@@ -1,5 +1,6 @@
 // Meta progression data (GAME-DESIGN §11). Rules are evaluated by src/save.js (ED.Save, ED.Meta).
-// ED.SHOP: permanent Camp ranks in save order (append only): { id, name, icon (atlas anim), max, stat (ED.Stats key), per (value per rank), cost (rank 1 price), txt }.
+// ED.SHOP: permanent Camp ranks in save order (append only): { id, name, icon (atlas anim), max, was (former higher max: owned ranks above max, up to was, are refunded on load),
+//   stat (ED.Stats key), per (value per rank), cost (rank 1 price), txt }.
 //   Price of rank r + 1 (r ranks owned): cost x (r + 1)^2 (ED.shopPrice).
 // ED.UNLOCKS: heroes: { cls: rule } where rule is { start } | { survive: s } (one run) | { beat: stage index } | { buy: gold } (Camp purchase) | { pure: true } (win any stage
 //   with 0 Camp ranks at run start), txt = the lock line; stages: { index: rule }.
@@ -19,7 +20,7 @@
     { id: 'growth', name: 'Growth', icon: 'fx.spark.magic', max: 5, stat: 'growth', per: 0.05, cost: 55, txt: '+5% XP' },
     { id: 'greed', name: 'Greed', icon: 'pickup.coin', max: 5, stat: 'greed', per: 0.1, cost: 45, txt: '+10% gold' },
     { id: 'fortune', name: 'Fortune', icon: 'icon.p.fortune', max: 5, stat: 'luck', per: 0.05, cost: 45, txt: '+5% luck' },
-    { id: 'revival', name: 'Revival', icon: 'fx.shield.gold', max: 2, stat: 'revival', per: 1, cost: 550, txt: '+1 revive per run' },
+    { id: 'revival', name: 'Revival', icon: 'fx.shield.gold', max: 1, was: 2, stat: 'revival', per: 1, cost: 550, txt: '+1 revive per run' },
     { id: 'reroll', name: 'Reroll', icon: 'fx.ring.shock', max: 5, stat: 'rerolls', per: 1, cost: 35, txt: '+1 card reroll per run' },
     { id: 'skip', name: 'Skip', icon: 'fx.puff', max: 3, stat: 'skips', per: 1, cost: 35, txt: '+1 card skip per run' },
     { id: 'banish', name: 'Banish', icon: 'fx.sigil.skull', max: 3, stat: 'banishes', per: 1, cost: 65, txt: '+1 card banish per run' },

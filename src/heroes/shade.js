@@ -214,7 +214,7 @@
   // Shadow Fan (Return): stabs + a fan of S.fan + S.thrown returning daggers forward and as many behind (registered first: the old evolution id); the return leg always crits.
   ED.addWeapon({
     id: 'shadowfan', name: 'Shadow Fan', icon: 'weapon.knives', look: 'sknife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Daggers fan out, return and crit',
-    base: base({ dmg: 21, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, fan: 3, tcd: 1, trange: 120, tdm: 0.42 }),
+    base: base({ dmg: 14.7, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, fan: 3, tcd: 1, trange: 120, tdm: 0.42 }),
     refine: [
       { mods: { fan: 2 }, txt: '+2 daggers each way' },
       { mods: { trange: 48, dmg: 0.15 }, txt: 'Daggers fly farther, +15% damage' },
@@ -223,7 +223,7 @@
   // Thousand Cuts (Flurry): the stab storm, each stab jittered within +-S.cone of the aim.
   ED.addWeapon({
     id: 'thousand', name: 'Thousand Cuts', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A storm of stabs in a narrow cone',
-    base: base({ dmg: 20, cd: 0.4, n: 6, pierce: 0, area: 1, speed: 0, dur: 0, knock: 2, range: 0, crit: 0.1, len: 68, wid: 12, cone: 0.36 }),
+    base: base({ dmg: 14, cd: 0.4, n: 6, pierce: 0, area: 1, speed: 0, dur: 0, knock: 2, range: 0, crit: 0.1, len: 68, wid: 12, cone: 0.36 }),
     refine: [
       { mods: { n: 2 }, txt: '+2 stabs per storm' },
       { mods: { cone: 0.12, len: 14 }, txt: 'Storm widens, stabs reach farther' },
@@ -232,7 +232,7 @@
   // Assassinate (Lethality): stabs + the mark and the shadow's X cuts.
   ED.addWeapon({
     id: 'assassinate', name: 'Assassinate', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A shadow hunts the toughest foe',
-    base: base({ dmg: 18, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.15, mark: true, mk: 1.1, mcd: 0.45, mlen: 64 }),
+    base: base({ dmg: 12.6, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.15, mark: true, mk: 1.1, mcd: 0.45, mlen: 64 }),
     refine: [
       { mods: { mcd: -0.2 }, txt: 'The shadow strikes far more often' },
       { mods: { mlen: 40 }, txt: 'Shadow cuts reach twice as far' },
@@ -241,7 +241,7 @@
   // Death Lotus (Lethality): crit stabs bloom into a ring of blades around their first foe.
   ED.addWeapon({
     id: 'lotus', name: 'Death Lotus', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Crits bloom into a ring of blades',
-    base: base({ dmg: 19, cd: 0.45, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 10, range: 0, crit: 0.15, bloom: 0.32, petals: 6, plen: 0.6 }),
+    base: base({ dmg: 13.3, cd: 0.45, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 10, range: 0, crit: 0.15, bloom: 0.32, petals: 6, plen: 0.6 }),
     refine: [
       { mods: { petals: 2 }, txt: '+2 blades per bloom' },
       { mods: { crit: 0.1, plen: 0.4 }, txt: '+10% crit, blades reach farther' },
@@ -250,7 +250,7 @@
   // Reaper's Return (Return): stabs + thrown daggers that pin a foe (strikes on it crit), then tear back as crits.
   ED.addWeapon({
     id: 'reaper', name: "Reaper's Return", icon: 'weapon.knives', look: 'pknife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Daggers pin foes, then tear back',
-    base: base({ dmg: 18, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, thrown: 3, tcd: 1, trange: 120, tdm: 1, pin: true, pdur: 1.2 }),
+    base: base({ dmg: 12.6, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, thrown: 3, tcd: 1, trange: 120, tdm: 1, pin: true, pdur: 1.2 }),
     refine: [
       { mods: { thrown: 1 }, txt: '+1 pinning dagger' },
       { mods: { thrown: 1, tcd: -0.3 }, txt: '+1 pinning dagger, thrown more often' },

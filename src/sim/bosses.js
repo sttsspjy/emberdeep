@@ -1,8 +1,8 @@
 // Bosses (GAME-DESIGN §8): ED.Bosses[id] = fn(w, e, dt) (the foe brain of a boss foe def, ai 'boss'), built with ED.Bosses.lib.runner; spawn / kill / enrage / bar bookkeeping on World.
 // Stage schedule: mid-bosses at 5:00, 10:00 and 15:00, the final boss at 20:00 (src/data/stages.js); scripts are stage-agnostic: add ids name home-stage foes and W.addKin swaps each for the host stage's
 // foe of the same kind (spawner.js W.stageKin; home-stage ids resolve to themselves) and skips a kind at its brain cap (W.foeAtCap). Boss bodies and parts (def.boss) bypass both.
-// HP = W.bossHp (foes.js: 1500 x (boss minute / 5)^2 x party x stage HP factor; a multi-body boss splits it in its spawn hook). A living boss halves normal spawns (spawner). The fight ends when its last listed body dies:
-// a chest (evolution first) plus gems and a coin of ED.CONST.GOLD.mid x stage gold drop there (the final boss pays ED.CONST.GOLD.final straight to the party, World.payGold), hostile shots and telegraphs of its bodies vanish; the final boss's death wins the run; at ED.CONST.ENRAGE_T a living final boss enrages (x3 damage and speed).
+// HP = W.bossHp (foes.js: 1500 x (boss minute / 5)^2, x2 from the 15:00 boss, x party x stage HP factor; a multi-body boss splits it in its spawn hook). A living boss halves normal spawns (spawner). The fight ends when its last listed body dies:
+// a chest (evolution first) plus gems and a coin of ED.CONST.GOLD.mid x stage gold drop there (the final boss pays ED.CONST.GOLD.final straight to the party, World.payGold), hostile shots and telegraphs of its bodies vanish; the final boss's death banks the win and starts the Last Light (lap.js); at ED.CONST.ENRAGE_T a living final boss enrages (x3 damage and speed).
 // Boss attack state lives in e.vars ({ phase, st, t, atk, last, at, s: per-attack scratch, force, fq, rage }). Boss parts (foes with def.boss outside w.bossList, e.g. spore pods) drop only their def.xp gem.
 (function (ED) {
   'use strict';
@@ -166,7 +166,7 @@
     // hostile shots and telegraphs of dead boss bodies vanish
     for (const pr of this.projs) if (pr.team === 1 && pr.e && pr.e.boss && (pr.e.dead || pr.e.id !== pr.owner)) pr.dead = true;
     for (const z of this.zones) if (z.team === 1 && z.src && z.src.boss && (z.src.dead || z.src.id !== z.srcId)) z.dead = true;
-    if (e.final) { this.payGold(C.GOLD.final); this.finalDown = true; return; }
+    if (e.final) { this.payGold(C.GOLD.final); this.startLap(e.x, e.y); return; }
     this.spawnPickup('chest', e.x, e.y, 2);
     for (let k = 0; k < 3; k++) this.dropGem(e.x + (k - 1) * 12, e.y + 10, 25);
     this.spawnPickup('gold', e.x, e.y - 12, Math.round(C.GOLD.mid * (this.sdef.gold || 1)));

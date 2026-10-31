@@ -12,6 +12,7 @@
   const PROJ_SOFT_CAP = 600;  // spawn-on-hit / on-kill arrows stop above this many live projectiles
   const FIRST = 1.5;          // an arrow's first hit deals x1.5
   const HOP = 170;            // bounce / kill-shot search radius (px)
+  const SEEK_VIEW = 2 * Math.hypot(ED.CONST.VIEW_W / 2, ED.CONST.VIEW_H / 2); // reaches every foe in the hero's view
   const FAN = 0.18;           // rad between fan arrows
   const FANK = 0.25;          // a fan of n arrows deals (1 + FANK (n - 1)) x one arrow in total
   const KSN = 2;              // kill shots per volley (S.kshot)
@@ -25,15 +26,27 @@
   const skipHit = (f) => skipHits.indexOf(f.id) >= 0;
   // Nearest foe within HOP of (x, y) that projectile pr has not hit (view-clamped by w.vclamp), or null.
   const nextFoe = (w, pr, x, y) => { skipHits = pr.hits; const e = w.nearestFoe(x, y, HOP, skipHit); skipHits = null; return e; };
+  // Seeker preference: bosses and elites are passed over while another foe is in the hero's view.
+  const bigFoe = (f) => f.boss || f.elite;
+  const skipHitBig = (f) => f.boss || f.elite || skipHits.indexOf(f.id) >= 0;
+  // nextFoe for Seeker: the nearest unhit non-boss non-elite foe within HOP; a boss / elite only while no unhit other foe is in view (w.vclamp); else null.
+  const seekNext = (w, pr, x, y) => {
+    skipHits = pr.hits;
+    let e = w.nearestFoe(x, y, SEEK_VIEW, skipHitBig);
+    if (e && U.dist2(x, y, e.x, e.y) > HOP * HOP) e = null;
+    else if (!e) e = w.nearestFoe(x, y, HOP, skipHit);
+    skipHits = null;
+    return e;
+  };
   const steer = (pr, a) => { pr.vx = Math.cos(a) * pr.sp; pr.vy = Math.sin(a) * pr.sp; pr.a = a; };
-  // Shared onHit: the first-hit bonus ends; on the last pierce with bounces left (pr.st) the arrow turns to the nearest unhit foe within HOP and flies on.
+  // Shared onHit: the first-hit bonus ends; on the last pierce with bounces left (pr.st) the arrow turns to the nearest unhit foe within HOP and flies on (homing arrows: it becomes their target).
   const bounce = (w, pr, e) => {
     if (pr.hits.length === 1) pr.dmg /= FIRST;
     if (pr.pierce > 0 || !(pr.st > 0)) return;
-    const t = nextFoe(w, pr, e.x, e.y);
+    const t = pr.hskip !== null ? seekNext(w, pr, e.x, e.y) : nextFoe(w, pr, e.x, e.y);
     if (!t) return;
     pr.st--; pr.pierce = 1;
-    steer(pr, Math.atan2(t.y - e.y, t.x - e.x));
+    steer(pr, Math.atan2(t.y - e.y, t.x - e.x)); pr.tgt = t; pr.tgtId = t.id;
     pr.life = Math.max(pr.life, HOP / pr.sp + 0.1);
   };
   // Arrow from hero p along a with damage x k (x FIRST until its first hit); heavy: see HEAVY. Sets pr.st = S.bounce x opt.bk (default 1).
@@ -79,7 +92,7 @@
   const ARROW = { look: 'arrow', onHit: bounce };
   ED.addWeapon({
     id: 'longbow', name: 'Longbow', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', txt: 'Piercing arrows toward your cursor',
-    base: { dmg: 22, cd: 0.55, n: 1, pierce: 8, area: 1, speed: 420, dur: 0, knock: 25, range: 300, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 22, cd: 0.7, n: 1, pierce: 8, area: 1, speed: 420, dur: 0, knock: 25, range: 260, heavy: 0, two: false, bounce: 0, kshot: 0 },
     paths: [
       { id: 'spread', name: 'Spread', forms: ['hail', 'galeshot'], ranks: [
         { mods: { n: 2 }, txt: '+2 arrows in a fan' },
@@ -114,7 +127,7 @@
   const HAIL = { look: 'arrow', pierce: 0, bk: 0.5, onHit: split };
   ED.addWeapon({
     id: 'hail', name: 'Hail of Arrows', icon: 'weapon.twinbows', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'Arrows split on hit',
-    base: { dmg: 22, cd: 1.05, n: 3, pierce: 1, area: 1, speed: 440, dur: 0, knock: 30, range: 320, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 15.4, cd: 1.05, n: 3, pierce: 1, area: 1, speed: 440, dur: 0, knock: 30, range: 320, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows' },
       { mods: { dmg: 0.25, pierce: 2 }, txt: '+25% damage, pierce 2 more' },
@@ -147,7 +160,7 @@
   };
   ED.addWeapon({
     id: 'ballista', name: 'Ballista', icon: 'weapon.crossbow', look: 'bolt', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'A giant bolt through the whole line',
-    base: { dmg: 44, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 240, dur: 0, knock: 70, range: 330, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 30.8, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 240, dur: 0, knock: 70, range: 330, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+1 bolt' },
       { mods: { dmg: 0.25, area: 0.5 }, txt: '+25% damage, bolts 50% bigger' },
@@ -155,16 +168,16 @@
   }, { fire: (w, p, ws, S) => { ballista(w, p, ws, S); return true; }, kill: killShot });
 
   // Seeker (Ricochet): S.n homing arrows (pierce S.pierce / 4, fan factor 0.35) launched in a wide fan along the cursor; a kill does not spend pierce and keeps the arrow flying
-  // (life >= 0.9 s, up to SEEK_K kills) to the next foe.
+  // (life >= 0.9 s, up to SEEK_K kills) to the next foe. Homing and bounces pass over bosses and elites while another foe is in the hero's view (hskip, seekNext).
   const SEEK_K = 2;
   const seekHit = (w, pr, e) => {
     if (e.dead && pr.rk < SEEK_K) { pr.rk++; pr.pierce++; pr.life = Math.max(pr.life, 0.9); pr.tgt = null; }
     bounce(w, pr, e);
   };
-  const SEEK = { look: 'arrow', homing: 10, pierce: 0, onHit: seekHit };
+  const SEEK = { look: 'arrow', homing: 10, hskip: bigFoe, pierce: 0, onHit: seekHit };
   ED.addWeapon({
     id: 'seeker', name: 'Seeker', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'Homing arrows hunt kill to kill',
-    base: { dmg: 44, cd: 0.9, n: 5, pierce: 0, area: 1, speed: 360, dur: 0, knock: 20, range: 360, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 30.8, cd: 0.9, n: 5, pierce: 0, area: 1, speed: 360, dur: 0, knock: 20, range: 360, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows' },
       { mods: { dmg: 0.25, bounce: 2 }, txt: '+25% damage, +2 bounces' },
@@ -177,7 +190,7 @@
   const GALE = { look: 'arrow', onHit: bounce };
   ED.addWeapon({
     id: 'galeshot', name: 'Gale Barrage', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'A rapid stream of arrows',
-    base: { dmg: 26, cd: 0.95, n: 1, pierce: 16, area: 1, speed: 520, dur: 0, knock: 15, range: 330, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 18.2, cd: 0.95, n: 1, pierce: 16, area: 1, speed: 520, dur: 0, knock: 15, range: 330, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows per stream' },
       { mods: { dmg: 0.25, pierce: 2 }, txt: '+25% damage, pierce 2 more' },
@@ -226,7 +239,7 @@
   };
   ED.addWeapon({
     id: 'rebound', name: 'Rebound', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'Arrows rebound off the screen edge',
-    base: { dmg: 42, cd: 0.9, n: 1, pierce: 8, area: 1, speed: 460, dur: 0, knock: 20, range: 300, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 29.4, cd: 0.9, n: 1, pierce: 8, area: 1, speed: 460, dur: 0, knock: 20, range: 300, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows' },
       { mods: { dmg: 0.25, bounce: 1 }, txt: '+25% damage, 1 more rebound' },

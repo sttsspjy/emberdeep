@@ -89,7 +89,7 @@ function fight(b, opt) {
     w.update(C.TICK); w.update(C.TICK);
     out.zonesAfter = w.zones.filter(z => !z.dead && (z.src === e)).length;
     out.chest = w.pickups.some(g => g.k === 'chest' && !g.dead);
-    out.won = w.state === 'won';
+    out.won = w.won === true; // banked win (the Last Light lap follows)
   } catch (err) { out.err = err; }
   return out;
 }
@@ -109,7 +109,7 @@ for (const b of BOSSES) {
   ok([...r.looks].every(k => ED.LOOK_IDX[k] !== undefined), `${b.id}: every look is registered (${[...r.looks].join(', ')})`);
   ok(r.zonesAfter === 0, `${b.id}: its zones die with it (${r.zonesAfter} left)`);
   ok(b.final ? r.won : r.chest, `${b.id}: ${b.final ? 'its death wins the run' : 'drops a chest'}`);
-  const hp = Math.round(1500 * Math.pow(b.t / 300, 2) * ED.STAGES[b.stage].foe.hp);
+  const hp = Math.round(1500 * Math.pow(b.t / 300, 2) * (b.t >= 900 ? 2 : 1) * ED.STAGES[b.stage].foe.hp);
   ok(r.hp0 === hp && ED.STAGES[b.stage].bosses.some(x => x.id === b.id && x.t === b.t && !!x.final === !!b.final), `${b.id}: ${ED.STAGES[b.stage].id} ${U.fmtTime(b.t)} slot, HP ${r.hp0} (want ${hp})`);
   if (b.id === 'king') { ok(r.pullMoved > 20, `king: whirlpool pulls a still hero (${r.pullMoved.toFixed(0)} px in 4 s)`); ok(r.addsSeen > 0, `king: telegraphed adds arrive (${r.addsSeen})`); }
   if (b.id === 'hollow') { ok(r.maxShards === 6, `hollow: 3 + 3 orbit shards by phase 3 (max ${r.maxShards})`); ok(r.crownOut > 0 && r.crownMax >= 3, `hollow: crowns fly (max ${r.crownMax} at once)`); }

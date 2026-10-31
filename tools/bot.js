@@ -57,7 +57,7 @@ function runOne(cfg) {
     if (Fn && Fn.open) for (let i = 0; i < BL.length; i++) if (!bodyFight.has(BL[i].id)) bodyFight.set(BL[i].id, Fn);
     const f = p.hp / p.maxHp; if (f < hpLow) hpLow = Math.max(0, f);
   }
-  const won = w.state === 'won';
+  const won = w.state === 'won' || !!w.won; // a banked win (final boss dead) cut by maxTime during the Last Light is still a win
   const r = {
     skill: cfg.skill, stage: cfg.stage, stageId: ED.STAGES[cfg.stage] ? ED.STAGES[cfg.stage].id : '', cls: p.cls, seed: cfg.seed, meta: cfg.meta,
     won, time: Math.round(w.time * 100) / 100, level: w.level, kills: w.kills, gold: w.gold,

@@ -22,7 +22,7 @@
     if (A && A.ok) for (const s of ['.idle', '.walk', '.walk.d', '.walk.0', '']) if (A.has(look + s)) return look + s;
     return look + '.idle';
   };
-  const foeIcon = (id) => (ED.FOES[id] ? lookIcon(ED.FOES[id].look) : '');
+  const foeIcon = C.foeIcon = (id) => (ED.FOES[id] ? lookIcon(ED.FOES[id].look) : '');
   const finalBoss = (sd) => (sd.bosses || []).find(b => b.final) || (sd.bosses || [])[0];
   const stageIcon = (i) => { const b = finalBoss(ED.STAGES[i]); return b ? foeIcon(b.id) : ''; };
   const UNSEEN = 'Not discovered yet';

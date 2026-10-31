@@ -18,13 +18,15 @@ Units: world px (hero sprite ≈ 16–24 px tall), seconds. HP numbers are integ
 
 ## 2. Run structure (Survival mode)
 
-- **Length**: 20:00. Mid-bosses at 5:00, 10:00 and 15:00; the final boss at 20:00. Killing the final boss wins the run. At 22:00, if it is still alive, the final boss enrages (×3 damage and speed).
+- **Length**: 20:00. Mid-bosses at 5:00, 10:00 and 15:00; the final boss at 20:00. At 22:00, if it is still alive, the final boss enrages (×3 damage and speed).
+- **Last Light**: killing the final boss banks the win (from then on the run can only end as a win). Every other foe dies at once (no drops), foe shots and telegraphs vanish, every gem on the ground flies to its nearest living hero and spawning stops: a 2 s calm (VICTORY banner, light shockwave from the boss, flash, fanfare). Then a 60 s lap: the horde floods at the hard cap (900 alive, 100% density floor) from the final-minute roster at the usual HP; no elites, bosses, flocks or swarm events. Kills drop gold instead of gems (§9); no XP, so no new level-ups (queued offers can still be picked). The run ends won when the timer runs out (every foe vanishes in a flash) or once every hero is down or dead. The HUD shows LAST LIGHT, the countdown and the lap's gold in place of the run timer.
 - **Phases**: 0:00–5:00, 5:00–10:00 and 10:00–15:00 each field their own roster; 15:00–20:00 adds no kind and turns the 10:00 roster brute-heavy (§7). **Benchmark** 17:00–20:00: a "surge" warning at 17:00, then elites every 30 s, an HP-heavy roster and a 70% density floor; the final boss stays the DPS check.
 - **Pace**: foes walk 18–55 px/s (swarmers 41–55 and divers 50–53 fastest; every other walker 18–48), so the hero (78–84 px/s) outpaces every walker; a foe spawned at 0:00 walks at 80% of that, rising linearly to 100% for foes spawned from 4:00 (fixed at spawn; bosses exempt); charges and dives fly 210–300 px/s at full speed all run.
 - **Arena**: bounded 3200 × 3200 world px per stage, solid edge walls, 20–40 scattered obstacles (pillars, ruins; circle colliders, radius 12–40) that make chokepoints, 40–55 destructible braziers (≥ 220 px apart, about one on screen) that drop pickups; any hero hit breaks one (swings, blasts, rings, pillars, and projectiles, which fly on without spending pierce), as does walking into it. A broken brazier relights 60 s after breaking once no living hero is within 700 px.
 - **View**: about 640 × 360 world px (integer-scaled to the canvas). Each client follows its own hero.
 - **Stages**: 3 stages (themes from the old biomes), each with its own foe roster, palette, three mid-bosses (the 15:00 one borrowed from another stage) and a final boss. Stage 1 is open; beating stage N unlocks N+1. Stage choice happens before the run.
-- **Victory screen**: time, kills, level, damage per weapon (bar chart), gold earned.
+- **Results screen** (win or loss, one viewport, no page scroll): stat tiles (time, kills, level, gold, damage, best hit, damage taken, healed, Last Light kills / gold), a weapon table (damage bar, share, DPS over the time owned, kills, build line; Forms gold, the skill row violet), passives, a per-minute timeline (kills bars, level line, boss spawn-to-kill bands, the lap shaded), party (damage, kills, downs, revives) and boss (arrival, time to kill) tabs, unlocks.
+  Input guard: keys and clicks do nothing for 1.5 s and nothing is focused; a key held from the run never presses a button (a fresh press is needed); a click outside the buttons skips the count-up.
 
 ## 3. Hero
 
@@ -84,7 +86,7 @@ Each hero has one own weapon (slot 1, fixed for the run) and gains up to 2 **sup
 | Shade | Flurry → Thousand Cuts | Lethality → Assassinate, Death Lotus | Return → Shadow Fan, Reaper's Return |
 | Bell | Peal → Cathedral, Undertow | Resonance → Glacier Toll, Windchime | Pendulum → Carillon |
 
-- **Power yardstick** (`tools/dps.js`, weapon only, minute-10 crowd, no passives, no Q). Builds: **base**; **t5** (tune 5: damage 2, haste 2, area 1); **p<i>** (t5 + path i at rank 5); **f<i><j>** (p<i> + Form j of path i, refined twice). Measured hero crowd dps: base 305–680; t5 475–1,050; p 1,270–2,440; f directional 2,470–5,260 (cross-hero mean 3,552); f 360° 1,790–2,500 (Bell 1,855–2,000). **Role rule** on f rows: 360° Forms (spins, auras, orbits, every Bell Form) are Garlic-tier: crowd ≤ 0.6 × the hero's directional f mean (Bell: 0.6 × the cross-hero directional f mean, ≈ 2,130), reach ≤ 60 px, strong push; directional Forms deal ≥ 2 × the hero's best 360° Form on a single target. Forms of one kind (360° / directional) of one hero sit within ±25% of their mean. `dps.js` prints this check after the hero tables.
+- **Power yardstick** (`tools/dps.js`, weapon only, minute-10 crowd, no passives, no Q). Builds: **base**; **t5** (tune 5: damage 2, haste 2, area 1); **p<i>** (t5 + path i at rank 5); **f<i><j>** (p<i> + Form j of path i, refined twice). Measured hero crowd dps: base 255–905; t5 395–1,070; p 1,160–2,435; f directional 2,160–4,510 (cross-hero mean 2,978); f 360° 1,265–2,130 (Bell 1,265–1,650). **Role rule** on f rows: 360° Forms (spins, auras, orbits, every Bell Form) are Garlic-tier: crowd ≤ 0.6 × the hero's directional f mean (Bell: 0.6 × the cross-hero directional f mean, ≈ 1,787), reach ≤ 60 px, strong push; directional Forms deal ≥ 2 × the hero's best 360° Form on a single target. Forms of one kind (360° / directional) of one hero sit within ±25% of their mean. `dps.js` prints this check after the hero tables.
 
 ## 5. Passives (12, levels 1–5)
 
@@ -136,7 +138,7 @@ Max 6 passives. Passives are generic stats: they evolve nothing and name no weap
 
 ## 8. Bosses
 
-Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (minute / 5)^2 × players factor × stage HP` (1500 / 6000 / 13500 / 24000 at 5:00 / 10:00 / 15:00 / 20:00; a multi-body boss splits it, e.g. the Twins two halves). Bosses drop a chest: a Form fork when a weapon is Form-ready, else a path pick when one is path-ready, else an extra level-up (§9). While a boss lives, normal spawns run at 50% rate.
+Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (minute / 5)^2 × players factor × stage HP`, ×2 from the 15:00 boss on (1500 / 6000 / 27000 / 48000 at 5:00 / 10:00 / 15:00 / 20:00; a multi-body boss splits it, e.g. the Twins two halves). Bosses drop a chest: a Form fork when a weapon is Form-ready, else a path pick when one is path-ready, else an extra level-up (§9). While a boss lives, normal spawns run at 50% rate.
 
 - **Roster** (5:00 · 10:00 · 15:00 · final 20:00): Ossuary — Bone Warden · The Twins · Demon Cyclops · Hollow King. Glowmire — Sporemother · Demon Cyclops · Rift Weaver · Drowned King. Abyss — Blue Samurai · Rift Weaver · The Twins · The Wick-Eater. The 15:00 mid-boss is borrowed from another stage for now.
 - **Adds**: boss adds come from the host stage's roster by kind (same brain; a swarmer becomes the stage's flock foe; home-stage adds stay as written) and respect the brain caps (§7): a ranged, summoner, dasher or brute add at its cap is skipped.
@@ -147,7 +149,7 @@ Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (m
 ## 9. Pickups
 
 - **XP gems**: small (1), medium (5, from elites and brutes), large (25). At 350 gems on the ground a new drop still lands where the foe died: it merges into the nearest gem within 80 px, else the gem farthest from every hero vanishes and its value rides on the new gem (XP is never lost).
-- **Gold coins**: 1–5 from braziers (78%); 1–5 × stage gold from elites; a 100 × stage gold coin from each mid-boss; worth value × (1 + greed + luck / 2) to the collector. The final boss kill (300), the victory (300) and the run-end pay (win or loss: 1 per 100 kills + 10 per full minute survived) pay × stage gold × the party's mean gold multiplier straight to the run's gold. Stage gold: ×1 / ×1.25 / ×1.5.
+- **Gold coins**: 1–5 from braziers (78%); during the Last Light lap one 1 × stage gold coin per 8 hero kills (at 120 coins on the ground a new one merges into a coin within 80 px), and a magnet also pulls every coin; 1–5 × stage gold from elites; a 100 × stage gold coin from each mid-boss; worth value × (1 + greed + luck / 2) to the collector. The final boss kill (300), the victory (300) and the run-end pay (win or loss: 1 per 100 kills + 10 per full minute survived) pay × stage gold × the party's mean gold multiplier straight to the run's gold. Stage gold: ×1 / ×1.25 / ×1.5.
 - **Food**: heals 30 HP; braziers (20%) and elites (50%, on top of the chest). No passive regen by default.
 - **Magnet** (hero kills of non-boss foes, 0.3% per kill, from 2:20 and at least 100 s after the previous magnet; a new magnet replaces an uncollected one; ≈ first at 2:30–4:00, 8–10 per 20-minute run): pulls every gem on the map. Drawn with a pulsing blue halo.
 - **Holy Bomb** (braziers, 2%): kills every non-elite foe on screen.
@@ -163,7 +165,7 @@ Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (m
 ## 11. Meta progression
 
 - **Gold** carries over, including a lost run's collected gold. Survival and bosses pay more than kill count (§9): at Greed 0 a 10-minute loss pays ≈ 300–450 (the 5:00 mid-boss 100, 100 for ten minutes, ≈ 50 bounty, a few coins); a 20-minute win ≈ 1,500 / 2,000 / 2,500 on stages 1 / 2 / 3 (bot wins with every Camp rank, gold bonus divided out: 1,605 / 2,436 / 2,553; a no-Camp win on stage 2: 2,043; three mid-bosses 300, final + win 600, minutes 200, bounty ≈ 270–390). Greed and Fortune raise it up to ×1.625.
-- **Camp shop**: permanent ranks; price of rank r + 1 = `cost × (r + 1)²` (cheap first ranks, steep tops); Refund All returns every coin paid for the owned ranks (a profile from before this rule refunds at the old 80 × rank prices). Shop total 43,360 ≈ 15 full runs (≈ 5 hours) with Greed bought along the way; achievements (≈ 5,350) pay for Shade.
+- **Camp shop**: permanent ranks; price of rank r + 1 = `cost × (r + 1)²` (cheap first ranks, steep tops); Refund All returns every coin paid for the owned ranks (a profile from before this rule refunds at the old 80 × rank prices). A rank above a row's lowered max (Revival 2 → 1) is dropped on load and its price refunded once (Revival rank 2: 2,200; old-rule profiles 160). Shop total 41,160 ≈ 14 full runs (≈ 5 hours) with Greed bought along the way; achievements (≈ 5,350) pay for Shade.
 
   | Rank | Max | Per rank | cost | Total |
   |---|---|---|---|---|
@@ -176,7 +178,7 @@ Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 1500 × (m
   | Growth | 5 | +5% XP | 55 | 3,025 |
   | Greed | 5 | +10% gold | 45 | 2,475 |
   | Fortune | 5 | +5% luck | 45 | 2,475 |
-  | Revival | 2 | +1 revive per run | 550 | 2,750 |
+  | Revival | 1 | +1 revive per run | 550 | 550 |
   | Reroll | 5 | +1 reroll per run | 35 | 1,925 |
   | Skip | 3 | +1 skip per run | 35 | 490 |
   | Banish | 3 | +1 banish per run | 65 | 910 |

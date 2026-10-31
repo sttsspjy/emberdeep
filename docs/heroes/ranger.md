@@ -7,9 +7,9 @@ HP 90, speed 84, crit 8%.
 ## Weapon: Longbow (`longbow`)
 
 - **Aim**: exactly along the cursor, foe or no foe (no aim assist).
-- **Arrow**: pierces 8 foes, 300 px range (420 px/s); its first hit deals ×1.5.
+- **Arrow**: pierces 8 foes, 260 px range (420 px/s); its first hit deals ×1.5.
 - **Fan**: n arrows 0.18 rad apart; a fan of n deals (1 + 0.25 (n − 1)) × one arrow in total.
-- Base: 22 damage, cooldown 0.55 s, knockback 25. Multishot adds fan arrows.
+- Base: 22 damage, cooldown 0.7 s, knockback 25. Multishot adds fan arrows.
 
 ## Paths
 
@@ -27,11 +27,11 @@ The picked path's ranks keep applying after a Form; each Form reads them in its 
 
 | Form | Need | Pattern | Base | Refine 1 | Refine 2 |
 |---|---|---|---|---|---|
-| **Hail of Arrows** (`hail`) | Spread 5 | Full-damage fan (0.14 rad apart); an arrow's first hit splits off 3 arrows fanning forward (0.8× damage, 2 pierce, no further split). Pierce capped at 3, half the bounces | 22 dmg, 3 arrows / 1.05 s, pierce 1 | +2 arrows | +25% damage, pierce 2 more |
-| **Ballista** (`ballista`) | Piercer 5 | 1 + (n − 1) / 2 giant bolts (12 px radius, 240 px/s) that pierce every foe until they leave the view and always crit; heavy volleys ×1.5 size, ×1.25 damage; bounces become arrows (⅓ damage) loosed from the first foe hit | 44 dmg, 1 bolt / 1.2 s, knockback 70 | +1 bolt | +25% damage, bolts 50% bigger |
-| **Seeker** (`seeker`) | Ricochet 5 | Homing arrows (10 rad/s) launched in a wide fan along the cursor; a kill does not spend pierce and keeps the arrow hunting (up to 2 kills, life ≥ 0.9 s). Fan factor 0.35, a quarter of the pierce | 44 dmg, 5 arrows / 0.9 s | +2 arrows | +25% damage, +2 bounces |
-| **Gale Barrage** (`galeshot`) | Spread 5 | A stream of 1 + n full-damage arrows, one every 0.05 s, each re-aimed along the cursor (±0.04 rad jitter); two targets: every 2nd arrow takes the split fan's second aim; every (2 × heavy)-th arrow heavy | 26 dmg, 0.95 s cycle, pierce 16, 520 px/s | +2 arrows per stream | +25% damage, pierce 2 more |
-| **Rebound** (`rebound`) | Ricochet 5 | Arrows reaching the view edge turn toward the foe nearest the Ranger (else mirror), forget their hits and regain their pierce, 2 + bounces times (life 3 s); no first-hit bonus | 42 dmg, 1 arrow / 0.9 s, pierce 8 | +2 arrows | +25% damage, 1 more rebound |
+| **Hail of Arrows** (`hail`) | Spread 5 | Full-damage fan (0.14 rad apart); an arrow's first hit splits off 3 arrows fanning forward (0.8× damage, 2 pierce, no further split). Pierce capped at 3, half the bounces | 15.4 dmg, 3 arrows / 1.05 s, pierce 1 | +2 arrows | +25% damage, pierce 2 more |
+| **Ballista** (`ballista`) | Piercer 5 | 1 + (n − 1) / 2 giant bolts (12 px radius, 240 px/s) that pierce every foe until they leave the view and always crit; heavy volleys ×1.5 size, ×1.25 damage; bounces become arrows (⅓ damage) loosed from the first foe hit | 30.8 dmg, 1 bolt / 1.2 s, knockback 70 | +1 bolt | +25% damage, bolts 50% bigger |
+| **Seeker** (`seeker`) | Ricochet 5 | Homing arrows (10 rad/s) launched in a wide fan along the cursor; a kill does not spend pierce and keeps the arrow hunting (up to 2 kills, life ≥ 0.9 s). Homing and bounces pass over bosses and elites while any other foe is in the Ranger's view (a bounce then only takes another foe within 170 px). Fan factor 0.35, a quarter of the pierce | 30.8 dmg, 5 arrows / 0.9 s | +2 arrows | +25% damage, +2 bounces |
+| **Gale Barrage** (`galeshot`) | Spread 5 | A stream of 1 + n full-damage arrows, one every 0.05 s, each re-aimed along the cursor (±0.04 rad jitter); two targets: every 2nd arrow takes the split fan's second aim; every (2 × heavy)-th arrow heavy | 18.2 dmg, 0.95 s cycle, pierce 16, 520 px/s | +2 arrows per stream | +25% damage, pierce 2 more |
+| **Rebound** (`rebound`) | Ricochet 5 | Arrows reaching the view edge turn toward the foe nearest the Ranger (else mirror), forget their hits and regain their pierce, 2 + bounces times (life 3 s); no first-hit bonus | 29.4 dmg, 1 arrow / 0.9 s, pierce 8 | +2 arrows | +25% damage, 1 more rebound |
 
 Forms show as `???` until discovered; no card line names a Form.
 
@@ -50,15 +50,15 @@ Zero damage. Leap 160 px toward the cursor over 0.34 s, over foes and obstacles,
 
 | build | form | kind | crowd wpn | kills/s | single wpn |
 |---|---|---|---|---|---|
-| base | - |  | 305 | 3.3 | 59 |
-| t5 | - |  | 475 | 5.9 | 92 |
-| p0 | - |  | 1,431 | 19.3 | 333 |
-| p1 | - |  | 1,441 | 20.4 | 265 |
-| p2 | - |  | 1,467 | 20.1 | 157 |
-| f00 | hail | dir | 3,583 | 50.5 | 732 |
-| f01 | galeshot | dir | 2,866 | 38.5 | 1,107 |
-| f10 | ballista | dir | 2,668 | 38.5 | 509 |
-| f20 | seeker | dir | 3,682 | 52.1 | 759 |
-| f21 | rebound | dir | 2,581 | 36.2 | 657 |
+| base | - |  | 255 | 2.4 | 48 |
+| t5 | - |  | 394 | 4.7 | 75 |
+| p0 | - |  | 1,237 | 16.8 | 263 |
+| p1 | - |  | 1,161 | 15.9 | 209 |
+| p2 | - |  | 1,273 | 17.4 | 122 |
+| f00 | hail | dir | 2,718 | 38.0 | 513 |
+| f01 | galeshot | dir | 2,679 | 37.2 | 778 |
+| f10 | ballista | dir | 2,655 | 38.5 | 356 |
+| f20 | seeker | dir | 3,015 | 42.3 | 535 |
+| f21 | rebound | dir | 2,412 | 32.8 | 457 |
 
-All Forms directional; f rows within ±25% of their mean (3,076).
+All Forms directional; f rows within ±25% of their mean (2,696).

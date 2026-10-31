@@ -227,7 +227,7 @@
   const STORM = { look: 'bone', pierce: 999, rehit: 0.25, life: 1, tick: orbitTick, onEnd: stormEnd, st: null };
   ED.addWeapon({
     id: 'bonestorm', name: 'Bone Storm', icon: 'weapon.soulscythe', look: 'bone', sig: 'necro', mode: 'around', evolved: true, form: true, from: 'boneshard', txt: 'Shards orbit, then launch',
-    base: base({ dmg: 7, cd: 0.9, n: 6, pierce: 4, area: 1.2, speed: 320, dur: 0, knock: 80, range: 230, orbit: 1.0 }),
+    base: base({ dmg: 4.9, cd: 0.9, n: 6, pierce: 4, area: 1.2, speed: 320, dur: 0, knock: 80, range: 230, orbit: 1.0 }),
     refine: [
       { mods: { n: 2 }, txt: '+2 orbiting shards' },
       { mods: { dmg: 0.25, pierce: 2 }, txt: '+25% damage, pierce 2 more' },
@@ -249,7 +249,7 @@
   // Bone Lord: the army rises as Bone Knights (wide stunning cleave, a ground slam every S.slam-th swing); shards as Bone Shard.
   ED.addWeapon({
     id: 'bonelord', name: 'Bone Lord', icon: 'weapon.alt.waraxe', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'Your dead rise as Bone Knights',
-    base: base({ dmg: 16, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 1, kind: 1, life: 12, mk: 0.6, marc: 3.0, slam: 3 }),
+    base: base({ dmg: 11.2, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 1, kind: 1, life: 12, mk: 0.6, marc: 3.0, slam: 3 }),
     refine: [
       { mods: { cap: 2 }, txt: '+2 Bone Knights' },
       { mods: { slam: -1, dmg: 0.25 }, txt: 'Knights slam more often, +25% damage' },
@@ -260,7 +260,7 @@
   const GLOB = { look: 'glob', speed: 0, dmg: 0, pierce: 999, r: 3, life: 1, knock: 0, onEnd: globEnd };
   ED.addWeapon({
     id: 'plaguefield', name: 'Plague Field', icon: 'weapon.plaguestaff', look: 'glob', sig: 'necro', mode: 'densest', evolved: true, form: true, from: 'boneshard', txt: 'Blight leaps from foe to foe',
-    base: base({ dmg: 16, cd: 1.0, n: 2, pierce: 0, area: 1, speed: 220, dur: 0, knock: 0, range: 220, pk: 1.35, parea: 0.2, pdur: 3.5, spread: 1 }),
+    base: base({ dmg: 11.2, cd: 1.0, n: 2, pierce: 0, area: 1, speed: 220, dur: 0, knock: 0, range: 220, pk: 1.35, parea: 0.2, pdur: 3.5, spread: 1 }),
     refine: [
       { mods: { n: 1, parea: 0.3 }, txt: '+1 glob, pools grow larger' },
       { mods: { dmg: 0.25, pdur: 1.5 }, txt: '+25% damage, pools last longer' },
@@ -284,7 +284,7 @@
   // Lich: the army rises as plague ghouls that rush foes and burst (blast S.gr, damage S.dmg x S.mk), leaving a blight pool; shards as Bone Shard.
   ED.addWeapon({
     id: 'lich', name: 'Lich', icon: 'weapon.soulscythe', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'The dead rise as bursting ghouls',
-    base: base({ dmg: 20, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 5, raise: 2, kind: 3, life: 5, mk: 1.15, gr: 34 }),
+    base: base({ dmg: 14, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 5, raise: 2, kind: 3, life: 5, mk: 1.15, gr: 34 }),
     refine: [
       { mods: { cap: 2, raise: 1 }, txt: '+2 ghouls, raised faster' },
       { mods: { dmg: 0.25, gr: 10 }, txt: '+25% damage, bigger bursts' },
@@ -293,7 +293,7 @@
   // Ossuary: the army rises as skeleton archers (keep 60-110 px off, loose S.avol homing shards every S.acd s that split as Bone Shard); shards as Bone Shard.
   ED.addWeapon({
     id: 'ossuary', name: 'Ossuary', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'Your army takes up bows of bone',
-    base: base({ dmg: 14, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 2, kind: 2, life: 12, mk: 0.55, acd: 0.6, avol: 1, apierce: 9 }),
+    base: base({ dmg: 9.8, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 2, kind: 2, life: 12, mk: 0.55, acd: 0.6, avol: 1, apierce: 9 }),
     refine: [
       { mods: { cap: 2 }, txt: '+2 skeleton archers' },
       { mods: { avol: 1, dmg: 0.25 }, txt: 'Archers loose 2 shards, +25% damage' },

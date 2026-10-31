@@ -453,7 +453,7 @@ for (const st of [0, 1, 2]) {
     const fin = w.bossList.find(e => e.final), finHp = fin && fin.maxHp;
     w.time = 1318; step(1319.5); const pre = fin && fin.enraged; step(1320.5);
     const want = sd.bosses[2].id + '@900,' + sd.bosses[3].id + '@1200!';
-    ok(seen.join() === want && Math.abs(midHp - Math.round(13500 * k)) <= 1 && finHp === Math.round(24000 * k) && !pre && fin.enraged && w.state === 'play',
+    ok(seen.join() === want && Math.abs(midHp - Math.round(27000 * k)) <= 1 && finHp === Math.round(48000 * k) && !pre && fin.enraged && w.state === 'play',
       `${sd.id}: 15:00 ${seen[0]} (HP ${hps.join(' + ')}), final ${seen[1]} (HP ${finHp}), enraged at ${C.ENRAGE_T} s: ${!!pre} -> ${!!(fin && fin.enraged)}`);
   }
 }
@@ -590,10 +590,10 @@ for (let s = 0; s < 3; s++) {
     const coins = () => w.pickups.filter(g => !g.dead && g.k === 'gold').reduce((s, g) => s + g.val, 0);
     const el = w.spawnFoe('skeleton', p.x + 300, p.y, { elite: true }); w.killFoe(el, null); const eliteC = coins();
     w.time = 300; const mid = w.standInBoss({ t: 300, id: 'x' }); w.killFoe(mid, null); const midC = coins() - eliteC;
-    w.time = 1200; const fin = w.standInBoss({ t: 1200, id: 'x', final: true }); w.killFoe(fin, null); const g0 = w.gold; w.update(C.TICK);
+    w.time = 1200; const fin = w.standInBoss({ t: 1200, id: 'x', final: true }); w.killFoe(fin, null); const g0 = w.gold, banked = w.won && w.state === 'play'; w.time = w.lap.t0 + w.lap.dur; w.update(C.TICK); // skips the Last Light lap
     const end = w.events.find(ev => ev.t === 'end');
     const runEnd = Math.round((Math.floor(w.kills / G.bounty) + G.minute * Math.floor(w.time / 60)) * k) + Math.round(G.win * k); // kill bounty + minutes survived, then the win
-    return { ok: eliteC >= k && eliteC <= Math.round(5 * k) && midC === Math.round(G.mid * k) && g0 === Math.round(G.final * k) && w.state === 'won' && end && end.summary.gold === w.gold && w.gold === g0 + runEnd, k, eliteC, midC, fin: g0, total: w.gold };
+    return { ok: eliteC >= k && eliteC <= Math.round(5 * k) && midC === Math.round(G.mid * k) && g0 === Math.round(G.final * k) && banked && w.state === 'won' && end && end.summary.gold === w.gold && w.gold === g0 + runEnd, k, eliteC, midC, fin: g0, total: w.gold };
   };
   for (const s of [0, 1, 2]) { const r = goldRun(s); ok(r.ok, `${ED.STAGES[s].id} gold x${r.k}: elite coins ${r.eliteC}, mid-boss coin ${r.midC}, final boss ${r.fin}, summary ${r.total} with the win bonus`); }
 }

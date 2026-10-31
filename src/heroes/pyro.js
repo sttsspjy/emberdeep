@@ -232,7 +232,7 @@
   const IBOLT = { look: 'fireball', onHit: infHit, onEnd: infEnd, st: null };
   ED.addWeapon({
     id: 'inferno', name: 'Inferno', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'cursor', evolved: true, form: true, from: 'firebolt', txt: 'Pools merge and spread',
-    base: { dmg: 16, cd: 1.0, n: 3, pierce: 1, area: 1.5, speed: 250, dur: 3.5, knock: 30, range: RANGE, pools: 8, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    base: { dmg: 11.2, cd: 1.0, n: 3, pierce: 1, area: 1.5, speed: 250, dur: 3.5, knock: 30, range: RANGE, pools: 8, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 1 }, txt: '+1 bolt' },
       { mods: { area: 0.25, dur: 0.3 }, txt: '+25% pool size, last 30% longer' },
@@ -244,7 +244,7 @@
   // each blasts, leaves a fire pool and scatters S.cluster bomblets. No foe: the salvo walks 120 px out along the cursor dir.
   ED.addWeapon({
     id: 'firestorm', name: 'Firestorm', icon: 'weapon.inferno', look: 'shell', sig: 'pyro', mode: 'densest', evolved: true, form: true, from: 'firebolt', shellForm: true, txt: 'A walking salvo of shells',
-    base: { dmg: 24, cd: 1.6, n: 3, pierce: 0, area: 1.2, speed: 0, dur: 2.5, knock: 100, range: SHELL_RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    base: { dmg: 16.8, cd: 1.6, n: 3, pierce: 0, area: 1.2, speed: 0, dur: 2.5, knock: 100, range: SHELL_RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 2 }, txt: '+2 shells per salvo' },
       { mods: { area: 0.25, cluster: 2 }, txt: 'Blasts 25% wider, +2 bomblets' },
@@ -276,7 +276,7 @@
   const SEED = { look: 'seed', homing: 4, onHit: seedHit, st: null };
   ED.addWeapon({
     id: 'wildfire', name: 'Wildfire', icon: 'weapon.inferno', look: 'seed', sig: 'pyro', mode: 'cursor', evolved: true, form: true, from: 'firebolt', txt: 'Fire that jumps from foe to foe',
-    base: { dmg: 16, cd: 1.0, n: 3, pierce: 0, area: 1.2, speed: 240, dur: 2.5, knock: 20, range: RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 5, cemb: 2, spread: 0, cgen: 3, bmul: 1.4 },
+    base: { dmg: 11.2, cd: 1.0, n: 3, pierce: 0, area: 1.2, speed: 240, dur: 2.5, knock: 20, range: RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 5, cemb: 2, spread: 0, cgen: 3, bmul: 1.4 },
     refine: [
       { mods: { n: 1, cemb: 1 }, txt: '+1 seed, +1 ember per blast' },
       { mods: { area: 0.3, spread: 1 }, txt: 'Blasts 30% wider, fire leaps more' },
@@ -302,7 +302,7 @@
   const PBOLT = { look: 'fireball', onHit: (w, pr, e) => plant(w, pr, e.x, e.y), onEnd: (w, pr) => plant(w, pr, pr.x, pr.y), st: null };
   ED.addWeapon({
     id: 'pyre', name: 'Pyre', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'cursor', evolved: true, form: true, from: 'firebolt', txt: 'Fire that gathers, then erupts',
-    base: { dmg: 14, cd: 1.1, n: 2, pierce: 0, area: 1.3, speed: 230, dur: 2.5, knock: 20, range: RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    base: { dmg: 9.8, cd: 1.1, n: 2, pierce: 0, area: 1.3, speed: 230, dur: 2.5, knock: 20, range: RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 1 }, txt: '+1 bolt' },
       { mods: { area: 0.3, cemb: 2 }, txt: 'Eruptions 30% wider, +2 embers' },
@@ -326,7 +326,7 @@
   };
   ED.addWeapon({
     id: 'napalm', name: 'Napalm', icon: 'weapon.inferno', look: 'shell', sig: 'pyro', mode: 'densest', evolved: true, form: true, from: 'firebolt', shellForm: true, txt: 'Shells that leave walls of fire',
-    base: { dmg: 16, cd: 1.4, n: 2, pierce: 0, area: 1.2, speed: 0, dur: 3, knock: 60, range: SHELL_RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    base: { dmg: 11.2, cd: 1.4, n: 2, pierce: 0, area: 1.2, speed: 0, dur: 3, knock: 60, range: SHELL_RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 1 }, txt: '+1 canister' },
       { mods: { area: 0.25, dur: 0.3 }, txt: 'Fire walls 25% longer, last longer' },

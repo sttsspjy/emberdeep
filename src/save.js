@@ -47,9 +47,18 @@
     const p = S.defaultProfile(); o = o && typeof o === 'object' ? o : {};
     p.name = S.sanitizeName(o.name);
     p.gold = num(o.gold); p.lifetime = Math.max(p.gold, num(o.lifetime));
-    for (const s of ED.SHOP) { const r = o.shop ? num(o.shop[s.id]) : 0; if (r > 0) p.shop[s.id] = U.clamp(r, 0, s.max); }
+    // Ranks above a row's max, up to its former max (s.was), are dropped and refunded once (the clamped rank is what gets stored): today's price (cost x rank^2, at most spent);
+    // a profile without spent: the old rule (80 x rank). Ranks past was are dropped unpaid.
+    const legacy = o.spent === undefined;
+    let back = 0;
+    for (const s of ED.SHOP) {
+      const r = o.shop ? num(o.shop[s.id]) : 0; if (r > 0) p.shop[s.id] = U.clamp(r, 0, s.max);
+      for (let k = s.max, e = Math.min(r, s.was | 0); k < e; k++) back += legacy ? 80 * (k + 1) : s.cost * (k + 1) * (k + 1);
+    }
     // spent: a profile from before spent was kept gets the old price rule (80 x rank) so a refund never pays more than was paid.
-    p.spent = o.spent !== undefined ? num(o.spent) : ED.SHOP.reduce((t, s) => { const r = p.shop[s.id] | 0; return t + 40 * r * (r + 1); }, 0);
+    p.spent = !legacy ? num(o.spent) : ED.SHOP.reduce((t, s) => { const r = p.shop[s.id] | 0; return t + 40 * r * (r + 1); }, 0);
+    if (!legacy) { back = Math.min(back, p.spent); p.spent -= back; }
+    if (back > 0) { p.gold += back; p.lifetime = Math.max(p.lifetime, p.gold); }
     const heroOk = (c) => ED.UNLOCKS.heroes[c] !== undefined, clsList = (a) => (Array.isArray(a) ? a.filter((c, i) => heroOk(c) && a.indexOf(c) === i) : []);
     const stList = (a) => (Array.isArray(a) ? a.map(v => v | 0).filter((v, i, b) => v >= 0 && v < ED.STAGES.length && b.indexOf(v) === i) : []);
     if (Array.isArray(o.heroes)) for (const c of o.heroes) if (heroOk(c) && p.heroes.indexOf(c) < 0) p.heroes.push(c);

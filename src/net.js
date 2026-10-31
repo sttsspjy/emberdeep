@@ -8,7 +8,7 @@
   const N = ED.Net = {};
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const PREFIX = 'wickdeep-sv-';
-  N.VERSION = ED.NET_VERSION = 12; // bump on any wire change: mixed versions would desync
+  N.VERSION = ED.NET_VERSION = 13; // bump on any wire change: mixed versions would desync
   // Heartbeat: PeerJS 'close' does not fire when a tab crashes or a network drops, so both ends ping and
   // treat a few seconds of silence as a disconnect (longer in the lobby, where little else is sent).
   const PING_MS = 2000, TIMEOUT_RUN = 6000, TIMEOUT_LOBBY = 10000;
@@ -329,11 +329,12 @@
 
   // ---------------- snapshot encode (host) ----------------
   // Layout: u8 SNAP, u32 seq, u32 tick, u32 ack (last input seq applied for this client), f32 xp, f32 xpNext, u16 level, u32 kills, u32 gold, u8 state (0 play, 1 won, 2 lost),
-  // i16 ox, oy (cull rect origin), boss (varint id + 1 or 0; varint k, u8 hpQ, u8 flags), boss bar (u8 flags 1 on 2 final 4 enraged; if on: varint foe index, u8 q, u8 phase, u8 n, u8 rev (255 none)), braziers (u8 n + broken bitmask), u8 heroes + records,
+  // i16 ox, oy (cull rect origin), boss (varint id + 1 or 0; varint k, u8 hpQ, u8 flags), boss bar (u8 flags 1 on 2 final 4 enraged; if on: varint foe index, u8 q, u8 phase, u8 n, u8 rev (255 none)), Last Light (u8 phase 0 none / 1 calm / 2 lap; if set: u16 s left x 100, varint lap gold, varint lap kills), braziers (u8 n + broken bitmask), u8 heroes + records,
   // then u16-counted sections: zones (+ u16-counted ids of zones gone), foes, projectiles, pickups, hits, deaths, misc binary events, JSON events.
   // Foes / projectiles / pickups / positional events are kept only inside the client's view + MARGIN; their positions are 3 bytes (12 + 12 bits at 0.5 px from the rect origin).
   // Ids: arrays are in spawn order, so ids ascend: each id is written as delta from the previous (with 2 flag bits); a delta of 0 escapes to an absolute id.
   const MARGIN = 160;
+  const LV = { ph: 0, rem: 0, gold: 0, kills: 0 }; // encode scratch (World.lapView)
   const HIT_CAP = 100, DIE_CAP = 120, MISC_CAP = 80, PICK_CAP = 24, JSON_CAP = 48, CARRY_CAP = 64;
   N.MARGIN = MARGIN;
   let ox = 0, oy = 0, RW = 0, RH = 0;
@@ -369,6 +370,8 @@
     if (b && !b.dead) { wv(b.id + 1); wv(b.k); w8(b.hpQ); w8((b.enraged ? 1 : 0) | (b.final ? 2 : 0)); } else wv(0);
     const bb = w.bossBar;
     if (bb && bb.on) { w8(1 | (bb.final ? 2 : 0) | (bb.enraged ? 4 : 0)); wv(Math.max(0, ED.FOE_IDS.indexOf(bb.id))); w8(U.clamp(Math.round(bb.q), 0, 255)); w8(bb.phase | 0); w8(bb.n | 0); w8(bb.rev < 0 ? 255 : U.clamp(Math.round(bb.rev * 254), 0, 254)); } else w8(0);
+    const lv = w.lapView(LV);
+    w8(lv.ph); if (lv.ph) { w16(U.clamp(Math.round(lv.rem * 100), 0, 65535)); wv(lv.gold); wv(lv.kills); }
     const BR = w.arena.braziers, nb = Math.min(BR.length, 255);
     w8(nb); for (let i = 0; i < nb; i += 8) { let m = 0; for (let k = 0; k < 8 && i + k < nb; k++) if (BR[i + k].broken) m |= 1 << k; w8(m); }
     // heroes (all, full)
@@ -591,13 +594,14 @@
   // cfg: { stage, seed, roster: [{ pid, slot, name, cls }] (World hero order), myPid }. view: the ARCHITECTURE §10 view model, arrays rebuilt by frame(rt).
   N.Mirror = function (cfg) {
     this.roster = cfg.roster; this.myPid = cfg.myPid; this.seq = 0; this.T = 0; this.ack = 0; this.ready = false; this.state = 'play';
-    this.view = { me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: ED.Arena.generate(cfg.stage | 0, cfg.seed >>> 0), stage: cfg.stage | 0, seed: cfg.seed >>> 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, events: [] };
+    this.view = { me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: ED.Arena.generate(cfg.stage | 0, cfg.seed >>> 0), stage: cfg.stage | 0, seed: cfg.seed >>> 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, lap: null, events: [] };
     this.heroes = cfg.roster.map((r, i) => { const h = mkTrack(heroFields()); h.pid = r.pid; h.slot = r.slot | 0; h.cls = r.cls; h.name = r.name || 'Hero'; h.idx = i; return h; });
     this.myIdx = this.heroes.findIndex(h => h.pid === cfg.myPid);
     this.me = this.heroes[this.myIdx] || null; // view.me from the first snapshot on
     this.srv = { x: 0, y: 0, dashT: 0, dashCd: 0, dashDx: 1, dashDy: 0, mdir: 0, mvx: 0, mvy: 0, moving: false, spd: 0, live: false };
     this.boss = { id: 0, k: 0, x: 0, y: 0, hpQ: 255, enraged: false, final: false, dead: false };
     this.bossBar = { on: false, id: '', name: '', q: 0, phase: 0, final: false, enraged: false, n: 0, rev: -1 };
+    this.lapV = { ph: 0, rem: 0, gold: 0, kills: 0 };
     this.foes = new Tracks(() => ({ id: 0, k: 0, def: null, x: 0, y: 0, r: 7, hpQ: 255, face: 1, flash: 0, st: 0, stT: 0, st0: 0, elite: false, boss: false, scale: 1, enraged: false, freezeT: 0, stunT: 0, burnT: 0, slowT: 0 }), foeApply);
     this.projs = new Tracks(() => ({ id: 0, k: '', wid: '', team: 0, x: 0, y: 0, a: 0, r: 4, t: 0 }), projApply);
     this.picks = new Tracks(() => ({ id: 0, k: 'xp1', x: 0, y: 0 }), null);
@@ -625,6 +629,9 @@
     const bf = r8(), BB = this.bossBar;
     if (bf & 1) { const d = ED.FOES[ED.FOE_IDS[rv()]]; BB.on = true; BB.final = !!(bf & 2); BB.enraged = !!(bf & 4); BB.id = d ? d.id : ''; BB.name = d ? d.name : 'Boss'; BB.q = r8(); BB.phase = r8(); BB.n = r8(); const rv8b = r8(); BB.rev = rv8b === 255 ? -1 : rv8b / 254; } else BB.on = false;
     v.bossBar = BB;
+    const LP = this.lapV; LP.ph = r8();
+    if (LP.ph) { LP.rem = r16() / 100; LP.gold = rv(); LP.kills = rv(); } else LP.rem = LP.gold = LP.kills = 0;
+    v.lap = LP;
     const nb = r8(), BR = v.props.braziers;
     for (let i = 0; i < nb; i += 8) { const m = r8(); for (let k = 0; k < 8 && i + k < nb; k++) if (BR[i + k]) { const br = !!(m & (1 << k)); BR[i + k].broken = br; BR[i + k].hp = br ? 0 : 1; } }
     // heroes

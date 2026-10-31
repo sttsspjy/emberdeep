@@ -28,7 +28,7 @@
   };
 
   // Deals dmg to foe e. Crit roll (hero crit or src.critC; src.crit forces one) x critMul, foe e.takeMul, rounded, min 1. Flash (not on dots), knockback (def.kb, elites x0.35, bosses none),
-  // hero dealt tracking per weapon id, hero hit hook, aggregated hit event, kill at 0 HP. Returns the damage dealt.
+  // hero dealt tracking per weapon id (plus party damage w.dmgAll and the hero's highest hit), hero hit hook, aggregated hit event, kill at 0 HP. Returns the damage dealt.
   W.hitFoe = function (e, dmg, src) {
     if (e.dead || !(dmg > 0) || e.invulnT > 0) return 0;
     const p = src && src.p;
@@ -50,7 +50,8 @@
     }
     if (p) {
       const id = src.wid || 'other';
-      p.dealt[id] = (p.dealt[id] || 0) + dealt;
+      p.dealt[id] = (p.dealt[id] || 0) + dealt; this.dmgAll += dealt;
+      if (d > p.top) { p.top = d; p.topId = id; }
       const hk = ED.HOOK[p.cls]; if (hk && hk.hit) hk.hit(this, p, e, dealt, src);
     }
     this.addHit(e, d, crit);
@@ -257,7 +258,7 @@
 
   // ---------------- projectiles ----------------
   // Hero projectile from weapon wid at (x, y) along a. S = effective numbers (speed, dmg, pierce, range, area, knock, crit). opt: { look, speed, dmg, pierce, r, life, homing (turn rad/s),
-  // ret (boomerang back to the hero), rehit (s: the same foe can be hit again after this), knock, solid (stops at obstacles), onHit(w, pr, e, dealt), onEnd(w, pr), tick(w, pr, dt), st (custom state) }.
+  // hskip (homing: foes for which hskip(e) is true are chased only while no other foe is inside the owner's view), ret (boomerang back to the hero), rehit (s: the same foe can be hit again after this), knock, solid (stops at obstacles), onHit(w, pr, e, dealt), onEnd(w, pr), tick(w, pr, dt), st (custom state) }.
   W.shoot = function (p, wid, x, y, a, S, opt) {
     opt = opt || NO; S = S || NO;
     const pr = this.projPool.pop() || { hits: [] }, sp = opt.speed !== undefined ? opt.speed : (S.speed || 200), def = ED.WEAPONS[wid];
@@ -267,7 +268,7 @@
     pr.dmg = opt.dmg !== undefined ? opt.dmg : S.dmg || 0; pr.pierce = opt.pierce !== undefined ? opt.pierce : S.pierce || 0;
     pr.life = opt.life !== undefined ? opt.life : (S.range > 0 ? S.range / sp : 1.5); pr.t = 0;
     pr.knock = opt.knock !== undefined ? opt.knock : S.knock || 0; pr.critC = S.crit !== undefined ? S.crit : -1;
-    pr.homing = opt.homing || 0; pr.tgt = null; pr.tgtId = 0;
+    pr.homing = opt.homing || 0; pr.hskip = opt.hskip || null; pr.tgt = null; pr.tgtId = 0;
     pr.ret = !!opt.ret; pr.out = pr.life / 2; pr.back = false;
     pr.rehit = opt.rehit || 0; pr.hitClr = 0; pr.hits.length = 0; pr.solid = !!opt.solid;
     pr.onHit = opt.onHit || null; pr.onEnd = opt.onEnd || null; pr.tick = opt.tick || null; pr.st = opt.st || null; pr.dead = false;
@@ -309,13 +310,14 @@
     const pr = this.projPool.pop() || { hits: [] };
     pr.id = this.nextId(); pr.k = look || 'bolt'; pr.team = 1; pr.owner = e.id; pr.p = null; pr.e = e; pr.wid = '';
     pr.x = e.x; pr.y = e.y - e.r * 0.5; pr.vx = Math.cos(a) * speed; pr.vy = Math.sin(a) * speed; pr.a = a; pr.sp = speed;
-    pr.r = r || 4; pr.dmg = dmg; pr.pierce = 0; pr.life = 4; pr.t = 0; pr.knock = 0; pr.critC = -1; pr.homing = 0; pr.tgt = null; pr.tgtId = 0;
+    pr.r = r || 4; pr.dmg = dmg; pr.pierce = 0; pr.life = 4; pr.t = 0; pr.knock = 0; pr.critC = -1; pr.homing = 0; pr.hskip = null; pr.tgt = null; pr.tgtId = 0;
     pr.ret = false; pr.out = 0; pr.back = false; pr.rehit = 0; pr.hitClr = 0; pr.hits.length = 0; pr.solid = true; pr.onHit = null; pr.onEnd = null; pr.tick = null; pr.st = null; pr.dead = false;
     this.projs.push(pr);
     this.emit({ t: 'eshoot', id: e.id, x: Math.round(pr.x), y: Math.round(pr.y), look: pr.k });
     return pr;
   };
 
+  const HOME_VIEW = 2 * Math.hypot(VW.hw, VW.hh); // reaches every foe in the owner's view from any point inside it
   W.updateProjs = function (dt) {
     const A = this.arena, size = A.size, list = this.projs, n = list.length;
     for (let i = 0; i < n; i++) {
@@ -325,7 +327,11 @@
       pr.t += dt; pr.life -= dt;
       if (pr.tick) pr.tick(this, pr, dt);
       if (pr.homing > 0 && !pr.back) {
-        if ((!pr.tgt || pr.tgt.dead || pr.tgt.id !== pr.tgtId) && (this.tick + pr.id) % 6 === 0) { pr.tgt = this.nearestFoe(pr.x, pr.y, 260); pr.tgtId = pr.tgt ? pr.tgt.id : 0; }
+        // Retarget every 6th tick while the target is lost (with hskip: also while it is a passed-over foe): the nearest preferred foe in view, else the nearest within 260 px.
+        const hs = pr.hskip;
+        if ((!pr.tgt || pr.tgt.dead || pr.tgt.id !== pr.tgtId || (hs !== null && hs(pr.tgt))) && (this.tick + pr.id) % 6 === 0) {
+          pr.tgt = (hs !== null && this.nearestFoe(pr.x, pr.y, HOME_VIEW, hs)) || this.nearestFoe(pr.x, pr.y, 260); pr.tgtId = pr.tgt ? pr.tgt.id : 0;
+        }
         const t = pr.tgt;
         if (t && !t.dead && t.id === pr.tgtId) {
           const want = Math.atan2(t.y - pr.y, t.x - pr.x), a = Math.atan2(pr.vy, pr.vx), d = U.angDiff(a, want), step = pr.homing * dt;
@@ -448,7 +454,7 @@
   W.hurtHero = function (p, dmg, src) {
     if (!this.alive(p) || p.invuln > 0 || p.dashT > 0 || this.cheats.god) return 0;
     const d = Math.max(1, Math.round(dmg * (1 - (p.dr || 0)) - p.stats.armor));
-    p.hp -= d; p.invuln = C.IFRAME; p.hurtT = 0.2;
+    p.hp -= d; p.taken += d; p.invuln = C.IFRAME; p.hurtT = 0.2;
     this.emit({ t: 'hurt', pid: p.pid, dmg: d, x: Math.round(p.x), y: Math.round(p.y) });
     if (p.hp <= 0) this.heroDown(p);
     return d;

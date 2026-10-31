@@ -20,7 +20,7 @@ Role: holy strikes on foes near the hero, healing and protecting allies, zone co
 
 Tables give the 3 shape ranks at path ranks 1 / 3 / 5; path ranks 2 and 4 are generic steps (+10% damage, cooldown x0.95). Before the path: 5 tune steps; the path is picked from a chest (one per slot, permanent); a path at rank 5 readies its Forms (GAME-DESIGN §4). A Form keeps only its own path's ranks.
 
-## Forms (one per run; path ranks keep applying; base dmg 30, Verdict 48, Halo 24, Judgment Ray 23)
+## Forms (one per run; path ranks keep applying; base dmg 21, Verdict 33.6, Halo 16.8, Judgment Ray 16.1)
 
 | Form | Rule | Pattern | Refine 1 | Refine 2 |
 |---|---|---|---|---|
@@ -41,13 +41,13 @@ Tables give the 3 shape ranks at path ranks 1 / 3 / 5; path ranks 2 and 4 are ge
 |---|---|---|---|---|---|
 | base | - |  | 440 | 4.4 | 23 |
 | t5 | - |  | 614 | 6.8 | 36 |
-| p0 | - |  | 1,269 | 15.7 | 174 |
-| p1 | - |  | 1,369 | 17.4 | 71 |
-| p2 | - |  | 1,398 | 18.0 | 62 |
-| f00 | wrath | dir | 5,262 | 74.0 | 546 |
-| f10 | halo | 360° | 2,486 | 33.9 | 195 |
-| f11 | consecration | dir | 4,574 | 62.3 | 564 |
-| f20 | jray | 360° | 2,373 | 31.9 | 211 |
-| f21 | verdict | dir | 4,874 | 68.5 | 435 |
+| p0 | - |  | 1,266 | 15.7 | 174 |
+| p1 | - |  | 1,334 | 17.3 | 71 |
+| p2 | - |  | 1,395 | 18.0 | 62 |
+| f00 | wrath | dir | 4,507 | 62.9 | 387 |
+| f10 | halo | 360° | 1,981 | 26.9 | 135 |
+| f11 | consecration | dir | 3,808 | 52.5 | 402 |
+| f20 | jray | 360° | 1,938 | 25.6 | 148 |
+| f21 | verdict | dir | 4,052 | 56.0 | 305 |
 
-Role rule (f rows): 360° Forms (Halo, Judgment Ray) crowd ≤ 0.6 × directional mean (4,903 → ≤ 2,942): met; directional single ≥ 2 × the 360° best (211 → ≥ 422): met (Verdict 435 lowest); each kind within ±25% of its mean.
+Role rule (f rows): 360° Forms (Halo, Judgment Ray) crowd ≤ 0.6 × directional mean (4,122 → ≤ 2,473): met; directional single ≥ 2 × the 360° best (148 → ≥ 296): met (Verdict 305 lowest); each kind within ±25% of its mean.

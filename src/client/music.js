@@ -1,7 +1,7 @@
 // Synthesized adaptive music (no audio files). ED.Music drives a sequencer engine (Score, ported from the legacy score) on the music bus of ED.Audio.
 // Tracks: 'title' (menus), 'run<n>' per stage, 'boss<n>' and 'final<n>' (the final boss); theme n: 1 Ossuary, 2 Glowmire, 4 Abyss (by ED.STAGES id). A switch lands on the next bar
 // while the old track fades over a bar. Level 0..3 sets the layer mix (pad, arp, bass, drums, perc, lead): in a run from the alive foe count (60 / 220 / 480), at least 1 from minute 8,
-// raised for 8-12 s by swarm / elite / boss warnings; during a boss from its HP (above 66% 1, above 33% 2, else 3; enraged 3). Rises at once, falls one step after 4 s lower.
+// raised for 8-12 s by swarm / elite / boss warnings; during a boss from its HP (above 66% 1, above 33% 2, else 3; enraged 3); the Last Light (view.lap calm and lap) plays the final track at 3. Rises at once, falls one step after 4 s lower.
 // Hero HP under 30% muffles the music and beats a heart; downed muffles harder; the solo pause muffles. Stingers: a mid-boss killed, victory, defeat (then the menu track).
 // Cost: notes are scheduled from a 100 ms timer 0.4 s ahead; ED.Music.update(view, dt) per frame only reads counts.
 (function (ED) {
@@ -497,7 +497,9 @@
     if (b) { const hs = b.maxHp ? b.hp / b.maxHp : b.hpQ !== undefined ? b.hpQ / 255 : 1; raw = b.enraged ? 3 : hs > 0.66 ? 1 : hs > 0.33 ? 2 : 3; }
     else { const n = v.foes ? v.foes.length : 0; raw = n < 60 ? 0 : n < 220 ? 1 : n < 480 ? 2 : 3; if (v.time >= 480 && raw < 1) raw = 1; }
     if (t < M.bumpT && M.bump > raw) raw = M.bump;
-    play((b ? (b.final ? 'final' : 'boss') : 'run') + themeOf(v), raw, t);
+    const lap = !!(v.lap && v.lap.ph); // Last Light (calm and lap): the final track at full intensity
+    if (lap) raw = 3;
+    play((b ? (b.final ? 'final' : 'boss') : lap ? 'final' : 'run') + themeOf(v), raw, t);
     level(raw, t);
     const me = v.me, G = ED.Game, paused = !!(G && (G.paused || (G.w && G.w.paused)));
     let hz = 20000;

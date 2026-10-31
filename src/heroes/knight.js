@@ -13,10 +13,10 @@
   // slam (directional: blast at each strike tip; 360 Forms: ring around the hero on the string's last strike), stag (stun s on strike hits).
   // Form keys: cracks (Colossus: crack lines across the first front sweep of a string), cutT (Gale: cut line life s), quake + fiss (Earthsplitter: every quake-th attack, fiss radial fissures), orbit (Tempest: spiral blades).
   // FORM[wid]: full (strikes are 360 spins), spin (honours S.spin; Forms ignore it), gap (s between strikes), one (a single strike per attack; each S.n above 1 adds 2 cracks instead), heart (foes within half reach take that much extra), crack, swirl (spin hits push foes around the hero), gale (big crescents + cut lines), spiral (spiral blades per attack),
-  // quake (fissure ring every S.quake attacks), move (cooldown runs this much faster while moving), big (directional Forms: big foes take that many x from sweeps and crescents),
+  // quake (fissure ring every S.quake attacks), move (cooldown runs this much faster while moving), big (big foes take that many x from sweeps and crescents; bigAll: from waves and slams too),
   // cone (half-angle rad: the swing arc is at most 2 x cone, no back swing, follow-up strikes on the aim line, crescents and cut lines fan within +-0.6 x cone).
   const FORM = {
-    cleave: { gap: 0.15, spin: true },
+    cleave: { gap: 0.15, spin: true, big: 1.6, bigAll: true },
     colossus: { gap: 0.3, crack: true, one: true, heart: 2.5, big: 1.6 },
     whirlwind: { full: true, gap: 0.14, swirl: true, move: 0.3, heart: 1 },
     gale: { gap: 0.18, gale: true, big: 1.6, cone: PI / 6 },
@@ -25,7 +25,7 @@
   };
   const CRACK_MAX = 200; // crack / fissure / cut reach (px): stays inside the view
   const SPIN_K = 0.6; // Cleave's path spin (Whirl rank 3) deals x SPIN_K
-  // Big foes (radius >= BIG_R: brutes, elites, bosses) hit by a Form with F.big take the extra (big - 1) x dealt as a second, no-crit, no-knock hit.
+  // Big foes (radius >= BIG_R: brutes, elites, bosses) hit by a weapon with F.big take the extra (big - 1) x dealt as a second, no-crit, no-knock hit.
   const BIG_R = 12;
   const heavy = (w, p, wid, e, dealt) => {
     const k = FORM[wid] ? FORM[wid].big || 1 : 1;
@@ -42,11 +42,11 @@
   let SX = 0, SY = 0, SWF = 0;
   const swirl = (w, e) => { const dx = e.x - SX, dy = e.y - SY; w.knock(e, -dy + dx * 0.5, dx + dy * 0.5, SWF * (e.elite ? 0.5 : 1)); };
   const ARC = { knock: 0, look: 'slash', stun: 0, onHit: null, noEv: false };
-  const SLAM = { knock: 0, look: 'quake', stun: 0 };
+  const SLAM = { knock: 0, look: 'quake', stun: 0, onHit: null };
   // Crescent wave: piercing; ret doubles its life so the outbound leg keeps its reach.
-  const WAVE = { look: 'crescent', speed: 250, dmg: 0, pierce: 999, r: 12, life: 0.5, knock: 0, ret: false };
+  const WAVE = { look: 'crescent', speed: 250, dmg: 0, pierce: 999, r: 12, life: 0.5, knock: 0, ret: false, onHit: null };
   const wave = (w, p, ws, S, a, k) => {
-    WAVE.dmg = S.dmg * k * DK; WAVE.r = 10 * S.area; WAVE.knock = S.knock * 0.4; WAVE.ret = !!S.ret;
+    WAVE.dmg = S.dmg * k * DK; WAVE.onHit = FORM[ws.id].bigAll ? projBig : null; WAVE.r = 10 * S.area; WAVE.knock = S.knock * 0.4; WAVE.ret = !!S.ret;
     WAVE.life = Math.min(0.72, 0.5 * Math.sqrt(S.area)) * (S.ret ? 2 : 1);
     w.shoot(p, ws.id, p.x + Math.cos(a) * 14, p.y - 4 + Math.sin(a) * 14, a, S, WAVE);
   };
@@ -70,7 +70,10 @@
     CRACK.dur = dur; CRACK.dmg = S.dmg * k * DK; CRACK.stun = (S.stag || 0) + 0.3; CRACK.knock = S.knock * 0.5;
     w.zone(CRACK);
   };
-  const slam = (w, p, ws, S, x, y, r, k) => { SLAM.knock = S.knock * 1.2; SLAM.stun = (S.stag || 0) + 0.3; w.blast(p, ws.id, x, y, r, S.dmg * k * DK, SLAM); };
+  const slam = (w, p, ws, S, x, y, r, k) => {
+    SLAM.knock = S.knock * 1.2; SLAM.stun = (S.stag || 0) + 0.3; SLAM.onHit = FORM[ws.id].bigAll ? arcBig : null; HP = p; HW = ws.id;
+    w.blast(p, ws.id, x, y, r, S.dmg * k * DK, SLAM);
+  };
   // Spiral blade (Tempest): circles its hero at up to 48 px for 0.4 s, then spirals out to ~200 px (pr.oa angle, pr.od turn sign), re-hits a foe every 0.6 s.
   const spiral = (w, pr, dt) => {
     const p = pr.p; if (!p || dt <= 0) return;
@@ -141,7 +144,7 @@
   // ---------------- Cleave and its Forms ----------------
   ED.addWeapon({
     id: 'cleave', name: 'Cleave', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', txt: 'Sword arc toward your cursor',
-    base: { dmg: 28, cd: 1.1, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 120, range: 56, arc: 2.0, wave: 0, stag: 0, slam: 0 },
+    base: { dmg: 36, cd: 1.1, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 120, range: 56, arc: 2.0, wave: 0, stag: 0, slam: 0 },
     paths: [
       { id: 'great', name: 'Greatblade', forms: ['colossus', 'earthsplitter'], ranks: [
         { mods: { area: 0.3, cd: 0.15, stag: 0.3 }, txt: 'Bigger, slower swings that stagger' },
@@ -161,7 +164,7 @@
   // Whirlwind (Whirl): 360 spins (60 px at Form base), hits swirl foes around and out from the hero, the cooldown runs 1.3x while moving.
   ED.addWeapon({
     id: 'whirlwind', name: 'Whirlwind', icon: 'weapon.alt.double_axe', sig: 'knight', mode: 'around', evolved: true, form: true, from: 'cleave', txt: 'Nonstop spins, faster while moving',
-    base: { dmg: 12, cd: 0.9, n: 1, pierce: 0, area: 1.2, speed: 0, dur: 0, knock: 150, range: 50, arc: TAU, wave: 0, stag: 0, slam: 0 },
+    base: { dmg: 8.4, cd: 0.9, n: 1, pierce: 0, area: 1.2, speed: 0, dur: 0, knock: 150, range: 50, arc: TAU, wave: 0, stag: 0, slam: 0 },
     refine: [
       { mods: { n: 1 }, txt: '+1 spin per whirl' },
       { mods: { area: 0.15 }, txt: '+15% spin size' },
@@ -170,7 +173,7 @@
   // Colossus Blade (Greatblade): one huge slow 200 deg sweep that staggers; cracks fan across it and erupt 0.3 s later.
   ED.addWeapon({
     id: 'colossus', name: 'Colossus Blade', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', evolved: true, form: true, from: 'cleave', txt: 'One giant sweep that cracks the ground',
-    base: { dmg: 58, cd: 1.8, n: 1, pierce: 0, area: 1.5, speed: 0, dur: 0, knock: 200, range: 60, arc: 3.5, wave: 0, stag: 0.5, slam: 0, cracks: 3 },
+    base: { dmg: 40.6, cd: 1.8, n: 1, pierce: 0, area: 1.5, speed: 0, dur: 0, knock: 200, range: 60, arc: 3.5, wave: 0, stag: 0.5, slam: 0, cracks: 3 },
     refine: [
       { mods: { cracks: 2 }, txt: '+2 ground cracks' },
       { mods: { area: 0.2, stag: 0.4 }, txt: '+20% sweep size, longer stagger' },
@@ -179,7 +182,7 @@
   // Rending Gale (Edge Wave): swings fling big piercing crescents that leave cutting wind lines.
   ED.addWeapon({
     id: 'gale', name: 'Rending Gale', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', evolved: true, form: true, from: 'cleave', txt: 'Big crescents that leave cutting wind',
-    base: { dmg: 18, cd: 0.7, n: 1, pierce: 0, area: 1.15, speed: 0, dur: 0, knock: 80, range: 56, arc: 2.0, wave: 3, stag: 0, slam: 0, cutT: 1.0 },
+    base: { dmg: 12.6, cd: 0.7, n: 1, pierce: 0, area: 1.15, speed: 0, dur: 0, knock: 80, range: 56, arc: 2.0, wave: 3, stag: 0, slam: 0, cutT: 1.0 },
     refine: [
       { mods: { wave: 2 }, txt: '+2 crescents' },
       { mods: { cutT: 1.0 }, txt: 'Wind cuts linger twice as long' },
@@ -188,7 +191,7 @@
   // Earthsplitter (Greatblade): heavy spins; every quake-th attack fissures radiate all around and the ground slams.
   ED.addWeapon({
     id: 'earthsplitter', name: 'Earthsplitter', icon: 'weapon.alt.double_axe', sig: 'knight', mode: 'around', evolved: true, form: true, from: 'cleave', txt: 'Heavy spins; every 3rd splits the earth',
-    base: { dmg: 25, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 160, range: 46, arc: TAU, wave: 0, stag: 0.3, slam: 0, quake: 3, fiss: 8 },
+    base: { dmg: 15, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 160, range: 46, arc: TAU, wave: 0, stag: 0.3, slam: 0, quake: 3, fiss: 8 },
     refine: [
       { mods: { fiss: 4 }, txt: '+4 fissures' },
       { mods: { quake: -1 }, txt: 'Splits the earth every 2nd spin' },
@@ -197,7 +200,7 @@
   // Blade Tempest (Edge Wave): each attack releases blades that spiral out around the hero (with back: a second ring turning the other way).
   ED.addWeapon({
     id: 'tempest', name: 'Blade Tempest', icon: 'weapon.alt.double_axe', sig: 'knight', mode: 'around', evolved: true, form: true, from: 'cleave', txt: 'Blades spiral out around you',
-    base: { dmg: 11, cd: 1.2, n: 1, pierce: 0, area: 1.2, speed: 0, dur: 0, knock: 120, range: 50, arc: TAU, wave: 0, stag: 0, slam: 0, orbit: 3 },
+    base: { dmg: 7.7, cd: 1.2, n: 1, pierce: 0, area: 1.2, speed: 0, dur: 0, knock: 120, range: 50, arc: TAU, wave: 0, stag: 0, slam: 0, orbit: 3 },
     refine: [
       { mods: { orbit: 2 }, txt: '+2 spiral blades' },
       { mods: { orbit: 1, area: 0.2 }, txt: '+1 blade, +20% blade size' },

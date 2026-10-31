@@ -157,6 +157,13 @@
     for (let i = 0; i < 8; i++) s.N('bandpass', rnd(1500, 5000), 1200, 0.08, 0.35, 3, 0.08 + i * 0.09 + rnd(0, 0.04));
     [523, 659, 784].forEach((f, i) => s.T('sine', f, f, 1.6, 0.12, 0.5 + i * 0.08, 0.1));
   });
+  // Last Light: the final boss's death (brass fanfare over a bell chord), the lap's start (rising horn call)
+  def('fanfare', { d: 3.2, n: 1, g: 0.95, cap: 1, gap: 1, pr: 3, rv: 0.5 }, (s) => {
+    [262, 330, 392].forEach((f, i) => s.B(f, 0.22, 0.55, i * 0.16));
+    [523, 659, 784].forEach((f) => s.B(f, 1.8, 0.4, 0.5)); s.B(131, 2, 0.45, 0.5); s.T('sine', 65, 65, 2, 0.5, 0.5);
+    [1047, 1319, 1568].forEach((f, i) => s.F(f, 1.41, 1.2, 1.6, 0.18, 0.55 + i * 0.07)); s.N('highpass', 6000, 3000, 1.2, 0.2, 1, 0.5, 0.05);
+  });
+  def('lap.horn', { d: 2.4, n: 1, g: 0.85, cap: 1, gap: 2, pr: 3, rv: 0.45 }, (s) => { s.B(98, 0.5, 0.6); s.B(131, 0.5, 0.6, 0.45); s.B(196, 1.3, 0.6, 0.9); s.B(98, 1.3, 0.45, 0.9); s.N('lowpass', 300, 1200, 1, 0.4, 1, 0.9, 0.3); });
   def('warn.swarm', { d: 1.6, n: 1, g: 0.7, cap: 1, gap: 2, pr: 3, rv: 0.4 }, (s) => { s.B(110, 0.5, 0.6); s.B(147, 0.8, 0.7, 0.55); s.B(73, 1.3, 0.4); s.N('lowpass', 200, 900, 1.2, 0.5, 1, 0, 0.8); });
   def('warn.elite', { d: 1.3, n: 1, g: 0.65, cap: 1, gap: 2, pr: 3, rv: 0.4 }, (s) => { s.F(147, 1.41, 3, 1.2, 0.6); s.F(208, 1.41, 2, 1, 0.35, 0.02); s.T('sine', 74, 72, 1.2, 0.5); s.N('bandpass', 2000, 700, 0.06, 0.5, 2); });
   def('warn.boss', { d: 2.6, n: 1, g: 0.8, cap: 1, gap: 3, pr: 3, rv: 0.4 }, (s) => {
@@ -485,6 +492,8 @@
       case 'revive': aggHero(C.revive, ev.pid, mine, mine ? 1 : 2); break;
       case 'boss': pp = 0; agg(C[ev.phase === 0 ? 'boss.intro' : ev.phase === -1 ? 'boss.die' : ev.phase === 'enrage' ? 'boss.enrage' : 'boss.phase'], 1, 3); if (ev.phase === 0 || ev.phase === -1) A.duck(0.3, 2.2); break;
       case 'brazier': agg(C.brazier, posGain(ev.x, ev.y), 1); break;
+      case 'victory': pp = 0; agg(C.fanfare, 1, 3); A.duck(0.25, 3); break;
+      case 'lap': pp = 0; agg(C[ev.ph === 1 ? 'lap.horn' : 'boss.die'], 1, 3); break;
       case 'chest': if (mine) { pp = 0; agg(C.chest, 1, 3); } break;
       case 'warn': pp = 0; agg(C['warn.' + ev.kind], 1, 3); break;
       case 'skill': { const c = scue(ev.id, ev.slot); if (mine) { pp = 0; agg(c, 1, 3); } else { const h = heroAt(ev.pid); agg(c, 0.5 * (h ? posGain(h.x, h.y) : 0.6), 0); } break; }
