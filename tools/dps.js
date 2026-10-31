@@ -3,7 +3,7 @@
 //        node tools/dps.js support [id ...] [--t 20] [--md]  (support weapons alone: knight stand-in with its hero weapon disabled, the support in slot 1; default every support)
 // Builds (slot lifecycle, GAME-DESIGN §4): base (nothing); t5 (tune 5: damage 2, haste 2, area 1); p<i> (t5 + path i at rank 5); f<i><j> (p<i> + Form j of path i's list, refined twice).
 // Party level per build (w.level; offers only, no weapon numbers): base 1, t5 6, p 15, f 25.
-// crowd: 160 'skeleton' foes kept on the field (40-300 px around the hero, HP of minute 10 = 3.4x base); dps = damage dealt / s, kps = kills / s.
+// crowd: 160 'skeleton' foes kept on the field (40-300 px around the hero, 3.4x base HP; a minute-10 foe has 2.1x); dps = damage dealt / s, kps = kills / s.
 // single: one knockback-immune 'skelknight' with near-infinite HP 50 px to the right of the hero; dps on it. Aim point = nearest foe.
 // Hero runs end with the role check on f rows (GAME-DESIGN §4): kind 360 (OMNI, every Bell Form) vs dir; 360 crowd <= 0.6 x the hero's dir mean (Bell: the cross-hero dir mean);
 // dir single >= 2 x the hero's best 360 single; each kind within ±25% of the hero's kind mean. --md prints table rows as Markdown.

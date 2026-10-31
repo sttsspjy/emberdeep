@@ -65,7 +65,7 @@ ok(['chaser', 'swarm', 'brute', 'ranged', 'exploder', 'splitter', 'diver', 'char
 { // wire order: boss bodies keep their indices, tier foes follow them; XP curve
   const I = ED.FOE_IDX, X = ED.World.xpFor; let c10 = 0, c20 = 0, c30 = 0; for (let L = 1; L < 30; L++) { if (L < 10) c10 += X(L); if (L < 20) c20 += X(L); c30 += X(L); }
   ok(I.sporepod === 37 && I.twinhammer === 38 && I.weaver === 39 && I.wickeater === 40 && I.bulwark === 41 && I.colossus === 47 && ED.FOES.weaver.name === 'Rift Weaver', `foe wire order: boss bodies 37-40, tier foes 41-${ED.FOE_IDS.length - 1}`);
-  ok(X(1) === 3 && c10 === 731 && c20 === 5106 && c30 === 16131, `XP curve: ${X(1)} for level 2, cumulative ${c10} / ${c20} / ${c30} to levels 10 / 20 / 30`);
+  ok(X(1) === 3 && c10 === 731 && c20 === 8106 && c30 === 47631, `XP curve: ${X(1)} for level 2, cumulative ${c10} / ${c20} / ${c30} to levels 10 / 20 / 30`);
 }
 
 const players = (list) => list.map((cls, i) => ({ pid: 'p' + (i + 1), name: 'P' + (i + 1), slot: i, cls, meta: { shop: {}, sigs: [] } }));

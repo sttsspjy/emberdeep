@@ -353,26 +353,29 @@
   };
 
   // Pickup target (re-chosen every 0.5 s or when it is gone): chests first, food when hurt, magnet / bomb, else the best gem cluster point. tgtK = pull weight.
+  // A magnet within 900 px is worth MAG_V0 + (loose gem XP on the map) / MAG_DIV, at most MAG_VMAX (below a chest).
+  const MAG_V0 = 35, MAG_DIV = 20, MAG_VMAX = 58;
   Brain.prototype.pickTarget = function (ED, w, p) {
     const t = this.tgt;
     if (t && (t.dead || t.id !== this.tgtId)) this.tgt = null;
     if (this.tgt && this.n < this.tgtT) return;
     this.tgtT = this.n + 30;
     const G = w.pickups, hpF = p.hp / Math.max(1, p.maxHp), danger = Math.min(1, this.crowd * 0.05);
-    let best = null, bs = 0, bk = 0;
+    let best = null, bs = 0, bk = 0, gems = 0, mag = null, md = 0;
     for (let i = 0; i < G.length; i++) {
       const g = G[i]; if (g.dead || g.pull) continue;
       const d = Math.hypot(g.x - p.x, g.y - p.y);
       let v = 0, k = 0;
       if (g.k === 'chest') { if (d > 1600) continue; v = 60; k = 1.1; }
       else if (g.k === 'food') { if (hpF > 0.8 || d > 900) continue; v = 30 * (1.2 - hpF); k = 0.6 + (1 - hpF); }
-      else if (g.k === 'magnet') { if (d > 900) continue; v = 12; k = 0.6; }
+      else if (g.k === 'magnet') { if (d <= 900) { mag = g; md = d; } continue; }
       else if (g.k === 'bomb') { if (d > 700) continue; v = 4 + this.crowd * 0.3; k = 0.5; }
       else if (g.k === 'gold') { if (d > 300) continue; v = 0.5 * g.val; k = 0.25; }
-      else { if (d > 500) continue; v = g.val; k = 0.3; }
+      else { gems += g.val; if (d > 500) continue; v = g.val; k = 0.3; }
       const s = v / (d + 80);
       if (s > bs) { bs = s; best = g; bk = k; }
     }
+    if (mag && Math.min(MAG_VMAX, MAG_V0 + gems / MAG_DIV) / (md + 80) > bs) { best = mag; bk = 0.8; }
     this.tgt = best; this.tgtId = best ? best.id : 0; this.tgtK = bk * (1 - 0.6 * danger);
   };
 
