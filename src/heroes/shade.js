@@ -194,7 +194,7 @@
   const base = (o) => Object.assign({}, KEYS, o);
   ED.addWeapon({
     id: 'daggers', name: 'Twin Daggers', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', txt: 'Rapid stabs toward your cursor',
-    base: base({ dmg: 13, cd: 0.5, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.1 }),
+    base: base({ dmg: 16, cd: 0.5, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.1 }),
     paths: [
       { id: 'flurry', name: 'Flurry', form: 'thousand', ranks: [
         { mods: { n: 1 }, txt: '+1 stab per flurry' },

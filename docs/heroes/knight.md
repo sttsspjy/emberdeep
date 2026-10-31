@@ -4,7 +4,7 @@ Role: wades into the crowd. Wide, heavy front arcs, stagger and knockback; direc
 
 ## Weapon: Cleave (cursor)
 
-Base: 24 dmg, cd 1.1 s, one 115° arc (2.0 rad), reach 56 px, knock 120. Attacks come in strings: extra swings follow 0.15 s apart (alternating ±0.3 rad) at 0.8× damage. Back swings deal 0.5× and carry no waves or slams. Aim: directional strings (Cleave, Colossus Blade, Rending Gale) swing exactly along the cursor, waves and crescents fly along it, back swings mirror it; 360° Forms ignore it.
+Base: 28 dmg, cd 1.1 s, one 115° arc (2.0 rad), reach 56 px, knock 120. Attacks come in strings: extra swings follow 0.15 s apart (alternating ±0.3 rad) at 0.8× damage. Back swings deal 0.5× and carry no waves or slams. Aim: directional strings (Cleave, Colossus Blade, Rending Gale) swing exactly along the cursor, waves and crescents fly along it, back swings mirror it; 360° Forms ignore it.
 
 | Path | Rank 1 | Rank 2 | Rank 3 |
 |---|---|---|---|

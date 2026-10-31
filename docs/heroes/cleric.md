@@ -4,7 +4,7 @@ Role: holy strikes on foes near the hero, healing and protecting allies, zone co
 
 ## Weapon: Smite (root)
 
-- Base: dmg 20, cd 1.0 s, 1 pillar, pillar radius 26, range 230 px. Pillars fall 0.2 s on distinct random foes within range in view; pillars beyond the foe count fall again on random picks 0.1 s apart (single targets take them all). Pillars stay targeted. No foe: pillars stride out along the cursor direction.
+- Base: dmg 23, cd 1.0 s, 1 pillar, pillar radius 26, range 230 px. Pillars fall 0.2 s on distinct random foes within range in view; pillars beyond the foe count fall again on random picks 0.1 s apart (single targets take them all). Pillars stay targeted. No foe: pillars stride out along the cursor direction.
 - Emitters added by paths (all damage factors are of the weapon damage):
   - **Aura** (Censer): radius 48 / 62 (rank 1 / 2) × area; pulse every 0.5 s for 10%; with healing, a pulse that hit any foe heals heroes inside 0.6 HP/s.
   - **Censers** (Censer 3): orbit at 0.8 × aura radius, blast r 12 every 0.2 s for 25%, knock 60.

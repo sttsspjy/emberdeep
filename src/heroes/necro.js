@@ -13,7 +13,7 @@
   const KLOOK = ['minion', 'boneknight', 'bonearcher', 'ghoul'];
 
   ED.regLook('minion', 'boneknight', 'corpse', 'bonewall', 'blight', 'plague', 'bonearcher', 'ghoul', 'glob', 'boneslam');
-  ED.addHero({ id: 'necro', name: 'Necro', hp: 95, speed: 70, crit: 0.05, sig: 'boneshard', skills: ['bonewall'], icon: 'hero.necro.idle', col: '#b7a6e0', txt: 'Raises an army. The dead are fuel.' });
+  ED.addHero({ id: 'necro', name: 'Necro', hp: 105, speed: 70, crit: 0.05, sig: 'boneshard', skills: ['bonewall'], icon: 'hero.necro.idle', col: '#b7a6e0', txt: 'Raises an army. The dead are fuel.' });
 
   // ---------------- corpses ----------------
   const corpses = (p) => { if (!p.corpse) { p.corpse = new Float64Array(CORPSES * 3).fill(-1); p.corpI = 0; } return p.corpse; };
@@ -192,7 +192,7 @@
   const SHOT = { fire(w, p, ws, S) { shards(w, p, ws, S); army(w, p, ws, S); return true; }, kill: onKill };
   ED.addWeapon({
     id: 'boneshard', name: 'Bone Shard', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', txt: 'Shards pierce; the dead rise to serve',
-    base: base({ dmg: 12, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220 }),
+    base: base({ dmg: 15, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220 }),
     paths: [
       { id: 'legion', name: 'Legion', form: 'bonelord', ranks: [
         { mods: { cap: 2, raise: 1 }, txt: '+2 skeletons, raised two at a time' },

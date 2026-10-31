@@ -5,7 +5,7 @@
 // Packs: def.pack foes spawn [min, max] together (1 spawn each);
 // def.wall packs spawn as a line across the hero's direction, def.wall px apart, each member keeping its side offset in e.aa (AI.march).
 // Flock (every events.flock.every s from events.flock.first): one tight pack of the stage's swarmer on the spawn ring at the next golden-angle step around a random living hero, rushing at its spot
-// (8 at 0:40 to 40 at 10:00 x party factor); bounded by the hard cap only (not the alive cap or the density floor); swarm-brain non-solo kinds come only from flocks and swarm events.
+// (8 at 0:40 to 40 at 10:00 x party factor); may exceed the alive cap by FLOCK_OVER (25%), never the hard cap; swarm-brain non-solo kinds come only from flocks and swarm events.
 // Swarm event (every events.swarm.every s): a closing ring of swarmers rushing at one hero's spot, or a stampede line crossing that hero's screen (24 at the first event to 50 by 12:00); rush time uses the foe's paced speed (W.foePace);
 // stampede members cycle the ring ids plus the stampede ids present in the current roster.
 // Benchmark phase (stage bench { t, elite }): from bench.t a 'warn' { kind: 'surge' } event and elites every bench.elite s.
@@ -14,7 +14,7 @@
 (function (ED) {
   'use strict';
   const U = ED.U, W = ED.World.prototype;
-  const HARD_CAP = 900, RING = [380, 460], BOSS_WARN = 5, SWARM_R = 430, REFILL = 0.1, REFILL_MIN = 4, REFILL_MAX = 40, GOLDEN = Math.PI * (3 - Math.sqrt(5)), FLOCK_R = 40, FLOCK_FULL = 600;
+  const HARD_CAP = W.HARD_CAP = 900, RING = [380, 460], BOSS_WARN = 5, SWARM_R = 430, REFILL = 0.1, REFILL_MIN = 4, REFILL_MAX = 40, GOLDEN = Math.PI * (3 - Math.sqrt(5)), FLOCK_R = 40, FLOCK_FULL = 600, FLOCK_OVER = 1.25;
 
   W.initSpawner = function () {
     const sd = this.sdef, ev = (sd.events && sd.events.swarm) || null, fl = (sd.events && sd.events.flock) || null, el = sd.elites || null;
@@ -83,7 +83,7 @@
   // at the next golden-angle step (members on a blocked spot take the free centre), all rushing along the centre's heading to 30 px short of p's spot. Returns the number spawned.
   W.flockEvent = function (ev, p) {
     const sp = this.sp, k = U.clamp((this.time - ev.first) / Math.max(1, FLOCK_FULL - ev.first), 0, 1);
-    const n = Math.min(Math.round((ev.n[0] + (ev.n[1] - ev.n[0]) * k) * (1 + 0.25 * (this.partyN - 1))), HARD_CAP - this.foes.length);
+    const n = Math.min(Math.round((ev.n[0] + (ev.n[1] - ev.n[0]) * k) * (1 + 0.25 * (this.partyN - 1))), HARD_CAP - this.foes.length, Math.round(this.aliveCap() * FLOCK_OVER) - this.foes.length);
     sp.ang = (sp.ang + GOLDEN + this.rng.range(-0.3, 0.3)) % U.TAU;
     const pt = n > 0 ? this.ringPoint(p, RING[0], RING[1], false, sp.ang) : null;
     if (!pt) return 0;

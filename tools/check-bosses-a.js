@@ -101,7 +101,7 @@ ok(wd.digest === wd2.digest, `warden: deterministic (${wd.digest} / ${wd2.digest
 reset();
 const spO = { id: 'spore', stage: 0, minute: 10, phaseAt: [[25, 0.6], [42, 0.3]] }, sp = fight(spO), spN = cover(spO, ['spore']);
 ok(!sp.err, 'spore: 60 s throws nothing' + (sp.err ? ': ' + sp.err.stack : ''));
-ok(sp.boss && sp.boss.maxHp === 8485, 'spore: HP 1500 x (10 min / 5)^2.5 = 8485 (' + (sp.boss && sp.boss.maxHp) + ')');
+ok(sp.boss && sp.boss.maxHp === 6000, 'spore: HP 1500 x (10 min / 5)^2 = 6000 (' + (sp.boss && sp.boss.maxHp) + ')');
 ok(allUsed('spore').length === 0, 'spore: every attack used within ' + spN + ' fight(s) ' + JSON.stringify(used.spore));
 ok(sp.phases.join() === '2,3', 'spore: phases 2, 3 (' + sp.phases.join() + ')');
 ok(sp.pods === 4, 'spore: 4 pods rose (' + sp.pods + ')');

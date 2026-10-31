@@ -9,7 +9,7 @@ HP 90, speed 80, crit 8%.
 - **Aim**: exactly along the cursor, foe or no foe (no aim assist).
 - **Arrow**: pierces 8 foes, 300 px range (420 px/s); its first hit deals ×1.5.
 - **Fan**: n arrows 0.18 rad apart; a fan of n deals (1 + 0.25 (n − 1)) × one arrow in total.
-- Base: 20 damage, cooldown 0.55 s, knockback 25. Multishot adds fan arrows.
+- Base: 22 damage, cooldown 0.55 s, knockback 25. Multishot adds fan arrows.
 
 ## Paths
 

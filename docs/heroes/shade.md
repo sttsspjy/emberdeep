@@ -9,7 +9,7 @@ HP 80, speed 80, crit 15%.
 - **Stab**: a line from the hero's hand toward the aim, 52 px long, 10 px wide (area scales both); every foe on the line is hit.
 - **Strike**: 2 stabs per 0.5 s, spread evenly over the cooldown (one stab every 0.25 s), each re-aimed exactly along the cursor (no aim assist).
 - **Crit per stab**: one roll per stab; a crit stab crits every foe it touches, others never crit. Weapon crit +10%.
-- Base: 13 damage, knockback 14. Multishot adds stabs per strike.
+- Base: 16 damage, knockback 14. Multishot adds stabs per strike.
 
 ## Paths
 

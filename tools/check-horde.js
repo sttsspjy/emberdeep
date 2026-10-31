@@ -54,7 +54,7 @@ ok(['chaser', 'swarm', 'brute', 'ranged', 'exploder', 'splitter', 'diver', 'char
 { // wire order: boss bodies keep their indices, tier foes follow them; XP curve
   const I = ED.FOE_IDX, X = ED.World.xpFor; let c10 = 0, c20 = 0, c30 = 0; for (let L = 1; L < 30; L++) { if (L < 10) c10 += X(L); if (L < 20) c20 += X(L); c30 += X(L); }
   ok(I.sporepod === 37 && I.twinhammer === 38 && I.weaver === 39 && I.wickeater === 40 && I.bulwark === 41 && I.colossus === 47 && ED.FOES.weaver.name === 'Rift Weaver', `foe wire order: boss bodies 37-40, tier foes 41-${ED.FOE_IDS.length - 1}`);
-  ok(X(1) === 4 && c10 === 987 && c20 === 6907 && c30 === 21820, `XP curve: ${X(1)} for level 2, cumulative ${c10} / ${c20} / ${c30} to levels 10 / 20 / 30`);
+  ok(X(1) === 3 && c10 === 731 && c20 === 5106 && c30 === 16131, `XP curve: ${X(1)} for level 2, cumulative ${c10} / ${c20} / ${c30} to levels 10 / 20 / 30`);
 }
 
 const players = (list) => list.map((cls, i) => ({ pid: 'p' + (i + 1), name: 'P' + (i + 1), slot: i, cls, meta: { shop: {}, sigs: [] } }));
@@ -282,10 +282,10 @@ for (const st of [0, 1, 2]) {
     const head = F.every(e => e.rushT > 0 && Math.abs(e.rx - (h.x - cx) / d) < 0.15 && Math.abs(e.ry - (h.y - cy) / d) < 0.15), tight = F.every(e => Math.hypot(e.x - cx, e.y - cy) <= 80);
     return { n: F.length, d, head, tight, id: F.length ? F[0].def.id : '', cap: v.aliveCap(), alive: v.foes.length };
   };
-  const a = one(1, 600, 0), b = one(4, 600, 0), c = one(1, 900, 0), d = one(1, 40, 80), e = one(1, 600, 880), g = one(1, 300, 0, 2);
+  const a = one(1, 600, 0), b = one(4, 600, 0), c = one(1, 900, 0), d = one(1, 40, 80), e = one(4, 900, 880), f = one(1, 600, 750), g = one(1, 300, 0, 2);
   ok(a.n === 40 && b.n === 70 && c.n === 40 && g.n === 23 && g.id === 'starspawn', `flock size: ${a.n} at 10:00 solo, ${b.n} x4, ${c.n} at 15:00, Abyss ${g.n} ${g.id} at 5:00`);
   ok(a.head && a.tight && a.d >= 340 && a.d <= 470, `flock: one pack ${Math.round(a.d)} px out, every member rushing at the hero's spot`);
-  ok(d.n === 8 && d.alive > d.cap && e.n === 20 && e.alive === 900, `flock past the alive cap (${d.alive} alive, cap ${d.cap}); hard cap holds (${e.n} spawned at 880 -> ${e.alive})`);
+  ok(d.n === 8 && d.alive > d.cap && f.alive === Math.round(f.cap * 1.25) && e.n === 20 && e.alive === 900, `flock past the alive cap (${d.alive} alive, cap ${d.cap}), at most +25% (${f.alive} at cap ${f.cap}); hard cap holds (${e.n} spawned at 880 -> ${e.alive})`);
 }
 { // benchmark phase: a 'surge' warning at 12:00, then elites every 30 s
   const w = new ED.World({ seed: 77, stage: 1, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];

@@ -78,6 +78,6 @@
   add('bloater', { name: 'Bog Bloater', hp: 44, spd: 22, dmg: 1.2, r: 11, scale: 1.4, split: { id: 'bloatling', n: [2, 2] } });
   add('bloatling', { name: 'Bloatling', hp: 13, spd: 34, r: 7, solo: true, split: { id: 'glowlet', n: [2, 3] } });
   add('mirecrab', { name: 'Mire Crab', ai: 'march', hp: 96, spd: 20, dmg: 1.4, r: 11, xp: 5, kb: 0, take: 0.7, pack: [3, 4], wall: 26, scale: 1.5 });
-  add('stalker', { name: 'Rift Stalker', ai: 'blinker', pack: [2, 3], hp: 22, spd: 42, r: 7, blink: { range: 230, side: 36, wind: 0.7, slash: 0.6, r: 34, mul: 1.5, cd: 5.5 } });
+  add('stalker', { name: 'Rift Stalker', ai: 'blinker', pack: [1, 2], hp: 22, spd: 42, r: 7, blink: { range: 230, side: 36, wind: 0.7, slash: 0.6, r: 34, mul: 1, cd: 5.5 } });
   add('colossus', { name: 'Void Colossus', ai: 'brute', hp: 192, spd: 20, dmg: 1.6, r: 15, xp: 5, kb: 0, take: 0.8, brute: true, slam: SLAM(64, { wind: 1.2, cd: 4.2, pull: { r: 150, str: 45 } }) });
 })(globalThis.ED || (globalThis.ED = {}));

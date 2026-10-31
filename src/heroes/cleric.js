@@ -227,7 +227,7 @@
   // Smite: S.n pillars on random foes near the hero; paths Storm (more pillars, leaps), Censer (aura, healing, censers), Lance (sweeping beam).
   ED.addWeapon({
     id: 'smite', name: 'Smite', icon: 'weapon.mace', sig: 'cleric', mode: 'random', txt: 'Holy pillars on random foes',
-    base: base({ dmg: 20, cd: 1.0, n: 1 }),
+    base: base({ dmg: 23, cd: 1.0, n: 1 }),
     paths: [
       { id: 'storm', name: 'Storm', form: 'wrath', ranks: [
         { mods: { n: 1 }, txt: '+1 pillar' },

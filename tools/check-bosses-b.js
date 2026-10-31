@@ -84,6 +84,7 @@ function fight(b, opt) {
     // kill: owned zones must vanish, a mid-boss drops a chest, a final boss wins the run
     e.takeMul = 1;
     w.hitFoe(e, 1e9, w.src(w.heroes[0], 'test'));
+    w.heroes[0].x = e.x + 400; w.heroes[0].y = e.y; // out of pickup reach: the chest stays on the ground
     w.update(C.TICK); w.update(C.TICK);
     out.zonesAfter = w.zones.filter(z => !z.dead && (z.src === e)).length;
     out.chest = w.pickups.some(g => g.k === 'chest' && !g.dead);

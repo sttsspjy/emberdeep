@@ -4,7 +4,7 @@
 
 ## Weapon: Bone Shard (auto, cursor)
 
-Every 1.0 s: 1 piercing shard (12 dmg, pierce 3, 280 px/s, range 220) exactly along the cursor. Then the **army** step: raises 1 minion while fewer than **3** live (at the freshest corpse within 200 px, else beside the hero), so the army stands from the first seconds. Skeletons: 10 s life, swing every 0.6 s for 0.65 × weapon damage in a 2.8 rad arc, leash 200 px, target foes within 150 px. Hard cap 24 minions per hero.
+Every 1.0 s: 1 piercing shard (15 dmg, pierce 3, 280 px/s, range 220) exactly along the cursor. Then the **army** step: raises 1 minion while fewer than **3** live (at the freshest corpse within 200 px, else beside the hero), so the army stands from the first seconds. Skeletons: 10 s life, swing every 0.6 s for 0.65 × weapon damage in a 2.8 rad arc, leash 200 px, target foes within 150 px. Hard cap 24 minions per hero.
 
 | Path | Rank 1 | Rank 2 | Rank 3 | Form |
 |---|---|---|---|---|

@@ -79,7 +79,7 @@
   const ARROW = { look: 'arrow', onHit: bounce };
   ED.addWeapon({
     id: 'longbow', name: 'Longbow', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', txt: 'Piercing arrows toward your cursor',
-    base: { dmg: 20, cd: 0.55, n: 1, pierce: 8, area: 1, speed: 420, dur: 0, knock: 25, range: 300, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 22, cd: 0.55, n: 1, pierce: 8, area: 1, speed: 420, dur: 0, knock: 25, range: 300, heavy: 0, two: false, bounce: 0, kshot: 0 },
     paths: [
       { id: 'spread', name: 'Spread', form: 'hail', ranks: [
         { mods: { n: 2 }, txt: '+2 arrows in a fan' },
