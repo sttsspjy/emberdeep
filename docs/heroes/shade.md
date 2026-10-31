@@ -2,7 +2,7 @@
 
 **Role**: rapid, narrow, short-range stabs toward the cursor; crits rolled per stab; executes; the elite / boss killer up close; survives through Shadow Step. Unlike the Knight (wide, slow arcs into a crowd), every Shade hit is a thin line.
 
-HP 80, speed 80, crit 15%.
+HP 80, speed 84, crit 15%.
 
 ## Weapon: Twin Daggers (`daggers`)
 

@@ -9,7 +9,7 @@
   const U = ED.U, TAU = U.TAU;
   ED.regLook('stepcut', 'afterimg', 'sknife', 'stab', 'stabx', 'tcut', 'smark', 'mcut', 'petal', 'sexec', 'rknife', 'pknife');
 
-  ED.addHero({ id: 'shade', name: 'Shade', hp: 80, speed: 80, crit: 0.15, sig: 'daggers', skills: ['step'], icon: 'hero.shade.idle', col: '#8a9bd6', txt: 'Rapid stabs, deadly crits.' });
+  ED.addHero({ id: 'shade', name: 'Shade', hp: 80, speed: 84, crit: 0.15, sig: 'daggers', skills: ['step'], icon: 'hero.shade.idle', col: '#8a9bd6', txt: 'Rapid stabs, deadly crits.' });
 
   const AIM_CONE = 0.9, HAND = 6, VIS = 0.12;
   const ZO = { team: 0, p: null, wid: '', x: 0, y: 0, a: 0, len: 0, w: 0, r: 0, dur: VIS, look: '' };
@@ -276,7 +276,7 @@
     if (d < 1) a = p.mdir;
     d = U.clamp(d, 40, N.dist);
     const ox = p.x, oy = p.y;
-    p.x += Math.cos(a) * d; p.y += Math.sin(a) * d; ED.Arena.collide(w.arena, p, p.r);
+    p.x += Math.cos(a) * d; p.y += Math.sin(a) * d; ED.Arena.collide(w.arena, p, ED.CONST.HERO_BODY);
     p.invuln = Math.max(p.invuln, 0.35); p.mdir = a;
     const len = Math.hypot(p.x - ox, p.y - oy) || 1;
     w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, a, len, w: 26, dur: 0.3, look: 'stepcut' });

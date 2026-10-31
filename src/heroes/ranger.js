@@ -5,7 +5,7 @@
   const U = ED.U, TAU = U.TAU;
 
   ED.regLook('vault', 'vland', 'caltrops', 'shock');
-  ED.addHero({ id: 'ranger', name: 'Ranger', hp: 90, speed: 80, crit: 0.08, sig: 'longbow', skills: ['vault'], icon: 'hero.ranger.idle', col: '#9fd38a', txt: 'Piercing arrows down long lines.' });
+  ED.addHero({ id: 'ranger', name: 'Ranger', hp: 90, speed: 84, crit: 0.08, sig: 'longbow', skills: ['vault'], icon: 'hero.ranger.idle', col: '#9fd38a', txt: 'Piercing arrows down long lines.' });
 
   // ---------------- shared arrow mechanics ----------------
   // Projectile fields used here: pr.st = bounces left (number), pr.rk = per-arrow counter (Seeker kill refreshes, Rebound segment pierce); pr.dmg drops from x FIRST to x1 after the first hit.
@@ -253,7 +253,7 @@
   }, (w, p, x, y, N) => {
     const a = Math.hypot(x - p.x, y - p.y) < 1 ? p.mdir : Math.atan2(y - p.y, x - p.x), c = Math.cos(a), s = Math.sin(a);
     let d = N.dist;
-    while (d > 0 && ED.Arena.blocked(w.arena, p.x + c * d, p.y + s * d, p.r)) d -= 8;
+    while (d > 0 && ED.Arena.blocked(w.arena, p.x + c * d, p.y + s * d, ED.CONST.HERO_BODY)) d -= 8;
     d = Math.max(0, d);
     const v = p.vault || (p.vault = { t: 0, T: 0, end: 0, x0: 0, y0: 0, x1: 0, y1: 0, gem: 0 });
     v.T = v.t = N.t; v.end = w.time + N.t; v.x0 = p.x; v.y0 = p.y; v.x1 = p.x + c * d; v.y1 = p.y + s * d; v.gem = N.gem;
@@ -272,7 +272,7 @@
       const k = U.clamp(1 - v.t / v.T, 0, 1);
       p.x = v.x0 + (v.x1 - v.x0) * k; p.y = v.y0 + (v.y1 - v.y0) * k; p.moving = true;
       if (v.t > 0) return;
-      ED.Arena.collide(w.arena, p, p.r);
+      ED.Arena.collide(w.arena, p, ED.CONST.HERO_BODY);
       w.pullGems(p, p.x, p.y, v.gem);
       w.zone({ team: 0, p, wid: 'vault', x: p.x, y: p.y, r: 40, dur: 0.4, look: 'vland' });
     },

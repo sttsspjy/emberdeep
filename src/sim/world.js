@@ -119,13 +119,13 @@
       if (p.dashT > 0) {
         const step = Math.min(dt, p.dashT), v = D.dist / D.t;
         p.vx = p.dashDx * v; p.vy = p.dashDy * v;
-        ED.Arena.move(A, p, p.vx * step, p.vy * step, p.r);
+        ED.Arena.move(A, p, p.vx * step, p.vy * step, C.HERO_BODY);
         p.dashT -= dt; p.moving = true;
       } else {
         const sp = p.stats.speed * (p.slowT > 0 ? 1 - (p.slowK || 0) : 1);
         p.vx = I.mx * sp; p.vy = I.my * sp;
         p.moving = Math.abs(I.mx) + Math.abs(I.my) > 0.05;
-        if (p.moving) { ED.Arena.move(A, p, p.vx * dt, p.vy * dt, p.r); p.mdir = Math.atan2(I.my, I.mx); p.mvx = I.mx; p.mvy = I.my; }
+        if (p.moving) { ED.Arena.move(A, p, p.vx * dt, p.vy * dt, C.HERO_BODY); p.mdir = Math.atan2(I.my, I.mx); p.mvx = I.mx; p.mvy = I.my; }
       }
       if (p.slowT > 0) p.slowT -= dt;
       const hk = ED.HOOK[p.cls]; if (hk && hk.tick) hk.tick(this, p, dt);

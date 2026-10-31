@@ -10,7 +10,7 @@
   const U = ED.U, TAU = U.TAU;
   ED.regLook('tollb', 'tollw', 'cathb', 'cathw', 'pealw', 'tollf', 'rime', 'glacb', 'glacw', 'carb', 'underw', 'chime', 'chimew');
 
-  ED.addHero({ id: 'bell', name: 'Bellwarden', hp: 115, speed: 69, crit: 0.05, sig: 'toll', skills: ['peal'], icon: 'hero.bell.idle', col: '#e6c27a', txt: 'Peals that push the horde back.' });
+  ED.addHero({ id: 'bell', name: 'Bellwarden', hp: 115, speed: 78, crit: 0.05, sig: 'toll', skills: ['peal'], icon: 'hero.bell.idle', col: '#e6c27a', txt: 'Peals that push the horde back.' });
 
   // Zone options (scratch, reset by zopt; w.zone copies them).
   const ZO = { team: 0, p: null, wid: '', x: 0, y: 0, r: 0, dur: 0, dps: 0, tick: 0.5, knock: 0, slow: null, look: '', st: null, onTick: null, onEnd: null };
@@ -25,11 +25,11 @@
   // ---------------- waves ----------------
   // Wave options (scratch; wopt resets, wave copies): R0 start radius, R end radius (R < R0: the ring closes in), dur s (ease out) after delay s, dmg, stun s, knock (away from the centre),
   // pull (> 0: pull every foe reached toward that radius instead; a foe that cannot be moved (boss, no knockback) takes x crush), slow k (2 s), freeze s, res (+dmg share vs slowed / stunned / frozen foes), shatter (+dmg share vs frozen foes,
-  // then a shard burst and the ice breaks), shard (ring kills burst in shards).
-  const WO = { R0: 0, R: 0, dur: 0, delay: 0, dmg: 0, stun: 0, knock: 0, pull: 0, slow: 0, freeze: 0, res: 0, shatter: 0, shard: 0, crush: 0 };
+  // then a shard burst and the ice breaks), shard (ring kills burst in shards), seen (a Set shared by several waves: a foe is hit once across all of them; null: per wave).
+  const WO = { R0: 0, R: 0, dur: 0, delay: 0, dmg: 0, stun: 0, knock: 0, pull: 0, slow: 0, freeze: 0, res: 0, shatter: 0, shard: 0, crush: 0, seen: null };
   const wopt = (R0, R, dur, dmg) => {
     WO.R0 = R0; WO.R = R; WO.dur = dur; WO.dmg = dmg;
-    WO.delay = WO.stun = WO.knock = WO.pull = WO.slow = WO.freeze = WO.res = WO.shatter = WO.shard = WO.crush = 0;
+    WO.delay = WO.stun = WO.knock = WO.pull = WO.slow = WO.freeze = WO.res = WO.shatter = WO.shard = WO.crush = 0; WO.seen = null;
     return WO;
   };
   const WST = [];
@@ -46,15 +46,15 @@
   function waveTick(w, z) {
     const s = z.st, k = (z.t - s.delay) / s.dur;
     if (k < 0) return;
-    const r = s.R0 + (s.R - s.R0) * U.easeOut(Math.min(1, k)), inward = s.R < s.R0, p = z.p;
+    const r = s.R0 + (s.R - s.R0) * U.easeOut(Math.min(1, k)), inward = s.R < s.R0, p = z.p, H = s.seen || s.hits;
     z.r = Math.max(1, r);
     const q = w.foeScan(z.x, z.y, inward ? s.R0 : r);
     for (let i = 0; i < q.length; i++) {
-      const e = q[i]; if (e.dead || s.hits.has(e.id)) continue;
+      const e = q[i]; if (e.dead || H.has(e.id)) continue;
       const d2 = U.dist2(z.x, z.y, e.x, e.y), ro = (inward ? s.R0 : r) + e.r;
       if (d2 > ro * ro || (inward && r > e.r && d2 < (r - e.r) * (r - e.r))) continue;
       if (p && !ED.inView(p, e.x, e.y, e.r)) continue; // status and push follow the damage rule: only inside the hero's view
-      s.hits.add(e.id);
+      H.add(e.id);
       const held = e.freezeT > 0, shat = s.shatter > 0 && held;
       let m = shat ? 1 + s.shatter : s.res && (held || e.stunT > 0 || e.slowT > 0) ? 1 + s.res : 1;
       if (e.r >= BIG_R && s.kind === 'weapon') m *= BIG_K;
@@ -72,7 +72,7 @@
     }
     w.foeEnd();
   }
-  function waveEnd(w, z) { const s = z.st; if (s.R >= s.R0) w.hitBraziers(z.x, z.y, s.R, z.p); s.hits.clear(); WST.push(s); z.st = null; }
+  function waveEnd(w, z) { const s = z.st; if (s.R >= s.R0) w.hitBraziers(z.x, z.y, s.R, z.p); s.hits.clear(); s.seen = null; WST.push(s); z.st = null; }
 
   // ---------------- bells, frost ground ----------------
   // Keeps st.bells[i] = { z, id, hits, clr } (i < n) alive on a circle of radius R around the hero (angle st.ang + i x TAU / n, st.ang turning spin rad/s);
@@ -109,12 +109,12 @@
   const bell = (ws, i) => { const b = ws.st.bells && ws.st.bells[i]; return b && b.z && b.z.id === b.id && !b.z.dead ? b.z : null; };
   const RIME_SLOW = [0.45, 0.6];
   // A peal of radius R from (x, y) with the slot's ring numbers (stun, knock, chill, res, shard, freeze, shatter) at dmgK x S.dmg; S.echo: a wider, weaker ring 0.25 s later;
-  // S.frost: frost ground (radius R / 2, max 48 px) for 2 s, S.dmg x 0.6 x frost per s, slows.
-  function peal(w, p, ws, S, x, y, R, dur, dmgK, look) {
-    const o = wopt(0, R, dur, S.dmg * dmgK);
+  // S.frost: frost ground (radius R / 2, max 48 px) for 2 s, S.dmg x 0.6 x frost per s, slows. seen / seenE: shared hit Sets of the ring / echo (optional).
+  function peal(w, p, ws, S, x, y, R, dur, dmgK, look, seen, seenE) {
+    const o = wopt(0, R, dur, S.dmg * dmgK); o.seen = seen || null;
     o.stun = S.stun || 0; o.knock = S.knock; o.slow = S.chill || 0; o.res = S.res || 0; o.shard = S.shard || 0; o.freeze = S.freeze || 0; o.shatter = S.shatter || 0;
     wave(w, p, ws.id, x, y, look, 'weapon');
-    if (S.echo) { o.R = R * 1.35; o.dur = dur * 1.2; o.delay = 0.25; o.dmg *= 0.6; o.knock = 0; o.freeze = o.shatter = 0; wave(w, p, ws.id, x, y, look, 'weapon'); }
+    if (S.echo) { o.R = R * 1.35; o.dur = dur * 1.2; o.delay = 0.25; o.dmg *= 0.6; o.knock = 0; o.freeze = o.shatter = 0; o.seen = seenE || null; wave(w, p, ws.id, x, y, look, 'weapon'); }
     if (S.frost > 0) { const zo = zopt(p, ws.id, x, y, Math.min(48, R * 0.5), 2, S.dmg * 0.6 * S.frost, 0, 'rime'); zo.slow = RIME_SLOW; w.zone(zo); }
   }
   // Toll-style orbit radius: S.orbit x sqrt(area); S.swing: swings out and back (0.5x .. 1.5x, 2.4 rad/s).
@@ -155,9 +155,10 @@
   });
 
   // Cathedral: great bells; each fire peals them in sequence 0.18 s apart, then S.great great rings (S.r x area x 2, 75% damage, 0.35 s apart) burst from the hero.
+  // One toll hits a foe once with the bell rings and once with their echoes, however many bells reach it (shared Sets, two pairs alternating per toll); a toll never restarts mid-sequence.
   ED.addWeapon({
     id: 'cathedral', name: 'Cathedral', icon: 'weapon.greatbell', sig: 'bell', mode: 'around', evolved: true, form: true, from: 'toll', txt: 'Great bells peal in sequence',
-    base: { dmg: 15, cd: 1.6, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 300, range: 0, r: 84, orbit: 62, spin: 1.7, body: 0.8, stun: 0.2, great: 1 },
+    base: { dmg: 11, cd: 1.6, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 300, range: 0, r: 84, orbit: 62, spin: 1.7, body: 0.8, stun: 0.2, great: 1 },
     refine: [
       { mods: { great: 1 }, txt: 'The great ring tolls twice' },
       { mods: { area: 0.25 }, txt: '+25% ring size' },
@@ -170,13 +171,19 @@
       st.seqT = 0.18;
       const i = (S.n | 0) - st.seq, z = bell(ws, i);
       st.seq--;
-      if (z) peal(w, p, ws, S, z.x, z.y, S.r * S.area, 0.32, 1, 'cathw');
+      if (z) peal(w, p, ws, S, z.x, z.y, S.r * S.area, 0.32, 1, 'cathw', st.hs[st.hi], st.hs[st.hi + 1]);
       if (st.seq) return;
       const o = wopt(0, S.r * S.area * 2, 0.5, S.dmg * 0.75);
       o.stun = S.stun || 0; o.knock = S.knock; o.slow = S.chill || 0; o.res = S.res || 0; o.shard = S.shard || 0;
       for (let g = 0; g < Math.max(1, S.great | 0); g++) { o.delay = g * 0.35; wave(w, p, ws.id, p.x, p.y - 6, 'cathw', 'weapon'); }
     },
-    fire(w, p, ws, S) { ws.st.seq = Math.max(1, S.n | 0); ws.st.seqT = 0; return true; },
+    fire(w, p, ws, S) {
+      const st = ws.st;
+      if (st.seq > 0) return false;
+      if (!st.hs) { st.hs = [new Set(), new Set(), new Set(), new Set()]; st.hi = 2; }
+      st.hi ^= 2; st.hs[st.hi].clear(); st.hs[st.hi + 1].clear();
+      st.seq = Math.max(1, S.n | 0); st.seqT = 0; return true;
+    },
   });
 
   // ---------------- Great Peal ----------------
@@ -219,7 +226,7 @@
   // then the wheel swells from 0.6x to (0.6 + S.swell)x its orbit and back over 0.8 s.
   ED.addWeapon({
     id: 'carillon', name: 'Carillon', icon: 'weapon.handbells', sig: 'bell', mode: 'around', evolved: true, form: true, from: 'toll', txt: 'A wheel of bells sweeps out and back',
-    base: { dmg: 6, cd: 1.3, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 160, range: 0, r: 40, orbit: 40, spin: 3.2, body: 2, swell: 0.9 },
+    base: { dmg: 8, cd: 1.3, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 110, range: 0, r: 40, orbit: 40, spin: 3.2, body: 2, swell: 0.9 },
     refine: [
       { mods: { n: 2 }, txt: '+2 bells' },
       { mods: { spin: 1.2, swell: 0.35 }, txt: 'Bells whirl faster and swing wider' },

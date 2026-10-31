@@ -9,7 +9,7 @@
   const U = ED.U, TAU = U.TAU;
   ED.regLook('smite', 'wrath', 'pglow', 'sanct', 'aura', 'halo', 'beam', 'ray', 'hallow');
 
-  ED.addHero({ id: 'cleric', name: 'Cleric', hp: 110, speed: 70, crit: 0.05, sig: 'smite', skills: ['sanctuary'], icon: 'hero.cleric.idle', col: '#ffe08a', txt: 'Holy pillars smite foes near you.' });
+  ED.addHero({ id: 'cleric', name: 'Cleric', hp: 110, speed: 78, crit: 0.05, sig: 'smite', skills: ['sanctuary'], icon: 'hero.cleric.idle', col: '#ffe08a', txt: 'Holy pillars smite foes near you.' });
 
   // ---------------- pillars ----------------
   const FALL = 0.2, LEAP_R = 110, LEAP_K = 0.4, LEAP_MAX = 4, HOP_R = 120, HOP_K = 0.85, HOP_FALL = 0.1;

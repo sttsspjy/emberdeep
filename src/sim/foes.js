@@ -7,6 +7,7 @@
   'use strict';
   const U = ED.U, W = ED.World.prototype;
   const CONTACT_CD = 1.0, FAR = 900, FAR_ELITE = 1300, RETARGET = 20, ATK_TOK = 2;
+  const SPLIT_ARC = 70 * Math.PI / 180, SPLIT_JIT = 0.08; // splitter children: half-arc half width, angle jitter (rad); sum < 90 deg
 
   W.initFoes = function () { this.foePool = []; };
   // Contact damage at the current time: 3 at 0:00 rising to 9 at 15:00 (GAME-DESIGN §7), x the stage damage factor.
@@ -140,7 +141,11 @@
     const sp = e.def.split;
     if (sp && !e.boss) {
       const n = Math.min(this.rng.int(sp.n[0], sp.n[1]) + (e.elite ? 3 : 0), this.HARD_CAP - this.foes.length + 1); // the dying parent still counts in foes
-      for (let i = 0; i < n; i++) { const a = i / n * U.TAU + this.rng.next(), d = 8 + e.r * 0.5; this.spawnFoe(sp.id, e.x + Math.cos(a) * d, e.y + Math.sin(a) * d); }
+      // children fan out on a +-SPLIT_ARC half-arc facing away from the nearest living hero (none: random facing), so none starts closer to that hero than the parent
+      let h = null, hd = Infinity;
+      for (let k = 0; k < this.living.length; k++) { const q = this.living[k], d2 = (q.x - e.x) * (q.x - e.x) + (q.y - e.y) * (q.y - e.y); if (d2 < hd) { hd = d2; h = q; } }
+      const c = h ? Math.atan2(e.y - h.y, e.x - h.x) : this.rng.next() * U.TAU, d = 8 + e.r * 0.5;
+      for (let i = 0; i < n; i++) { const a = c + (n > 1 ? (i / (n - 1) * 2 - 1) * SPLIT_ARC : 0) + this.rng.range(-SPLIT_JIT, SPLIT_JIT); this.spawnFoe(sp.id, e.x + Math.cos(a) * d, e.y + Math.sin(a) * d); }
     }
     if (p) { this.weaponKill(p, e); const hk = ED.HOOK[p.cls]; if (hk && hk.kill) hk.kill(this, p, e); }
   };

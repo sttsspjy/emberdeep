@@ -33,14 +33,14 @@
       const dx = z.x - p.x, dy = z.y - p.y, d = Math.hypot(dx, dy);
       if (d > z.r || d < 8 || Math.abs(U.angDiff(z.a, Math.atan2(-dy, -dx))) > z.arc / 2) continue;
       const k = DEVOUR.pull * DT * (1 - 0.5 * d / z.r) / d;
-      ED.Arena.move(w.arena, p, dx * k, dy * k, p.r);
+      ED.Arena.move(w.arena, p, dx * k, dy * k, ED.CONST.HERO_BODY);
     }
   };
   // Closing ring: still while warned (z.r = r0), then shrinks to r1; a hero on the band outside every gap is hit.
   const darkUpd = (w, z, e, st) => { if (z.t >= st.arm) z.r = DARK.r0 - (DARK.r0 - DARK.r1) * Math.min(1, (z.t - st.arm) / DARK.close); };
   const darkTest = (w, z, p) => {
     const dx = p.x - z.x, dy = p.y - z.y, d = Math.hypot(dx, dy);
-    if (Math.abs(d - z.r) > DARK.band + p.r * 0.7) return false;
+    if (Math.abs(d - z.r) > DARK.band + p.r) return false;
     const a = Math.atan2(dy, dx), n = z.w;
     for (let i = 0; i < n; i++) if (Math.abs(U.angDiff(z.a + i * TAU / n, a)) <= DARK.gap) return false;
     return true;

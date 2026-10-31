@@ -17,7 +17,7 @@
     if (st.upd) st.upd(w, z, e, st);
     if (z.dead || z.t < st.arm || !(st.mul > 0)) return;
     const L = w.living, dmg = e.dmg * st.mul;
-    for (let i = 0; i < L.length; i++) { const p = L[i]; if (st.test ? st.test(w, z, p) : w.zoneHas(z, p.x, p.y, p.r * 0.7)) w.hurtHero(p, dmg, z); }
+    for (let i = 0; i < L.length; i++) { const p = L[i]; if (st.test ? st.test(w, z, p) : w.zoneHas(z, p.x, p.y, p.r)) w.hurtHero(p, dmg, z); }
   };
   // Live hostile hazard (not a telegraph): zone fields o ({ look, x, y, r, a, len, w, arc, dur }); look doubles as wid so ED.SkillFx[look] draws it. st: { mul, arm, upd, test, ...state }.
   const hz = (w, e, o, st) => {
@@ -63,7 +63,7 @@
       const dx = x - p.x, dy = y - p.y, d = Math.hypot(dx, dy);
       if (d > r || d < 3) continue;
       const k = str * dt * (1 - 0.5 * d / r) / d;
-      ED.Arena.move(w.arena, p, dx * k, dy * k, p.r);
+      ED.Arena.move(w.arena, p, dx * k, dy * k, C.HERO_BODY);
     }
   };
   // Foe shot tagged with its look as wid (ED.WeaponFx[look] draws it). o: { life, fly (passes obstacles), tick(w, pr, dt), st }.
@@ -102,7 +102,7 @@
     e.face = Math.cos(z.a) >= 0 ? 1 : -1;
   };
   const poolUpd = (w, z, e, st) => { z.x = e.x; z.y = e.y; if (z.t >= st.arm) pull(w, z.x, z.y, z.r, st.str, DT); };
-  const coreTest = (w, z, p) => U.dist2(z.x, z.y, p.x, p.y) <= (POOL.core + p.r * 0.7) ** 2;
+  const coreTest = (w, z, p) => U.dist2(z.x, z.y, p.x, p.y) <= (POOL.core + p.r) ** 2;
   const standingPool = (w, e) => hz(w, e, { look: 'whirlpool', r: POOL.r3, dur: 1e6 }, { mul: POOL.mul, arm: 1.0, upd: poolUpd, test: coreTest, str: POOL.str3 });
 
   const chase = approach(140);

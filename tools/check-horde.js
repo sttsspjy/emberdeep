@@ -13,6 +13,7 @@
 //    brain caps: shooters, summoners and dashers (charger / diver / blinker) never pass their alive caps; dasher packs and stampedes trim to the room left.
 // 4. Recycling: a foe left 1000 px behind returns to the spawn ring. 5. Arena: deterministic, obstacle count in range, centre clear, features keep lanes.
 // 6. Gold: elite coins, mid-boss coin, final boss and victory gold x the stage gold multiplier; w.summary().gold carries it.
+// 7. Hero leeway: blasts, zero-damage blasts and projectiles push foes away from the hitting hero; splitter children start no closer to the hero than the parent; HERO_R 6 contact.
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const { load } = require('./sim.js');
@@ -424,6 +425,30 @@ for (let s = 0; s < 3; s++) {
     return { ok: eliteC >= k && eliteC <= Math.round(5 * k) && midC === G.mid * k && g0 === G.final * k && w.state === 'won' && end && end.summary.gold === w.gold && w.gold === (G.final + G.win) * k, k, eliteC, midC, fin: g0, total: w.gold };
   };
   for (const s of [0, 1, 2]) { const r = goldRun(s); ok(r.ok, `${ED.STAGES[s].id} gold x${r.k}: elite coins ${r.eliteC}, mid-boss coin ${r.midC}, final boss ${r.fin}, summary ${r.total} with the win bonus`); }
+}
+
+// ---------------- 7. hero leeway ----------------
+{ // knockback: a blast centred behind a foe (foe between it and the hero), its zero-damage form and a projectile flying back at the hero all push the foe away from the hero
+  const push = (hit) => { const { w, p, e } = lab('skeleton', 40, { hpMul: 100 }); e.kbx = e.kby = 0; hit(w, p, e); return e.kbx; };
+  const kb = push((w, p, e) => w.blast(p, 'test', e.x + 20, e.y, 30, 1, { knock: 200 }));
+  const kb0 = push((w, p, e) => w.blast(p, 'test', e.x + 20, e.y, 30, 0, { knock: 200 }));
+  const kbp = push((w, p, e) => { w.shoot(p, 'test', e.x + 12, e.y, Math.PI, null, { speed: 300, dmg: 1, pierce: 9, knock: 200, life: 1 }); w.updateProjs(C.TICK); });
+  ok(kb > 0 && kb0 > 0 && kbp > 0, `hero hits push foes away from the hitting hero: blast ${Math.round(kb)}, zero-damage blast ${Math.round(kb0)}, returning shot ${Math.round(kbp)} px/s (+x = away)`);
+}
+{ // splitters: every child starts at least as far from the hero as its parent was, at any bearing, elite or not
+  let worst = Infinity, kids = 0;
+  for (const id of ['slime', 'glowslime', 'jelly', 'bloater', 'bloatling']) for (let k = 0; k < 8; k++) for (const elite of [false, true]) {
+    const a = k / 8 * U.TAU, { w, p, e } = lab(id, 0, { elite });
+    e.x = p.x + Math.cos(a) * 30; e.y = p.y + Math.sin(a) * 30;
+    const d0 = Math.hypot(e.x - p.x, e.y - p.y), n0 = w.foes.length; w.killFoe(e, null);
+    for (const c of w.foes.slice(n0)) { worst = Math.min(worst, Math.hypot(c.x - p.x, c.y - p.y) - d0); kids++; }
+  }
+  ok(kids > 0 && worst >= -1e-9, `splitter children land on the far side: ${kids} children, closest ${worst.toFixed(2)} px beyond the parent's distance`);
+}
+{ // hitbox: HERO_R 6; contact needs overlap at r 6
+  const touch = (gap) => { const { w, p, e } = lab('skeleton', 0); e.x = p.x + e.r + C.HERO_R + gap; e.spd = 0; p.invuln = 0; const hp0 = p.hp; w.input('p1', { mx: 0, my: 0, ax: p.x + 50, ay: p.y }); w.update(C.TICK); return p.hp < hp0; };
+  const { p } = lab('skeleton', 200);
+  ok(C.HERO_R === 6 && p.r === 6 && !touch(0.5) && touch(-0.5), `hero hitbox r ${p.r}: no contact 0.5 px apart, contact at 0.5 px overlap`);
 }
 
 console.log(`check-horde: ${fails ? fails + ' failure(s)' : 'all passed'} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);

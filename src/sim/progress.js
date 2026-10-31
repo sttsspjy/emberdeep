@@ -49,18 +49,18 @@
         if (!this.alive(p)) { g.pull = ''; continue; }
         g.t += dt;
         const dx = p.x - g.x, dy = p.y - g.y, d = Math.hypot(dx, dy) || 1, sp = 160 + 900 * g.t * g.t;
-        if (d <= p.r + TOUCH || sp * dt >= d) { this.collect(p, g); continue; }
+        if (d <= C.HERO_BODY + TOUCH || sp * dt >= d) { this.collect(p, g); continue; }
         g.vx = dx / d * sp; g.vy = dy / d * sp; g.x += g.vx * dt; g.y += g.vy * dt;
         continue;
       }
       for (let h = 0; h < this.living.length; h++) {
-        const p = this.living[h], R = gem || g.k === 'gold' ? p.stats.pickup : p.r + 10;
+        const p = this.living[h], R = gem || g.k === 'gold' ? p.stats.pickup : C.HERO_BODY + 10;
         if (U.dist2(p.x, p.y, g.x, g.y) <= R * R) { g.pull = p.pid; g.t = 0; break; }
       }
     }
     this.gemCount = gems;
     const B = this.arena.braziers;
-    for (const p of this.living) for (let i = 0; i < B.length; i++) { const b = B[i]; if (!b.broken && U.dist2(p.x, p.y, b.x, b.y) <= (p.r + b.r + 4) ** 2) this.breakBrazier(b, p); }
+    for (const p of this.living) for (let i = 0; i < B.length; i++) { const b = B[i]; if (!b.broken && U.dist2(p.x, p.y, b.x, b.y) <= (C.HERO_BODY + b.r + 4) ** 2) this.breakBrazier(b, p); }
     // relight (checked once a second): a brazier broken RELIGHT s ago lights again while no living hero is within RELIGHT_R px
     if (this.tick % 60 === 0) for (let i = 0; i < B.length; i++) {
       const b = B[i];

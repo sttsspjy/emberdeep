@@ -163,7 +163,7 @@
       if (dx * dx + dy * dy > PROJ_R * PROJ_R) continue;
       if (dx * q.vx + dy * q.vy > 0 && dx * dx + dy * dy > 40 * 40) continue; // moving away
       const o = PJ[PN] || (PJ[PN] = { x: 0, y: 0, vx: 0, vy: 0, rad: 0, cost: 0, life: 0 });
-      o.x = q.x; o.y = q.y; o.vx = q.vx * this.vk; o.vy = q.vy * this.vk; o.rad = q.r + p.r * 0.7 + 3; o.cost = Math.max(0.3, (q.dmg || 5) * hpK); o.life = q.life;
+      o.x = q.x; o.y = q.y; o.vx = q.vx * this.vk; o.vy = q.vy * this.vk; o.rad = q.r + p.r + 3; o.cost = Math.max(0.3, (q.dmg || 5) * hpK); o.life = q.life;
       PN++;
     }
     // hostile zones
@@ -235,7 +235,7 @@
           if (t < iv || (dash && t <= D.t)) continue;
           const sx = x0 + (x - x0) * f, sy = y0 + (y - y0) * f, zz = zAt(o, t);
           PROBE.x = sx; PROBE.y = sy; PROBE.r = p.r;
-          hit = o.test ? o.test(w, zz, PROBE) : w.zoneHas(zz, sx, sy, p.r * 0.7 + 4);
+          hit = o.test ? o.test(w, zz, PROBE) : w.zoneHas(zz, sx, sy, p.r + 4);
           if (!hit && o.soft && m === steps) soft = w.zoneHas(zz, sx, sy, p.r);
         }
         if (hit) { tot += o.cost * HW[k]; if (k < 2) near += o.cost * HW[k]; }
@@ -244,7 +244,7 @@
       h0 = h; x0 = x; y0 = y;
     }
     // warned zones: the hero's spot when they resolve (plus the act that follows a dmg-0 warning)
-    const wr = p.r * 0.7 + 5;
+    const wr = p.r + 5;
     for (let j = 0; j < ZN; j++) {
       const o = ZL[j]; if (o.kind === 3) continue;
       let t = o.rem, wt = 1;

@@ -2,7 +2,7 @@
 
 **Role**: long straight piercing lines in one direction; the best single-target and elite killer at range; weak against a surrounding crowd (Volley is the crowd answer). Unlike the Shade (short stabs up close), every Ranger hit comes from a distance along a line.
 
-HP 90, speed 80, crit 8%.
+HP 90, speed 84, crit 8%.
 
 ## Weapon: Longbow (`longbow`)
 

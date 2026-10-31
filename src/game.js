@@ -291,12 +291,12 @@
     }
     if (P.dashT > 0) {
       const st = Math.min(dt, P.dashT), v = D.dist / D.t;
-      ED.Arena.move(A, P, P.dashDx * v * st, P.dashDy * v * st, C.HERO_R);
+      ED.Arena.move(A, P, P.dashDx * v * st, P.dashDy * v * st, C.HERO_BODY);
       P.dashT -= dt; P.moving = true;
     } else {
       const sp = this.spd;
       P.moving = Math.abs(f.mx) + Math.abs(f.my) > 0.05;
-      if (P.moving) { ED.Arena.move(A, P, f.mx * sp * dt, f.my * sp * dt, C.HERO_R); P.mdir = Math.atan2(f.my, f.mx); P.mvx = f.mx; P.mvy = f.my; }
+      if (P.moving) { ED.Arena.move(A, P, f.mx * sp * dt, f.my * sp * dt, C.HERO_BODY); P.mdir = Math.atan2(f.my, f.mx); P.mvx = f.mx; P.mvy = f.my; }
     }
   };
   // One local tick: the latched input becomes frame seq (quantized exactly as the host will read it) and moves the predicted hero.

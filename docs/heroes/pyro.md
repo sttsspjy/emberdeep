@@ -1,6 +1,6 @@
 # Pyro — area denial
 
-Paints the ground with fire. Instant hits are weak; pools, burns and death blasts carry the damage. Kites the horde through its own fire. HP 100, speed 74.
+Paints the ground with fire. Instant hits are weak; pools, burns and death blasts carry the damage. Kites the horde through its own fire. HP 100, speed 80.
 
 Shared rules: every damage source credits the slot's current weapon id. Ground fire (pools, pyres, fire lines) is capped at 12 + `pools` per hero; a new one past the cap ends the oldest. Pools set a short burn (0.15 × dmg/s, 1 s) on foes inside. Shell range 220 px, bolt range 210 px.
 

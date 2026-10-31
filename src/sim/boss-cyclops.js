@@ -21,7 +21,7 @@
     e.face = Math.cos(z.a) >= 0 ? 1 : -1;
   };
   const waveUpd = (w, z) => { z.r += STOMP.speed * DT; };
-  const waveTest = (w, z, p) => { const d = Math.hypot(p.x - z.x, p.y - z.y); return Math.abs(d - z.r) <= STOMP.band + p.r * 0.7; };
+  const waveTest = (w, z, p) => { const d = Math.hypot(p.x - z.x, p.y - z.y); return Math.abs(d - z.r) <= STOMP.band + p.r; };
   const stompEnd = (w, z) => { const e = z.src; if (e && !e.dead && e.id === z.srcId) hz(w, e, { look: 'stompwave', x: z.x, y: z.y, r: STOMP.r, dur: STOMP.dur }, { mul: STOMP.wmul, upd: waveUpd, test: waveTest }); };
 
   B.cyclops = runner({

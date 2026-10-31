@@ -20,7 +20,7 @@
     this.vclamp = null;                // hero whose view limits nearestFoe / densest (set around weapons, skills, hero projectiles and zones)
   };
 
-  // Hit source from the ring: { p (hero or null), wid, kind ('weapon'|'proj'|'zone'|'dot'|'skill'|'chain'|...), crit (forced), critC (crit chance override, -1 = hero stat), knock, kx, ky (push direction; 0,0 = away from x, y) }.
+  // Hit source from the ring: { p (hero or null), wid, kind ('weapon'|'proj'|'zone'|'dot'|'skill'|'chain'|...), crit (forced), critC (crit chance override, -1 = hero stat), knock, kx, ky (push direction; 0,0 = away from hero p, else from x, y) }.
   W.src = function (p, wid, kind, knock) {
     const s = this.srcRing[this.srcI = (this.srcI + 1) & 63];
     s.p = p || null; s.wid = wid || ''; s.kind = kind || 'weapon'; s.crit = false; s.critC = -1; s.knock = knock || 0; s.kx = 0; s.ky = 0; s.x = p ? p.x : 0; s.y = p ? p.y : 0;
@@ -44,7 +44,7 @@
     if (!src || src.kind !== 'dot') e.flash = FLASH;
     if (src && src.knock > 0 && e.def.kb > 0 && !e.boss) {
       let kx = src.kx, ky = src.ky;
-      if (!kx && !ky) { kx = e.x - src.x; ky = e.y - src.y; }
+      if (!kx && !ky) { kx = e.x - (p ? p.x : src.x); ky = e.y - (p ? p.y : src.y); } // invariant: hero hits push foes away from the hitting hero
       const l = Math.hypot(kx, ky) || 1, k = src.knock * e.def.kb * (e.elite ? 0.35 : 1);
       e.kbx += kx / l * k; e.kby += ky / l * k;
     }
@@ -160,7 +160,7 @@
     return n;
   };
 
-  // Circle hit at (x, y) of radius r. opt as arc (knock pushes away from the centre). Emits 'boom'. Returns the number of foes hit.
+  // Circle hit at (x, y) of radius r. opt as arc (knock pushes away from hero p, without one from the centre). Emits 'boom'. Returns the number of foes hit.
   W.blast = function (p, wid, x, y, r, dmg, opt) {
     opt = opt || NO;
     const q = this.foeScan(x, y, r);
@@ -169,7 +169,7 @@
       const e = q[k]; if (e.dead) continue;
       const rr = r + e.r; if (U.dist2(x, y, e.x, e.y) > rr * rr || !seen(p, e)) continue;
       const s = this.src(p, wid, opt.kind || 'weapon', opt.knock || 0); s.x = x; s.y = y; if (opt.crit) s.crit = true;
-      const dealt = dmg > 0 ? this.hitFoe(e, dmg, s) : (opt.knock ? (this.knock(e, e.x - x, e.y - y, opt.knock), 0) : 0); n++;
+      const dealt = dmg > 0 ? this.hitFoe(e, dmg, s) : (opt.knock ? (this.knock(e, e.x - (p ? p.x : x), e.y - (p ? p.y : y), opt.knock), 0) : 0); n++;
       if (!e.dead) applyOpt(this, e, opt, p);
       if (opt.onHit) opt.onHit(this, e, dealt);
     }
@@ -354,7 +354,7 @@
             const rr = pr.r + e.r; if (U.dist2(pr.x, pr.y, e.x, e.y) > rr * rr) continue;
             if (pr.hits.indexOf(e.id) >= 0) continue;
             pr.hits.push(e.id);
-            const s = this.src(pr.p, pr.wid, 'proj', pr.knock); s.kx = pr.vx; s.ky = pr.vy; s.critC = pr.critC;
+            const s = this.src(pr.p, pr.wid, 'proj', pr.knock); s.x = pr.x; s.y = pr.y; s.critC = pr.critC;
             const dealt = this.hitFoe(e, pr.dmg, s);
             if (pr.onHit) pr.onHit(this, pr, e, dealt);
             if (pr.pierce-- <= 0) { pr.dead = true; break; }
@@ -362,7 +362,7 @@
           this.foeEnd();
         } else {
           for (const p of this.living) {
-            const rr = pr.r + p.r * 0.7;
+            const rr = pr.r + p.r;
             if (U.dist2(pr.x, pr.y, p.x, p.y) <= rr * rr) { if (p.dashT <= 0) { this.hurtHero(p, pr.dmg, pr); pr.dead = true; } break; }
           }
         }
@@ -425,13 +425,13 @@
           z.tickT += z.tick;
           const dmg = z.dps * z.tick;
           if (z.team === 0) this.zoneFoes(z, (e) => { const s = this.src(z.p, z.wid, 'zone', z.knock); s.x = z.x; s.y = z.y; this.hitFoe(e, dmg, s); if (!e.dead) applyOpt(this, e, z, z.p); });
-          else for (const p of this.living) if (this.zoneHas(z, p.x, p.y, p.r * 0.7)) this.hurtHero(p, dmg, z);
+          else for (const p of this.living) if (this.zoneHas(z, p.x, p.y, p.r)) this.hurtHero(p, dmg, z);
           if (z.onTick) z.onTick(this, z);
         }
       } else if (z.onTick) z.onTick(this, z);
       if (z.t >= z.dur) {
         if (z.warn && z.dmg > 0) {
-          if (z.team === 1) { for (const p of this.living) if (this.zoneHas(z, p.x, p.y, p.r * 0.7)) this.hurtHero(p, z.dmg, z); }
+          if (z.team === 1) { for (const p of this.living) if (this.zoneHas(z, p.x, p.y, p.r)) this.hurtHero(p, z.dmg, z); }
           else this.zoneFoes(z, (e) => { const s = this.src(z.p, z.wid, 'zone', z.knock); s.x = z.x; s.y = z.y; this.hitFoe(e, z.dmg, s); if (!e.dead) applyOpt(this, e, z, z.p); });
           this.emit({ t: 'boom', pid: z.p ? z.p.pid : '', wid: z.wid, x: Math.round(z.x), y: Math.round(z.y), r: Math.round(z.r || z.w), look: z.k, team: z.team });
         }
@@ -454,7 +454,7 @@
   };
   // Foe-side blast (exploders, boss slams without a telegraph zone): hurts living heroes within r. Emits 'boom' (team 1).
   W.foeBlast = function (e, x, y, r, dmg, look) {
-    for (const p of this.living) if (U.dist2(x, y, p.x, p.y) <= (r + p.r * 0.7) ** 2) this.hurtHero(p, dmg, e);
+    for (const p of this.living) if (U.dist2(x, y, p.x, p.y) <= (r + p.r) ** 2) this.hurtHero(p, dmg, e);
     this.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r: Math.round(r), look: look || 'fire', team: 1 });
   };
 

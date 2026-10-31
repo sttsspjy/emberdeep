@@ -49,7 +49,7 @@
       const dx = x - p.x, dy = y - p.y, d = Math.hypot(dx, dy);
       if (d > r || d < 12) continue;
       const s = Math.min(step, d - 12);
-      ED.Arena.move(w.arena, p, dx / d * s, dy / d * s, p.r);
+      ED.Arena.move(w.arena, p, dx / d * s, dy / d * s, C.HERO_BODY);
     }
   };
   // Leap: s = { fx, fy, tx, ty, fl } (from, to, flight s). Moves e along an eased path at time t; no contact while airborne; lands pushed out of obstacles. True once landed.

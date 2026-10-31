@@ -12,7 +12,8 @@
     MAX_PLAYERS: 4,
     SNAP_HZ: 20,
     INPUT_HZ: 30,
-    HERO_R: 10,           // hero collision radius
+    HERO_R: 6,            // hero hitbox (p.r): foe contact, foe shots, zones, blasts, slams; hero-foe body separation
+    HERO_BODY: 10,        // hero wall-collision radius and touch / trigger reach (pickups, braziers, foe attack triggers); not a hitbox
     DASH: { t: 0.2, dist: 80, cd: 3.5 }, // dash length (s), distance (px), cooldown (s); i-frames for its whole length
     IFRAME: 0.5,          // invulnerability after a hit (s)
     RUN_LEN: 900,         // survival length (s): the final boss spawns here

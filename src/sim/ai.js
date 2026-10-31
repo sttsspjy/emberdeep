@@ -69,7 +69,7 @@
     }
     e.acd -= dt;
     const d = w.steer(e, t.x, t.y, 1, dt), P = S.pull;
-    if (e.acd <= 0 && d < (P ? P.r * 0.7 : R * 0.75 + t.r)) {
+    if (e.acd <= 0 && d < (P ? P.r * 0.7 : R * 0.75 + ED.CONST.HERO_BODY)) {
       const dur = start(e, S.wind);
       if (P) { PZ.x = e.x; PZ.y = e.y; PZ.r = P.r; PZ.dur = dur; PZ.src = e; PZ.st = P; w.zone(PZ); PZ.src = null; }
       warn(w, e, e.x, e.y, R, 0, 0, 0, 0, dur, true);
@@ -127,7 +127,7 @@
     }
     const a = Math.atan2(t.y - e.y, t.x - e.x) + Math.sin(e.age * 4 + e.id) * 0.3;
     w.steer(e, e.x + Math.cos(a) * 100, e.y + Math.sin(a) * 100, 1, dt);
-    const rr = e.r + t.r + 20;
+    const rr = e.r + ED.CONST.HERO_BODY + 20;
     if ((t.x - e.x) * (t.x - e.x) + (t.y - e.y) * (t.y - e.y) < rr * rr) { e.vx = e.vy = 0; warn(w, e, e.x, e.y, R, 0, 0, 0, 0, start(e, e.def.fuse || 0.7), true); }
   };
 
