@@ -204,7 +204,7 @@
     const w = this.w; if (!w || !this.rem) return;
     this.rem.delete(pid);
     const p = w.hero(pid);
-    if (p && !p.dead && w.state === 'play') { p.dead = true; p.downed = false; p.offer = null; p.pend = 0; p.pendForm = 0; p.hp = 0; w.emit({ t: 'dead', pid, left: true }); }
+    if (p && !p.dead && w.state === 'play') { p.dead = true; p.downed = false; p.offer = null; p.pend = 0; p.pendPath = 0; p.pendForm = 0; p.hp = 0; w.emit({ t: 'dead', pid, left: true }); }
     w.partyN = Math.max(1, 1 + this.rem.size);
   };
 
@@ -244,10 +244,10 @@
     if (!me || !me.offer || !me.offer[n - 1]) return;
     this.L.pick = n; this.offerKeep = me.offer; me.offer = null; this.offerHold = 1;
   };
-  // Banish card n (1..4): sent with the next tick; the strip hides until the host's new offer arrives. A Form offer (every card kind 'form') cannot be banished.
+  // Banish card n (1..4): sent with the next tick; the strip hides until the host's new offer arrives. Unbanishable cards and chest offers (W.canBanish) are refused here too.
   S.clientBanish = function (n) {
     const me = this.view && this.view.me;
-    if (!me || !me.offer || !me.offer[n - 1] || !(me.banishes > 0) || me.offer[0].kind === 'form') return;
+    if (!me || !me.offer || !me.offer[n - 1] || !(me.banishes > 0) || !ED.World.prototype.canBanish(me.offer, me.offer[n - 1])) return;
     this.L.banish = n; this.offerKeep = me.offer; me.offer = null; this.offerHold = 1;
   };
   // Host message for this client: ArrayBuffer snapshot, { t: 'offer', cards }, { t: 'end', summary }.
@@ -358,7 +358,7 @@
     this.finish({
       won: M ? M.state === 'won' : false, time: v.time, kills: v.kills, level: v.level, gold: v.gold, stage: v.stage, note: msg || '',
       perHero: (M ? M.heroes : []).map(h => ({ pid: h.pid, cls: h.cls, name: h.name, kills: h.kills | 0, dealt: {}, weapons: h.weapons.map(ws => ws.id),
-        build: h.weapons.map(ws => ({ id: ws.id, pr: (ws.pr || [0, 0, 0]).slice(), fl: ws.fl | 0 })) })),
+        build: h.weapons.map(ws => ({ id: ws.id, tune: ws.tune | 0, path: ws.path === undefined ? -1 : ws.path, pr: (ws.pr || [0, 0, 0]).slice(), fl: ws.fl | 0 })) })),
     });
   };
   // Net numbers for a HUD or checks: { mode, rtt (client: s, input sent -> acked state shown), snapBytes, ... }.

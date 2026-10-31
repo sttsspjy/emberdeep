@@ -31,8 +31,8 @@ const bj = B.buildJobs(big, ED);
 ok(JSON.stringify(bj) === JSON.stringify(B.buildJobs(big, ED)) && bj[0].seed === 1 && bj.slice(-1)[0].seed === 2 && bj.length === 2 * ED.STAGES.length * ED.HERO_IDS.length * 4, 'job order is deterministic, seed outermost (' + bj.length + ' jobs)');
 const sk = B.buildJobs(Object.assign({}, cfg, { skill: '1,0.3' }), ED);
 ok(sk.length === 2 * gen.length && sk[0].skill === 1 && sk[1].skill === 0.3 && sk.every(j => j.maxTime === 300), '--skill 1,0.3 doubles the jobs, skill innermost; jobs carry skill and maxTime');
-ok(B.cfgFrom({}, null).skill === '1,0.3' && B.cfgFrom({}, null).seeds === 8 && B.cfgFrom({}, { seeds: 4, maxTime: 1080 }).skill === '1' && !('weapons' in B.cfgFrom({}, null)), 'defaults: skill 1,0.3, 8 seeds, no weapons; a stored cfg without skill ran skill 1');
-const j0 = { stage: 0, cls: 'knight', seed: 1, meta: 'none', skill: 1, maxTime: 1080 };
+ok(B.cfgFrom({}, null).skill === '1,0.3' && B.cfgFrom({}, null).seeds === 8 && B.cfgFrom({}, { seeds: 4, maxTime: 1380 }).skill === '1' && !('weapons' in B.cfgFrom({}, null)), 'defaults: skill 1,0.3, 8 seeds, no weapons; a stored cfg without skill ran skill 1');
+const j0 = { stage: 0, cls: 'knight', seed: 1, meta: 'none', skill: 1, maxTime: 1380 };
 ok(new Set([j0, Object.assign({}, j0, { cls: 'pyro' }), Object.assign({}, j0, { skill: 0.3 }), Object.assign({}, j0, { maxTime: 600 })].map(B.keyOf)).size === 4 && B.tupleOf(j0) === B.tupleOf(Object.assign({}, j0, { cls: 'pyro' })),
   'hero, skill and maxTime are in the job key; heroes share a pairing tuple');
 const fo = fake.runOne(Object.assign({}, j0));
@@ -44,7 +44,7 @@ ok(f1.filter(r => r.won).length > f3.filter(r => r.won).length && mean(f3.map(r 
 
 // 2. a fresh run: stages 0,1 x knight, pyro, ranger x seed 1 x skill 1, 0.3 = 2 * 3 * 2 = 12 jobs
 const dir = path.join(tmp, 'a');
-const M = [...FAKE, '--stages', '0,1', '--heroes', 'knight,pyro,ranger', '--meta', 'none', '--jobs', '2', '--maxTime', '1080'];
+const M = [...FAKE, '--stages', '0,1', '--heroes', 'knight,pyro,ranger', '--meta', 'none', '--jobs', '2', '--maxTime', '1380'];
 let r = run([...M, '--seeds', '1', '--out', dir]);
 ok(r.status === 0, 'fake bench exits 0' + (r.status ? ': ' + r.stderr : ''));
 ok(lines(dir).length === 12 && new Set(keys(dir)).size === 12, 'results.jsonl has 12 distinct runs (got ' + lines(dir).length + ')');
@@ -74,10 +74,10 @@ ok(meta.sessions.length === 4 && meta.cfg.seeds === 2 && meta.sessions.every(s =
 // 3b. refusals on copies
 const cMax = path.join(tmp, 'max'); fs.cpSync(dir, cMax, { recursive: true });
 r = run(['--resume', cMax, '--maxTime', '600']);
-ok(r.status === 2 && /maxTime 600 differs from the stored 1080/.test(r.stderr) && runs(cMax).length === 24, 'resume with another maxTime is refused (exit 2)' + (r.status !== 2 ? ': ' + r.status + ' ' + r.stderr + r.stdout.slice(0, 300) : ''));
+ok(r.status === 2 && /maxTime 600 differs from the stored 1380/.test(r.stderr) && runs(cMax).length === 24, 'resume with another maxTime is refused (exit 2)' + (r.status !== 2 ? ': ' + r.status + ' ' + r.stderr + r.stdout.slice(0, 300) : ''));
 r = run(['--resume', cMax, '--maxTime', '600', '--force']);
 const Smax = json(cMax, 'summary.json');
-ok(r.status === 0 && /24 jobs, 0 already done, 24 to run/.test(r.stdout) && runs(cMax).length === 48 && Smax.groups.some(g => g.maxTime === 600 && / · max 10:00/.test(g.label)) && Smax.groups.some(g => g.maxTime === 1080),
+ok(r.status === 0 && /24 jobs, 0 already done, 24 to run/.test(r.stdout) && runs(cMax).length === 48 && Smax.groups.some(g => g.maxTime === 600 && / · max 10:00/.test(g.label)) && Smax.groups.some(g => g.maxTime === 1380),
   '--force runs the new maxTime as separate jobs and groups (label shows max)');
 const cHash = path.join(tmp, 'hash'); fs.cpSync(dir, cHash, { recursive: true });
 const mh = json(cHash, 'meta.json'); mh.hash = 'deadbeefdead'; fs.writeFileSync(path.join(cHash, 'meta.json'), JSON.stringify(mh));
@@ -102,17 +102,17 @@ const winf = (x) => x.won ? 1 : 0;
 const kn = g0.rows.find(w => w.cls === 'knight');
 const relK = H('knight').map(x => winf(x) - mean(R0.filter(y => y.seed === x.seed).map(winf)));
 ok(kn.n === 2 && kn.weapon === 'cleave' && kn.wname === ED.WEAPONS.cleave.name && kn.rel.win.n === 2 && near(kn.rel.win.d, mean(relK)), 'knight row: n, weapon, relative strength = minus the mean of every hero on the same tuple (raw runs)');
-const shareK = mean(H('knight').map(x => { let t = 0; for (const v of Object.values(x.dealt)) t += v; return ((x.dealt.cleave || 0) + (x.dealt.whirlwind || 0)) / t; }));
+const shareK = mean(H('knight').map(x => { let t = 0; for (const v of Object.values(x.dealt)) t += v; return ED.weaponForms('cleave').reduce((s, f) => s + (x.dealt[f.id] || 0), x.dealt.cleave || 0) / t; }));
 ok(near(kn.share, Math.round(shareK * 1000) / 1000, 0.0011) && near(kn.formRate, H('knight').filter(x => x.evolved.cleave > 0).length / 2), 'dmg share folds the Form in; Form rate from evolved[root]');
 const D = R0.map(x => B.derive(x, ED));
-ok(D.every(d => d.slots.length === 3) && R0.every((x, i) => !x.bosses.some(b => b.id === 'twinhammer') || D[i].slots[1] !== null), 'twinhammer kill (no spawn) maps to the twins slot');
+ok(D.every(d => d.slots.length === 4) && R0.every((x, i) => !x.bosses.some(b => b.id === 'twinhammer') || D[i].slots[1] !== null), 'twinhammer kill (no spawn) maps to the twins slot');
 const fin = R0.filter(x => x.won).map(x => { const b = x.bosses[x.bosses.length - 1]; return b.at - b.spawn; });
 ok(fin.length ? near(g0.overall.finalTTK, Math.round(mean(fin) * 10) / 10, 0.051) : g0.overall.finalTTK === null, 'final TTK = mean(at - spawn) of the last boss over won runs');
 ok(near(g0.overall.hurtMin, Math.round(mean(R0.map(x => x.hurt / x.time * 60)) * 100) / 100, 0.006), 'hurt/min = mean(hurt / time * 60)');
 const lost = R0.filter(x => !x.won);
 ok(g0.overall.lostN === lost.length && (lost.length ? near(g0.overall.lostTime, Math.round(mean(lost.map(x => x.time)) * 10) / 10, 0.051) : g0.overall.lostTime === null), 'lost survival: mean time of lost runs only');
 const twinsKilled = R0.filter(x => x.bosses.some(b => b.id === 'twins' || b.id === 'twinhammer')).length;
-ok(g0.funnel.length === 3 && g0.funnel[1].killed === twinsKilled && g0.funnel.every(f => f.killed <= f.reached && f.reached <= g0.n), 'funnel counts twinhammer kills in the twins slot');
+ok(g0.funnel.length === 4 && g0.funnel[1].killed === twinsKilled && g0.funnel.every(f => f.killed <= f.reached && f.reached <= g0.n), 'funnel counts twinhammer kills in the twins slot');
 const gp = S.groups[2];
 ok(gp.stage === -1 && /each stage's schedule/.test(gp.funnel[0].label) && gp.funnel[0].t === 300, 'pooled funnel is labelled per stage schedule');
 ok(gp.stages.length === 2 && gp.cells['knight|0'] && gp.cells['knight|1'] && gp.cells['knight|0'].n === 2 && g0.stages.length === 1 && !g0.cells['knight|1'], 'cells per hero x stage (pooled: both stages; stage group: its own)');
@@ -134,8 +134,8 @@ ok(!('fill' in g0) && g0.taken.length > 0 && Math.abs(tsum - 1) < 0.01, 'damage 
 
 // 5. relative strength over tuples with >= 2 heroes (synthetic unbalanced matrix): knight seeds 1-10 (wins 1-5), ranger seeds 6-10 (wins all, final 10 s faster), pyro seeds 1-10 (wins 1-7)
 const syn = path.join(tmp, 'syn'); fs.mkdirSync(syn);
-const mk = (cls, seed, won) => ({ stage: 0, stageId: 'ossuary', cls, seed, meta: 'none', skill: 1, maxTime: 1080, hash: 'h', won, time: won ? 920 : 500,
-  level: 50, kills: 1000, gold: 0, death: won ? null : 'bat', bosses: won ? [{ id: 'warden', at: 320, spawn: 300 }, { id: 'twins', at: 630, spawn: 600 }, { id: 'hollow', at: 920 - (cls === 'ranger' ? 10 : 0), spawn: 900 }] : [],
+const mk = (cls, seed, won) => ({ stage: 0, stageId: 'ossuary', cls, seed, meta: 'none', skill: 1, maxTime: 1380, hash: 'h', won, time: won ? 1220 : 500,
+  level: 50, kills: 1000, gold: 0, death: won ? null : 'bat', bosses: won ? [{ id: 'warden', at: 320, spawn: 300 }, { id: 'twins', at: 630, spawn: 600 }, { id: 'cyclops', at: 930, spawn: 900 }, { id: 'hollow', at: 1220 - (cls === 'ranger' ? 10 : 0), spawn: 1200 }] : [],
   dealt: { [ED.HEROES[cls].sig]: 100 }, taken: { bat: 10 }, hurt: won ? 46 : 50, build: { weapons: [], passives: [] }, evolved: {}, hpLow: 0.5, ticks: 1, ms: 1 });
 const sr = [];
 for (let s = 1; s <= 10; s++) sr.push(mk('knight', s, s <= 5), mk('pyro', s, s <= 7));

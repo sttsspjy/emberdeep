@@ -10,6 +10,10 @@
   St.PICKUP = 48; // base pickup radius (px)
   St.HASTE_CAP = 0.5;
   St.CD_MIN = 0.2;   // weapon cooldown floor (s)
+  // Tune steps (GAME-DESIGN §4), card order = ws.tk order: damage x (1 + dmg x count), cooldown x cd^count, area x (1 + area x count).
+  ED.TUNE = [{ id: 'dmg', dmg: 0.15, txt: '+15% damage' }, { id: 'haste', cd: 0.91, txt: '+10% attack speed' }, { id: 'area', area: 0.12, txt: '+12% area' }];
+  // Generic path step (path ranks 2 and 4): damage x (1 + dmg x steps), cooldown x cd^steps.
+  ED.PATH_STEP = { dmg: 0.1, cd: 0.95, txt: '+10% damage, +5% speed' };
 
   St.compute = (p) => {
     const h = ED.HEROES[p.cls] || {}, add = {};
@@ -42,32 +46,34 @@
     for (let i = 0; i < lvl - 1 && i < L.length; i++) addMods(L[i].mods, sum);
     return sum;
   };
-  // Weapon mods of slot ws: the root's path ranks (ws.pr; kept after a Form) + the Form's refine ranks (ws.fl).
+  // Weapon mods of slot ws: the picked path's shape ranks (path rank 1 / 3 / 5 -> ranks[0 / 1 / 2]; kept after a Form) + the Form's refine ranks (ws.fl).
   const sumWeapon = (ws, root, form, sum) => {
     clear(sum);
-    const P = (root && root.paths) || [];
-    for (let i = 0; i < P.length; i++) { const R = P[i].ranks || []; for (let r = 0; r < (ws.pr ? ws.pr[i] : 0) && r < R.length; r++) addMods(R[r].mods, sum); }
+    const pa = ws.path >= 0 && root && root.paths ? root.paths[ws.path] : null;
+    if (pa) { const R = pa.ranks || [], n = (ws.pr[ws.path] + 1) >> 1; for (let r = 0; r < n && r < R.length; r++) addMods(R[r].mods, sum); }
     if (form && form.refine) for (let r = 0; r < ws.fl && r < form.refine.length; r++) addMods(form.refine[r].mods, sum);
     return sum;
   };
-  const SUM = {};
+  const SUM = {}, ZERO3 = [0, 0, 0];
   // Weapon keys with fixed rules (ARCHITECTURE §6); every other key in base or mods passes through (base + sum for numbers).
   const KNOWN = { dmg: 1, cd: 1, n: 1, pierce: 1, area: 1, speed: 1, dur: 1, knock: 1, range: 1, crit: 1 };
 
   // Effective numbers of weapon slot `slot` of hero p into ws.S (reused object): { dmg, cd, n, pierce, area, speed, dur, knock, range, crit, critMul, ...custom }.
-  // Base from ED.WEAPONS[ws.id].base (the Form's once taken); mods from sumWeapon.
+  // Base from ED.WEAPONS[ws.id].base (the Form's once taken); mods from sumWeapon; tune steps (ws.tk) and generic path steps (path ranks 2, 4) scale dmg, cd and area.
   St.weapon = (p, slot) => {
     const ws = p.weapons[slot], def = ED.WEAPONS[ws.id], root = ED.WEAPONS[ED.weaponRoot(ws)], b = def.base, st = p.stats;
     const sum = sumWeapon(ws, root, def.form ? def : null, SUM);
+    const T = ED.TUNE, K = ws.tk || ZERO3, g = ws.path >= 0 ? ws.pr[ws.path] >> 1 : 0, PS = ED.PATH_STEP;
+    const kDmg = (1 + T[0].dmg * K[0]) * (1 + PS.dmg * g), kCd = Math.pow(T[1].cd, K[1]) * Math.pow(PS.cd, g), kArea = 1 + T[2].area * K[2];
     const S = ws.S || (ws.S = {});
     clear(S);
     for (const k in b) if (!KNOWN[k]) S[k] = b[k];
     for (const k in sum) if (!KNOWN[k]) S[k] = typeof sum[k] === 'number' && typeof b[k] === 'number' ? b[k] + sum[k] : sum[k];
-    S.dmg = (b.dmg || 0) * (1 + (sum.dmg || 0)) * (1 + st.might);
-    S.cd = Math.max(St.CD_MIN, (b.cd || 1) * (1 + (sum.cd || 0)) * (1 - st.haste));
+    S.dmg = (b.dmg || 0) * (1 + (sum.dmg || 0)) * kDmg * (1 + st.might);
+    S.cd = Math.max(St.CD_MIN, (b.cd || 1) * (1 + (sum.cd || 0)) * kCd * (1 - st.haste));
     S.n = (b.n || 1) + (sum.n || 0) + (def.noAmount ? 0 : st.amount);
     S.pierce = (b.pierce || 0) + (sum.pierce || 0);
-    S.area = (b.area || 1) * (1 + (sum.area || 0)) * (1 + st.reach);
+    S.area = (b.area || 1) * (1 + (sum.area || 0)) * kArea * (1 + st.reach);
     S.speed = (b.speed || 0) * (1 + (sum.speed || 0)) * (1 + st.velocity);
     S.dur = (b.dur || 0) * (1 + (sum.dur || 0)) * (1 + st.duration);
     S.knock = (b.knock || 0) * (1 + (sum.knock || 0));

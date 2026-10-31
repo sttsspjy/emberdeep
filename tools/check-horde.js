@@ -1,15 +1,16 @@
 // Horde regression check (exit 1 on failure): foe roster, stage timelines, brains, telegraphs, spawner events, recycling, arena layouts. Usage: node tools/check-horde.js
-// 1. Data: every roster / event / split id exists, has a brain and atlas art; timelines have 16 rows, caps 80 / 150 / 220 at 0:00-2:00 then 300 -> 700, rates rising into the mid-game, density floors (none at 0:00); roster tiers (5:00 and 10:00 add kinds,
-//    early kinds fade out); no swarm-brain flyer in any roster (flocks only); boss ids per stage; foe wire order (tier foes after the boss bodies); the XP curve;
+// 1. Data: every roster / event / split id exists, has a brain and atlas art; timelines have 21 rows, caps 80 / 150 / 220 at 0:00-2:00 then 300 -> 700, rates rising until 19:00, density floors (none at 0:00); roster tiers (5:00 and 10:00 add kinds,
+//    early kinds fade out, 15:00 adds none; no charger or diver from 11:00); no swarm-brain flyer in any roster (flocks only); boss ids per stage; foe wire order (tier foes after the boss bodies); the XP curve;
 //    foe HP: base x (1 + 0.15 x minute) (swarm brain 0.06) x party x stage; swarmers and divers 10-11 HP.
 // 2. Brains: each attack kind (ranged, exploder, charger, diver, brute, blinker) shows a warn zone >= 0.6 s before it deals damage; a stun cancels a wind-up and drops its telegraph;
 //    ranged streams (one lane, 'aim' look, shot life), lobs (a fixed circle at the hero's spot, then a blast there; killing the caster cancels it), the per-hero attack budget, no retreat;
 //    charge / dive reach (start only within min(range, lane - 12), 'dash' look, rest after the dash), divers close in without a token, charge / dive / blink starts spend atkTok;
 //    guard (shield up, open after the bash), summoner (summons after its ring), pull slam (drags a still hero in), wall packs (a line across the approach).
-// 3. Spawner: a weaponless god hero per stage reaches the alive cap by the mid-game, sees swarm events every 120 s from 2:00, elites every 60 s from 2:30, bosses at 5/10/15 min; a missing boss script spawns a stand-in;
+// 3. Spawner: a weaponless god hero per stage reaches the alive cap by the mid-game, sees swarm events every 120 s from 2:00, elites every 60 s from 2:30, bosses at 5/10 min; the 15:00 mid-boss and the 20:00 final boss per stage (HP, flags), enrage at ENRAGE_T;
+//    a missing boss script spawns a stand-in;
 //    from an empty field at 6:00 / 8:00 (solo and a party of 4) the alive count refills to the density floor within 0.5 s without passing the cap; at the floor the rate is x1.
-//    benchmark phase: a 'surge' warning at 12:00, elites every 30 s.
-//    flocks: every 18 s from 0:40, 8 -> 40 swarmers by 10:00 x party factor, a pack within 40 px or a line (x1.5, >= 300 px at 10:00) on the spawn ring; past the alive cap, not past the hard cap;
+//    benchmark phase: a 'surge' warning at 17:00, elites every 30 s. Curves at 15:00 / 20:00: contact damage 9 / 11, shot factor x1.8 / x2.1, swarm waves 50 by 12:00 -> 60 by 20:00.
+//    flocks: every 18 s from 0:40, 8 -> 40 swarmers by 10:00 -> 52 by 20:00 x party factor, a pack within 40 px or a line (x1.5, >= 300 px at 10:00) on the spawn ring; past the alive cap, not past the hard cap;
 //    flock, ring and stampede members fly through (fixed heading and speed, never back), despawn 360 px outside the view (no gem, kill or 'die'), never recycle, despawn at the arena bound.
 //    brain caps: shooters, summoners and dashers (charger / diver / blinker) never pass their alive caps; dasher packs and stampedes trim to the room left.
 // 4. Recycling: a foe left 1000 px behind returns to the spawn ring. 5. Arena: deterministic, obstacle count in range, centre clear, features keep lanes.
@@ -28,7 +29,7 @@ const ART = (() => { const g = { ED: {} }; vm.runInNewContext(fs.readFileSync(pa
 const hasArt = (look) => !!(ART[look + '.walk'] || ART[look + '.idle'] || ART[look + '.walk.d'] || ART[look + '.walk.0']);
 
 // ---------------- 1. data ----------------
-const BOSSES = [['warden', 'twins', 'hollow'], ['spore', 'cyclops', 'king'], ['samurai', 'weaver', 'wickeater']];
+const BOSSES = [['warden', 'twins', 'cyclops', 'hollow'], ['spore', 'cyclops', 'weaver', 'king'], ['samurai', 'weaver', 'twins', 'wickeater']];
 const kinds = new Set();
 ED.STAGES.forEach((sd, si) => {
   const ids = new Set();
@@ -40,21 +41,24 @@ ED.STAGES.forEach((sd, si) => {
   const roster = new Set(); for (const row of sd.timeline) for (const r of row.roster) roster.add(r[0]);
   ok(roster.size >= 8, `${sd.id}: roster has ${roster.size} foes (>= 8)`);
   const fl = sd.events.flock, flyers = [...roster].filter(id => ED.FOES[id].ai === 'swarm' && !ED.FOES[id].solo);
-  ok(!flyers.length && fl && ED.FOES[fl.id].ai === 'swarm' && fl.first === 40 && fl.every === 18 && fl.n.join() === '8,40', `${sd.id}: flock ${fl && fl.id} every ${fl && fl.every} s from ${fl && fl.first} s; flyers in rosters: ${flyers.join(',') || 'none'}`);
+  ok(!flyers.length && fl && ED.FOES[fl.id].ai === 'swarm' && fl.first === 40 && fl.every === 18 && fl.n.join() === '8,40,52' && sd.events.swarm.n.join() === '24,50,60', `${sd.id}: flock ${fl && fl.id} every ${fl && fl.every} s from ${fl && fl.first} s; flyers in rosters: ${flyers.join(',') || 'none'}`);
   for (const id of ids) kinds.add(ED.FOES[id].split ? 'splitter' : ED.FOES[id].ai);
   const tl = sd.timeline;
-  ok(tl.length === 16 && tl[0].cap === 80 && tl[1].cap === 150 && tl[2].cap === 220 && tl[3].cap === 300 && tl[12].cap === 700 && tl[15].cap === 700, `${sd.id}: 16 rows, cap ${tl[0].cap} -> ${tl[12].cap}`);
-  ok(tl[10].rate >= tl[0].rate * 6 && tl.every((r, m) => m === 0 || m === 15 || r.rate >= tl[m - 1].rate), `${sd.id}: rate ${tl[0].rate} -> ${tl[10].rate} -> ${tl[14].rate}, never drops before 15:00`);
+  ok(tl.length === 21 && tl[0].cap === 80 && tl[1].cap === 150 && tl[2].cap === 220 && tl[3].cap === 300 && tl.slice(12).every(r => r.cap === 700), `${sd.id}: 21 rows, cap ${tl[0].cap} -> ${tl[12].cap} (holds to 20:00)`);
+  ok(tl[10].rate >= tl[0].rate * 6 && tl[19].rate > tl[14].rate && tl[20].rate < tl[19].rate && tl.every((r, m) => m === 0 || m === 20 || r.rate >= tl[m - 1].rate), `${sd.id}: rate ${tl[0].rate} -> ${tl[10].rate} -> ${tl[14].rate} -> ${tl[19].rate}, never drops before 20:00 (${tl[20].rate} under the final boss)`);
   ok(tl[0].floor === 0 && tl[1].floor === 0.1 && tl[4].floor === 0.25 && tl[9].floor === 0.5 && tl[10].floor === 0.55 && tl[11].floor === 0.6 && tl.slice(12).every(r => r.floor === 0.7), `${sd.id}: density floor ${tl.map(r => r.floor).join(' ')} of the cap`);
   const kindsAt = (a, b) => { const s = new Set(); for (let m = a; m < b; m++) for (const r of tl[m].roster) s.add(r[0]); return s; };
-  const A = kindsAt(0, 5), B = kindsAt(5, 10), Cc = kindsAt(10, 15), newB = [...B].filter(id => !A.has(id)), newC = [...Cc].filter(id => !A.has(id) && !B.has(id));
+  const A = kindsAt(0, 5), B = kindsAt(5, 10), Cc = kindsAt(10, 15), D = kindsAt(15, 21), newB = [...B].filter(id => !A.has(id)), newC = [...Cc].filter(id => !A.has(id) && !B.has(id)), newD = [...D].filter(id => !A.has(id) && !B.has(id) && !Cc.has(id));
   const gone = [...kindsAt(0, 2)].filter(id => ED.FOES[id].ai !== 'swarm' && Cc.has(id) && !(sd.id === 'abyss' && id === 'shade'));
   const filler = tl.slice(5).every(row => row.roster.some(r => ED.FOES[r[0]].ai === 'chaser' && !ED.FOES[r[0]].split && r[1] >= 3));
   ok(filler, `${sd.id}: every minute from 5:00 keeps a plain chaser (weight >= 3) as the brain-cap filler`);
-  ok(newB.length >= 3 && newC.length >= 1 && !gone.length && sd.bench && sd.bench.t === 720 && sd.bench.elite === 30, `${sd.id}: tiers - new at 5:00 ${newB.join(',')}; new at 10:00 ${newC.join(',')}; opening kinds gone by 10:00 except swarmers`);
+  ok(newB.length >= 3 && newC.length >= 1 && !gone.length && sd.bench && sd.bench.t === 1020 && sd.bench.elite === 30, `${sd.id}: tiers - new at 5:00 ${newB.join(',')}; new at 10:00 ${newC.join(',')}; opening kinds gone by 10:00 except swarmers`);
+  const dashers = [...kindsAt(11, 21)].filter(id => (ED.FOES[id].ai === 'charger' || ED.FOES[id].ai === 'diver') && !ED.FOES[id].guard);
+  const wt = (id, m) => (tl[m].roster.find(r => r[0] === id) || [0, 0])[1], heavy = [...D].filter(id => (ED.FOES[id].brute || newC.includes(id)) && wt(id, 19) >= wt(id, 15) * 1.25);
+  ok(!newD.length && !dashers.length && heavy.length >= 2, `${sd.id}: no new kind needed at 15:00 (${newD.join(',') || 'none'}), no charger or diver from 11:00 (${dashers.join(',') || 'none'}); brute / 10:00 kinds +25% or more by 19:00: ${heavy.join(',')}`);
   const shifts = tl.filter((r, m) => m > 0 && JSON.stringify(r.roster) !== JSON.stringify(tl[m - 1].roster)).length;
-  ok(shifts >= 13, `${sd.id}: roster weights shift ${shifts} of 15 minutes`);
-  ok(JSON.stringify(sd.bosses.map(b => b.id)) === JSON.stringify(BOSSES[si]) && sd.bosses[2].final && sd.bosses.map(b => b.t).join() === '300,600,900', `${sd.id}: bosses ${sd.bosses.map(b => b.id + '@' + b.t).join(' ')}`);
+  ok(shifts >= 18, `${sd.id}: roster weights shift ${shifts} of 20 minutes`);
+  ok(JSON.stringify(sd.bosses.map(b => b.id)) === JSON.stringify(BOSSES[si]) && sd.bosses.map(b => !!b.final).join() === 'false,false,false,true' && sd.bosses.map(b => b.t).join() === '300,600,900,1200' && sd.bosses[3].t === C.RUN_LEN, `${sd.id}: bosses ${sd.bosses.map(b => b.id + '@' + b.t).join(' ')}`);
 });
 ok(['chaser', 'swarm', 'brute', 'ranged', 'exploder', 'splitter', 'diver', 'charger', 'summoner', 'march', 'blinker'].every(k => kinds.has(k)), 'every foe kind appears: ' + [...kinds].join(','));
 { // wire order: boss bodies keep their indices, tier foes follow them; XP curve
@@ -305,7 +309,7 @@ for (const st of [0, 1, 2]) {
     w.sdef = Object.assign({}, w.sdef, { timeline: w.sdef.timeline.map(r => Object.assign({}, r, { rate: 0, floor: 0 })), events: { flock: w.sdef.events.flock }, elites: null, bosses: [] });
     return w;
   };
-  const size = (fl, t, n, line) => { const k = U.clamp((t - fl.first) / (600 - fl.first), 0, 1); return Math.round((fl.n[0] + (fl.n[1] - fl.n[0]) * k) * (1 + 0.25 * (n - 1)) * (line ? 1.5 : 1)); };
+  const size = (fl, t, n, line) => { const v = t < 600 ? fl.n[0] + (fl.n[1] - fl.n[0]) * U.clamp((t - fl.first) / (600 - fl.first), 0, 1) : fl.n[1] + (fl.n[2] - fl.n[1]) * Math.min(1, (t - 600) / 600); return Math.round(v * (1 + 0.25 * (n - 1)) * (line ? 1.5 : 1)); };
   // members F around hero h: centroid distance d, line (on one line across the heading), span (lateral extent), head (heading at h's spot), tight (pack within 80 px)
   const shape = (F, h) => {
     const cx = F.reduce((s, e) => s + e.x, 0) / (F.length || 1), cy = F.reduce((s, e) => s + e.y, 0) / (F.length || 1), d = Math.hypot(cx - h.x, cy - h.y), ux = (h.x - cx) / d, uy = (h.y - cy) / d;
@@ -329,9 +333,10 @@ for (const st of [0, 1, 2]) {
     const n0 = v.foes.length; v.updateSpawner(0);
     return Object.assign(shape(v.foes.slice(n0), h), { cap: v.aliveCap(), alive: v.foes.length });
   };
-  const a = one(1, 600, 0), b = one(4, 600, 0), c = one(1, 900, 0), d = one(1, 40, 80), e = one(4, 900, 880), f = one(1, 600, 750), g = one(1, 300, 0, 2);
-  ok(a.n === size(FL0, 600, 1, a.line) && b.n === size(FL0, 600, 4, b.line) && c.n === size(FL0, 900, 1, c.line) && g.n === size(ED.STAGES[2].events.flock, 300, 1, g.line) && g.id === 'starspawn',
-    `flock size: ${a.n} at 10:00 solo, ${b.n} x4, ${c.n} at 15:00, Abyss ${g.n} ${g.id} at 5:00 (lines x1.5)`);
+  const a = one(1, 600, 0), b = one(4, 600, 0), c = one(1, 900, 0), d = one(1, 40, 80), e = one(4, 900, 880), f = one(1, 600, 750), g = one(1, 300, 0, 2), h = one(1, 1200, 0), h2 = one(1, 1500, 0);
+  ok(a.n === size(FL0, 600, 1, a.line) && b.n === size(FL0, 600, 4, b.line) && c.n === size(FL0, 900, 1, c.line) && g.n === size(ED.STAGES[2].events.flock, 300, 1, g.line) && g.id === 'starspawn'
+    && c.n === (c.line ? 69 : 46) && h.n === (h.line ? 78 : 52) && h2.n === (h2.line ? 78 : 52),
+    `flock size: ${a.n} at 10:00 solo, ${b.n} x4, ${c.n} at 15:00, ${h.n} at 20:00, ${h2.n} at 25:00, Abyss ${g.n} ${g.id} at 5:00 (lines x1.5)`);
   let pk = null, ln = null;
   for (let s = 1; s < 40 && !(pk && ln); s++) { const r = one(1, 600, 0, 0, s); if (r.line) ln = ln || r; else pk = pk || r; }
   ok(pk && pk.head && pk.tight && pk.d >= 340 && pk.d <= 470, `pack flock: ${pk && pk.n} within 80 px, ${pk && Math.round(pk.d)} px out, every member heading through the hero's spot`);
@@ -400,12 +405,48 @@ for (const st of [0, 1, 2]) {
     ok(alive && Math.abs(m.y - h.y) < 1e-6 && Math.abs(moved - 96 * 70 / 60) < 1 && wall.dead && !die, `rushers never recycle: ${Math.round(moved)} px straight in 70 ticks from 1000 px out; a rusher at the arena bound despawns silently`);
   }
 }
-{ // benchmark phase: a 'surge' warning at 12:00, then elites every 30 s
+{ // benchmark phase: a 'surge' warning at 17:00, then elites every 30 s
   const w = new ED.World({ seed: 77, stage: 1, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];
-  p.weapons.length = 0; p.skills.length = 0; w.time = 715; w.sp.eliteT = 720; w.sp.swarmT = Infinity; w.sp.bossI = 99;
+  p.weapons.length = 0; p.skills.length = 0; w.time = 1015; w.sp.eliteT = 1020; w.sp.swarmT = w.sp.flockT = Infinity; w.sp.bossI = 99;
   const surge = [], el = [];
   for (let i = 0; i < 70 * 60; i++) { w.input('p1', { mx: 0, my: 0, ax: p.x + 50, ay: p.y, pick: p.offer ? 1 : 0 }); w.update(C.TICK); for (const ev of w.events) if (ev.t === 'warn') (ev.kind === 'surge' ? surge : ev.kind === 'elite' ? el : []).push(Math.round(w.time)); w.events.length = 0; }
-  ok(surge.join() === '720' && el.join() === '720,750,780', `benchmark: surge at ${surge.join()}, elites at ${el.join()}`);
+  ok(surge.join() === '1020' && el.join() === '1020,1050,1080', `benchmark: surge at ${surge.join()}, elites at ${el.join()}`);
+}
+{ // 15:00 mid-boss and 20:00 final boss per stage: ids, flags, HP 1500 x (t / 300)^2 x stage HP (twins: two halves); the final boss enrages at ENRAGE_T, not before
+  for (const st of [0, 1, 2]) {
+    const sd = ED.STAGES[st], k = sd.foe.hp, seen = [];
+    const w = new ED.World({ seed: 77, stage: st, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];
+    p.weapons.length = 0; p.skills.length = 0; w.sp.swarmT = w.sp.flockT = w.sp.eliteT = Infinity; w.sp.bossI = 2; w.sp.warnI = 1;
+    const step = (until) => {
+      while (w.time < until) {
+        w.input('p1', { mx: 0, my: 0, ax: p.x + 50, ay: p.y, pick: p.offer ? 1 : 0 }); w.update(C.TICK);
+        for (const ev of w.events) if (ev.t === 'boss' && ev.phase === 0) seen.push(ev.id + '@' + Math.round(w.time) + (ev.final ? '!' : ''));
+        w.events.length = 0;
+      }
+    };
+    w.time = 894; step(901);
+    const mids = w.bossList.slice(), hps = mids.map(e => e.maxHp), midHp = hps.reduce((s, v) => s + v, 0);
+    for (const e of mids) w.killFoe(e, null);
+    w.time = 1194; step(1201);
+    const fin = w.bossList.find(e => e.final), finHp = fin && fin.maxHp;
+    w.time = 1318; step(1319.5); const pre = fin && fin.enraged; step(1320.5);
+    const want = sd.bosses[2].id + '@900,' + sd.bosses[3].id + '@1200!';
+    ok(seen.join() === want && Math.abs(midHp - Math.round(13500 * k)) <= 1 && finHp === Math.round(24000 * k) && !pre && fin.enraged && w.state === 'play',
+      `${sd.id}: 15:00 ${seen[0]} (HP ${hps.join(' + ')}), final ${seen[1]} (HP ${finHp}), enraged at ${C.ENRAGE_T} s: ${!!pre} -> ${!!(fin && fin.enraged)}`);
+  }
+}
+{ // damage curves: contact 3 / 9 / 11 and shot factor x1 / x1.8 / x2.1 at 0:00 / 15:00 / 20:00, holding after; swarm waves 50 by 12:00 -> 60 by 20:00 (+-4, minus blocked spots)
+  const w = new ED.World({ seed: 77, stage: 0, players: players(['knight']) }), at = (t, f) => { w.time = t; return Math.round(w[f]() * 1000) / 1000; };
+  const cd = [0, 450, 900, 1050, 1200, 1500].map(t => at(t, 'contactDmg')).join('/'), fk = [0, 900, 1200, 1500].map(t => at(t, 'foeDmgK')).join('/');
+  const sw = (t) => {
+    const v = new ED.World({ seed: 5, stage: 0, players: players(['knight']), cheats: { god: true } }), h = v.heroes[0], ns = [];
+    v.time = t;
+    for (let i = 0; i < 6; i++) { const n0 = v.foes.length; v.swarmEvent(v.sdef.events.swarm, h); ns.push(v.foes.length - n0); for (const f of v.foes) v.despawnFoe(f); v.compact(); v.events.length = 0; }
+    return ns;
+  };
+  const s12 = sw(720), s20 = sw(1200), s25 = sw(1500), near = (ns, n) => ns.every(x => x <= n + 4 && x >= n - 14);
+  ok(cd === '3/6/9/10/11/11' && fk === '1/1.8/2.1/2.1' && near(s12, 50) && near(s20, 60) && near(s25, 60) && Math.max(...s20) > 54,
+    `curves: contact ${cd} at 0:00/7:30/15:00/17:30/20:00/25:00, shot factor ${fk} at 0:00/15:00/20:00/25:00; swarm waves ${s12.join(',')} at 12:00, ${s20.join(',')} at 20:00, ${s25.join(',')} at 25:00`);
 }
 { // a boss id without a script spawns a stand-in brute boss
   const r = spawnRun(0, 302, (w) => { w.sdef = Object.assign({}, w.sdef, { bosses: [{ t: 300, id: 'nobody' }] }); });
@@ -500,7 +541,7 @@ for (let s = 0; s < 3; s++) {
     const coins = () => w.pickups.filter(g => !g.dead && g.k === 'gold').reduce((s, g) => s + g.val, 0);
     const el = w.spawnFoe('skeleton', p.x + 300, p.y, { elite: true }); w.killFoe(el, null); const eliteC = coins();
     w.time = 300; const mid = w.standInBoss({ t: 300, id: 'x' }); w.killFoe(mid, null); const midC = coins() - eliteC;
-    w.time = 900; const fin = w.standInBoss({ t: 900, id: 'x', final: true }); w.killFoe(fin, null); const g0 = w.gold; w.update(C.TICK);
+    w.time = 1200; const fin = w.standInBoss({ t: 1200, id: 'x', final: true }); w.killFoe(fin, null); const g0 = w.gold; w.update(C.TICK);
     const end = w.events.find(ev => ev.t === 'end');
     return { ok: eliteC >= k && eliteC <= Math.round(5 * k) && midC === G.mid * k && g0 === G.final * k && w.state === 'won' && end && end.summary.gold === w.gold && w.gold === (G.final + G.win) * k, k, eliteC, midC, fin: g0, total: w.gold };
   };

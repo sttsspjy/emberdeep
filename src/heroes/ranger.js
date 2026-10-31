@@ -1,5 +1,5 @@
-// Ranger (marksman): hero data, signature Longbow (paths Spread / Piercer / Ricochet) and its Forms Hail of Arrows (Spread), Ballista (Piercer), Seeker (Ricochet),
-// hybrids Gale Barrage (Piercer + Spread) and Rebound (Piercer + Ricochet); Q Vault (leap toward the cursor, 3 skill levels).
+// Ranger (marksman): hero data, signature Longbow (paths Spread / Piercer / Ricochet) and its Forms Hail of Arrows + Gale Barrage (Spread), Ballista (Piercer),
+// Seeker + Rebound (Ricochet); Q Vault (leap toward the cursor, 3 skill levels).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU;
@@ -81,20 +81,19 @@
     id: 'longbow', name: 'Longbow', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', txt: 'Piercing arrows toward your cursor',
     base: { dmg: 22, cd: 0.55, n: 1, pierce: 8, area: 1, speed: 420, dur: 0, knock: 25, range: 300, heavy: 0, two: false, bounce: 0, kshot: 0 },
     paths: [
-      { id: 'spread', name: 'Spread', form: 'hail', ranks: [
+      { id: 'spread', name: 'Spread', forms: ['hail', 'galeshot'], ranks: [
         { mods: { n: 2 }, txt: '+2 arrows in a fan' },
         { mods: { two: true }, txt: 'The fan splits over two targets' },
         { mods: { dmg: 0.25, n: 2 }, txt: '+25% damage, +2 arrows' }] },
-      { id: 'pierce', name: 'Piercer', form: 'ballista', ranks: [
+      { id: 'pierce', name: 'Piercer', forms: ['ballista'], ranks: [
         { mods: { pierce: 4, range: 0.2 }, txt: 'Arrows pierce 4 more, fly farther' },
         { mods: { heavy: 3 }, txt: 'Every 3rd shot: a heavy bolt' },
         { mods: { dmg: 0.25, heavy: -1 }, txt: '+25% damage, every 2nd shot heavy' }] },
-      { id: 'ricochet', name: 'Ricochet', form: 'seeker', ranks: [
+      { id: 'ricochet', name: 'Ricochet', forms: ['seeker', 'rebound'], ranks: [
         { mods: { bounce: 2 }, txt: 'Arrows bounce to 2 more foes' },
         { mods: { kshot: 1 }, txt: 'Kills loose an arrow at the next foe' },
         { mods: { dmg: 0.25, bounce: 2 }, txt: '+25% damage, +2 bounces' }] },
-    ],
-    hybrids: [{ need: [0, 1], form: 'galeshot' }, { need: [1, 2], form: 'rebound' }],
+    ],
   }, {
     fire: (w, p, ws, S) => { volley(w, p, ws, S, ARROW, FAN, FANK); return true; },
     kill: killShot,
@@ -172,7 +171,7 @@
     ],
   }, { fire: (w, p, ws, S) => { SEEK.pierce = S.pierce >> 2; volley(w, p, ws, S, SEEK, 0.2, 0.35); return true; }, kill: killShot });
 
-  // Gale Barrage (Piercer + Spread): each cooldown starts a stream of GALE_N + S.n arrows, one every 0.05 s, each re-aimed along the cursor with +-0.04 rad jitter (w.rng);
+  // Gale Barrage (Spread): each cooldown starts a stream of GALE_N + S.n arrows, one every 0.05 s, each re-aimed along the cursor with +-0.04 rad jitter (w.rng);
   // two: every 2nd arrow goes along twoAim instead; every (2 x S.heavy)-th arrow is heavy.
   const GALE_N = 1;
   const GALE = { look: 'arrow', onHit: bounce };
@@ -198,7 +197,7 @@
     kill: killShot,
   });
 
-  // Rebound (Piercer + Ricochet): S.n arrows in a fan along the cursor; an arrow reaching its owner's view edge turns toward the foe nearest the owner (else mirrors), clears its hit list and
+  // Rebound (Ricochet): S.n arrows in a fan along the cursor; an arrow reaching its owner's view edge turns toward the foe nearest the owner (else mirrors), clears its hit list and
   // regains its pierce, up to 2 + S.bounce times; life 3 s; no first-hit bonus.
   const rbTick = (w, pr, dt) => {
     const p = pr.p;

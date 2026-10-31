@@ -16,8 +16,8 @@
     HERO_BODY: 10,        // hero wall-collision radius and touch / trigger reach (pickups, braziers, foe attack triggers); not a hitbox
     DASH: { t: 0.2, dist: 80, cd: 3.5 }, // dash length (s), distance (px), cooldown (s); i-frames for its whole length
     IFRAME: 0.5,          // invulnerability after a hit (s)
-    RUN_LEN: 900,         // survival length (s): the final boss spawns here
-    ENRAGE_T: 1020,       // the final boss enrages at this time (s)
+    RUN_LEN: 1200,        // survival length (s): the final boss spawns here
+    ENRAGE_T: 1320,       // the final boss enrages at this time (s)
     GOLD: { mid: 150, final: 300, win: 300, bounty: 10 }, // mid-boss coin drop, final boss kill and victory gold, run-end bounty (1 per 10 kills, win or loss); x the stage gold multiplier (GAME-DESIGN §9)
     VERSION: '2.0.0',
   };

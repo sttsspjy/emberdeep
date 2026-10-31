@@ -1,7 +1,8 @@
 // Headless check for bosses warden, spore, twins (exit 1 on failure). Usage: node tools/check-bosses-a.js
 // Per boss: spawned at its stage minute over a live horde vs a scripted hero (circles it, dashes, picks cards; HP kept topped up) for 60 s (keeps 220 px off the warden 8-18 s), HP forced through every phase:
 // no exceptions, every attack key used, phase events, foe telegraphs >= 0.6 s, normal spawns at 50% while it lives, deterministic digest, client draw hooks run on a mock batch.
-// Then killable with a cheat build (might x60): one 'boss' phase -1 event, a chest drops, w.boss clears. Twins: a fallen twin rises after its revive circle; both down ends the fight.
+// Then killable with a cheat build (might x60, Cleave with Edge Wave at rank 5): one 'boss' phase -1 event, a chest drops, w.boss clears (twins also as the Abyss 15:00 mid-boss: two halves of 1500 x 3^2 x stage HP).
+// Twins: a fallen twin rises after its revive circle; both down ends the fight.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
@@ -47,7 +48,7 @@ function fight(o) {
     // 50% spawn rate while the boss lives: one 1 s spawner step at an alive cap of 0
     const acc0 = w.sp.acc; w.sp.acc = 0; w.aliveCap = () => 0; w.updateSpawner(1); const row = w.timelineRow();
     out.half = Math.abs(w.sp.acc - Math.min(10, row.rate * (1 + 0.25 * (w.partyN - 1)) * 0.5)) < 1e-6; delete w.aliveCap; w.sp.acc = acc0;
-    const start = w.time, ctx = out.ctx = { e };
+    const start = w.time, ctx = out.ctx = { e, hp: w.bossList.map(b => b.maxHp) };
     for (let tick = 0; w.time - start < (o.len || 60) && w.state === 'play'; tick++) {
       const far = o.away && w.time - start >= o.away[0] && w.time - start < o.away[1] ? 220 : 0;
       for (const p of w.heroes) { drive(w, p, tick, w.boss || e, far); if (!o.mortal && !w.cheats.god && p.hp < HUGE / 2) { p.maxHp = HUGE; p.hp = HUGE; } }
@@ -146,8 +147,10 @@ ok(tw.half, 'twins: normal spawns at 50% while they live');
 ok(tw.w.bossBar.on && tw.w.bossBar.name === 'The Twins' && tw.w.bossBar.n === 2, 'twins: boss bar data (' + JSON.stringify(tw.w.bossBar) + ')');
 
 // ---------- killable with a cheat build ----------
-for (const [id, stage, minute] of [['warden', 0, 5], ['spore', 0, 10], ['twins', 1, 5]]) {
-  const r = fight({ id, stage, minute, cls: ['knight'], cheats: { god: true, might: 60 }, len: 90, stop: (w, out) => out.ends > 0 && w.time > 0 });
+for (const [id, stage, minute] of [['warden', 0, 5], ['spore', 0, 10], ['twins', 1, 5], ['twins', 2, 15]]) {
+  const r = fight({ id, stage, minute, cls: ['knight'], cheats: { god: true, might: 60 }, len: 90, stop: (w, out) => out.ends > 0 && w.time > 0,
+    script: (w, ctx, tick) => { if (!tick) w.setRanks(w.heroes[0], w.heroes[0].weapons[0], ED.TUNE_MAX, 2, ED.PATH_MAX); } }); // Edge Wave 5: crescents reach the boss from the kite distance
+  if (minute === 15) { const half = Math.round(ED.bossHp(900, ED.STAGES[stage].foe.hp) / 2), hp = r.ctx ? r.ctx.hp : []; ok(hp.length === 2 && hp.every(v => v === half), `twins at 15:00 on ${ED.STAGES[stage].id}: two bodies of ${half} HP (${hp.join(' / ')})`); }
   ok(!r.err, id + ': cheat kill throws nothing' + (r.err ? ': ' + r.err.stack : ''));
   ok(r.ends === 1 && r.chest && !r.w.boss && r.w.bossList.length === 0 && !r.w.bossBar.on, `${id}: killable with might x60 (ends ${r.ends}, chest ${r.chest}, at ${r.endT.toFixed(1)} s)`);
   ok(!r.w.zones.some(z => z.team === 1 && z.src && z.src.boss && !z.dead) && !r.w.projs.some(pr => pr.team === 1 && pr.e && pr.e.boss && !pr.dead), id + ': its shots and telegraphs vanish with it');

@@ -1,6 +1,6 @@
-// Boss 'cyclops' (Demon Cyclops, stage 2 final boss; art boss.cyclops.*). Enrages at ED.CONST.ENRAGE_T (bosses.js), telegraphs x0.8 (floor 0.6 s).
+// Boss 'cyclops' (Demon Cyclops, mid-boss: Glowmire 10:00, Ossuary 15:00; art boss.cyclops.*). Enraged (final boss only, bosses.js): telegraphs x0.8 (floor 0.6 s).
 // P1: eye laser sweep (the swept arc is warned; obstacles cut the beam), stomp (warned circle, then a shockwave ring rolls outward), leap slam with a fire ring.
-// P2 (66%): the laser sweeps back over the same arc, double stomps, aimed fire volleys. P3 (33%): a fan of three lasers, triple stomps, spider adds.
+// P2 (66%): the laser sweeps back over the same arc, double stomps, aimed fire volleys. P3 (33%): a fan of three lasers, triple stomps, adds (cave spiders and a shroom hulk, or the host stage's kin: bosses.js W.addKin).
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST, TAU = U.TAU, B = ED.Bosses, DT = C.TICK;
@@ -79,7 +79,7 @@
         return s.k >= 3 && t >= s.next;
       },
     },
-    // Spider adds (P3), at most once per 15 s.
+    // Adds (P3), at most once per 15 s.
     adds: {
       w: 1, phase: 3, wind: 0.8, ok: (w, e) => w.time - (e.vars.addT || -99) > 15,
       start(w, e) { e.vars.addT = w.time; adds(w, e, ['cavespider', 'cavespider', 'shroomhulk'], 80, 0.9); },

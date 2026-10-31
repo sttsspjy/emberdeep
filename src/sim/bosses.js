@@ -1,5 +1,7 @@
 // Bosses (GAME-DESIGN §8): ED.Bosses[id] = fn(w, e, dt) (the foe brain of a boss foe def, ai 'boss'), built with ED.Bosses.lib.runner; spawn / kill / enrage / bar bookkeeping on World.
-// HP = W.bossHp (foes.js: 1500 x (boss minute / 5)^2.5 x party x stage HP factor; a multi-body boss splits it in its spawn hook). A living boss halves normal spawns (spawner). The fight ends when its last listed body dies:
+// Stage schedule: mid-bosses at 5:00, 10:00 and 15:00, the final boss at 20:00 (src/data/stages.js); scripts are stage-agnostic: add ids name home-stage foes and W.addKin swaps each for the host stage's
+// foe of the same kind (spawner.js W.stageKin; home-stage ids resolve to themselves) and skips a kind at its brain cap (W.foeAtCap). Boss bodies and parts (def.boss) bypass both.
+// HP = W.bossHp (foes.js: 1500 x (boss minute / 5)^2 x party x stage HP factor; a multi-body boss splits it in its spawn hook). A living boss halves normal spawns (spawner). The fight ends when its last listed body dies:
 // a chest (evolution first) plus gems and a coin of ED.CONST.GOLD.mid x stage gold drop there (the final boss pays ED.CONST.GOLD.final straight to the party, World.payGold), hostile shots and telegraphs of its bodies vanish; the final boss's death wins the run; at ED.CONST.ENRAGE_T a living final boss enrages (x3 damage and speed).
 // Boss attack state lives in e.vars ({ phase, st, t, atk, last, at, s: per-attack scratch, force, fq, rage }). Boss parts (foes with def.boss outside w.bossList, e.g. spore pods) drop only their def.xp gem.
 (function (ED) {
@@ -33,10 +35,10 @@
     if (d > pref) w.steer(e, t.x, t.y, 1, dt);
     else { const a = aim(e) + Math.PI / 2 * (v.strafe || 1); if (mv(w, e, Math.cos(a), Math.sin(a), e.spd * 0.4, dt)) v.strafe = -(v.strafe || 1); e.face = t.x > e.x ? 1 : -1; }
   };
-  // Spawns foes of ids around the boss (one extra per hero beyond the first, at most 3).
+  // Spawns foes of ids (W.addKin) around the boss (one extra per hero beyond the first, at most 3).
   const summon = (w, e, ids) => {
     const n = ids.length + Math.min(3, w.partyN - 1);
-    for (let i = 0; i < n; i++) { const a = i / n * TAU, x = e.x + Math.cos(a) * (e.r + 30), y = e.y + Math.sin(a) * (e.r + 30); if (!ED.Arena.blocked(w.arena, x, y, 8)) w.spawnFoe(ids[i % ids.length], x, y); }
+    for (let i = 0; i < n; i++) { const a = i / n * TAU, x = e.x + Math.cos(a) * (e.r + 30), y = e.y + Math.sin(a) * (e.r + 30), id = w.addKin(ids[i % ids.length]); if (id && !ED.Arena.blocked(w.arena, x, y, 8)) w.spawnFoe(id, x, y); }
   };
   // Damage over time to hero p that grants no i-frames (hazards never shield a hero from a telegraphed hit). Returns the damage taken.
   const hazard = (w, p, dmg, src) => { if (p.invuln > 0) return 0; const d = w.hurtHero(p, dmg, src); if (d > 0) p.invuln = 0; return d; };
@@ -135,6 +137,8 @@
 
   // ---------- World bookkeeping ----------
   // w.bossBar: the HUD bar of the newest living boss { on, id, name, q (0..255 of the whole fight), phase, final, enraged, n (bodies up), rev (0..1 revive progress, -1 none) }.
+  // Boss add id for home-stage foe id: this stage's kin (W.stageKin), or null when it is unknown or its brain is at the cap (W.foeAtCap).
+  W.addKin = function (id) { const k = this.stageKin(id), d = ED.FOES[k]; return d && !this.foeAtCap(d) ? k : null; };
   W.initBosses = function () { this.bossList = []; this.bossBar = { on: false, id: '', name: '', q: 0, phase: 0, final: false, enraged: false, n: 0, rev: -1 }; };
   // Spawns stage boss entry b ({ t, id, final }) 260-320 px from a random living hero; its script's spawn hook may split HP and add bodies.
   W.spawnBoss = function (b) {

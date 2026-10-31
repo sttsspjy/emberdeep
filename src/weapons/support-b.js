@@ -88,20 +88,19 @@
     id: 'waraxe', name: 'War Axe', look: 'axe', held: 'weapon.alt.throwing_axe', support: true, role: 'control', mode: 'cursor', txt: 'Arcing axes knock the horde back',
     base: { dmg: 20, cd: 1.5, n: 2, pierce: 4, area: 1, speed: 100, dur: 0, knock: 260, range: 0, both: false, stag: 0, bounce: 0, back: false, split: 0 },
     paths: [
-      { id: 'count', name: 'Count', form: 'avalanche', ranks: [
+      { id: 'count', name: 'Count', forms: ['avalanche'], ranks: [
         { mods: { n: 1 }, txt: '+1 axe' },
         { mods: { both: true }, txt: 'Axes fly to both sides' },
         { mods: { dmg: 0.15, n: 1 }, txt: '+15% damage, +1 axe' }] },
-      { id: 'heft', name: 'Heft', form: 'avalanche', ranks: [
+      { id: 'heft', name: 'Heft', forms: ['avalanche'], ranks: [
         { mods: { area: 0.3, knock: 0.3 }, txt: 'Axes 30% bigger, push harder' },
         { mods: { stag: 0.35 }, txt: 'Axe hits stagger foes' },
         { mods: { pierce: 2, knock: 0.3 }, txt: 'Pierce 2 more, push even harder' }] },
-      { id: 'return', name: 'Return', form: 'avalanche', ranks: [
+      { id: 'return', name: 'Return', forms: ['avalanche'], ranks: [
         { mods: { bounce: 1 }, txt: 'Axes bounce once on landing' },
         { mods: { back: true }, txt: 'The bounce flies back toward you' },
         { mods: { dmg: 0.15, bounce: 1 }, txt: '+15% damage, +1 bounce' }] },
-    ],
-    hybrids: [],
+    ],
   }, { fire: (w, p, ws, S) => axeThrow(w, p, ws, S, 'axe') });
   ED.addWeapon({
     id: 'avalanche', name: 'Avalanche', look: 'avaxe', held: 'weapon.alt.double_axe', support: true, role: 'control', mode: 'cursor', evolved: true, form: true, from: 'waraxe', txt: 'Axes land and split into 3',
@@ -176,20 +175,19 @@
     id: 'bramble', name: 'Bramble Trail', look: 'bramble', held: 'proj.thorn', support: true, role: 'control', mode: 'around', txt: 'Thorns root foes where you walk',
     base: { dmg: 3, cd: 1.6, n: 5, pierce: 0, area: 1, speed: 0, dur: 1.8, knock: 0, range: 0, gap: 22, size: 8.5, rows: 1, ringR: 48, ring2: false, root: 0.5, imm: 0.8, barb: 0, rcrit: false, burst: false },
     paths: [
-      { id: 'length', name: 'Length', form: 'thornwood', ranks: [
+      { id: 'length', name: 'Length', forms: ['thornwood'], ranks: [
         { mods: { dur: 0.3 }, txt: 'Thorns last 30% longer' },
         { mods: { rows: 2 }, txt: 'The trail grows 3 thorns wide' },
         { mods: { rows: 2, dur: 0.3 }, txt: 'Trail 5 wide, thorns last longer' }] },
-      { id: 'snare', name: 'Snare', form: 'thornwood', ranks: [
+      { id: 'snare', name: 'Snare', forms: ['thornwood'], ranks: [
         { mods: { n: 2 }, txt: '+2 thorns in the ring' },
         { mods: { area: 0.2, root: 0.3 }, txt: 'Thorns 20% wider, roots 0.3 s longer' },
         { mods: { ring2: true }, txt: 'A second, outer ring of thorns' }] },
-      { id: 'barbs', name: 'Barbs', form: 'thornwood', ranks: [
+      { id: 'barbs', name: 'Barbs', forms: ['thornwood'], ranks: [
         { mods: { barb: 0.7 }, txt: 'Rooting thorns also stab the foe' },
         { mods: { burst: true }, txt: 'Rooted foes sprout thorns on death' },
         { mods: { rcrit: true, root: 0.2 }, txt: 'Stabs always crit, roots 0.2 s longer' }] },
-    ],
-    hybrids: [],
+    ],
   }, bramble);
   ED.addWeapon({
     id: 'thornwood', name: 'Thornwood', look: 'thicket', held: 'proj.thorn', support: true, role: 'control', mode: 'around', evolved: true, form: true, from: 'bramble', txt: 'Thickets persist and grab',
@@ -250,20 +248,19 @@
     id: 'glaive', name: 'Glaive', look: 'glaive', held: 'weapon.glaive', support: true, role: 'lane', mode: 'cursor', txt: 'Boomerang out and back, pierces',
     base: { dmg: 32, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 260, dur: 0, knock: 30, range: 320, keep: 0.3, hover: false, bcrit: false },
     paths: [
-      { id: 'twin', name: 'Twin', form: 'twinmoons', ranks: [
+      { id: 'twin', name: 'Twin', forms: ['twinmoons'], ranks: [
         { mods: { n: 1 }, txt: '+1 glaive in a fan' },
         { mods: { n: 1 }, txt: '+1 glaive' },
         { mods: { n: 1 }, txt: '+1 glaive' }] },
-      { id: 'reach', name: 'Reach', form: 'twinmoons', ranks: [
+      { id: 'reach', name: 'Reach', forms: ['twinmoons'], ranks: [
         { mods: { range: 0.3, speed: 0.2 }, txt: 'Glaives fly 30% farther and faster' },
         { mods: { hover: true }, txt: 'Glaives spin at the far end' },
         { mods: { pierce: 2, range: 0.2 }, txt: 'Cut 2 more foes, fly 20% farther' }] },
-      { id: 'edge', name: 'Edge', form: 'twinmoons', ranks: [
+      { id: 'edge', name: 'Edge', forms: ['twinmoons'], ranks: [
         { mods: { area: 0.4, keep: 0.1 }, txt: 'Glaives 40% bigger, cut deeper' },
         { mods: { bcrit: true }, txt: 'The return trip always crits' },
         { mods: { dmg: 0.15, area: 0.3 }, txt: '+15% damage, glaives 30% bigger' }] },
-    ],
-    hybrids: [],
+    ],
   }, { fire: glaiveFire });
   ED.addWeapon({
     id: 'twinmoons', name: 'Twin Moons', look: 'moon', held: 'weapon.glaive', support: true, role: 'lane', mode: 'cursor', evolved: true, form: true, from: 'glaive', txt: 'Two moon pairs loop both ways',
@@ -344,20 +341,19 @@
     id: 'chainspark', name: 'Chain Spark', look: 'spark', held: 'fx.thunder', support: true, role: 'lane', mode: 'nearest', txt: 'Lightning hunts elites, then arcs on',
     base: { dmg: 56, cd: 0.9, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 0, range: 320, hops: 2, jump: 90, fall: 0.5, first: 1, stun: 0, dbl: 0, split: 0, kfork: 0, branch: 0, fd: 0 },
     paths: [
-      { id: 'chain', name: 'Chain', form: 'stormcrown', ranks: [
+      { id: 'chain', name: 'Chain', forms: ['stormcrown'], ranks: [
         { mods: { hops: 1 }, txt: 'Arcs jump to 1 more foe' },
         { mods: { n: 1 }, txt: '+1 bolt at another foe' },
         { mods: { hops: 1, jump: 20 }, txt: '1 more jump, jumps reach farther' }] },
-      { id: 'voltage', name: 'Voltage', form: 'stormcrown', ranks: [
+      { id: 'voltage', name: 'Voltage', forms: ['stormcrown'], ranks: [
         { mods: { first: 0.3, stun: 0.2 }, txt: 'First foe: +30% damage, 0.2 s stun' },
         { mods: { dbl: 0.4 }, txt: 'The first foe is struck twice' },
         { mods: { cd: -0.15 }, txt: 'Bolts strike 15% faster' }] },
-      { id: 'fork', name: 'Fork', form: 'stormcrown', ranks: [
+      { id: 'fork', name: 'Fork', forms: ['stormcrown'], ranks: [
         { mods: { kfork: 1 }, txt: 'Kills fork an arc onward' },
         { mods: { split: 1 }, txt: 'The arc splits in two at the first foe' },
         { mods: { kfork: 1 }, txt: 'Kills fork 2 arcs onward' }] },
-    ],
-    hybrids: [],
+    ],
   }, { fire: (w, p, ws, S) => sparkFire(w, p, ws, S, false) });
   ED.addWeapon({
     id: 'stormcrown', name: 'Storm Crown', look: 'spark', held: 'fx.thunder', support: true, role: 'lane', mode: 'nearest', evolved: true, form: true, from: 'chainspark', txt: 'Sky bolts fork at every jump',

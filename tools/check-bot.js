@@ -2,9 +2,9 @@
 // 1. tools/bot-brain.js loads in Node without ED (reads it lazily) and think() returns a full input frame (E never pressed).
 // 2. runOne determinism: the same 90 s cfg twice gives identical results (wall-clock fields aside); the result carries every field (no weapon / fill fields).
 // 3. Pure reader: a 340 s stage-2 run (first boss at 5:00, a cyclops added at 2:00 for st.test hazards) where a second, discarded bot also thinks every tick ends identical to a plain run.
-// 4. Build: a 300 s knight run keeps the hero weapon in slot 0 (supports only after it), ranks it (3+ ranks) and takes a Form when offered; the bot casts Q and never presses E.
-// 5. Short-reach stance: a knight (Cleave) keeps a foe inside its swing reach on >= 20% of 120 s and holds bosses inside it.
-// 6. Card order: a Form > refine > the hero path closest to rank 3 (one path to 3, then a second) > new support > support paths > passives > skill.
+// 4. Build: a 300 s knight run keeps the hero weapon in slot 0 (supports only after it), levels it (3+ steps) and takes a Form when offered; the bot casts Q and never presses E.
+// 5. Short-reach stance: a knight (Cleave only, supports banished) keeps a foe inside its swing reach on >= 20% of 120 s and holds bosses inside it.
+// 6. Card order: a chest offer's first card (path pick, Form) > refine > hero path rank / tune > new support > support path rank / tune > passives > skill.
 // 7. Boss fights: every killed boss carries its spawn time under its stage id (the twins end on either body). skill 0.3 is deterministic and plays differently from skill 1.
 'use strict';
 let fails = 0;
@@ -77,14 +77,15 @@ ok(a.time >= 89 && a.time <= 91 && a.death === 'timeout' && a.ticks > 0, `maxTim
     w.events.length = 0;
   }
   const ws = p.weapons[0];
-  ok(ws.root === 'cleave' && p.weapons.slice(1).every(s => ED.WEAPONS[s.root].support) && ws.pr[0] + ws.pr[1] + ws.pr[2] >= 3, `hero weapon in slot 0, ranked (pr ${ws.pr.join('')}, lvl ${ws.lvl}, hero level ${w.level}; supports ${p.weapons.slice(1).map(s => s.root).join(',') || 'none'})`);
+  ok(ws.root === 'cleave' && p.weapons.slice(1).every(s => ED.WEAPONS[s.root].support) && ws.lvl >= 4, `hero weapon in slot 0, levelled (tune ${ws.tune}, pr ${ws.pr.join('')}, lvl ${ws.lvl}, hero level ${w.level}; supports ${p.weapons.slice(1).map(s => s.root).join(',') || 'none'})`);
   ok(formOffered < 0 || (formAt >= formOffered && formAt - formOffered < 0.1 && ws.evo), `a Form card is taken at once (offered ${formOffered.toFixed(1)} s, taken ${formAt.toFixed(1)} s, weapon ${ws.id})`);
   ok(q > 0 && e === 0, `the bot casts Q (${q}) and never presses E`);
 }
 
-// 5. short-reach stance (Cleave)
+// 5. short-reach stance (Cleave; supports banished so Cleave is the only weapon)
 {
   const ED = load(), w = new ED.World({ seed: 1, stage: 0, players: [{ pid: 'p1', cls: 'knight', meta: { shop: {}, sigs: [] } }] }), p = w.heroes[0];
+  for (const id of ED.WEAPON_IDS) if (ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved) p.banned.push('w:' + id);
   const bot = Bot.create({ pid: 'p1', seed: 1 }); bot.onStart(w, p);
   let n = 0, inR = 0, R = 56;
   while (w.time < 120 && w.state === 'play') {
@@ -103,34 +104,30 @@ ok(a.time >= 89 && a.time <= 91 && a.death === 'timeout' && a.ticks > 0, `maxTim
 {
   const ED = load(), w = new ED.World({ seed: 1, stage: 0, players: [{ pid: 'p1', cls: 'knight', meta: { shop: {}, sigs: [] } }] }), p = w.heroes[0], ws = p.weapons[0];
   const bot = Bot.create({ pid: 'p1', seed: 1 }); bot.onStart(w, p);
-  const path = (i) => ({ kind: 'path', id: 'cleave', path: i, lvl: ws.pr[i] + 1, name: '', txt: '', sub: '', icon: '', val: 0 });
+  const path = (i, lvl) => ({ kind: 'path', id: 'cleave', path: i, lvl: lvl || 2, name: '', txt: '', sub: '', icon: '', val: 0 });
+  const tune = (k, id) => ({ kind: 'tune', id: id || 'cleave', path: -1, tk: k, lvl: 1, name: '', txt: '', sub: '', icon: '', val: 0 });
   const card = (kind, id, lvl) => ({ kind, id, path: -1, lvl: lvl || 1, name: '', txt: '', sub: '', icon: '', val: 0 });
   const pick = (O) => { p.offer = O; const f = bot.think(w, p); p.offer = null; return f.pick ? O[f.pick - 1] : null; };
-  const seq = [];
-  for (let k = 0; k < 6; k++) {
-    const O = [0, 1, 2].filter(i => ws.pr[i] < 3).map(path).concat([card('passive', 'might'), card('skill', 'shove', 2)]);
-    const c = pick(O); seq.push(c.kind === 'path' ? 'p' + c.path : c.kind); if (c.kind === 'path') ws.pr[c.path]++;
-  }
-  ok(seq.join(',') === 'p0,p0,p0,p1,p1,p1', 'one path to rank 3 (the Form path first), then a second: ' + seq.join(','));
-  ws.pr[0] = 1; ws.pr[1] = 2; ws.pr[2] = 0;
-  const c2 = pick([path(0), path(1), path(2)]);
-  ok(c2 && c2.path === 1, 'the path closest to rank 3 goes first: path ' + (c2 && c2.path));
-  const f = pick([path(1), card('refine', 'whirlwind'), card('form', 'whirlwind'), card('passive', 'might')]), r = pick([path(1), card('refine', 'whirlwind'), card('passive', 'might')]);
+  const t = pick([card('passive', 'might'), tune(2), card('skill', 'shove', 2)]);
+  ok(t && t.kind === 'tune', 'a hero tune card before a passive and the skill: ' + (t && t.kind));
+  const pp = pick([0, 1, 2].map(i => ({ kind: 'pathpick', id: 'cleave', path: i, lvl: 1, name: '', txt: '', sub: '', icon: '', val: 0 })));
+  ok(pp && pp.kind === 'pathpick', 'a path-pick offer takes a path: ' + (pp && pp.path));
+  const f = pick([path(2), card('refine', 'whirlwind'), card('form', 'whirlwind'), card('passive', 'might')]), r = pick([path(2), card('refine', 'whirlwind'), card('passive', 'might')]);
   const s = pick([card('passive', 'mending'), card('skill', 'shove', 2), card('passive', 'might', 2)]);
   ok(f.kind === 'form' && r.kind === 'refine' && s.kind !== 'skill', `Form first (${f.kind}), then refine (${r.kind}); passives before the skill (${s.kind} ${s.id})`);
   const sid = ED.WEAPON_IDS.find(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved);
   if (sid) {
     const sp = (i, lvl) => ({ kind: 'path', id: sid, path: i, lvl, name: '', txt: '', sub: '', icon: '', val: 0 });
-    const a = pick([card('passive', 'might'), card('support', sid), path(1)]), b = pick([card('passive', 'might'), sp(0, 3), card('support', sid)]), c = pick([card('passive', 'might', 2), sp(1, 1)]);
+    const a = pick([card('passive', 'might'), card('support', sid), path(1)]), b = pick([card('passive', 'might'), sp(0, 3), card('support', sid)]), c = pick([card('passive', 'might', 2), tune(0, sid)]);
     const fo = pick([card('form', 'whirlwind'), card('form', 'colossus')]);
-    ok(a.kind === 'path' && b.kind === 'support' && c.kind === 'path' && fo && fo.id === 'whirlwind',
-      `hero path > new support > support path > passive; a Form offer takes its first card (${a.kind}, ${b.kind}, ${c.kind}, ${fo && fo.id})`);
+    ok(a.kind === 'path' && b.kind === 'support' && c.kind === 'tune' && fo && fo.id === 'whirlwind',
+      `hero path > new support > support path > support tune > passive; a Form offer takes its first card (${a.kind}, ${b.kind}, ${c.kind}, ${fo && fo.id})`);
   }
 }
 
 // 7. boss fights + skill tier
 {
-  const r = runOne({ stage: 0, cls: 'knight', seed: 1, maxTime: 660, meta: 'max' });
+  const r = runOne({ stage: 0, cls: 'knight', seed: 1, maxTime: 780, meta: 'max' });
   const ids = r.bosses.map(b => b.id + '@' + b.spawn + '-' + b.at).join(',');
   ok(r.bosses.length >= 2 && r.bosses.every(b => b.spawn !== null && b.at >= b.spawn) && r.bosses.some(b => b.id === 'twins'), 'boss kills carry their spawn: ' + ids + ' (time ' + r.time + ', death ' + r.death + ')');
   const c = { stage: 2, cls: 'ranger', seed: 5, maxTime: 90, skill: 0.3 }, x = runOne(c), y = runOne(c), z = runOne(Object.assign({}, c, { skill: 1 }));

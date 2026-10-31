@@ -258,7 +258,7 @@ async function main() {
     await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(!(await vis(page, 'ov-offer')), 'key 1 picks a card');
     // boss chest with a ready Form: chest popup says so, then a Form offer (header, no reroll / skip / banish foot); key 1 takes it
-    await page.evaluate(() => { const w = ED.Game.w, p = w.heroes[0]; p.offer = null; p.pend = 0; w.setRanks(p, p.weapons[0], 3, false); p.rerolls = 1; w.openChest(p, 2); });
+    await page.evaluate(() => { const w = ED.Game.w, p = w.heroes[0]; p.offer = null; p.pend = 0; w.setRanks(p, p.weapons[0], ED.TUNE_MAX, 0, ED.PATH_MAX); p.rerolls = 1; w.openChest(p, 2); });
     await page.waitForFunction(() => !document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(/Boss chest!/.test(await page.locator('#ov-chest').innerText()) && /Choose a Form/.test(await page.locator('#ov-chest').innerText()), 'boss chest popup: Choose a Form');
     check(await vis(page, 'ov-offer') && (await page.locator('#offer-title').innerText()) === 'Choose a Form' && (await page.locator('.offer-card.k-form').count()) >= 1 && !(await vis(page, 'offer-foot')), 'Form offer: header, Form cards, no reroll / skip / banish');
@@ -266,11 +266,11 @@ async function main() {
     await page.keyboard.press('Digit1');
     await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(await page.evaluate(() => ED.Game.w.heroes[0].weapons[0].evo), 'key 1 takes the Form');
-    // build a kit: every path at rank 3, the Form taken and refined, 5 passives, and a boss
+    // build a kit: the Form (taken above) refined, a support with tune and a path, 5 passives, and a boss
     await page.evaluate(() => {
       const w = ED.Game.w, p = w.heroes[0];
-      w.setRanks(p, p.weapons[0], 9, true);
-      if (p.weapons.length < 2) { const sup = ED.WEAPON_IDS.find(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved), s2 = sup && w.addWeapon(p, sup); if (s2) w.setRanks(p, s2, 4, false); } // slot 2 filled, slot 3 empty
+      while (w.refineForm(p, p.weapons[0]));
+      if (p.weapons.length < 2) { const sup = ED.WEAPON_IDS.find(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved), s2 = sup && w.addWeapon(p, sup); if (s2) w.setRanks(p, s2, ED.TUNE_MAX, 0, 2); } // slot 2 filled, slot 3 empty
       for (const id of ['might', 'haste', 'reach', 'vigor', 'magnet']) if (p.passives.length < 6 && !p.passives.some(x => x.id === id)) p.passives.push({ id, lvl: 2 });
       w.recalc(p, true); p.hp = Math.round(p.maxHp * 0.22); p.skills[0].cd = 6;
       w.spawnBoss({ t: 300, id: 'warden' });
@@ -286,7 +286,7 @@ async function main() {
     await page.keyboard.press('Escape');
     await wait(150);
     check(await vis(page, 'ov-pause'), 'Esc pauses');
-    check(await page.locator('#pause-build .pslot canvas').count() >= 5 && /Colossus Blade .*Greatblade 3/.test(await page.locator('#pause-build .pb-line').first().innerText()) && (await page.locator('#pause-build .pb-line').count()) === (await page.evaluate(() => ED.Game.w.heroes[0].weapons.length)), 'pause shows the build (weapon slots, one line per weapon: Form, path ranks; passives)');
+    check(await page.locator('#pause-build .pslot canvas').count() >= 5 && /Colossus Blade .*Greatblade 5/.test(await page.locator('#pause-build .pb-line').first().innerText()) && (await page.locator('#pause-build .pb-line').count()) === (await page.evaluate(() => ED.Game.w.heroes[0].weapons.length)), 'pause shows the build (weapon slots, one line per weapon: Form, path ranks; passives)');
     await shot(page, 'pause');
     await page.locator('#btn-pause-settings').click();
     check(await vis(page, 'ov-settings') && !(await vis(page, 'ov-pause')), 'settings from pause');

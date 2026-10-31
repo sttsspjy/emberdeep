@@ -1,6 +1,7 @@
 # Support weapons (canonical tree + numbers)
 
-Pool of 8, 2 support slots per hero (GAME-DESIGN §4). Each: 3 paths x 3 ranks, one Form (any path at rank 3; from a chest).
+Pool of 8, 2 support slots per hero (GAME-DESIGN §4). Each follows the slot lifecycle: 5 tune steps, a path pick from a chest, path ranks 2–5 (the table's Rank 1 / 2 / 3 are path ranks 1 / 3 / 5; 2 and 4 are +10% damage, cooldown x0.95), then the one Form (every path lists it; from a chest), refines 1–2.
+The tables give each path's shape ranks. "All 9 ranks" figures below are from the old 3 x 3 model (every path at rank 3); to be re-measured with one path at rank 5.
 
 ## Censer
 Horde (Garlic). An aura around you; every cooldown a pulse hits every foe inside, pushes it out (knock 50) and staggers it (0.1 s stun).

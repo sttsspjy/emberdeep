@@ -1,6 +1,6 @@
 # Wickdeep
 
-A co-op survivors-like that runs in the browser. Hordes pour into an open arena; your weapons fire on their own while you move, dodge, dash and fire your hero skill. Survive 15 minutes, beat the final boss, and spend the gold at Camp between runs.
+A co-op survivors-like that runs in the browser. Hordes pour into an open arena; your weapons fire on their own while you move, dodge, dash and fire your hero skill. Survive 20 minutes, beat the final boss, and spend the gold at Camp between runs.
 
 No build step, no backend, no install. It is a static site: open it from any web host and play.
 
@@ -28,22 +28,22 @@ Menus work with the keyboard too: arrows or WASD move between buttons, Enter pre
 ## A run
 
 1. Pick a hero, then a stage.
-2. Collect the gems foes drop. Each level offers 3–4 cards: a rank on one of a weapon's three paths, a new support weapon (up to 2, from a shared pool of 8), a passive (up to 6) or a skill level. Every rank changes how the weapon looks and fires. Solo play pauses while you choose.
-3. A path at rank 3 readies a **Form**: a new shape of that weapon. Forms come only from chests (see 4). Unknown Forms show as ???. Each weapon takes one Form; after that it can be refined twice.
-4. A boss chest lets you pick a Form for one weapon with a Form ready (else it gives an extra level-up). Elite chests level a passive or your skill; from 12:00 they also offer a Form when one is ready. In co-op every hero gets a chest reward, whoever opens it.
-5. Bosses arrive at 5:00 and 10:00; the final boss at 15:00. Beat it to win.
+2. Collect the gems foes drop. Each level offers 3–4 cards: a step for one of your weapons, a new support weapon (up to 2, from a shared pool of 8), a passive (up to 6) or a skill level. Solo play pauses while you choose.
+3. Each weapon grows in stages: 5 tune steps (damage, attack speed or area), then an elite chest lets you pick one of its three paths for good, path ranks 2–5 change how it looks and fires, then a boss chest offers that path's **Forms**: a new shape of the weapon (most of its damage). Unknown Forms show as ???. Each weapon takes one Form; after that it can be refined twice.
+4. Chests: an elite chest offers a path pick when a weapon is ready for one, else levels a passive or your skill; a boss chest offers a Form when a weapon is ready for one, else a path pick or an extra level-up. In co-op every hero gets a chest reward, whoever opens it.
+5. Bosses arrive at 5:00, 10:00 and 15:00; the final boss at 20:00. Beat it to win.
 6. Break braziers for gold, food, a magnet or a holy bomb. A brazier relights a minute after it breaks once you are away from it; elites often drop food.
 7. The results screen shows your build and how much damage each weapon and your skill dealt.
 
 ## Stages and bosses
 
-| Stage | 5:00 | 10:00 | Final (15:00) |
-|---|---|---|---|
-| The Ossuary | Bone Warden | The Twins | Hollow King |
-| The Glowmire | Sporemother | Demon Cyclops | Drowned King |
-| The Abyss | Blue Samurai | Rift Weaver | The Wick-Eater |
+| Stage | 5:00 | 10:00 | 15:00 | Final (20:00) |
+|---|---|---|---|---|
+| The Ossuary | Bone Warden | The Twins | Demon Cyclops | Hollow King |
+| The Glowmire | Sporemother | Demon Cyclops | Rift Weaver | Drowned King |
+| The Abyss | Blue Samurai | Rift Weaver | The Twins | The Wick-Eater |
 
-Every boss and elite attack is telegraphed: a red outline marks where it lands. A final boss still alive at 17:00 enrages. The horde never thins out: if you kill faster than it arrives, more foes pour in.
+Every boss and elite attack is telegraphed: a red outline marks where it lands. A final boss still alive at 22:00 enrages. The horde never thins out: if you kill faster than it arrives, more foes pour in.
 
 ## Co-op (2–4 players)
 

@@ -8,12 +8,12 @@
 //   crowdN: a knight run (god cheat) held at N live foes; after 2 s of warm-up measures --seconds (6) s, p50 / p95 / max: frame time (rAF interval; the browser runs uncapped,
 //          no vsync, when a crowd scenario is requested), main-thread work (all rAF callbacks of a frame), sim ms per 60 Hz tick and Render.frame ms.
 //          --software launches without the GPU (software GL: the Canvas2D fallback path). --gate fails crowd900 when GPU-path frame p95 > 8 ms (ARCHITECTURE §11; report-only by default).
-//   late[a|b|c]: staged late game for the render budget: a hero with its Form, every path at rank 3 and the Form refined (set a: knight whirlwind, b: ranger hail, c: pyro inferno),
+//   late[a|b|c]: staged late game for the render budget: a hero with its Form (tune 5, its path at rank 5) refined (set a: knight whirlwind, b: ranger hail, c: pyro inferno),
 //          six max passives, clock 25:00, the stage boss and 900 last-roster foes held at real HP
 //          (about 1,000 kills/s); measures like crowdN plus own-zone count / coverage. --gate fails when Render.frame p95 > 4 ms on WebGL or > 8 ms on Canvas2D (GAME-DESIGN §13).
-//          --support=id,id: the first two named supports join as Forms, every path at rank 3. --prof (crowdN / late, chromium): a CPU profile over the measured window,
+//          --support=id,id: the first two named supports join as Forms (tune 5, path 0 at rank 5). --prof (crowdN / late, chromium): a CPU profile over the measured window,
 //          the top 15 functions by self time in the notes.
-//   forms: one PNG per hero (--cls) x Form (--form=id,... filters): every path at rank 3, the Form refined twice, six max passives, clock 15:00, 400 last-roster foes held at
+//   forms: one PNG per hero (--cls) x Form (--form=id,... filters): tune 5, the Form's path at rank 5, the Form refined twice, six max passives, clock 20:00, 400 last-roster foes held at
 //          real HP, no boss, no level-ups or offers, --seconds (4) s of play; into a fresh folder <outdir>/forms-<stamp>-<browser>[-soft] (printed). Fails on a page / console error or a Form not taken.
 //          --support=id,... (support root or Form id; all: every support root): one PNG per hero Form x support, the support's Form (a root: its first Form) beside the hero's.
 //   coop: two pages of one browser context on ?net=local (BroadcastChannel transport): host + guest through the ED.Net lobby API (host, join, ready, start), then the real co-op
@@ -164,12 +164,11 @@ function pageBoot(cfg) {
         if (!ws) return null;
         if (d.form) {
           const f = E.weaponForms(rid).find(x => x.id === id);
-          if (f && !ws.evo) { for (const i of f.need) while (w.rankPath(p, ws, i)); w.takeForm(p, ws, id); }
+          if (f && !ws.evo) w.setForm(p, ws, id, 0);
           while (w.refineForm(p, ws));
-        } else {
-          const want = Math.max(0, Math.min(9, (lvl || 99) - 1));
-          let have = ws.pr[0] + ws.pr[1] + ws.pr[2];
-          for (let i = 0; i < 3 && have < want; i++) while (have < want && w.rankPath(p, ws, i)) have++;
+        } else if (!ws.evo) {
+          const want = Math.max(0, Math.min(E.TUNE_MAX + E.PATH_MAX, (lvl || 99) - 1)); // tune steps first, then path ranks (the picked path, else path 0)
+          w.setRanks(p, ws, Math.min(want, E.TUNE_MAX), want > E.TUNE_MAX ? (ws.path >= 0 ? ws.path : 0) : -1, want - E.TUNE_MAX);
         }
       } else if (E.PASSIVES[id]) {
         let ps = p.passives.find(x => x.id === id);
@@ -179,14 +178,14 @@ function pageBoot(cfg) {
       w.recalc(p, false);
       return D.state();
     };
-    // Takes Form fid (default: the hero weapon's first Form) on the local hero: ranks the paths it needs and swaps to it. Returns the weapon id now held or null.
+    // Takes Form fid (default: the hero weapon's first Form) on the local hero: tune full, its path to rank 5, then swaps to it. Returns the weapon id now held or null.
     D.evolve = (fid) => {
       const w = run(); if (!w) return null;
       const p = meOf(w), ws = p.weapons[0];
       if (!ws) return null;
       const f = E.weaponForms(ws.root).find(x => !fid || x.id === fid);
       if (!f) return null;
-      if (!ws.evo) { for (const i of f.need) while (w.rankPath(p, ws, i)); w.takeForm(p, ws, f.id); }
+      if (!ws.evo) w.setForm(p, ws, f.id, 0);
       w.recalc(p, false);
       return ws.id;
     };
@@ -570,8 +569,7 @@ async function scenLate(sc) {
       const E = window.ED, D = E.Debug, w = E.Game.w, p = w.heroes[0];
       D.give(F, 1);
       const ws = p.weapons[0];
-      if (ws) { for (let i = 0; i < 3; i++) while (w.rankPath(p, ws, i)); }
-      for (const id of SF) { D.give(id); const s = p.weapons.find(x => x.id === id); if (s) for (let i = 0; i < 3; i++) while (w.rankPath(p, s, i)); }
+      for (const id of SF) D.give(id);
       for (const id of ['might', 'reach', 'duration', 'multishot', 'haste', 'velocity']) D.give(id, 99);
       D.setTime(1500);
       const boss = D.spawnBoss();
@@ -637,13 +635,11 @@ async function scenForms() {
         await wait(300);
         const prep = await page.evaluate(([F, SF]) => {
           const E = window.ED, D = E.Debug, w = E.Game.w, p = w.heroes[0], ws = p.weapons[0];
-          for (let i = 0; i < 3; i++) while (w.rankPath(p, ws, i));
-          w.takeForm(p, ws, F);
-          for (let i = 0; i < 2; i++) w.refineForm(p, ws);
+          w.setForm(p, ws, F, 2);
           if (SF) D.give(SF);
           for (const id of ['might', 'reach', 'duration', 'multishot', 'haste', 'velocity']) D.give(id, 99);
-          D.setTime(900);
-          w.addXp = w.updateProgress = () => {}; p.pend = p.pendForm = 0; p.offer = null; w.paused = false; // no level-ups, offers or their overlay: the shot shows only this build
+          D.setTime(1200);
+          w.addXp = w.updateProgress = () => {}; p.pend = p.pendForm = p.pendPath = 0; p.offer = null; w.paused = false; // no level-ups, offers or their overlay: the shot shows only this build
           w.recalc(p, false);
           const s = SF ? p.weapons.find(x => x.id === SF) : null;
           return { id: ws.id, pr: ws.pr.join(''), fl: ws.fl, passives: p.passives.length, sup: s ? s.id + ':' + s.pr.join('') + 'r' + s.fl : '', first: p.weapons[0] === ws, held: p.weapons.map(x => x.id).join('+') };

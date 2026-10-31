@@ -1,7 +1,7 @@
 // Headless check of support weapons (a): Censer, Orbit Lanterns, Meteor Call, Frost Ring and their Forms (exit 1 on failure). Usage: node tools/check-supports-a.js
-// 1. Defs: support roots with 3 paths x 3 ranks all naming one Form (2 refines), card lines <= 40 chars that never name the Form, icons in the atlas.
-// 2. Slot 1: each joins a hero beside its weapon, fires and damages foes in view. 3. Shape: every path rank changes the pattern signature (zones / shots / statuses seen).
-// 4. Forms: ready from any path at rank 3, taken, change the pattern; feature probes (heal, wheel, stars + comet, frost walls). 5. View clamp. 6. Determinism per seed.
+// 1. Defs: support roots with 3 paths x 3 shape ranks all listing one Form (2 refines), card lines <= 40 chars that never name the Form, icons in the atlas.
+// 2. Slot 1: each joins a hero beside its weapon, fires and damages foes in view. 3. Shape: every shape rank (path rank 1 / 3 / 5) changes the pattern signature (zones / shots / statuses seen).
+// 4. Forms: ready from any picked path at rank 5, taken, change the pattern; feature probes (heal, wheel, stars + comet, frost walls). 5. View clamp. 6. Determinism per seed.
 'use strict';
 const fs = require('fs'), path = require('path');
 const { load } = require('./sim.js');
@@ -34,16 +34,16 @@ function run(w, s, fn, out) {
   } catch (e) { return e; }
   return null;
 }
-// Hero with support `id` in slot 1 at ranks [a, b, c] (and its Form refined fully).
-function build(id, ranks, form, seed) {
-  const w = world(seed), p = w.heroes[0], ws = w.addWeapon(p, id);
+// Hero with support `id` in slot 1, tune full, shape ranks [a, b, c] (first nonzero path at shape rank r -> path rank 2r - 1; all zero: tune only) or path ranks when pr;
+// form: the Form refined fully (ranks ignored).
+function build(id, ranks, form, seed, pr) {
+  const w = world(seed), p = w.heroes[0], ws = w.addWeapon(p, id), i = ranks.findIndex(x => x > 0);
   if (!ws) return { w, p, ws: null };
-  for (let i = 0; i < 3; i++) for (let r = 0; r < ranks[i]; r++) w.rankPath(p, ws, i);
-  if (form) { w.takeForm(p, ws, form); while (w.refineForm(p, ws)); }
-  w.recalc(p, false);
+  if (form) w.setForm(p, ws, form, 2);
+  else w.setRanks(p, ws, ED.TUNE_MAX, i, i < 0 ? 0 : pr ? ranks[i] : 2 * ranks[i] - 1);
   return { w, p, ws };
 }
-const dealt = (p, ws) => (p.dealt[ws.root] || 0) + (p.dealt[ED.WEAPONS[ws.root].paths[0].form] || 0) + (p.dealt.burn || 0);
+const dealt = (p, ws) => (p.dealt[ws.root] || 0) + (p.dealt[ED.WEAPONS[ws.root].paths[0].forms[0]] || 0) + (p.dealt.burn || 0);
 const b4 = (v) => Math.round(v / 4) * 4;
 // Pattern signature over s s against two 24-foe rings (inner 0.5 x HP, outer 40 x HP): zone looks (max live count, max r), shot looks (max live count, distance range from the hero),
 // statuses seen (slowed / frozen / burning / knocked), the strongest slow, freeze onsets, boom looks, max zone dur per look. kmax (outside the signature): strongest foe knockback seen.
@@ -80,10 +80,10 @@ function pattern(id, ranks, form, s, seed) {
 }
 
 for (const id of IDS) {
-  const d = ED.WEAPONS[id], fid = d && d.paths && d.paths[0].form, F = fid && ED.WEAPONS[fid];
+  const d = ED.WEAPONS[id], fid = d && d.paths && d.paths[0].forms[0], F = fid && ED.WEAPONS[fid];
   // 1. defs
-  ok(d && d.support && d.role && !d.evolved && d.paths.length === 3 && d.paths.every(pa => pa.ranks.length === 3 && pa.form === fid) && (d.hybrids || []).length === 0,
-    `${id}: support (${d && d.role}), 3 paths x 3 ranks, all naming ${fid}`);
+  ok(d && d.support && d.role && !d.evolved && d.paths.length === 3 && d.paths.every(pa => pa.ranks.length === 3 && pa.forms.join() === fid),
+    `${id}: support (${d && d.role}), 3 paths x 3 shape ranks, all listing ${fid}`);
   ok(F && F.support && F.evolved && F.form && F.from === id && F.refine.length === 2, `${fid}: Form of ${id}, 2 refines`);
   const lines = [d.txt, F.txt]; for (const pa of d.paths) for (const rk of pa.ranks) lines.push(rk.txt); for (const rf of F.refine) lines.push(rf.txt);
   const nm = F.name.toLowerCase(), bad = lines.filter((l, i) => l.length > 40 || (i !== 1 && l.toLowerCase().includes(nm)));
@@ -103,16 +103,16 @@ for (const id of IDS) {
     ok(!pc.err && pa.sig !== pc.sig, `${id} ${d.paths[i].name} ${r}: pattern changes` + (pa.sig === pc.sig ? ' (same: ' + pc.sig + ')' : '') + (pc.err ? ': ' + pc.err.stack : ''));
   }
 
-  // 4. Form: ready from any path at rank 3 only, taken once, refined twice, changes the pattern
+  // 4. Form: ready from any picked path at rank 5 only, taken once, refined twice, changes the pattern
   for (let i = 0; i < 3; i++) {
-    const r2 = [0, 0, 0], r3 = [0, 0, 0]; r2[i] = 2; r3[i] = 3;
-    const A = build(id, r2, ''), B = build(id, r3, '');
-    ok(A.w.formsReady(A.p, A.ws).length === 0 && B.w.formsReady(B.p, B.ws).some(f => f.id === fid), `${id}: ${d.paths[i].name} at rank 3 readies ${fid}`);
+    const r2 = [0, 0, 0], r3 = [0, 0, 0]; r2[i] = ED.PATH_MAX - 1; r3[i] = ED.PATH_MAX;
+    const A = build(id, r2, '', undefined, true), B = build(id, r3, '', undefined, true);
+    ok(A.w.formsReady(A.p, A.ws).length === 0 && B.w.formsReady(B.p, B.ws).some(f => f.id === fid), `${id}: ${d.paths[i].name} at rank ${ED.PATH_MAX} readies ${fid}`);
     if (i === 0) ok(B.w.takeForm(B.p, B.ws, fid) && B.ws.id === fid && B.w.formsReady(B.p, B.ws).length === 0 && B.w.refineForm(B.p, B.ws) === 1 && B.w.refineForm(B.p, B.ws) === 2 && B.w.refineForm(B.p, B.ws) === 0,
       `${fid}: taken, no second Form, 2 refines`);
   }
   const all = pattern(id, [3, 3, 3], '', 5), fm = pattern(id, [3, 3, 3], fid, 5);
-  ok(!fm.err && fm.dealt > 0 && fm.sig !== all.sig, `${fid} (3/3/3, refined): new pattern, dealt ${Math.round(fm.dealt)} (all ranks ${Math.round(all.dealt)})` + (fm.err ? ': ' + fm.err.stack : ''));
+  ok(!fm.err && fm.dealt > 0 && fm.sig !== all.sig, `${fid} (refined): new pattern, dealt ${Math.round(fm.dealt)} (path 0 rank 5 ${Math.round(all.dealt)})` + (fm.err ? ': ' + fm.err.stack : ''));
 
   // 6. determinism
   const dg = (seed) => { const r = pattern(id, [3, 3, 3], fid, 3, seed); let h = Math.round(r.dealt); for (const e of r.w.foes) h = (h * 31 + Math.round(e.x * 4) + Math.round(e.hp)) % 1e9; return h; };
@@ -181,7 +181,7 @@ for (const id of IDS) {
 
 // 5. view clamp: a foe pinned just outside the holder's view is never hit or given a status, with foes in view to aim at
 for (const id of IDS) {
-  const fid = ED.WEAPONS[id].paths[0].form;
+  const fid = ED.WEAPONS[id].paths[0].forms[0];
   for (const form of ['', fid]) {
     const { w, p, ws } = build(id, [3, 3, 3], form, 4);
     ring(w, p.x, p.y, 20, 50, 30);

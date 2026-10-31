@@ -1,4 +1,4 @@
-// Boss 'king' (Drowned King, stage 2 mid-boss) and ED.Bosses.libB, the hazard helpers shared by boss-hollow.js, boss-cyclops.js and boss-samurai.js (they load after this file).
+// Boss 'king' (Drowned King, Glowmire final boss) and ED.Bosses.libB, the hazard helpers shared by boss-hollow.js, boss-cyclops.js and boss-samurai.js (they load after this file).
 // P1: Tidal Beam (one beam sweeps the aim arc; obstacles cut it), trident fan, leap slam, telegraphed adds. P2 (66%): two opposite beams, 5 tridents, the whirlpool (pull + core).
 // P3 (33%): a standing whirlpool follows the King for the rest of the fight, beams turn a half circle each (a full spin between the two), more adds.
 (function (ED) {
@@ -42,16 +42,16 @@
     return null;
   };
   // Telegraphed adds: a 'summon' circle per add on a ring of radius rad around e, the foe appears when it resolves (none if the boss died first). One extra add per hero beyond the first (max 3).
-  const spawnAdd = (w, z) => { if (ED.FOES[z.st] && !ED.Arena.blocked(w.arena, z.x, z.y, 8)) w.spawnFoe(z.st, z.x, z.y); };
+  // Each id goes through W.addKin (the host stage's kin; none when its brain is at the cap), rechecked against the cap when the circle resolves. Returns the circles placed.
+  const spawnAdd = (w, z) => { const d = ED.FOES[z.st]; if (d && !w.foeAtCap(d) && !ED.Arena.blocked(w.arena, z.x, z.y, 8)) w.spawnFoe(z.st, z.x, z.y); };
   const adds = (w, e, ids, rad, dur) => {
-    ids = ids.filter(id => ED.FOES[id]);
     if (!ids.length) return 0;
     const n = ids.length + Math.min(3, w.partyN - 1), a0 = w.rng.next() * TAU;
     let k = 0;
     for (let i = 0; i < n; i++) {
-      const a = a0 + i / n * TAU, x = e.x + Math.cos(a) * rad, y = e.y + Math.sin(a) * rad;
-      if (ED.Arena.blocked(w.arena, x, y, 8)) continue;
-      tele(w, e, x, y, 12, T(e, dur), 0, { look: 'summon', wid: 'summon', st: ids[i % ids.length], onEnd: spawnAdd }); k++;
+      const a = a0 + i / n * TAU, x = e.x + Math.cos(a) * rad, y = e.y + Math.sin(a) * rad, id = w.addKin(ids[i % ids.length]);
+      if (!id || ED.Arena.blocked(w.arena, x, y, 8)) continue;
+      tele(w, e, x, y, 12, T(e, dur), 0, { look: 'summon', wid: 'summon', st: id, onEnd: spawnAdd }); k++;
     }
     return k;
   };

@@ -1,8 +1,8 @@
 // Headless check of the Ranger tree (exit 1 on failure). Usage: node tools/check-hero-ranger.js
-// 1. Every path rank changes the effective numbers or the fired pattern (arrows and foe hits of three volleys); card lines <= 40 chars.
-// 2. Every Form (3 pure + 2 hybrid) is ready only under its rule (its path(s) at rank 3), locks the others once taken, refines twice and deals damage in a foe ring.
+// 1. Every path rank 1-5 (tune full) changes the effective numbers or the fired pattern (arrows and foe hits of three volleys); card lines <= 40 chars.
+// 2. Every Form (1-2 per path) is ready only with its own path at rank 5, locks the others once taken, refines twice and deals damage in a foe ring.
 // 3. Mechanics: arrows fly along the cursor past nearer foes and elites; the split fan (two) aims its second half at a foe off the cursor line, else 0.35 rad off it; bounces turn arrows to unhit foes; kill shots fire from kills; Ballista bolts pierce a whole line; Rebound arrows turn at the view edge.
-// 4. Damage only in view: a full 3/3/3 build of the Longbow and every Form never hurts a pinned foe 340 px away (outside the 320 px half view) while hurting a near one.
+// 4. Damage only in view: every Longbow path at rank 5 and every refined Form never hurts a pinned foe 340 px away (outside the 320 px half view) while hurting a near one.
 // 5. Vault at levels 1..4: zero damage leap toward the cursor, untouchable, gem pull on landing; L2 farther, L3 2 charges, L4 caltrops; obstacle-safe landing.
 // 6. Determinism: the same seed and inputs give the same digest for every Form; client draw hooks run on a mock batch without non-finite args.
 'use strict';
@@ -20,16 +20,17 @@ function world(seed) {
   return w;
 }
 const ring = (w, x, y, n, r, hpMul) => { for (let i = 0; i < n; i++) { const a = i / n * U.TAU; w.spawnFoe('skeleton', x + Math.cos(a) * r, y + Math.sin(a) * r * 0.6, { hpMul: hpMul || 1 }); } };
-const ranks = (w, p, r) => { const ws = p.weapons[0]; for (let i = 0; i < 3; i++) for (let k = 0; k < r[i]; k++) w.rankPath(p, ws, i); w.recalc(p, false); return ws; };
-const form = (w, p, ws, id) => { w.takeForm(p, ws, id); while (w.refineForm(p, ws)); w.recalc(p, false); };
+// Path ranks r = [r0, r1, r2] (one nonzero path; all zero: tune only), tune full.
+const ranks = (w, p, r) => { const i = r.findIndex(x => x > 0); return w.setRanks(p, p.weapons[0], ED.TUNE_MAX, i, i >= 0 ? r[i] : 0); };
+const form = (w, p, ws, id) => w.setForm(p, ws, id, 2);
+const top = (i) => [0, 0, 0].map((x, j) => (j === i ? ED.PATH_MAX : 0));
 const step = (w, n) => { for (let i = 0; i < n; i++) { w.update(C.TICK); w.events.length = 0; } };
 const aimAt = (p, a) => { p.mdir = a; p.in.ax = p.x + Math.cos(a) * 100; p.in.ay = p.y + Math.sin(a) * 100; };
 
 // 1. Pattern of three volleys into a still foe grid (20 px apart over the view, 40 px clear around the hero): projectiles made, foe hits (hit records), wide projectiles.
 function pattern(r, fid) {
   const w = world(9), p = w.heroes[0];
-  const ws = ranks(w, p, r);
-  if (fid) form(w, p, ws, fid);
+  const ws = fid ? form(w, p, p.weapons[0], fid) : ranks(w, p, r);
   for (let gx = -300; gx <= 300; gx += 20) for (let gy = -160; gy <= 160; gy += 20) if (Math.hypot(gx, gy) >= 40) w.spawnFoe('skeleton', p.x + gx, p.y + gy, { hpMul: 50 });
   for (const e of w.foes) e.spd = 0;
   ws.cd = 0;
@@ -47,29 +48,25 @@ function pattern(r, fid) {
 }
 for (let i = 0; i < 3; i++) {
   let prev = pattern([0, 0, 0]);
-  for (let k = 1; k <= 3; k++) {
+  for (let k = 1; k <= ED.PATH_MAX; k++) {
     const r = [0, 0, 0]; r[i] = k;
-    const cur = pattern(r), txt = ROOT.paths[i].ranks[k - 1].txt;
+    const cur = pattern(r), txt = k & 1 ? ROOT.paths[i].ranks[k >> 1].txt : 'generic step';
     ok(cur.pat !== prev.pat || cur.num !== prev.num, `${ROOT.paths[i].name} rank ${k} "${txt}" changes the attack (${prev.pat} -> ${cur.pat} projs/hits/wide)`);
     ok(txt.length <= 40, `card line <= 40 chars: "${txt}"`);
     prev = cur;
   }
 }
 for (const f of FORMS) for (let k = 1; k <= 2; k++) ok(ED.WEAPONS[f.id].refine[k - 1].txt.length <= 40 && ED.WEAPONS[f.id].txt.length <= 40, `${f.id} card lines <= 40 chars`);
-for (const f of FORMS) { const a = pattern([3, 3, 3], f.id), b = pattern([3, 3, 3]); ok(a.pat !== b.pat, `${f.id}: a new pattern over the 3/3/3 Longbow (${b.pat} -> ${a.pat})`); }
+for (const f of FORMS) { const a = pattern(null, f.id), b = pattern(top(f.path)); ok(a.pat !== b.pat, `${f.id}: a new pattern over the Longbow with its path at rank 5 (${b.pat} -> ${a.pat})`); }
 
 // 2. Form rules.
-ok(FORMS.length === 5 && FORMS.filter(f => f.path < 0).length === 2 && ROOT.paths.some(pa => pa.form === 'hail'), `5 Forms, 2 hybrids, hail kept (${FORMS.map(f => f.id + '[' + f.need + ']').join(' ')})`);
+ok(FORMS.length === 5 && ROOT.paths.every(pa => pa.forms.length >= 1 && pa.forms.length <= 2) && FORMS.every(f => f.any.length === 1) && ROOT.paths[0].forms[0] === 'hail', `5 Forms, 1-2 per path, each on one path, hail kept (${ROOT.paths.map(pa => pa.name + ': ' + pa.forms.join('+')).join('; ')})`);
 for (const f of FORMS) {
-  const w = world(3), p = w.heroes[0], ws = p.weapons[0];
-  const early = [];
-  for (let i = 0; i < 3; i++) for (let k = 0; k < 3; k++) {
-    if (f.need.indexOf(i) < 0 || (i === f.need[f.need.length - 1] && k === 2)) continue;
-    w.rankPath(p, ws, i); if (w.formsReady(p, ws).some(x => x.id === f.id)) early.push(i + ':' + k);
-  }
-  w.rankPath(p, ws, f.need[f.need.length - 1]);
+  const w = world(3), p = w.heroes[0], ws = ranks(w, p, [0, 0, 0].map((x, i) => (i === f.path ? ED.PATH_MAX - 1 : 0)));
+  const early = w.formsReady(p, ws).length, o = world(3), q = o.heroes[0], other = ranks(o, q, top((f.path + 1) % 3));
+  w.rankPath(p, ws, f.path);
   const ready = w.formsReady(p, ws).map(x => x.id);
-  ok(!early.length && ready.indexOf(f.id) >= 0, `${f.id}: ready only once paths ${f.need.join('+')} reach rank 3 (early: ${early.join(',') || 'none'}; ready: ${ready.join(',')})`);
+  ok(!early && !o.formsReady(q, other).some(x => x.id === f.id) && ready.indexOf(f.id) >= 0, `${f.id}: ready only once ${ROOT.paths[f.path].name} reaches rank ${ED.PATH_MAX} (ready: ${ready.join(',')})`);
   ok(!w.formsReady(p, world(3).heroes[0].weapons[0]).length, `${f.id}: nothing ready with no ranks`);
   w.takeForm(p, ws, f.id);
   let rf = 0; while (w.refineForm(p, ws)) rf++;
@@ -91,7 +88,7 @@ for (const f of FORMS) {
 }
 { // split fan (two): second half at a foe off the cursor line, else 0.35 rad off the line
   for (const foe of [true, false]) {
-    const w = world(2), p = w.heroes[0], ws = ranks(w, p, [2, 0, 0]);
+    const w = world(2), p = w.heroes[0], ws = ranks(w, p, [3, 0, 0]);
     const e = foe ? w.spawnFoe('skeleton', p.x, p.y + 120, { hpMul: 1e4 }) : null; if (e) e.spd = 0;
     aimAt(p, 0); ws.cd = 0; w.update(C.TICK); ws.cd = 99;
     const qs = w.projs.filter(x => !x.dead && x.p === p), n = qs.length, b = foe ? Math.atan2(e.y - (p.y - 6), e.x - p.x) : 0.35, S = ED.Stats.weapon(p, 0);
@@ -108,20 +105,20 @@ for (const f of FORMS) {
   ok(a.hp < a.maxHp && b.hp < b.maxHp, `Ricochet: the arrow bounces from the first foe to a second one 110 px off its line (hurt ${a.hp < a.maxHp}/${b.hp < b.maxHp})`);
 }
 { // kill shots: kills loose arrows that are not volley arrows
-  const w = world(2), p = w.heroes[0], ws = ranks(w, p, [0, 0, 2]);
+  const w = world(2), p = w.heroes[0], ws = ranks(w, p, [0, 0, 3]);
   ring(w, p.x, p.y, 16, 60, 0.2); for (const e of w.foes) e.spd = 0;
   ws.cd = 0; let fired = 0, made = 0; const ids = new Set();
   for (let i = 0; i < 40; i++) { w.update(C.TICK); for (const ev of w.events) if (ev.t === 'shoot') fired++; w.events.length = 0; for (const q of w.projs) if (!q.dead && q.p === p && !ids.has(q.id)) { ids.add(q.id); made++; } if (fired) ws.cd = 99; }
   ok(fired === 1 && made > 1, `kill shots: one volley of 1 arrow made ${made} arrows`);
 }
 { // Ballista bolts pierce a whole line of 12 foes
-  const w = world(2), p = w.heroes[0], ws = ranks(w, p, [0, 3, 0]); form(w, p, ws, 'ballista');
+  const w = world(2), p = w.heroes[0], ws = form(w, p, p.weapons[0], 'ballista');
   const line = []; for (let i = 0; i < 12; i++) { const e = w.spawnFoe('skeleton', p.x + 40 + i * 20, p.y - 6, { hpMul: 1e4 }); e.spd = 0; line.push(e); }
   ws.cd = 0; w.update(C.TICK); ws.cd = 99; step(w, 90);
   ok(line.every(e => e.hp < e.maxHp), `Ballista: one bolt hits all 12 foes of a line (${line.filter(e => e.hp < e.maxHp).length})`);
 }
 { // Rebound: arrows turn at the view edge and fly back
-  const w = world(2), p = w.heroes[0], ws = ranks(w, p, [0, 3, 3]); form(w, p, ws, 'rebound');
+  const w = world(2), p = w.heroes[0], ws = form(w, p, p.weapons[0], 'rebound');
   aimAt(p, 0); ws.cd = 0; w.update(C.TICK); ws.cd = 99;
   const q = w.projs.find(x => !x.dead && x.p === p), vx0 = q.vx;
   let back = false; for (let i = 0; i < 90 && !q.dead; i++) { w.update(C.TICK); w.events.length = 0; if (q.vx * vx0 < 0) back = true; }
@@ -129,9 +126,8 @@ for (const f of FORMS) {
 }
 
 // 4. View clamp: pinned foes at 340 px (outside) and at 60-150 px (inside) for 5 s.
-for (const f of [{ id: 'longbow' }].concat(FORMS)) {
-  const w = world(4), p = w.heroes[0], ws = ranks(w, p, [3, 3, 3]);
-  if (f.id !== 'longbow') form(w, p, ws, f.id);
+for (const f of [0, 1, 2].map(i => ({ id: 'longbow', r: top(i) })).concat(FORMS)) {
+  const w = world(4), p = w.heroes[0], ws = f.r ? ranks(w, p, f.r) : form(w, p, p.weapons[0], f.id);
   const far = [], near = [];
   for (let i = 0; i < 8; i++) {
     const a = i / 8 * U.TAU;
@@ -144,7 +140,7 @@ for (const f of [{ id: 'longbow' }].concat(FORMS)) {
     aimAt(p, i / 300 * U.TAU); w.update(C.TICK); w.events.length = 0;
   }
   const hurtFar = far.filter(e => e.hp < e.maxHp).length, hurtNear = near.filter(e => e.hp < e.maxHp).length;
-  ok(hurtFar === 0 && hurtNear >= 1, `${f.id} 3/3/3: no damage outside the view (far hurt ${hurtFar}, near hurt ${hurtNear}/8)`);
+  ok(hurtFar === 0 && hurtNear >= 1, `${f.id} ${f.r ? f.r.join('') : 'refined'}: no damage outside the view (far hurt ${hurtFar}, near hurt ${hurtNear}/8)`);
 }
 
 // 5. Vault (zero damage): leaps N.dist toward the cursor, untouchable, over foes; lands pulling gems within 200 px; L2 +60 px; L3 2 charges; L4 caltrops slow foes at the takeoff.
@@ -182,8 +178,7 @@ const mockB = new Proxy({}, { get: (o, k) => (k === 'crowd' || k === 'zoneLite' 
 ED.Atlas = { ok: true, has: () => true, anim: () => ({ n: 6 }), frameAt: () => 0 };
 vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'hfx-ranger.js'), 'utf8'), { filename: 'hfx-ranger.js' });
 function digestRun(fid, draw) {
-  const w = world(12), p = w.heroes[0], ws = ranks(w, p, [3, 3, 3]);
-  if (fid !== 'longbow') form(w, p, ws, fid);
+  const w = world(12), p = w.heroes[0], ws = fid === 'longbow' ? ranks(w, p, top(0)) : form(w, p, p.weapons[0], fid);
   p.skills[0].lvl = 4;
   let d = 0, err = null;
   try {

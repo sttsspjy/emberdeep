@@ -6,7 +6,7 @@
 // 3. Downed / revive reach the client. 4. A late join is refused. 5. The host leaving ends the client's run with a note; a client quitting drops its hero on the host.
 // 6. Snapshot bytes at 300 / 900 foes (+600 projectiles, 400 gems, a busy event window): reported; gate <= 12 KB at 900 (ARCHITECTURE §11); decode round trip exact to 0.25 px;
 //    all 3 weapon slots (hero weapon + 2 supports, Forms refined) decode.
-// 7. Late-game zones: 4 zone-heavy heroes (cleric, pyro, necro, bell) with their Form maxed (all paths rank 3, refine 2), max passives, 900 foes, 3 clients: every snapshot <= 12 KB;
+// 7. Late-game zones: 4 zone-heavy heroes (cleric, pyro, necro, bell) with their Form maxed (its path at rank 5, refine 2), max passives, 900 foes, 3 clients: every snapshot <= 12 KB;
 //    client 1's mirrored zones equal the host's in-rect zones at every snapshot. 8. A client's banish reaches it as a new offer.
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
@@ -16,8 +16,8 @@ const ED = load(), U = ED.U, C = ED.CONST;
 let SUPS = ED.WEAPON_IDS.filter(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved);
 if (SUPS.length < 2) {
   for (const id of ['tna', 'tnb']) {
-    ED.addWeapon({ id, name: 'T ' + id, icon: 'icon.w.cleave', support: true, role: 'horde', mode: 'around', txt: 'Test', base: { dmg: 1, cd: 1 }, hybrids: [],
-      paths: [0, 1, 2].map(i => ({ id: id + i, name: 'P' + i, form: id + 'f', ranks: [0, 1, 2].map(() => ({ mods: { dmg: 0.1 }, txt: 'R' })) })) }, { fire: () => true });
+    ED.addWeapon({ id, name: 'T ' + id, icon: 'icon.w.cleave', support: true, role: 'horde', mode: 'around', txt: 'Test', base: { dmg: 1, cd: 1 },
+      paths: [0, 1, 2].map(i => ({ id: id + i, name: 'P' + i, forms: [id + 'f'], ranks: [0, 1, 2].map(() => ({ mods: { dmg: 0.1 }, txt: 'R' })) })) }, { fire: () => true });
     ED.addWeapon({ id: id + 'f', name: 'T ' + id + ' Form', icon: 'icon.w.cleave', support: true, evolved: true, form: true, from: id, txt: 'Test', base: { dmg: 2, cd: 1 },
       refine: [{ mods: { dmg: 0.1 }, txt: 'R' }, { mods: { dmg: 0.1 }, txt: 'R' }] }, { fire: () => true });
   }
@@ -30,7 +30,7 @@ const N = ED.Net;
 { const r = U.RNG(4242); Math.random = r.next; } // party codes and pids: same every run
 const GATE = 12 * 1024;
 let fails = 0;
-const okV = N.VERSION === 10 && ED.NET_VERSION === 10;
+const okV = N.VERSION === 11 && ED.NET_VERSION === 11;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
 const t0 = Date.now();
 
@@ -184,9 +184,9 @@ ok(Math.hypot(me.x - cliHero.x, me.y - cliHero.y) < 0.01, `idle client hero sits
 ok(cliDash >= 10, `client dashes predicted locally (${cliDash})`);
 const atSnap = ring[Math.round(gC.mir.T / C.TICK) % RING];
 ok(atSnap && atSnap.tick === Math.round(gC.mir.T / C.TICK) && Math.abs(me.hp - atSnap.hp) < 0.01 && me.maxHp === cliHero.maxHp && gC.view.level === atSnap.level && gC.view.kills === atSnap.kills && gC.view.gold === atSnap.gold, `vitals / level / kills / gold match the host at the snapshot tick (lv ${w.level}, kills ${w.kills})`);
-const sig = (p) => p.weapons.map(x => x.id + x.lvl + ':' + x.pr.join('') + x.fl + (x.evo ? 'F' : '')).join(',') + '|' + p.passives.map(x => x.id + x.lvl).join(',') + '|' + p.skills.map(x => x.id + x.lvl).join(',');
-ok(sig(me) === sig(cliHero) && me.skills.length === 1 && me.weapons.length >= 1 && me.weapons[0].root === ED.HEROES[me.cls].sig && me.weapons[0].pr.some(r => r > 0), 'client hero weapon (path ranks, refine) / passives / one skill match the host: ' + sig(me));
-ok(okV, 'NET_VERSION 10');
+const sig = (p) => p.weapons.map(x => x.id + x.lvl + ':' + x.tune + '/' + x.path + '/' + x.pr.join('') + x.fl + (x.evo ? 'F' : '')).join(',') + '|' + p.passives.map(x => x.id + x.lvl).join(',') + '|' + p.skills.map(x => x.id + x.lvl).join(',');
+ok(sig(me) === sig(cliHero) && me.skills.length === 1 && me.weapons.length >= 1 && me.weapons[0].root === ED.HEROES[me.cls].sig && me.weapons[0].lvl > 1, 'client hero weapon (tune, path ranks, refine) / passives / one skill match the host: ' + sig(me));
+ok(okV, 'NET_VERSION 11');
 const cq = me.skills[0], hq = cliHero.skills[0];
 ok(cq && hq.chN === 2 && cq.chN === hq.chN && cq.ch === hq.ch && hq.ch === 2, `Q charges on the wire (host ${hq.ch}/${hq.chN}, client ${cq && cq.ch}/${cq && cq.chN})`);
 ok(cliPicks >= 5 && hostPicks >= 5 && !pendLive, `co-op level-ups resolve without pause (client picks ${cliPicks}, host picks ${hostPicks}, client pending ${pendLive} while picking)`);
@@ -263,8 +263,8 @@ function scene(n, spread) {
   for (const row of W2.sdef.timeline) row.rate = 0;
   W2.sp.swarmT = W2.sp.eliteT = W2.sp.flockT = Infinity; W2.sdef = Object.assign({}, W2.sdef, { bosses: [] });
   const p = W2.heroes[0], c = W2.heroes[1], rng = U.RNG(9), ids = ['bat', 'skeleton', 'slime', 'skelknight', 'bonearcher'];
-  W2.setRanks(p, p.weapons[0], 9, true);
-  for (const id of SUPS.slice(0, 2)) W2.setRanks(p, W2.addWeapon(p, id), 9, true); // all 3 slots: hero weapon + 2 supports, Forms refined
+  W2.setForm(p, p.weapons[0], 'hail', 2);
+  for (const id of SUPS.slice(0, 2)) W2.setRanks(p, W2.addWeapon(p, id), ED.TUNE_MAX, 0, ED.PATH_MAX, 0, 2); // all 3 slots: hero weapon + 2 supports, Forms refined
   const top = () => {
     while (W2.foes.length < n) { const x = c.x + spread(rng, 'x'), y = c.y + spread(rng, 'y'); if (!ED.Arena.blocked(W2.arena, x, y, 8)) W2.spawnFoe(ids[rng.int(0, ids.length - 1)], x, y, { hpMul: 400 }); }
     while (W2.projs.length < 600) { const a = rng.next() * U.TAU; W2.shoot(p, 'longbow', p.x + Math.cos(a) * rng.range(0, 300), p.y + Math.sin(a) * rng.range(0, 300), rng.next() * U.TAU, null, { look: 'arrow', dmg: 5, speed: 120, pierce: 9999, rehit: 0.5, life: 4 }); }
@@ -299,8 +299,8 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
     ok(bad === 0 && M.view.foes.length >= inR && M.view.projs.length > 0 && M.view.pickups.length > 0, `decode round trip: ${M.view.foes.length} foes (${inR} in view), ${M.view.projs.length} projectiles, ${M.view.pickups.length} pickups, mismatches ${bad}`);
     const h = M.view.heroes.find(x => x.pid === 'host');
     const hw = h && h.weapons[0], HP = r.W2.heroes[0];
-    ok(h && hw.id === 'hail' && hw.evo && hw.pr.join('') === '333' && hw.fl === 2 && hw.lvl === 13 && hw.root === 'longbow', 'hero weapon decodes: Form, path ranks, refine');
-    ok(h && h.weapons.length === 3 && HP.weapons.every((ws, i) => { const s = h.weapons[i]; return s.id === ws.id && s.root === ws.root && s.lvl === ws.lvl && s.evo === ws.evo && s.pr.join() === ws.pr.join() && s.fl === ws.fl; }),
+    ok(h && hw.id === 'hail' && hw.evo && hw.tune === 5 && hw.tk.join('') === '221' && hw.path === 0 && hw.pr.join('') === '500' && hw.fl === 2 && hw.lvl === 14 && hw.root === 'longbow', 'hero weapon decodes: Form, tune kinds, path, rank, refine');
+    ok(h && h.weapons.length === 3 && HP.weapons.every((ws, i) => { const s = h.weapons[i]; return s.id === ws.id && s.root === ws.root && s.lvl === ws.lvl && s.evo === ws.evo && s.tune === ws.tune && s.tk.join() === ws.tk.join() && s.path === ws.path && s.pr.join() === ws.pr.join() && s.fl === ws.fl; }),
       'all 3 slots decode: ' + (h ? h.weapons.map(s => s.id + ':' + s.pr.join('') + s.fl).join(' ') : ''));
     // braziers: broken and relit states both reach the client (bitmask)
     const HB = r.W2.arena.braziers, MB = M.view.props.braziers, same = () => HB.every((b, i) => MB[i].broken === b.broken && MB[i].hp === (b.broken ? 0 : 1));
@@ -319,8 +319,7 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
   const FORM = { cleric: 'consecration', pyro: 'napalm', necro: 'plaguefield', bell: 'windchime' }; // the zone-heaviest Form per hero
   W3.heroes.forEach((p) => {
     for (const id of ['might', 'reach', 'duration', 'multishot', 'haste', 'velocity']) p.passives.push({ id, lvl: ED.PASSIVES[id].max });
-    const ws = W3.setRanks(p, p.weapons[0], 9, false);
-    W3.takeForm(p, ws, FORM[p.cls]); while (W3.refineForm(p, ws));
+    W3.setForm(p, p.weapons[0], FORM[p.cls], 2);
     W3.recalc(p, true);
   });
   for (const row of W3.sdef.timeline) row.rate = 0;

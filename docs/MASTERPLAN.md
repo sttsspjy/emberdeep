@@ -25,6 +25,7 @@ North-star: a co-op browser survivors-like (solo or up to 4 friends, zero instal
 - [x] More gold: boss and win gold, later stages pay more, a kill bounty even when you lose
 - [x] Form icons
 - [x] Readability pass on every Form's visuals
+- [x] 20-minute runs: a third mid-boss at 15:00 (borrowed from another stage for now), the final boss at 20:00, the benchmark surge at 17:00
 - [ ] Your playtest of the redesign
 
 ## Next

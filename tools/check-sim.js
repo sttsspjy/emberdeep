@@ -1,10 +1,10 @@
 // Headless sim regression check (exit 1 on failure). Usage: node tools/check-sim.js [--quick] (quick: 5-minute solo / 4-hero runs, the victory run on stage 1 only).
-// Card policy everywhere: a Form card first, then refine, then the offered path closest to rank 3, else the first card.
-// 1. Solo knight, 15:00 with scripted inputs (circle walk, Q / dash on timers), god cheat: reaches the final boss spawn; run twice -> same digest.
+// Card policy everywhere: a Form card first, then refine, then the highest path rank offered, then a tune card, else the first card (a path-pick offer: its first path).
+// 1. Solo knight, 20:00 (C.RUN_LEN) with scripted inputs (circle walk, Q / dash on timers), god cheat: reaches the final boss spawn; run twice -> same digest.
 // 2. 4 heroes (knight, ranger, pyro, cleric), same script, god cheat: no exceptions, reaches the final boss; run twice -> same digest.
 // 3. Victory runs (full: all 7 heroes, stages 1 / 2 / 3 in turn; quick: knight on stage 1): a cheat build (six passives at max, weapon unranked) with { god, might: 40 }, walking to chests:
-//    3 bosses met, the stage's final boss dies (state 'won', one 'end' event, summary), the hero reaches a Form through its own picks; the stage 3 ranger run twice -> same digest.
-//    Quick mode adds a Form reach run per hero up to 420 s ({ god, might: 40, xp: 4 }, same build; Forms come from boss chest Form offers, the first at 5:00): every hero takes a Form.
+//    4 bosses met (5:00 / 10:00 / 15:00 / final 20:00), the stage's final boss dies (state 'won', one 'end' event, summary), the hero reaches a Form through its own picks; the stage 3 ranger run twice -> same digest.
+//    Quick mode adds a Form reach run per hero up to 420 s ({ god, might: 40, xp: 4 }, same build; path picks from elite chests, Forms from boss chest Form offers, the first at 5:00): every hero takes a Form.
 // 4. Mortal solo knight run until it ends (no cheats): state 'lost' with one 'end' event, or survives.
 // 5. Every hero x every stage, 90 s, god cheat: no exceptions, Q casts (E is unbound: never cast), the signature weapon deals damage, foes die; combined digest printed.
 // 6. Invariants on every run: hit events <= 200 per tick, foe telegraphs >= 0.6 s, alive cap respected.
@@ -22,6 +22,7 @@ function pickIdx(p) {
   let k = O.findIndex(c => c.kind === 'form');
   if (k < 0) k = O.findIndex(c => c.kind === 'refine');
   if (k < 0) { let best = -1; O.forEach((c, i) => { if (c.kind === 'path' && c.lvl > best) { best = c.lvl; k = i; } }); }
+  if (k < 0) k = O.findIndex(c => c.kind === 'tune');
   return (k < 0 ? 0 : k) + 1;
 }
 // Scripted player: circles, aims at the nearest foe in its view (else 80 px ahead), Q every 7 s, E pressed every 11 s (unbound), dash every 5 s (phase per slot), picks by pickIdx. seek: walks to a living boss outside its view, else the nearest chest within 700 px.
@@ -47,7 +48,7 @@ function cheatBuild(w, p) {
 // Digest of the visible state: rolled over every second.
 function stateHash(w) {
   let s = w.tick + '|' + w.kills + '|' + w.level + '|' + Math.floor(w.xp) + '|' + w.gold + '|' + w.foes.length + '|' + w.projs.length + '|' + w.pickups.length;
-  for (const p of w.heroes) s += '|' + p.x.toFixed(2) + ',' + p.y.toFixed(2) + ',' + p.hp.toFixed(2) + ',' + p.weapons.map(x => x.id + x.pr.join('') + x.fl).join('') + p.passives.map(x => x.id + x.lvl).join('');
+  for (const p of w.heroes) s += '|' + p.x.toFixed(2) + ',' + p.y.toFixed(2) + ',' + p.hp.toFixed(2) + ',' + p.weapons.map(x => x.id + x.tune + x.pr.join('') + x.fl).join('') + p.passives.map(x => x.id + x.lvl).join('');
   let fx = 0, fy = 0; for (const e of w.foes) { fx += e.x; fy += e.y; }
   return U.hashStr(s + '|' + fx.toFixed(1) + '|' + fy.toFixed(1));
 }
@@ -96,10 +97,10 @@ const finalUp = (w) => w.bossList.some(e => e.final) && w.time > LEN + 3;
 // 1. solo determinism + reaching the final boss
 const soloCfg = () => ({ seed: 1234, stage: 0, players: players(['knight']), cheats: { god: true } });
 const s1 = run(soloCfg(), LEN + 10, finalUp), s2 = run(soloCfg(), LEN + 10, finalUp);
-ok(!s1.err && !s2.err, 'solo 15:00 runs throw nothing' + errOf(s1));
+ok(!s1.err && !s2.err, 'solo 20:00 runs throw nothing' + errOf(s1));
 ok(s1.digest === s2.digest, `solo digest equal (${s1.digest} / ${s2.digest})`);
 ok(s1.w.bossList.some(e => e.final) || QUICK, `solo reaches the final boss (bosses ${s1.bosses.join(', ')}; t ${s1.w.time.toFixed(0)} s, kills ${s1.w.kills}, level ${s1.w.level})`);
-ok(QUICK || s1.bosses.length >= 3, 'solo meets 3 bosses');
+ok(QUICK || s1.bosses.length >= 4, `solo meets 4 bosses (${s1.bosses.join(', ')})`);
 invariants(s1, 'solo');
 // 2. four heroes
 const quadCfg = () => ({ seed: 99, stage: 0, players: players(['knight', 'ranger', 'pyro', 'cleric']), cheats: { god: true } });
@@ -113,14 +114,14 @@ const VICTORY = [['knight', 0, 7], ['ranger', 1, 8], ['pyro', 2, 9], ['necro', 0
 const vcfg = (cls, st, seed, xp) => ({ seed, stage: st, players: players([cls]), cheats: { god: true, might: 40, xp: xp || 1 } });
 const vopt = { seek: true, setup: (w) => cheatBuild(w, w.heroes[0]) };
 const formOf = (v) => { const ws = v.w.heroes[0].weapons[0]; return ws.evo && v.evolved.some(e => e === ws.root + '>' + ws.id) ? ws.id : ''; };
-const build = (v) => v.w.heroes[0].weapons.map(x => x.id + ' ' + x.pr.join('') + '/' + x.fl).join(',');
+const build = (v) => v.w.heroes[0].weapons.map(x => x.id + ' t' + x.tune + ' ' + x.pr.join('') + '/' + x.fl).join(',');
 let sum = null;
 const formed = new Set();
 for (const [cls, st, seed] of VICTORY) {
   const v = run(vcfg(cls, st, seed), C.RUN_LEN + 150, vopt), fin = ED.STAGES[st].bosses.find(b => b.final), tag = `stage ${st + 1} ${cls}`;
   ok(!v.err, tag + ': victory run throws nothing' + errOf(v));
   ok(v.w.state === 'won' && v.ends === 1 && v.killed.includes(fin.id + '!'), `${tag}: victory (state ${v.w.state}, t ${v.w.time.toFixed(0)} s, level ${v.w.level}, kills ${v.w.kills}; met ${v.bosses.join(', ')}; killed ${v.killed.join(', ')}; digest ${v.digest})`);
-  ok(v.bosses.length >= 3, `${tag}: meets ${v.bosses.length} bosses`);
+  ok(v.bosses.length >= 4, `${tag}: meets ${v.bosses.length} bosses`);
   const f = formOf(v);
   if (f) formed.add(cls);
   ok(!!f && v.evolved.filter(e => e.startsWith(v.w.heroes[0].weapons[0].root + '>')).length === 1, `${tag}: reaches one hero-weapon Form through its picks (${v.evolved.join(',') || 'none'}; build ${build(v)})`);

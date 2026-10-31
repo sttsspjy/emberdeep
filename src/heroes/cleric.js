@@ -1,7 +1,7 @@
 // Cleric (support): signature Smite = holy pillars on random foes near the hero (team 0 warn zones that resolve after a short fall) plus two emitters the paths add:
-// a holy aura around the hero (Censer path: pulses, heals allies inside, swinging censers) and a sweeping holy beam (Lance path). Every Form keeps all three parts and reshapes one:
-// Wrath (pillars hop foe to foe), Halo (the aura becomes a ring wall that shoves foes out), Judgment Ray (beams rotate around the hero), hybrids Consecration (pillars leave
-// healing holy ground) and Verdict (the beam calls pillars along its sweep). Q Sanctuary: holy ground at the cursor that heals and revives allies, wards foes out, rains pillars.
+// a holy aura around the hero (Censer path: pulses, heals allies inside, swinging censers) and a sweeping holy beam (Lance path). Every Form keeps the parts its path adds and reshapes one:
+// Wrath (pillars hop foe to foe), Halo (the aura becomes a ring wall that shoves foes out), Judgment Ray (beams rotate around the hero), Consecration (Censer; pillars leave
+// healing holy ground), Verdict (Lance; the beam calls pillars along its sweep). Q Sanctuary: holy ground at the cursor that heals and revives allies, wards foes out, rains pillars.
 // Zone looks: smite / wrath (falling pillar), pglow (landed pillar, visual), hallow (Consecration ground), sanct, aura, halo (circle w = censer count),
 // beam (line, sweep), ray (line, rotating). Pillar riders ride on a pooled state object (PS free list): no allocation per pillar in steady state.
 (function (ED) {
@@ -229,20 +229,19 @@
     id: 'smite', name: 'Smite', icon: 'weapon.mace', sig: 'cleric', mode: 'random', txt: 'Holy pillars on random foes',
     base: base({ dmg: 23, cd: 1.0, n: 1 }),
     paths: [
-      { id: 'storm', name: 'Storm', form: 'wrath', ranks: [
+      { id: 'storm', name: 'Storm', forms: ['wrath'], ranks: [
         { mods: { n: 1 }, txt: '+1 pillar' },
         { mods: { jump: 1 }, txt: 'Pillars leap to a nearby foe' },
         { mods: { jump: 1 }, txt: 'Leaps strike 2 foes' }] },
-      { id: 'censer', name: 'Censer', form: 'halo', ranks: [
+      { id: 'censer', name: 'Censer', forms: ['halo', 'consecration'], ranks: [
         { mods: { aura: 1 }, txt: 'A holy aura burns foes near you' },
         { mods: { aura: 1, heal: 0.6 }, txt: 'Aura grows and heals allies in it' },
         { mods: { swing: 2 }, txt: '2 censers swing around you' }] },
-      { id: 'lance', name: 'Lance', form: 'jray', ranks: [
+      { id: 'lance', name: 'Lance', forms: ['jray', 'verdict'], ranks: [
         { mods: { beam: 1 }, txt: 'A holy beam sweeps foes every 3 s' },
         { mods: { pass: 1 }, txt: 'The beam sweeps back again' },
         { mods: { beams: 1 }, txt: 'A second beam sweeps behind you' }] },
     ],
-    hybrids: [{ need: [0, 1], form: 'consecration' }, { need: [0, 2], form: 'verdict' }],
   }, impl(''));
 
   // Wrath: every pillar starts a chain that hops to the next foe outward (S.hop hops, 85% damage each).
@@ -272,7 +271,7 @@
       { mods: { rays: 1, dmg: 0.2 }, txt: '+1 beam, +20% damage' },
     ],
   }, impl('ray'));
-  // Consecration (Storm + Censer at rank 3): every volley pillar leaves holy ground that burns and slows foes and heals allies standing in it.
+  // Consecration (Censer): every volley pillar leaves holy ground that burns and slows foes and heals allies standing in it.
   ED.addWeapon({
     id: 'consecration', name: 'Consecration', icon: 'weapon.mace', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Pillars leave holy ground',
     base: base({ dmg: 30, cd: 1.0, n: 2, groundK: 0.3, gheal: 1.2 }),
@@ -281,7 +280,7 @@
       { mods: { groundK: 0.1, dmg: 0.2 }, txt: '+20% damage, ground burns hotter' },
     ],
   }, impl('hallow'));
-  // Verdict (Storm + Lance at rank 3): the beam sweeps more often and calls pillars down along its path.
+  // Verdict (Lance): the beam sweeps more often and calls pillars down along its path.
   ED.addWeapon({
     id: 'verdict', name: 'Verdict', icon: 'weapon.warhammer', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Beams call pillars as they sweep',
     base: base({ dmg: 30, cd: 1.0, n: 2, bcd: 1.6, vpK: 1.7 }),

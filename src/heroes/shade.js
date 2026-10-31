@@ -1,5 +1,5 @@
-// Shade (assassin): hero data, signature Twin Daggers (rapid narrow stabs toward the cursor; 3 paths x 3 ranks), Forms Thousand Cuts (path 0), Assassinate (path 1),
-// Shadow Fan (path 2), hybrids Death Lotus (paths 0 + 1) and Reaper's Return (paths 1 + 2); Q Shadow Step.
+// Shade (assassin): hero data, signature Twin Daggers (rapid narrow stabs toward the cursor; 3 paths x 3 ranks), Forms Thousand Cuts (Flurry), Assassinate + Death Lotus (Lethality),
+// Shadow Fan + Reaper's Return (Return); Q Shadow Step.
 // Stab: a segment from the hero's hand along the aim, S.len x area long, S.wid x area wide; every foe touching it is hit. Crit is rolled once per stab (a crit stab forces a crit on
 // every foe it touches, others never crit). A strike of S.n stabs is spread evenly over the cooldown (ws.st queue), each stab re-aimed. Visual: one line zone per stab.
 // Zone looks: stab / stabx (crit) / tcut (storm stab) line zones 0.12 s; smark (mark on a foe), mcut (shadow X cut, w = cut length), petal (bloom, w = blade count), sexec (execute pop,
@@ -196,20 +196,19 @@
     id: 'daggers', name: 'Twin Daggers', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', txt: 'Rapid stabs toward your cursor',
     base: base({ dmg: 16, cd: 0.5, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.1 }),
     paths: [
-      { id: 'flurry', name: 'Flurry', form: 'thousand', ranks: [
+      { id: 'flurry', name: 'Flurry', forms: ['thousand'], ranks: [
         { mods: { n: 1 }, txt: '+1 stab per flurry' },
         { mods: { len: 26 }, txt: 'Stabs lunge much farther' },
         { mods: { n: 1, cd: -0.15 }, txt: '+1 stab, flurries come faster' }] },
-      { id: 'lethality', name: 'Lethality', form: 'assassinate', ranks: [
+      { id: 'lethality', name: 'Lethality', forms: ['assassinate', 'lotus'], ranks: [
         { mods: { exec: 0.1 }, txt: 'Stabs execute foes under 10% HP' },
         { mods: { crit: 0.1, lunge: 0.8 }, txt: '+10% crit, crits stab much farther' },
         { mods: { exec: 0.05, burst: 0.6 }, txt: 'Executes burst, cutting foes nearby' }] },
-      { id: 'return', name: 'Return', form: 'shadowfan', ranks: [
+      { id: 'return', name: 'Return', forms: ['shadowfan', 'reaper'], ranks: [
         { mods: { thrown: 1 }, txt: 'Throw a dagger that flies back' },
         { mods: { thrown: 1 }, txt: '+1 returning dagger' },
         { mods: { hover: true, thrown: 1 }, txt: '+1 dagger, they spin at the far end' }] },
-    ],
-    hybrids: [{ need: [0, 1], form: 'lotus' }, { need: [1, 2], form: 'reaper' }],
+    ],
   }, stabImpl);
 
   // Shadow Fan (Return): stabs + a fan of S.fan + S.thrown returning daggers forward and as many behind (registered first: the old evolution id); the return leg always crits.
@@ -239,7 +238,7 @@
       { mods: { mlen: 40 }, txt: 'Shadow cuts reach twice as far' },
     ],
   }, stabImpl);
-  // Death Lotus (Flurry + Lethality): crit stabs bloom into a ring of blades around their first foe.
+  // Death Lotus (Lethality): crit stabs bloom into a ring of blades around their first foe.
   ED.addWeapon({
     id: 'lotus', name: 'Death Lotus', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Crits bloom into a ring of blades',
     base: base({ dmg: 19, cd: 0.45, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 10, range: 0, crit: 0.15, bloom: 0.32, petals: 6, plen: 0.6 }),
@@ -248,7 +247,7 @@
       { mods: { crit: 0.1, plen: 0.4 }, txt: '+10% crit, blades reach farther' },
     ],
   }, stabImpl);
-  // Reaper's Return (Lethality + Return): stabs + thrown daggers that pin a foe (strikes on it crit), then tear back as crits.
+  // Reaper's Return (Return): stabs + thrown daggers that pin a foe (strikes on it crit), then tear back as crits.
   ED.addWeapon({
     id: 'reaper', name: "Reaper's Return", icon: 'weapon.knives', look: 'pknife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Daggers pin foes, then tear back',
     base: base({ dmg: 18, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, thrown: 3, tcd: 1, trange: 120, tdm: 1, pin: true, pdur: 1.2 }),

@@ -12,21 +12,23 @@ Role: holy strikes on foes near the hero, healing and protecting allies, zone co
 
 ## Paths
 
-| Path | Rank 1 | Rank 2 | Rank 3 | Form |
+| Path | Rank 1 | Rank 3 | Rank 5 | Forms |
 |---|---|---|---|---|
 | Storm | +1 pillar (n +1) | Pillars leap to a nearby foe (1 leap: 70% radius, 40% dmg, within 110 px; no foe: strikes the spot again) | Leaps strike 2 foes (2 leaps) | Wrath |
-| Censer | A holy aura burns foes near you (aura) | Aura grows and heals allies in it (radius 62, heal 0.6 HP/s) | 2 censers swing around you | Halo |
-| Lance | A holy beam sweeps foes every 3 s | The beam sweeps back again (2 passes) | A second beam sweeps behind you (2 beams, opposite) | Judgment Ray |
+| Censer | A holy aura burns foes near you (aura) | Aura grows and heals allies in it (radius 62, heal 0.6 HP/s) | 2 censers swing around you | Halo, Consecration |
+| Lance | A holy beam sweeps foes every 3 s | The beam sweeps back again (2 passes) | A second beam sweeps behind you (2 beams, opposite) | Judgment Ray, Verdict |
+
+Tables give the 3 shape ranks at path ranks 1 / 3 / 5; path ranks 2 and 4 are generic steps (+10% damage, cooldown x0.95). Before the path: 5 tune steps; the path is picked from a chest (one per slot, permanent); a path at rank 5 readies its Forms (GAME-DESIGN §4). A Form keeps only its own path's ranks.
 
 ## Forms (one per run; path ranks keep applying; base dmg 30, Halo 24, Judgment Ray 23)
 
 | Form | Rule | Pattern | Refine 1 | Refine 2 |
 |---|---|---|---|---|
-| Wrath | Storm 3 | 2 pillars (r 28); each starts a chain of 5 hops: the next pillar falls on the nearest foe within 120 px farther from the chain start (85% dmg, 0.1 s apart) | Chains hop 2 more times | +1 pillar, +20% damage |
-| Halo | Censer 3 | The aura becomes a ring wall, radius 60 × area: the band (−14 / +10 px) hits every 0.25 s for 35%, slows 40%, shoves out (knock 140); inner pulses 80%; heal +0.6 HP/s; +1 censer riding the ring | The ring is 30% wider | +2 censers, +20% damage |
-| Judgment Ray | Lance 3 | 1 + 1 + beams + passes holy beams (60 px) turn around the hero at 2.4 rad/s without pause, 35% per crossing; 3 pillars per volley | Beams reach 30% farther | +1 beam, +20% damage |
-| Consecration | Storm 3 + Censer 3 | Every volley pillar leaves holy ground (2 × pillar radius, 3 s × duration): 30% dps, 30% slow; heroes standing in any of it heal 1.2 HP/s (no stacking) | +1 pillar | +20% damage, ground burns hotter |
-| Verdict | Storm 3 + Lance 3 | Sweeps every 1.6 s and each beam calls a pillar every 0.06 s along it (at 50 / 78 / 100% of its length, 170% dmg, 85% radius) | Beams reach 30% farther | +1 pillar, +20% damage |
+| Wrath | Storm 5 | 2 pillars (r 28); each starts a chain of 5 hops: the next pillar falls on the nearest foe within 120 px farther from the chain start (85% dmg, 0.1 s apart) | Chains hop 2 more times | +1 pillar, +20% damage |
+| Halo | Censer 5 | The aura becomes a ring wall, radius 60 × area: the band (−14 / +10 px) hits every 0.25 s for 35%, slows 40%, shoves out (knock 140); inner pulses 80%; heal +0.6 HP/s; +1 censer riding the ring | The ring is 30% wider | +2 censers, +20% damage |
+| Judgment Ray | Lance 5 | 1 + 1 + beams + passes holy beams (60 px) turn around the hero at 2.4 rad/s without pause, 35% per crossing; 3 pillars per volley | Beams reach 30% farther | +1 beam, +20% damage |
+| Consecration | Censer 5 | Every volley pillar leaves holy ground (2 × pillar radius, 3 s × duration): 30% dps, 30% slow; heroes standing in any of it heal 1.2 HP/s (no stacking) | +1 pillar | +20% damage, ground burns hotter |
+| Verdict | Lance 5 | Sweeps every 1.6 s and each beam calls a pillar every 0.06 s along it (at 50 / 78 / 100% of its length, 170% dmg, 85% radius) | Beams reach 30% farther | +1 pillar, +20% damage |
 
 ## Skill (Q): Sanctuary
 

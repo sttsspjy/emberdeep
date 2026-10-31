@@ -1,6 +1,6 @@
 // Headless check of the Bell's Toll tree and Great Peal (exit 1 on failure). Usage: node tools/check-hero-bell.js
-// 1. Cards: 3 paths x 3 ranks, lines <= 40 chars that never name a Form; every rank changes the weapon's numbers and its pattern (checked per rank).
-// 2. Forms: each is ready only under its rule (pure: its path at 3; hybrid: both paths at 3), one Form per run, refines twice, fires, and draws its own pattern.
+// 1. Cards: 3 paths x 3 shape ranks, lines <= 40 chars that never name a Form; every path rank 1-5 changes the weapon's numbers, every shape rank its pattern.
+// 2. Forms: 1-2 per path, each ready only with its own path at rank 5, one Form per run, refines twice, fires, and draws its own pattern.
 // 3. View clamp: rings neither damage nor stun a foe outside the hero's view. 4. Great Peal at levels 1-4 (zero damage stun + push, echo, shield, gems, cooldown >= 7 s). 5. Determinism digest per Form.
 'use strict';
 const { load } = require('./sim.js');
@@ -31,16 +31,15 @@ function run(w, s, fn, out) {
   } catch (e) { return e; }
   return null;
 }
-// Hero with ranks [a, b, c] (and Form id refined fully, or '').
-function build(ranks, form, seed) {
-  const w = world(seed), p = w.heroes[0], ws = p.weapons[0];
-  for (let i = 0; i < 3; i++) for (let r = 0; r < ranks[i]; r++) w.rankPath(p, ws, i);
-  if (form) { w.takeForm(p, ws, form); while (w.refineForm(p, ws)); }
-  w.recalc(p, false);
+// Hero with tune full and shape ranks [a, b, c] (one nonzero path at shape rank r -> path rank 2r - 1; all zero: tune only), path ranks when pr; Form id: that Form refined fully (ranks ignored).
+function build(ranks, form, seed, pr) {
+  const w = world(seed), p = w.heroes[0], ws = p.weapons[0], i = ranks.findIndex(x => x > 0);
+  if (form) w.setForm(p, ws, form, 2);
+  else w.setRanks(p, ws, ED.TUNE_MAX, i, i < 0 ? 0 : pr ? ranks[i] : 2 * ranks[i] - 1);
   return { w, p, ws };
 }
 const looks = (w, k) => w.zones.filter(z => !z.dead && z.k === k);
-const S0 = (ranks, form) => { const { w, p } = build(ranks, form); return Object.assign({}, w.weaponS(p, 0)); };
+const S0 = (ranks, form, pr) => { const { w, p } = build(ranks, form, undefined, pr); return Object.assign({}, w.weaponS(p, 0)); };
 
 // 1. cards and ranks
 const names = FORMS.map(f => ED.WEAPONS[f.id].name.toLowerCase());
@@ -49,9 +48,9 @@ const lines = [];
 for (const pa of ROOT.paths) for (const rk of pa.ranks) lines.push(rk.txt);
 for (const f of FORMS) for (const rf of ED.WEAPONS[f.id].refine) lines.push(rf.txt);
 ok(lines.every(l => l.length <= 40 && !names.some(n => l.toLowerCase().includes(n))), 'card lines <= 40 chars, no Form named: ' + lines.filter(l => l.length > 40 || names.some(n => l.toLowerCase().includes(n))).join(' | '));
-for (let i = 0; i < 3; i++) for (let r = 1; r <= 3; r++) {
+for (let i = 0; i < 3; i++) for (let r = 1; r <= ED.PATH_MAX; r++) {
   const a = [0, 0, 0], b = [0, 0, 0]; a[i] = r - 1; b[i] = r;
-  const sa = S0(a, ''), sb = S0(b, ''), diff = Object.keys(sb).filter(k => sa[k] !== sb[k]);
+  const sa = S0(a, '', true), sb = S0(b, '', true), diff = Object.keys(sb).filter(k => sa[k] !== sb[k]);
   ok(diff.length > 0, `path ${ROOT.paths[i].name} rank ${r} changes ${diff.join(', ')}`);
 }
 // Pattern per rank: zones and statuses seen over s (3) s in 24-foe rings at 60 and 120 px (HP x hpMul, default 40) for ranks given; returns { maxWaves, looks, frozen, stunned, slowed, booms, rMin, rMax }.
@@ -85,14 +84,13 @@ function pattern(ranks, form, s, hpMul) {
 }
 
 // 2. Forms
-ok(FORMS.length === 5 && FORMS.filter(f => f.path < 0).length === 2, 'toll: 3 pure Forms + 2 hybrids: ' + FORMS.map(f => f.id + '[' + f.need + ']').join(' '));
+ok(FORMS.length === 5 && ROOT.paths.every(pa => pa.forms.length >= 1 && pa.forms.length <= 2) && FORMS.every(f => f.any.length === 1), 'toll: 5 Forms, 1-2 per path: ' + ROOT.paths.map(pa => pa.name + ' ' + pa.forms.join('+')).join('; '));
 for (const f of FORMS) {
-  const ready = (ranks) => { const { w, p, ws } = build(ranks, ''); return w.formsReady(p, ws).some(x => x.id === f.id); };
-  const at = (v) => [0, 1, 2].map(i => (f.need.includes(i) ? v : 0));
-  const others = [0, 1, 2].map(i => (f.need.includes(i) ? 0 : 3));
-  const one = f.need.length > 1 ? [0, 1, 2].map(i => (i === f.need[0] ? 3 : 0)) : null;
-  ok(!ready(at(2)) && !ready(others) && (!one || !ready(one)) && ready(at(3)), `${f.id}: ready only with path(s) ${f.need.join('+')} at rank 3`);
-  const { w, p, ws } = build(at(3), '');
+  const ready = (pr) => { const { w, p, ws } = build(pr, '', undefined, true); return w.formsReady(p, ws).some(x => x.id === f.id); };
+  const at = (v) => [0, 1, 2].map(i => (i === f.path ? v : 0));
+  const other = [0, 1, 2].map(i => (i === (f.path + 1) % 3 ? ED.PATH_MAX : 0));
+  ok(!ready(at(ED.PATH_MAX - 1)) && !ready(other) && ready(at(ED.PATH_MAX)), `${f.id}: ready only with ${ROOT.paths[f.path].name} at rank ${ED.PATH_MAX}`);
+  const { w, p, ws } = build(at(ED.PATH_MAX), '', undefined, true);
   ok(w.takeForm(p, ws, f.id) && w.formsReady(p, ws).length === 0 && !w.takeForm(p, ws, FORMS.find(x => x.id !== f.id).id), `${f.id}: taken; no other Form after it`);
   ok(w.refineForm(p, ws) === 1 && w.refineForm(p, ws) === 2 && w.refineForm(p, ws) === 0, `${f.id}: 2 refines`);
 }
@@ -131,9 +129,9 @@ for (const f of FORMS) {
   const still = w.zones.filter(z => !z.dead && z.k === 'chime' && ids.has(z.id));
   ok(ch.length > 0 && still.length > 0 && p.x - x0 > 60 && rang, `windchime: ${ch.length} chimes dropped, ${still.length} still ringing after the hero walked ${Math.round(p.x - x0)} px`);
 }
-for (const f of FORMS) { // every Form fires and deals damage in a crowd with all ranks
+for (const f of FORMS) { // every Form fires and deals damage in a crowd (its path at rank 5, refined)
   const r = pattern([3, 3, 3], f.id, 4);
-  ok(!r.err && r.dealt > 0, `${f.id} (3/3/3, refined): 4 s, dealt ${Math.round(r.dealt)}` + (r.err ? ': ' + r.err.stack : ''));
+  ok(!r.err && r.dealt > 0, `${f.id} (refined): 4 s, dealt ${Math.round(r.dealt)}` + (r.err ? ': ' + r.err.stack : ''));
 }
 
 // 3. view clamp: a foe just outside the view (below) is never hit or stunned by rings, Cathedral great rings or Great Peal; one inside is
@@ -172,7 +170,7 @@ for (const form of ['', 'cathedral']) {
   ok(!L[2].gem && L[3].gem, 'great peal L4: pulls gems');
 }
 
-// 5. determinism: 20 s with Q spam per Form (3/3/3 refined), twice
+// 5. determinism: 20 s with Q spam per Form (refined), twice
 const digest = (form) => {
   const { w, p } = build([3, 3, 3], form, 21);
   p.skills[0].lvl = 4;

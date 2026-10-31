@@ -4,9 +4,10 @@
 //   feature: { f: 'row' (colonnade) | 'arc' (broken wall with one gap) | 'cluster' (tight clump) | 'single', w (pick weight), look ('' = plain rock disc), r: [min, max], n: [min, max], gap: [min, max] (px between surfaces), spread (cluster radius) }.
 // arena: { size, obstacles: [min, max] (colliders), braziers: [min, max], clear (no obstacle within this radius of the centre) }.
 // foe: { hp, dmg } stage multipliers on foe and boss HP and on contact / shot damage. gold: multiplier on elite, boss and victory gold (GAME-DESIGN §9).
-// Roster tiers: each stage's 0:00-5:00, 5:00-10:00 and 10:00-15:00 rosters differ (early kinds fade to weight 0, two new kinds per stage at 5:00 and 10:00; every row keeps a plain chaser kind, the filler when brain caps re-pick); the stage's swarmer is in no roster: it comes in flocks and swarm events.
+// Roster tiers: each stage's 0:00-5:00, 5:00-10:00 and 10:00-15:00 rosters differ (early kinds fade to weight 0, two new kinds per stage at 5:00 and 10:00; every row keeps a plain chaser kind, the filler when brain caps re-pick);
+//   15:00-20:00 adds no kind: the brute and the 10:00 kind weigh ~30% more by 18:00. The stage's swarmer is in no roster: it comes in flocks and swarm events.
 // timeline[m] (minute m; the last entry holds for the rest of the run): { rate (spawns/s solo), cap (alive cap solo), floor (density floor, fraction of the alive cap), roster: [[foeId, weight]] }.
-// events.flock: { id, first, every, n: [at first, at 10:00] } a pack or a line of swarmers flying through one hero's spot (spawner.js flockEvent); events.swarm: { first, every, ring: [ids], stampede: [ids] (used when in the current roster), n: [at first, at 12:00] } a closing ring or a stampede line flying through; elites: { first, every };
+// events.flock: { id, first, every, n: [at first, at 10:00, at 20:00] } a pack or a line of swarmers flying through one hero's spot (spawner.js flockEvent); events.swarm: { first, every, ring: [ids], stampede: [ids] (used when in the current roster), n: [at first, at 12:00, at 20:00] } a closing ring or a stampede line flying through; elites: { first, every };
 // bench: { t (s), elite (s between elites) } the benchmark phase (HP-heavy roster, density floor 0.7, a 'surge' warning); bosses: [{ t (s), id, final }].
 (function (ED) {
   'use strict';
@@ -18,19 +19,19 @@
     for (let i = 1; i < keys.length; i++) if (m < keys[i][0]) { const a = keys[i - 1], b = keys[i]; return a[1] + (b[1] - a[1]) * (m - a[0]) / (b[0] - a[0]); }
     return keys[keys.length - 1][1];
   };
-  // Builds 16 minute rows from rate[16], roster { id: keyframes } and spikes { minute: { id: extra weight } } (a minute's signature foe).
+  // Builds one minute row per rate entry (21: 0:00-20:00) from rate, roster { id: keyframes } and spikes { minute: { id: extra weight } } (a minute's signature foe).
   const timeline = (rate, roster, spikes) => {
     const out = [];
-    for (let m = 0; m <= 15; m++) {
+    for (let m = 0; m < rate.length; m++) {
       const rows = [];
       for (const id in roster) { const wt = keyAt(roster[id], m) + ((spikes[m] && spikes[m][id]) || 0); if (wt > 0) rows.push([id, Math.round(wt * 10) / 10]); }
       out.push({ rate: rate[m], cap: capAt(m), floor: floorAt(m), roster: rows });
     }
     return out;
   };
-  // Spawn rate per minute (solo spawns/s; GAME-DESIGN §7), shared by the stages (stage 3 x1.05); BENCH: the 12:00-15:00 benchmark phase.
-  const RATE = [1.2, 2.2, 2.8, 3.8, 4.9, 6, 8.1, 10.2, 11.9, 13.6, 14, 16.2, 17.8, 19.6, 21.3, 18.7];
-  const BENCH = { t: 720, elite: 30 };
+  // Spawn rate per minute (solo spawns/s; GAME-DESIGN §7), shared by the stages (stage 3 x1.05); BENCH: the 17:00-20:00 benchmark phase.
+  const RATE = [1.2, 2.2, 2.8, 3.8, 4.9, 6, 8.1, 10.2, 11.9, 13.6, 14, 16.2, 17.8, 19.6, 21.3, 22.5, 23.5, 24.5, 25.5, 26, 24];
+  const BENCH = { t: 1020, elite: 30 };
   const ROW = (look, r, n, gap, w) => ({ f: 'row', w, look, r, n, gap });
   const ARC = (look, r, n, gap, w) => ({ f: 'arc', w, look, r, n, gap });
   const CLUSTER = (look, r, n, spread, w) => ({ f: 'cluster', w, look, r, n, spread });
@@ -60,13 +61,13 @@
           icewolf: [[5, 2], [7, 3], [10, 2], [11, 0]],
           frostwisp: [[6, 1], [8, 3], [10, 1], [11, 0]],
           bulwark: [[5, 2], [7, 3], [11, 3], [13, 4]],
-          skelknight: [[5, 0.6], [8, 1], [10, 2], [12, 3]],
-          bonecaller: [[10, 1], [11, 2]],
+          skelknight: [[5, 0.6], [8, 1], [10, 2], [12, 3], [15, 3], [18, 3.9]],
+          bonecaller: [[10, 1], [11, 2], [15, 2], [18, 2.6]],
         },
-        { 2: { slime: 3 }, 4: { imp: 2 }, 6: { bulwark: 3 }, 8: { frostwisp: 3 }, 11: { bonecaller: 2 }, 13: { skelknight: 2 } }),
-      events: { flock: { id: 'bat', first: 40, every: 18, n: [8, 40] }, swarm: { first: 120, every: 120, ring: ['bat'], stampede: ['bat', 'skeleton', 'drowned'], n: [24, 50] } },
+        { 2: { slime: 3 }, 4: { imp: 2 }, 6: { bulwark: 3 }, 8: { frostwisp: 3 }, 11: { bonecaller: 2 }, 13: { skelknight: 2 }, 16: { bulwark: 2 }, 18: { skelknight: 2 } }),
+      events: { flock: { id: 'bat', first: 40, every: 18, n: [8, 40, 52] }, swarm: { first: 120, every: 120, ring: ['bat'], stampede: ['bat', 'skeleton', 'drowned'], n: [24, 50, 60] } },
       elites: { first: 150, every: 60 }, bench: BENCH,
-      bosses: [{ t: 300, id: 'warden' }, { t: 600, id: 'twins' }, { t: 900, id: 'hollow', final: true }],
+      bosses: [{ t: 300, id: 'warden' }, { t: 600, id: 'twins' }, { t: 900, id: 'cyclops' }, { t: 1200, id: 'hollow', final: true }],
     },
     {
       id: 'glowmire', name: 'The Glowmire',
@@ -91,13 +92,13 @@
           cavespider: [[5, 2], [7, 3], [10, 2], [11, 0]],
           drone: [[6, 1], [8, 3], [10, 1], [11, 0]],
           bloater: [[5, 2], [7, 3], [11, 2]],
-          shroomhulk: [[5, 0.6], [8, 1], [10, 2], [12, 3]],
-          mirecrab: [[10, 0.6], [11, 1], [13, 1.5]],
+          shroomhulk: [[5, 0.6], [8, 1], [10, 2], [12, 3], [15, 3], [18, 3.9]],
+          mirecrab: [[10, 0.6], [11, 1], [13, 1.5], [15, 1.5], [18, 2]],
         },
-        { 2: { glowslime: 3 }, 4: { spitter: 2 }, 6: { bloater: 3 }, 8: { drone: 3 }, 11: { mirecrab: 1 }, 13: { shroomhulk: 2 } }),
-      events: { flock: { id: 'glowlet', first: 40, every: 18, n: [8, 40] }, swarm: { first: 120, every: 120, ring: ['glowlet'], stampede: ['glowlet', 'myconid', 'reaver'], n: [24, 50] } },
+        { 2: { glowslime: 3 }, 4: { spitter: 2 }, 6: { bloater: 3 }, 8: { drone: 3 }, 11: { mirecrab: 1 }, 13: { shroomhulk: 2 }, 16: { mirecrab: 1 }, 18: { shroomhulk: 2 } }),
+      events: { flock: { id: 'glowlet', first: 40, every: 18, n: [8, 40, 52] }, swarm: { first: 120, every: 120, ring: ['glowlet'], stampede: ['glowlet', 'myconid', 'reaver'], n: [24, 50, 60] } },
       elites: { first: 150, every: 60 }, bench: BENCH,
-      bosses: [{ t: 300, id: 'spore' }, { t: 600, id: 'cyclops' }, { t: 900, id: 'king', final: true }],
+      bosses: [{ t: 300, id: 'spore' }, { t: 600, id: 'cyclops' }, { t: 900, id: 'weaver' }, { t: 1200, id: 'king', final: true }],
     },
     {
       id: 'abyss', name: 'The Abyss',
@@ -121,14 +122,14 @@
           eel: [[4, 1], [6, 3], [10, 2], [11, 0]],
           voideye: [[6, 1], [8, 3], [10, 1], [11, 0]],
           stalker: [[5, 2], [7, 3], [11, 3]],
-          horror: [[5, 0.6], [8, 1], [10, 2], [12, 3]],
+          horror: [[5, 0.6], [8, 1], [10, 2], [12, 3], [15, 3], [18, 3.9]],
           riftcaller: [[9, 0.5], [10, 2]],
-          colossus: [[10, 0.6], [11, 1], [13, 1.5]],
+          colossus: [[10, 0.6], [11, 1], [13, 1.5], [15, 1.5], [18, 2]],
         },
-        { 2: { jelly: 3 }, 4: { voidwraith: 2 }, 6: { stalker: 3 }, 8: { voideye: 3 }, 11: { colossus: 1 }, 13: { horror: 2 } }),
-      events: { flock: { id: 'starspawn', first: 40, every: 18, n: [8, 40] }, swarm: { first: 120, every: 120, ring: ['starspawn'], stampede: ['starspawn', 'shade', 'stalker'], n: [24, 50] } },
+        { 2: { jelly: 3 }, 4: { voidwraith: 2 }, 6: { stalker: 3 }, 8: { voideye: 3 }, 11: { colossus: 1 }, 13: { horror: 2 }, 16: { colossus: 1 }, 18: { horror: 2 } }),
+      events: { flock: { id: 'starspawn', first: 40, every: 18, n: [8, 40, 52] }, swarm: { first: 120, every: 120, ring: ['starspawn'], stampede: ['starspawn', 'shade', 'stalker'], n: [24, 50, 60] } },
       elites: { first: 150, every: 60 }, bench: BENCH,
-      bosses: [{ t: 300, id: 'samurai' }, { t: 600, id: 'weaver' }, { t: 900, id: 'wickeater', final: true }],
+      bosses: [{ t: 300, id: 'samurai' }, { t: 600, id: 'weaver' }, { t: 900, id: 'twins' }, { t: 1200, id: 'wickeater', final: true }],
     },
   ];
   ED.STAGE_IDS = ED.STAGES.map(s => s.id);

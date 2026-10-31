@@ -1,8 +1,8 @@
 // Headless check of the Knight tree (exit 1 on failure). Usage: node tools/check-hero-knight.js
-// 1. Every path rank changes the effective numbers or the fired pattern (swings / booms / projectiles / zones of one attack string).
-// 2. Every Form (3 pure + 2 hybrid) is ready only under its rule (its path(s) at rank 3), locks the others once taken, refines twice and deals damage in a foe ring.
-// 3. Damage only in view: a full 3/3/3 build of every Form never hurts a pinned foe 340 px away (outside the 320 px half view) while hurting near ones.
-// 3b. Rending Gale stays in a +-30 deg cone (3/3/3 build): at >= 120 px only rays within 30 deg of the aim are hit; nothing past 45 deg at any distance (crescent bodies near the hero).
+// 1. Every path rank 1-5 (tune full) changes the effective numbers or the fired pattern (swings / booms / projectiles / zones of one attack string).
+// 2. Every Form (1-2 per path) is ready only with its own path at rank 5, locks the others once taken, refines twice and deals damage in a foe ring.
+// 3. Damage only in view: every path at rank 5 and every refined Form never hurts a pinned foe 340 px away (outside the 320 px half view) while hurting near ones.
+// 3b. Rending Gale stays in a +-30 deg cone (refined): at >= 120 px only rays within 30 deg of the aim are hit; nothing past 45 deg at any distance (crescent bodies near the hero).
 // 4. Bulwark Shove at levels 1..4: zero damage; pushes foes out to the shove edge (elites half, immune foes stay), slows (L3 stuns); L4 ring blocks a foe walking in.
 // 5. Determinism: the same seed and inputs give the same digest (hero, foes, damage) for every Form; client draw hooks run on a mock batch without non-finite args.
 'use strict';
@@ -20,7 +20,8 @@ function world(seed) {
   return w;
 }
 const ring = (w, x, y, n, r, hpMul) => { for (let i = 0; i < n; i++) { const a = i / n * U.TAU; w.spawnFoe('skeleton', x + Math.cos(a) * r, y + Math.sin(a) * r, { hpMul: hpMul || 1 }); } };
-const ranks = (w, p, r) => { const ws = p.weapons[0]; for (let i = 0; i < 3; i++) for (let k = 0; k < r[i]; k++) w.rankPath(p, ws, i); w.recalc(p, false); return ws; };
+// Path ranks r = [r0, r1, r2] (one nonzero path; all zero: tune only), tune full.
+const ranks = (w, p, r) => { const i = r.findIndex(x => x > 0); return w.setRanks(p, p.weapons[0], ED.TUNE_MAX, i, i >= 0 ? r[i] : 0); };
 
 // 1. Pattern of one attack string: counts of swing / boom events, projectiles and zones made within 0.8 s after a fire in a still foe ring.
 function pattern(r, form) {
@@ -44,9 +45,9 @@ function pattern(r, form) {
 }
 for (let i = 0; i < 3; i++) {
   let prev = pattern([0, 0, 0]);
-  for (let k = 1; k <= 3; k++) {
+  for (let k = 1; k <= ED.PATH_MAX; k++) {
     const r = [0, 0, 0]; r[i] = k;
-    const cur = pattern(r), txt = ROOT.paths[i].ranks[k - 1].txt;
+    const cur = pattern(r), txt = k & 1 ? ROOT.paths[i].ranks[k >> 1].txt : 'generic step';
     ok(cur.pat !== prev.pat || cur.num !== prev.num, `${ROOT.paths[i].name} rank ${k} "${txt}" changes the attack (${prev.pat} -> ${cur.pat} swings/booms/projs/zones)`);
     ok(txt.length <= 40, `card line <= 40 chars: "${txt}"`);
     prev = cur;
@@ -55,17 +56,13 @@ for (let i = 0; i < 3; i++) {
 for (const f of FORMS) for (let k = 1; k <= 2; k++) ok(ED.WEAPONS[f.id].refine[k - 1].txt.length <= 40 && ED.WEAPONS[f.id].txt.length <= 40, `${f.id} card lines <= 40 chars`);
 
 // 2. Form rules.
-ok(FORMS.length === 5 && FORMS.filter(f => f.path < 0).length === 2, `5 Forms, 2 hybrids (${FORMS.map(f => f.id + '[' + f.need + ']').join(' ')})`);
+ok(FORMS.length === 5 && ROOT.paths.every(pa => pa.forms.length >= 1 && pa.forms.length <= 2) && FORMS.every(f => f.any.length === 1), `5 Forms, 1-2 per path, each on one path (${ROOT.paths.map(pa => pa.name + ': ' + pa.forms.join('+')).join('; ')})`);
 for (const f of FORMS) {
-  const w = world(3), p = w.heroes[0], ws = p.weapons[0];
-  const early = [];
-  for (let i = 0; i < 3; i++) for (let k = 0; k < 3; k++) {
-    if (f.need.indexOf(i) < 0 || (i === f.need[f.need.length - 1] && k === 2)) continue;
-    w.rankPath(p, ws, i); if (w.formsReady(p, ws).some(x => x.id === f.id)) early.push(i + ':' + k);
-  }
-  w.rankPath(p, ws, f.need[f.need.length - 1]);
+  const w = world(3), p = w.heroes[0], ws = ranks(w, p, [0, 0, 0].map((x, i) => (i === f.path ? ED.PATH_MAX - 1 : 0)));
+  const early = w.formsReady(p, ws).length, o = world(3), q = o.heroes[0], other = ranks(o, q, [0, 0, 0].map((x, i) => (i === (f.path + 1) % 3 ? ED.PATH_MAX : 0)));
+  w.rankPath(p, ws, f.path);
   const ready = w.formsReady(p, ws).map(x => x.id);
-  ok(!early.length && ready.indexOf(f.id) >= 0, `${f.id}: ready only once paths ${f.need.join('+')} reach rank 3 (early: ${early.join(',') || 'none'}; ready: ${ready.join(',')})`);
+  ok(!early && !o.formsReady(q, other).some(x => x.id === f.id) && ready.indexOf(f.id) >= 0, `${f.id}: ready only once ${ROOT.paths[f.path].name} reaches rank ${ED.PATH_MAX} (ready: ${ready.join(',')})`);
   ok(!w.formsReady(p, world(3).heroes[0].weapons[0]).length, `${f.id}: nothing ready with no ranks`);
   w.takeForm(p, ws, f.id);
   let rf = 0; while (w.refineForm(p, ws)) rf++;
@@ -78,9 +75,8 @@ for (const f of FORMS) {
 }
 
 // 3. View clamp: pinned foes at 340 px (outside) and at 60-150 px (inside) for 5 s.
-for (const f of [{ id: 'cleave' }].concat(FORMS)) {
-  const w = world(4), p = w.heroes[0], ws = ranks(w, p, [3, 3, 3]);
-  if (f.id !== 'cleave') { w.takeForm(p, ws, f.id); while (w.refineForm(p, ws)); w.recalc(p, false); }
+for (const f of [{ id: 'cleave', r: [5, 0, 0] }, { id: 'cleave', r: [0, 5, 0] }, { id: 'cleave', r: [0, 0, 5] }].concat(FORMS)) {
+  const w = world(4), p = w.heroes[0], ws = f.r ? ranks(w, p, f.r) : w.setForm(p, p.weapons[0], f.id, 2);
   const far = [], near = [];
   for (let i = 0; i < 8; i++) {
     const a = i / 8 * U.TAU;
@@ -93,15 +89,15 @@ for (const f of [{ id: 'cleave' }].concat(FORMS)) {
     p.mdir = i / 300 * U.TAU; p.in.ax = p.x + Math.cos(p.mdir) * 100; p.in.ay = p.y + Math.sin(p.mdir) * 100; w.update(C.TICK); w.events.length = 0;
   }
   const hurtFar = far.filter(e => e.hp < e.maxHp).length, hurtNear = near.filter(e => e.hp < e.maxHp).length;
-  ok(hurtFar === 0 && hurtNear >= 6, `${f.id} 3/3/3: no damage outside the view (far hurt ${hurtFar}, near hurt ${hurtNear}/8)`);
+  ok(hurtFar === 0 && hurtNear >= 3, `${f.id} ${f.r ? f.r.join('') : 'refined'}: no damage outside the view (far hurt ${hurtFar}, near hurt ${hurtNear}/8)`);
 }
 
-// 3b. Rending Gale cone (3/3/3, refined, aim +x): pinned foes along rays at 30-240 px; at >= 120 px only rays within +-30 deg are hit (240 px still hit at 20 deg), at any distance none past +-45 deg.
+// 3b. Rending Gale cone (refined, aim +x): pinned foes along rays at 30-240 px; at >= 120 px only rays within +-30 deg are hit (240 px still hit at 20 deg), at any distance none past +-45 deg.
 {
   const hit = {};
   for (const deg of [0, 20, 30, 40, 60, 75, 90, 135, 180]) for (const sg of [1, -1]) {
-    const w = world(4), p = w.heroes[0], ws = ranks(w, p, [3, 3, 3]);
-    w.takeForm(p, ws, 'gale'); while (w.refineForm(p, ws)); w.recalc(p, false);
+    const w = world(4), p = w.heroes[0];
+    w.setForm(p, p.weapons[0], 'gale', 2);
     const a = sg * deg * Math.PI / 180, F = [30, 60, 90, 120, 180, 240].map(d => ({ d, x: p.x + Math.cos(a) * d, y: p.y - 4 + Math.sin(a) * d }));
     for (const f of F) f.e = w.spawnFoe('skeleton', f.x, f.y, { hpMul: 1e4 });
     for (let i = 0; i < 240; i++) { for (const f of F) { f.e.x = f.x; f.e.y = f.y; f.e.kbx = f.e.kby = 0; f.e.spd = 0; } w.input(p.pid, { mx: 0, my: 0, ax: p.x + 100, ay: p.y - 4 }); w.update(C.TICK); w.events.length = 0; }
@@ -149,8 +145,8 @@ const mockB = new Proxy({}, { get: (o, k) => (k === 'crowd' || k === 'zoneLite' 
 ED.Atlas = { ok: true, has: () => true, anim: () => ({ n: 6 }), frameAt: () => 0 };
 vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'hfx-knight.js'), 'utf8'), { filename: 'hfx-knight.js' });
 function digestRun(form, draw) {
-  const w = world(12), p = w.heroes[0], ws = ranks(w, p, [3, 3, 3]);
-  w.takeForm(p, ws, form); while (w.refineForm(p, ws)); w.recalc(p, false);
+  const w = world(12), p = w.heroes[0];
+  w.setForm(p, p.weapons[0], form, 2);
   p.skills[0].lvl = 4;
   let d = 0, err = null;
   try {

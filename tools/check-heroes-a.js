@@ -1,7 +1,7 @@
 // Headless check for heroes Knight, Ranger, Pyro, Necro (exit 1 on failure). Usage: node tools/check-heroes-a.js
-// Per hero (god cheat, from 4:00 so the horde is dense): 4 phases of 15 s with skill level 1..4 and 0 / 3 / 6 / 9 path ranks (path 0 first), then 20 s in the path-0 Form, refined twice.
+// Per hero (god cheat, from 4:00 so the horde is dense): 4 phases of 15 s with skill level 1..4 and no tune / path 0 at rank 1 / 3 / 5 (tune full), then 20 s in path 0's first Form, refined twice.
 // Q is held every tick (cast on cooldown), aimed at the nearest foe; fodder rings keep targets near the hero. Each phase: no exception, the skill casts, the weapon deals damage, the skill none.
-// Extras: Bone Shard / Bone Storm on other heroes (the slain rise for them too), Cleave aims inside the facing cone (no foe: along it), path shape flags reach the effective numbers,
+// Extras: Bone Shard / Bone Storm on other heroes (the slain rise for them too), Cleave aims inside the facing cone (no foe: along it), each path's shape flags reach the effective numbers,
 // skills carry no damage, necro minions rise / obey the cap, same seed -> same digest, no NaN positions.
 'use strict';
 const { load } = require('./sim.js');
@@ -16,15 +16,15 @@ function drive(w, p, tick) {
   p.offer = null; p.pend = 0; // no card picks: the phase setup owns the build
   w.input(p.pid, { mx: Math.cos(a) * 0.6, my: Math.sin(a) * 0.6, ax: e ? e.x : p.x + 80, ay: e ? e.y : p.y, q: true });
 }
-// Sets skill levels to L, spends `ranks` more path ranks (path 0 first); form: takes the path-0 Form and refines it twice.
-function setup(w, p, L, ranks, form) {
+// Sets skill levels to L and path 0 to rank `rank` (tune full; 0: no change); form: takes path 0's first Form and refines it twice.
+function setup(w, p, L, rank, form) {
   for (const sk of p.skills) sk.lvl = L;
-  const ws = p.weapons[0], def = ED.WEAPONS[ED.HEROES[p.cls].sig];
+  const ws = p.weapons[0], def = ED.WEAPONS[ED.HEROES[p.cls].sig], fid = def.paths[0].forms[0];
   if (form) {
     const ready = w.formsReady(p, ws).map(f => f.id);
-    ok(ready.indexOf(def.paths[0].form) >= 0, `${p.cls}: ${def.paths[0].form} is ready with path 0 at rank 3 (ready: ${ready.join(',')})`);
-  }
-  w.setRanks(p, ws, ranks, form);
+    ok(ready.indexOf(fid) >= 0, `${p.cls}: ${fid} is ready with path 0 at rank ${ED.PATH_MAX} (ready: ${ready.join(',')})`);
+    w.setForm(p, ws, fid, 2);
+  } else if (rank) w.setRanks(p, ws, ED.TUNE_MAX, 0, rank);
 }
 // Keeps targets near the hero: 30 foes on a 110-200 px ring once a second while fewer than 120 are within 250 px.
 const FODDER = ED.FOE_IDS.find(id => !ED.FOES[id].boss && !ED.FOES[id].brute && !ED.FOES[id].range);
@@ -62,7 +62,7 @@ function runHero(cls, seed) {
   const w = new ED.World({ seed, stage: 0, players: [{ pid: 'p1', name: 'T', slot: 0, cls, meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
   w.time = 240;
   const p = w.heroes[0], out = { digest: 0, maxMin: 0, w, p };
-  for (let L = 1; L <= 4; L++) { setup(w, p, L, L > 1 ? 3 : 0, false); phase(w, p, 15, `skill lvl ${L}, ${p.weapons[0].id} ranks ${p.weapons[0].pr.join('')}`, out); }
+  for (let L = 1; L <= 4; L++) { setup(w, p, L, [0, 1, 3, 5][L - 1], false); phase(w, p, 15, `skill lvl ${L}, ${p.weapons[0].id} tune ${p.weapons[0].tune} ranks ${p.weapons[0].pr.join('')}`, out); }
   setup(w, p, 4, 0, true);
   phase(w, p, 20, `Form ${p.weapons[0].id} refine ${p.weapons[0].fl}`, out);
   return out;
@@ -70,8 +70,8 @@ function runHero(cls, seed) {
 
 for (const cls of HEROES) {
   const r = runHero(cls, 4242);
-  const h = ED.HEROES[cls], def = ED.WEAPONS[h.sig], fd = ED.WEAPONS[def.paths[0].form], ws = r.p.weapons[0];
-  ok(ws.id === fd.id && ws.evo && ws.fl === 2 && ws.pr.join('') === '333' && ws.lvl === 13, `${cls}: signature took the Form ${fd.id}, refined twice (lvl ${ws.lvl})`);
+  const h = ED.HEROES[cls], def = ED.WEAPONS[h.sig], fd = ED.WEAPONS[def.paths[0].forms[0]], ws = r.p.weapons[0];
+  ok(ws.id === fd.id && ws.evo && ws.fl === 2 && ws.pr.join('') === '500' && ws.tune === 5 && ws.lvl === 14, `${cls}: signature took the Form ${fd.id}, refined twice (lvl ${ws.lvl})`);
   ok(def.paths.length === 3 && def.paths.every(pa => pa.id && pa.name && pa.ranks.length === 3 && pa.ranks.every(l => l.txt.length <= 40)) && !def.levels && !def.pair && !def.evo,
     `${cls}: ${def.id} has 3 paths x 3 rank cards, lines <= 40 chars, no levels / pair / evo`);
   ok(fd.form && fd.evolved && fd.from === def.id && fd.refine.length === 2 && fd.refine.every(l => l.txt.length <= 40) && fd.txt.length <= 40, `${cls}: Form ${fd.id} from ${def.id}, 2 refine cards`);
@@ -90,7 +90,7 @@ for (const cls of HEROES) {
 for (const [cls, id] of [['cleric', 'boneshard'], ['bell', 'bonestorm']]) {
   const w = new ED.World({ seed: 9, stage: 0, players: [{ pid: 'p1', cls, meta: { shop: {}, sigs: [] } }], cheats: { god: true } }), p = w.heroes[0];
   w.time = 240;
-  p.weapons.length = 0; const ws = w.addWeapon(p, id); w.setRanks(p, ws, 9, false);
+  p.weapons.length = 0; const ws = w.addWeapon(p, id); w.setRanks(p, ws, ED.TUNE_MAX, 0, ED.PATH_MAX);
   let err = null, maxMin = 0;
   try { for (let i = 0; i < 900; i++) { drive(w, p, i); if (i % 60 === 0) feed(w, p); w.update(C.TICK); w.events.length = 0; maxMin = Math.max(maxMin, ED.Necro.liveMinions(p)); } } catch (e) { err = e; }
   ok(!err && p.dealt[id] > 0 && ws.root === 'boneshard', `${cls} carrying ${id}: dealt ${Math.round(p.dealt[id] || 0)}` + (err ? ': ' + err.stack : ''));
@@ -123,7 +123,7 @@ for (const [cls, wid] of [['ranger', 'longbow'], ['pyro', 'firebolt'], ['necro',
 }
 {
   const w = new ED.World({ seed: 3, stage: 0, players: [{ pid: 'p1', cls: 'cleric' }], cheats: { god: true } }), p = w.heroes[0], ws = p.weapons[0];
-  w.foes.length = 0; w.updateSpawner = () => {}; w.rankPath(p, ws, 2); w.recalc(p, false);
+  w.foes.length = 0; w.updateSpawner = () => {}; w.setRanks(p, ws, ED.TUNE_MAX, 2, 1);
   p.in.ax = p.x; p.in.ay = p.y + 100; ws.cd = 99;
   let z = null; for (let i = 0; i < 60 && !z; i++) { w.update(C.TICK); w.events.length = 0; z = w.zones.find(o => !o.dead && o.k === 'beam'); }
   ok(z && Math.abs(U.angDiff(z.a, Math.PI / 2 - 1.9 / 2)) < 0.15, `smite: the Lance sweep starts centred on the cursor dir with no foe (a ${z && z.a.toFixed(2)})`);
@@ -131,17 +131,23 @@ for (const [cls, wid] of [['ranger', 'longbow'], ['pyro', 'firebolt'], ['necro',
   const pl = w.zones.filter(o => !o.dead && o.wid === 'smite' && o.k !== 'beam');
   ok(pl.length > 0 && pl.every(o => o.x < p.x - 20 && Math.abs(o.y - p.y) < 2), `smite: with no foe, pillars stride out along the cursor dir (${pl.map(o => Math.round(o.x - p.x) + ',' + Math.round(o.y - p.y)).join(' ')})`);
 }
-// Path shape flags reach the effective numbers (every path at rank 3, no Form).
+// Path shape flags reach the effective numbers (each path at rank 5 in its own world, no Form); skills at level 4.
 {
-  const w = new ED.World({ seed: 1, stage: 0, players: [{ pid: 'p1', cls: 'knight' }, { pid: 'p2', cls: 'ranger', slot: 1 }, { pid: 'p3', cls: 'pyro', slot: 2 }, { pid: 'p4', cls: 'necro', slot: 3 }], cheats: { god: true } });
-  const [k, r, py, n] = w.heroes;
-  for (const p of w.heroes) { w.setRanks(p, p.weapons[0], 9, false); for (const sk of p.skills) sk.lvl = 4; }
+  const four = (i) => {
+    const v = new ED.World({ seed: 1, stage: 0, players: [{ pid: 'p1', cls: 'knight' }, { pid: 'p2', cls: 'ranger', slot: 1 }, { pid: 'p3', cls: 'pyro', slot: 2 }, { pid: 'p4', cls: 'necro', slot: 3 }], cheats: { god: true } });
+    for (const p of v.heroes) { if (i >= 0) v.setRanks(p, p.weapons[0], ED.TUNE_MAX, i, ED.PATH_MAX); for (const sk of p.skills) sk.lvl = 4; }
+    return v;
+  };
+  const w = four(-1), [k, r, py, n] = w.heroes, P = [0, 1, 2].map(i => four(i).heroes);
   const S = (p) => ED.Stats.weapon(p, 0), N = (p, i) => ED.Stats.skill(p, i);
-  ok(S(k).back && S(k).spin && S(k).ret && S(k).slam === 1 && S(k).wave === 3 && S(k).n === 2, 'knight: Cleave 333 swings back, spins, slams, 3 returning waves, 2 swings');
-  ok(S(r).heavy === 2 && S(r).two && S(r).n === 5 && S(r).pierce === 12 && S(r).bounce === 4 && S(r).kshot === 1, 'ranger: Longbow 333 heavy every 2nd, two targets, 5 arrows, pierce 12, 4 bounces, kill shots');
-  ok(S(py).shells === 2 && S(py).cluster === 4 && S(py).combust === 3 && S(py).cemb === 3 && S(py).spread === 1 && S(py).flare > 0, 'pyro: Fire Bolt 333 shells 2, bomblets 4, death blasts, embers 3, leaps, flare');
-  ok(S(n).cap === 5 && S(n).raise === 2 && S(n).over === 4 && S(n).split === 3 && S(n).homing === 3 && S(n).n === 4 && S(n).pools === 2 && S(n).pburst === 1,
-    'necro: Bone Shard 333 cap 5, raise 2, 4 over the cap, 4 homing shards splitting in 3, 2 pools that burst');
+  ok(S(P[0][0]).slam === 1 && S(P[1][0]).back && S(P[1][0]).spin && S(P[1][0]).n === 2 && S(P[2][0]).ret && S(P[2][0]).wave === 3 && !S(P[0][0]).back && !S(P[1][0]).wave,
+    'knight: Greatblade 5 slams; Whirl 5 swings back, spins, 2 swings; Edge Wave 5 3 returning waves; no flag from another path');
+  ok(S(P[0][1]).two && S(P[0][1]).n === 5 && S(P[1][1]).heavy === 2 && S(P[1][1]).pierce === S(r).pierce + 4 && S(P[2][1]).bounce === 4 && S(P[2][1]).kshot === 1,
+    'ranger: Spread 5 two targets, 5 arrows; Piercer 5 heavy every 2nd, pierce +4; Ricochet 5 4 bounces, kill shots');
+  ok(S(P[0][2]).flare > 0 && S(P[1][2]).shells === 2 && S(P[1][2]).cluster === 4 && S(P[2][2]).combust === 3 && S(P[2][2]).cemb === 3 && S(P[2][2]).spread === 1,
+    'pyro: Blaze 5 flare; Mortar 5 shells 2, bomblets 4; Combustion 5 death blasts, embers 3, leaps');
+  ok(S(P[0][3]).cap === S(n).cap + 2 && S(P[0][3]).raise === 2 && S(P[0][3]).over === 4 && S(P[1][3]).split === 3 && S(P[1][3]).homing === 3 && S(P[1][3]).n === 4 && S(P[2][3]).pools === 2 && S(P[2][3]).pburst === 1,
+    'necro: Legion 5 cap +2, raise 2, 4 over the cap; Shards 5 4 homing shards splitting in 3; Plague 5 2 pools that burst');
   ok(N(k, 0).stun === 1 && N(k, 0).ring === 3 && Math.abs(N(k, 0).r - 156) < 1e-9, 'knight: Bulwark Shove wider, stuns, leaves a ring');
   ok(N(r, 0).dist === 220 && N(r, 0).charges === 2 && N(r, 0).caltrops === 1, 'ranger: Vault farther, 2 charges, caltrops');
   ok(Math.abs(N(py, 0).r - 182) < 1e-9 && N(py, 0).flee === 3.5 && N(py, 0).gem === 200, 'pyro: Flashpoint wider, longer flee, gem pull');

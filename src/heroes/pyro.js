@@ -1,4 +1,4 @@
-// Pyro: hero data, signature Fire Bolt (3 paths x 3 ranks: Blaze, Mortar, Combustion), Forms Inferno / Firestorm / Wildfire (pure) and Pyre / Napalm (hybrid), Q Flashpoint (3 skill levels).
+// Pyro: hero data, signature Fire Bolt (3 paths x 3 ranks: Blaze, Mortar, Combustion), Forms Inferno (Blaze), Firestorm + Napalm (Mortar), Wildfire + Pyre (Combustion), Q Flashpoint (3 skill levels).
 // Role: area denial. Instant hits are weak; fire pools, burns and death blasts carry the damage. Every damage source credits the slot's current id (ws.id).
 // Ground fire (pools 'firepool', pyres 'pyre', fire lines 'napalm') lives in ws.st.pools (ring of live zones, refs checked by id), at most POOL_MAX + S.pools per hero; a new one past the cap ends the oldest.
 // Shared by the root and every Form (impl.tick / impl.kill): Mortar shells (S.shells, Forms with def.shellForm lob their own), death blasts of burning foes (S.combust) and fire leaps (S.spread).
@@ -187,20 +187,19 @@
     id: 'firebolt', name: 'Fire Bolt', icon: 'weapon.firestaff', look: 'fireball', sig: 'pyro', mode: 'cursor', txt: 'Bolt that leaves a fire pool',
     base: { dmg: 15, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 230, dur: 2.5, knock: 20, range: RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     paths: [
-      { id: 'blaze', name: 'Blaze', form: 'inferno', ranks: [
+      { id: 'blaze', name: 'Blaze', forms: ['inferno'], ranks: [
         { mods: { area: 0.3 }, txt: 'Fire bursts and pools 30% wider' },
         { mods: { dur: 0.6, pools: 4 }, txt: 'Fire pools last 60% longer' },
         { mods: { flare: 0.8, dmg: 0.2 }, txt: 'Pools flare as they die, +20% damage' }] },
-      { id: 'mortar', name: 'Mortar', form: 'firestorm', ranks: [
+      { id: 'mortar', name: 'Mortar', forms: ['firestorm', 'napalm'], ranks: [
         { mods: { shells: 1 }, txt: 'Lobs a shell at the thickest crowd' },
         { mods: { shells: 1 }, txt: '+1 shell' },
         { mods: { cluster: 4 }, txt: 'Shells scatter 4 burning bomblets' }] },
-      { id: 'combust', name: 'Combustion', form: 'wildfire', ranks: [
+      { id: 'combust', name: 'Combustion', forms: ['wildfire', 'pyre'], ranks: [
         { mods: { combust: 3 }, txt: 'Burning foes explode when they die' },
         { mods: { cemb: 3 }, txt: 'Death blasts fling 3 burning embers' },
         { mods: { spread: 1, dmg: 0.1 }, txt: 'Fire leaps between foes, +10% damage' }] },
-    ],
-    hybrids: [{ need: [0, 2], form: 'pyre' }, { need: [0, 1], form: 'napalm' }],
+    ],
   }, impl((w, p, ws, S) => fan(w, p, ws, S, BOLT, 0.25)));
 
   // ---------------- Inferno (Blaze) ----------------
@@ -284,7 +283,7 @@
     ],
   }, impl((w, p, ws, S) => fan(w, p, ws, S, SEED, 0.3)));
 
-  // ---------------- Pyre (Blaze + Combustion) ----------------
+  // ---------------- Pyre (Combustion) ----------------
   // Bolts plant pyres (26 px x area, smoulder 0.15 x dmg per second) that erupt after 1.2 s: a blast (1.4 x radius, dmg x (1 + S.flare / 2), burn) that leaves a 0.7 x fire pool.
   const ERUPT = { look: 'fire', burn: null, knock: 120 };
   const pyreEnd = (w, z) => {
@@ -310,7 +309,7 @@
     ],
   }, impl((w, p, ws, S) => fan(w, p, ws, S, PBOLT, 0.45)));
 
-  // ---------------- Napalm (Blaze + Mortar) ----------------
+  // ---------------- Napalm (Mortar) ----------------
   // S.n + S.shells canisters lob onto the densest cluster and random foes within SHELL_RANGE (no foe: 120 px out along the cursor dir, extras fanned 0.5 rad); each splashes (26 px x area, 0.6 x dmg) and leaves a fire line
   // (90 px x area long, 16 px x area wide, across the throw, 0.45 x dmg per second, 1.3 x S.dur s); S.cluster bomblets.
   const LINE = { team: 0, p: null, wid: '', x: 0, y: 0, r: 0, a: 0, len: 0, w: 0, dur: 0, dps: 0, tick: 0.5, burn: null, look: 'napalm', onEnd: null };

@@ -1,11 +1,11 @@
 // Headless bot run: one solo hero driven by tools/bot-brain.js through a whole survival run, sped up (no rendering). Deterministic per cfg.
-// API: const { runOne } = require('./bot.js'); runOne({ stage: 0..2, cls, seed, meta: 'none' | 'max', maxTime: s (default 18 * 60) }) -> result (sync). The hero holds only its signature.
+// API: const { runOne } = require('./bot.js'); runOne({ stage: 0..2, cls, seed, meta: 'none' | 'max', maxTime: s (default 23 * 60) }) -> result (sync). The hero holds only its signature.
 // meta (Bot.metaFor): 'max' = every ED.SHOP rank at max (a full profile); 'none' = an empty profile.
 // result: { stage, stageId, cls, seed, meta, won, time, level, kills, gold, death (killer / 'timeout' / null), bosses: [{ id (stage boss id), at (killed), spawn }], dealt: { id: dmg }, taken: { cause: dmg }, hurt (total taken),
 //   build: { weapons: [{ id, lvl, evo, pr: [path ranks], fl (refine) }], passives: [{ id, lvl }] }, evolved: { rootId: s (Form taken) }, hpLow (min HP fraction), ticks, ms (wall clock), skill,
 //   botMs (think() time, sampled every 16th tick x 16) }.
 // Optional cfg: skill 0..1 (bot reflexes, default 1).
-// CLI: node tools/bot.js --stage 0 --hero knight [--seed 1] [--meta max] [--max 1080] [--skill 0.5]  -> prints the result JSON and ms per game minute.
+// CLI: node tools/bot.js --stage 0 --hero knight [--seed 1] [--meta max] [--max 1380] [--skill 0.5]  -> prints the result JSON and ms per game minute.
 'use strict';
 const { load } = require('./sim.js');
 const Bot = require('./bot-brain.js');
@@ -22,7 +22,7 @@ function cause(src) {
 
 function runOne(cfg) {
   const t0 = Date.now();
-  cfg = Object.assign({ stage: 0, cls: 'knight', seed: 1, meta: 'none', maxTime: 18 * 60, skill: 1 }, cfg || {});
+  cfg = Object.assign({ stage: 0, cls: 'knight', seed: 1, meta: 'none', maxTime: 23 * 60, skill: 1 }, cfg || {});
   const ED = load(), C = ED.CONST;
   const w = new ED.World({ seed: cfg.seed, stage: cfg.stage, players: [{ pid: 'p1', name: 'Bot', slot: 0, cls: cfg.cls, meta: Bot.metaFor(ED, cfg.meta) }] });
   const p = w.heroes[0];
@@ -63,7 +63,7 @@ function runOne(cfg) {
     won, time: Math.round(w.time * 100) / 100, level: w.level, kills: w.kills, gold: w.gold,
     death: won ? null : w.state === 'lost' ? lastCause || 'unknown' : 'timeout',
     bosses, dealt: {}, taken, hurt: 0,
-    build: { weapons: p.weapons.map(ws => ({ id: ws.id, lvl: ws.lvl, evo: !!ws.evo, pr: ws.pr.slice(), fl: ws.fl })), passives: p.passives.map(ps => ({ id: ps.id, lvl: ps.lvl })) },
+    build: { weapons: p.weapons.map(ws => ({ id: ws.id, lvl: ws.lvl, evo: !!ws.evo, tune: ws.tune, path: ws.path, pr: ws.pr.slice(), fl: ws.fl })), passives: p.passives.map(ps => ({ id: ps.id, lvl: ps.lvl })) },
     evolved, hpLow: Math.round(hpLow * 1000) / 1000, ticks: w.tick, ms: 0, botMs: Math.round(Number(botNs) / 1e6),
   };
   for (const k in p.dealt) r.dealt[k] = Math.round(p.dealt[k]);
@@ -75,7 +75,7 @@ module.exports = { runOne, metaFor: Bot.metaFor };
 
 if (require.main === module) {
   const a = process.argv.slice(2), arg = (k, d) => { const i = a.indexOf('--' + k); return i >= 0 && i + 1 < a.length ? a[i + 1] : d; };
-  const cfg = { stage: +arg('stage', 0), cls: arg('hero', 'knight'), seed: +arg('seed', 1), meta: arg('meta', 'none'), maxTime: +arg('max', 18 * 60), skill: +arg('skill', 1) };
+  const cfg = { stage: +arg('stage', 0), cls: arg('hero', 'knight'), seed: +arg('seed', 1), meta: arg('meta', 'none'), maxTime: +arg('max', 23 * 60), skill: +arg('skill', 1) };
   const r = runOne(cfg);
   console.log(JSON.stringify(r, null, 1));
   console.log(`ms per game minute: ${(r.ms / Math.max(1e-6, r.time / 60)).toFixed(0)} (${r.ms} ms for ${(r.time / 60).toFixed(2)} min)`);

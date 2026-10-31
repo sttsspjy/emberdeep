@@ -1,4 +1,4 @@
-// Knight (brawler): hero data, signature Cleave (3 paths x 3 ranks), 5 Forms (Colossus Blade, Whirlwind, Rending Gale; hybrids Earthsplitter, Blade Tempest), Q Bulwark Shove.
+// Knight (brawler): hero data, signature Cleave (3 paths x 3 shape ranks), 5 Forms (Greatblade: Colossus Blade, Earthsplitter; Whirl: Whirlwind; Edge Wave: Rending Gale, Blade Tempest), Q Bulwark Shove.
 // Zones (networked, drawn by hfx-knight.js): 'shove' / 'bulwark' (Q); 'crack' team-0 warn lines that erupt at dur; 'cut' lingering wind lines (len = full length, drawn growing).
 (function (ED) {
   'use strict';
@@ -143,20 +143,20 @@
     id: 'cleave', name: 'Cleave', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', txt: 'Sword arc toward your cursor',
     base: { dmg: 28, cd: 1.1, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 120, range: 56, arc: 2.0, wave: 0, stag: 0, slam: 0 },
     paths: [
-      { id: 'great', name: 'Greatblade', form: 'colossus', ranks: [
+      { id: 'great', name: 'Greatblade', forms: ['colossus', 'earthsplitter'], ranks: [
         { mods: { area: 0.3, cd: 0.15, stag: 0.3 }, txt: 'Bigger, slower swings that stagger' },
         { mods: { arc: 0.9, dmg: 0.3 }, txt: 'Much wider arc, +30% damage' },
         { mods: { slam: 1 }, txt: 'Each swing ends in a ground slam' }] },
-      { id: 'whirl', name: 'Whirl', form: 'whirlwind', ranks: [
+      { id: 'whirl', name: 'Whirl', forms: ['whirlwind'], ranks: [
         { mods: { back: true }, txt: 'Also swings behind you' },
         { mods: { n: 1 }, txt: '+1 swing per attack' },
         { mods: { spin: true }, txt: 'Last swing becomes a full spin' }] },
-      { id: 'edge', name: 'Edge Wave', form: 'gale', ranks: [
+      { id: 'edge', name: 'Edge Wave', forms: ['gale', 'tempest'], ranks: [
         { mods: { wave: 1 }, txt: 'Swings fling a crescent wave' },
         { mods: { wave: 2 }, txt: '+2 waves in a fan' },
         { mods: { ret: true, dmg: 0.2 }, txt: 'Waves fly back to you, +20% damage' }] },
     ],
-    hybrids: [{ need: [0, 1], form: 'earthsplitter' }, { need: [1, 2], form: 'tempest' }], noAmount: true,
+    noAmount: true,
   }, IMPL);
   // Whirlwind (Whirl): 360 spins (60 px at Form base), hits swirl foes around and out from the hero, the cooldown runs 1.3x while moving.
   ED.addWeapon({
@@ -185,7 +185,7 @@
       { mods: { cutT: 1.0 }, txt: 'Wind cuts linger twice as long' },
     ], noAmount: true,
   }, IMPL);
-  // Earthsplitter (Greatblade + Whirl): heavy spins; every quake-th attack fissures radiate all around and the ground slams.
+  // Earthsplitter (Greatblade): heavy spins; every quake-th attack fissures radiate all around and the ground slams.
   ED.addWeapon({
     id: 'earthsplitter', name: 'Earthsplitter', icon: 'weapon.alt.double_axe', sig: 'knight', mode: 'around', evolved: true, form: true, from: 'cleave', txt: 'Heavy spins; every 3rd splits the earth',
     base: { dmg: 25, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 160, range: 46, arc: TAU, wave: 0, stag: 0.3, slam: 0, quake: 3, fiss: 8 },
@@ -194,7 +194,7 @@
       { mods: { quake: -1 }, txt: 'Splits the earth every 2nd spin' },
     ], noAmount: true,
   }, IMPL);
-  // Blade Tempest (Whirl + Edge Wave): each attack releases blades that spiral out around the hero (with back: a second ring turning the other way).
+  // Blade Tempest (Edge Wave): each attack releases blades that spiral out around the hero (with back: a second ring turning the other way).
   ED.addWeapon({
     id: 'tempest', name: 'Blade Tempest', icon: 'weapon.alt.double_axe', sig: 'knight', mode: 'around', evolved: true, form: true, from: 'cleave', txt: 'Blades spiral out around you',
     base: { dmg: 11, cd: 1.2, n: 1, pierce: 0, area: 1.2, speed: 0, dur: 0, knock: 120, range: 50, arc: TAU, wave: 0, stag: 0, slam: 0, orbit: 3 },

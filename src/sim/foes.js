@@ -10,16 +10,18 @@
   const SPLIT_ARC = 70 * Math.PI / 180, SPLIT_JIT = 0.08; // splitter children: half-arc half width, angle jitter (rad); sum < 90 deg
 
   W.initFoes = function () { this.foePool = []; };
-  // Contact damage at the current time: 3 at 0:00 rising to 9 at 15:00 (GAME-DESIGN §7), x the stage damage factor.
-  W.contactDmg = function () { return (3 + 6 * Math.min(1, this.time / 900)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
-  // Shot / blast damage factor at the current time: x1 at 0:00 rising to x1.8 at 15:00 (shots 4-9 per hit), x the stage damage factor.
-  W.foeDmgK = function () { return (1 + 0.8 * Math.min(1, this.time / 900)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
+  // Damage curve ramps (GAME-DESIGN §7): early 0..1 over 0:00-15:00, late 0..1 over 15:00-20:00; both hold after.
+  const early = (t) => Math.min(1, t / 900), late = (t) => U.clamp((t - 900) / 300, 0, 1);
+  // Contact damage at the current time: 3 at 0:00 rising to 9 at 15:00 and 11 at 20:00, x the stage damage factor.
+  W.contactDmg = function () { return (3 + 6 * early(this.time) + 2 * late(this.time)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
+  // Shot / blast damage factor at the current time: x1 at 0:00 rising to x1.8 at 15:00 and x2.1 at 20:00 (shots 4-9 per hit at 15:00), x the stage damage factor.
+  W.foeDmgK = function () { return (1 + 0.8 * early(this.time) + 0.3 * late(this.time)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
   // HP of foe def spawned now: def.hp x (1 + g x minutes) x party factor x the stage HP factor; g 0.06 swarm brain, 0.24 boss parts, else 0.15 (GAME-DESIGN §7).
   W.foeHp = function (def) { return def.hp * (1 + (def.ai === 'swarm' ? 0.06 : def.boss ? 0.24 : 0.15) * this.time / 60) * this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1); };
   // Walk speed factor of foes spawned now: 0.8 at 0:00 rising to 1 at 4:00; fixed at spawn, bosses exempt, telegraphed dashes keep their own speed.
   W.foePace = function () { return 0.8 + 0.2 * Math.min(1, this.time / 240); };
-  // Boss HP for a boss due at t s (GAME-DESIGN §8): 1500 x (minute / 5)^2.5 (1500 / 8485 / 23383 at 5 / 10 / 15 min) x party factor x the stage HP factor.
-  ED.bossHp = (t, k) => Math.round(1500 * Math.pow(t / 300, 2) * k); // boss HP at spawn time t s: 1500 x (t / 300)^2; k = party x stage HP factor (GAME-DESIGN §8)
+  // Boss HP for a boss due at t s (GAME-DESIGN §8): 1500 x (t / 300)^2 (1500 / 6000 / 13500 / 24000 at 5 / 10 / 15 / 20 min) x k (party factor x the stage HP factor).
+  ED.bossHp = (t, k) => Math.round(1500 * Math.pow(t / 300, 2) * k);
   W.bossHp = function (t) { return ED.bossHp(t, this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1)); };
 
   // Spawns foe k (id string or FOE_IDX) at (x, y). opts: { elite, hpMul, rush: [dx, dy, s, v] (fly-through: heading (dx, dy) at v px/s, rush time s) }. Returns the foe.

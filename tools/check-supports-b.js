@@ -1,7 +1,8 @@
 // Headless check of supports B: War Axe, Bramble Trail, Glaive, Chain Spark and their Forms (exit 1 on failure). Usage: node tools/check-supports-b.js
-// 1. Each registers as a support (role, 3 paths x 3 ranks all naming one Form, Form with 2 refines, card lines <= 40 chars, an icon in art-src), goes into slot 1 next to the hero weapon and fires.
-// 2. Every rank changes the fired shape (projectiles, reach, zones, foe hits, crits, stuns, moved foes, sizes over 4 s into a still foe grid while walking); the Form changes the 3/3/3 pattern.
-// 3. Damage only in view: a 3/3/3 build and its Form never hurt a pinned foe 340 px away while hurting near ones.
+// 1. Each registers as a support (role, 3 paths x 3 shape ranks all listing one Form, Form with 2 refines, card lines <= 40 chars, an icon in art-src), goes into slot 1 next to the hero weapon and fires.
+// 2. Every shape rank (path rank 1 / 3 / 5, tune full) changes the fired shape (projectiles, reach, zones, foe hits, crits, stuns, moved foes, sizes over 4 s into a still foe grid while walking);
+//    the Form changes the path-0-at-rank-5 pattern.
+// 3. Damage only in view: path 0 at rank 5 and the Form never hurt a pinned foe 340 px away while hurting near ones.
 // 4. Mechanics: the Glaive flies along the cursor past a nearer foe; axe knockback moves normal foes away from the hero but not bosses or knockback-immune brutes; thorn roots hold normal foes, not bosses.
 // 5. Determinism: the same seed and inputs give the same digest; client draw hooks (wfx-b.js) run on a mock batch without non-finite args.
 'use strict';
@@ -20,21 +21,20 @@ function world(seed) {
   w.updateSpawner = function () {}; w.addXp = function () {};
   return w;
 }
-// Support `id` in hero p's next slot with ranks r and (fid) its Form refined fully; the hero weapon is held off by step().
+// Support `id` in hero p's next slot, tune full, shape ranks r (first nonzero path at shape rank k -> path rank 2k - 1; all zero: tune only) or (fid) its Form refined fully;
+// the hero weapon is held off by step().
 const build = (w, p, id, r, fid) => {
-  const ws = w.addWeapon(p, id);
-  for (let i = 0; i < 3; i++) for (let k = 0; k < r[i]; k++) w.rankPath(p, ws, i);
-  if (fid) { w.takeForm(p, ws, fid); while (w.refineForm(p, ws)); }
-  w.recalc(p, false);
-  return ws;
+  const ws = w.addWeapon(p, id), i = r.findIndex(x => x > 0);
+  if (fid) return w.setForm(p, ws, fid, 2);
+  return w.setRanks(p, ws, ED.TUNE_MAX, i, i < 0 ? 0 : 2 * r[i] - 1);
 };
 const step = (w, p) => { p.weapons[0].cd = 1e9; w.update(C.TICK); };
-const formOf = (id) => ED.WEAPONS[id].paths[0].form;
+const formOf = (id) => ED.WEAPONS[id].paths[0].forms[0];
 
 // 1. Registration, slot 1, firing.
 for (const id of IDS) {
   const d = ED.WEAPONS[id], f = d && ED.WEAPONS[formOf(id)];
-  ok(d && d.support && ['horde', 'control', 'lane'].indexOf(d.role) >= 0 && d.paths.length === 3 && d.paths.every(pa => pa.ranks.length === 3 && pa.form === d.paths[0].form), `${id}: support def, role ${d && d.role}, 3 paths x 3 ranks naming ${d && d.paths[0].form}`);
+  ok(d && d.support && ['horde', 'control', 'lane'].indexOf(d.role) >= 0 && d.paths.length === 3 && d.paths.every(pa => pa.ranks.length === 3 && pa.forms.join() === formOf(id)), `${id}: support def, role ${d && d.role}, 3 paths x 3 shape ranks listing ${d && d.paths[0].form}`);
   ok(f && f.support && f.form && f.evolved && f.from === id && f.refine.length === 2, `${id}: Form ${f && f.id} (2 refines)`);
   const lines = [d.txt, f.txt].concat(...d.paths.map(pa => pa.ranks.map(r => r.txt)), f.refine.map(r => r.txt));
   ok(lines.every(s => s.length <= 40), `${id}: card lines <= 40 chars`);
@@ -84,7 +84,7 @@ for (const id of IDS) {
     }
   }
   const a = pattern(id, [3, 3, 3]), b = pattern(id, [3, 3, 3], formOf(id));
-  ok(a !== b, `${id} -> ${formOf(id)}: a new pattern over 3/3/3 (${a} -> ${b})`);
+  ok(a !== b, `${id} -> ${formOf(id)}: a new pattern over path 0 at rank 5 (${a} -> ${b})`);
 }
 
 // 3. Damage only in view.
@@ -98,7 +98,7 @@ for (const id of IDS) for (const fid of ['', formOf(id)]) {
     p.in.ax = p.x + 300; p.in.ay = p.y;
     step(w, p); w.events.length = 0;
   }
-  ok(far.hp === hp0 && (p.dealt[fid || id] || 0) > 0, `${fid || id} (3/3/3): the foe 340 px away is untouched (${far.hp}/${hp0}), near ones hurt (${Math.round(p.dealt[fid || id] || 0)})`);
+  ok(far.hp === hp0 && (p.dealt[fid || id] || 0) > 0, `${fid || id} (${fid ? 'refined' : 'path 0 rank 5'}): the foe 340 px away is untouched (${far.hp}/${hp0}), near ones hurt (${Math.round(p.dealt[fid || id] || 0)})`);
 }
 
 // 4a. Glaive follows the cursor: a nearer foe on the left, cursor right / up.

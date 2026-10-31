@@ -1,5 +1,5 @@
-// Necro (summoner): hero data, signature Bone Shard (3 paths x 3 ranks: Legion / Shards / Plague), Forms Bone Lord / Bone Storm / Plague Field + hybrids Lich (Legion + Plague)
-// and Ossuary (Legion + Shards), Q Bone Wall (3 skill levels).
+// Necro (summoner): hero data, signature Bone Shard (3 paths x 3 ranks: Legion / Shards / Plague), Forms Bone Lord + Ossuary (Legion), Bone Storm (Shards),
+// Plague Field + Lich (Plague), Q Bone Wall (3 skill levels).
 // Army: every volley raises S.raise minions while fewer than S.cap live (at the freshest corpse in view, else beside the holder); kill-rise (S.rise) adds short-lived extras up to
 // cap + S.over. Minions are zones (look by kind: 'minion' skeleton, 'boneknight', 'bonearcher', 'ghoul'; z.a facing, z.w swing flash 1..0, wid = credited weapon or skill) driven by
 // minTick (targets only inside the owner's view: w.vclamp is the zone's hero). Hit damage = S.dmg x S.mk at raise time. Owner lists p.minions / p.minIds (refs checked by id).
@@ -194,20 +194,19 @@
     id: 'boneshard', name: 'Bone Shard', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', txt: 'Shards pierce; the dead rise to serve',
     base: base({ dmg: 15, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220 }),
     paths: [
-      { id: 'legion', name: 'Legion', form: 'bonelord', ranks: [
+      { id: 'legion', name: 'Legion', forms: ['bonelord', 'ossuary'], ranks: [
         { mods: { cap: 2, raise: 1 }, txt: '+2 skeletons, raised two at a time' },
         { mods: { rise: 0.15, over: 4 }, txt: 'The slain rise as extra skeletons' },
         { mods: { marc: 1.2, dmg: 0.25 }, txt: 'Skeletons cleave wider, +25% damage' }] },
-      { id: 'shards', name: 'Shards', form: 'bonestorm', ranks: [
+      { id: 'shards', name: 'Shards', forms: ['bonestorm'], ranks: [
         { mods: { n: 2 }, txt: '+2 bone shards' },
         { mods: { split: 3 }, txt: 'Shards burst into 3 splinters' },
         { mods: { n: 1, homing: 3, dmg: 0.25 }, txt: '+1 shard, shards seek foes, +25% dmg' }] },
-      { id: 'plague', name: 'Plague', form: 'plaguefield', ranks: [
+      { id: 'plague', name: 'Plague', forms: ['plaguefield', 'lich'], ranks: [
         { mods: { pools: 1 }, txt: 'The dead rot into blight pools' },
         { mods: { pools: 1, parea: 0.25 }, txt: '+1 pool, pools spread wider' },
         { mods: { pburst: 1, dmg: 0.25 }, txt: 'Pools burst as they dry, +25% dmg' }] },
-    ],
-    hybrids: [{ need: [0, 2], form: 'lich' }, { need: [0, 1], form: 'ossuary' }],
+    ],
   }, SHOT);
   // Bone Storm: S.n shards orbit the hero (radius 30, S.orbit s, re-hitting foes they touch at ORB_K x damage), then launch along the cursor dir (full damage, homing after); they split as Bone Shard.
   const ORB_K = 0.3;

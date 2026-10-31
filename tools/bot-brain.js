@@ -452,8 +452,9 @@
   // ---------- cards ----------
   Brain.prototype.cardScore = function (ED, w, p, c) {
     const hpF = p.hp / Math.max(1, p.maxHp);
-    if (c.kind === 'form') return 2000;
+    if (c.kind === 'form' || c.kind === 'pathpick') return 2000 - (c.path | 0); // chest offers: the first card
     if (c.kind === 'refine') return 1200;
+    if (c.kind === 'tune') { const d = ED.WEAPONS[c.id] || {}; return (d.support ? 600 : 1000) - (c.tk | 0); }
     if (c.kind === 'path') {
       // c.lvl - 1 = the path's current rank: the path closest to rank 3 goes first (one path to 3, then a second); ties to the path with a Form, then the lower index. Support paths below a new support.
       const d = ED.WEAPONS[c.id] || {}, pa = (d.paths || [])[c.path] || {};

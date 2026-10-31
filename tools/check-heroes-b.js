@@ -1,5 +1,5 @@
 // Headless check of heroes Cleric, Shade and Bell (exit 1 on failure). Usage: node tools/check-heroes-b.js
-// 1. Signature weapon at 0..9 path ranks (path 0 first) and its path-0 Form refined twice: 10 s each in a foe ring, no exceptions, damage > 0 (prints dps per rank count).
+// 1. Signature weapon at 0..10 steps (tune 1-5, then path 0 ranks 1-5) and path 0's first Form refined twice: 10 s each in a foe ring, no exceptions, damage > 0 (prints dps per step).
 // 2. Q at every skill level 1..4: cast on cooldown at the nearest foe, zero damage, foes affected (stunned, slowed, displaced or lured; prints casts).
 // 3. Mechanics: Sanctuary heals an ally, Shadow Step blinks with 2 charges at L4, Great Peal stuns the screen and pulls gems, blast / arc / chain / zone statuses only in view, Toll / Cathedral bell bodies.
 // 4. 60 s solo run per hero with level-ups and Q spam: no exceptions, same digest twice. 5. Crowd cost at 900 foes (informational).
@@ -41,25 +41,26 @@ function arena(w, p, s, keep, fn) {
 
 // 1. path ranks + Form
 for (const cls of HEROES) {
-  const h = ED.HEROES[cls], def = ED.WEAPONS[h.sig], form = ED.WEAPONS[def.paths[0].form];
-  ok(def.paths.length === 3 && def.paths.every(pa => pa.ranks.length === 3 && pa.ranks.every(l => l.txt.length <= 40)), `${h.sig}: 3 paths x 3 ranks, card lines <= 40 chars`);
+  const h = ED.HEROES[cls], def = ED.WEAPONS[h.sig], form = ED.WEAPONS[def.paths[0].forms[0]];
+  ok(def.paths.length === 3 && def.paths.every(pa => pa.ranks.length === 3 && pa.ranks.every(l => l.txt.length <= 40)), `${h.sig}: 3 paths x 3 shape ranks, card lines <= 40 chars`);
   ok(!!form && form.form && form.from === h.sig && form.refine.length === 2, `${h.sig}: path 0 unlocks the Form ${form && form.id} (2 refines)`);
   const dps = [];
-  for (let R = 0; R <= 9; R++) {
+  const T = ED.TUNE_MAX;
+  for (let R = 0; R <= T + ED.PATH_MAX; R++) {
     const w = world([cls], 10 + R), p = w.heroes[0];
-    w.setRanks(p, p.weapons[0], R, false);
+    w.setRanks(p, p.weapons[0], Math.min(R, T), R > T ? 0 : -1, R - T);
     const err = arena(w, p, 10, 30);
     const d = p.dealt[h.sig] || 0; dps.push(Math.round(d / 10));
-    ok(!err && d > 0 && p.weapons[0].lvl === 1 + R, `${h.sig} ranks ${p.weapons[0].pr.join('')}: 10 s, dealt ${Math.round(d)}` + (err ? ': ' + err.stack : ''));
+    ok(!err && d > 0 && p.weapons[0].lvl === 1 + R, `${h.sig} tune ${p.weapons[0].tune} ranks ${p.weapons[0].pr.join('')}: 10 s, dealt ${Math.round(d)}` + (err ? ': ' + err.stack : ''));
   }
-  console.log(`     ${h.sig} dps by rank count 0..9: ${dps.join(' ')}`);
+  console.log(`     ${h.sig} dps by step 0..${T + ED.PATH_MAX}: ${dps.join(' ')}`);
   const w = world([cls], 77), p = w.heroes[0];
-  w.setRanks(p, p.weapons[0], 3, false);
-  ok(w.formsReady(p, p.weapons[0]).some(f => f.id === form.id), `${h.sig} path 0 at rank 3: ${form.id} is ready`);
-  w.setRanks(p, p.weapons[0], 6, true);
+  w.setRanks(p, p.weapons[0], T, 0, ED.PATH_MAX);
+  ok(w.formsReady(p, p.weapons[0]).some(f => f.id === form.id), `${h.sig} path 0 at rank ${ED.PATH_MAX}: ${form.id} is ready`);
+  w.setForm(p, p.weapons[0], form.id, 2);
   const err = arena(w, p, 20, 40);
   const d = p.dealt[form.id] || 0;
-  ok(!err && p.weapons[0].id === form.id && p.weapons[0].fl === 2 && d > 0, `${form.id} (ranks 333, refine 2): 20 s, dps ${Math.round(d / 20)}` + (err ? ': ' + err.stack : ''));
+  ok(!err && p.weapons[0].id === form.id && p.weapons[0].fl === 2 && d > 0, `${form.id} (path 0 rank 5, refine 2): 20 s, dps ${Math.round(d / 20)}` + (err ? ': ' + err.stack : ''));
 }
 
 // 2. skills at every level
@@ -148,11 +149,12 @@ const cast = (w, p, slot, x, y) => { w.input(p.pid, { q: true, ax: x, ay: y }); 
   const w = world(['bell']), p = w.heroes[0], ws = p.weapons[0];
   step(w, 0.2);
   ok(w.zones.filter(z => z.k === 'tollb').length === 1, 'toll: one bell orbits');
-  w.rankPath(p, ws, 2); w.rankPath(p, ws, 2); w.recalc(p, false); step(w, 0.2);
-  ok(w.zones.filter(z => z.k === 'tollb').length === 2, 'toll Pendulum rank 2: two bells orbit');
-  w.setRanks(p, ws, 3, true); step(w, 0.5);
-  const nb = w.weaponS(p, 0).n | 0;
-  ok(ws.id === 'cathedral' && nb === 5 && w.zones.filter(z => z.k === 'cathb').length === nb && !w.zones.some(z => z.k === 'tollb'), `cathedral: ${nb} bells (4 + Pendulum), toll bells gone`);
+  w.setRanks(p, ws, ED.TUNE_MAX, 2, 3); step(w, 0.2);
+  ok(w.zones.filter(z => z.k === 'tollb').length === 2, 'toll Pendulum rank 3: two bells orbit');
+  const v = world(['bell']), q = v.heroes[0], qs = q.weapons[0];
+  step(v, 0.2); v.setForm(q, qs, 'cathedral', 2); step(v, 0.5);
+  const nb = v.weaponS(q, 0).n | 0;
+  ok(qs.id === 'cathedral' && nb === ED.WEAPONS.cathedral.base.n && v.zones.filter(z => z.k === 'cathb').length === nb && !v.zones.some(z => z.k === 'tollb'), `cathedral: ${nb} bells, toll bells gone`);
 }
 
 // 4. 60 s runs with level-ups and Q / E spam, determinism
@@ -178,7 +180,7 @@ for (const cls of HEROES) {
 // 5. crowd cost: maxed Form + skill L4 cast on cooldown inside a held 900-foe crowd, 10 s. Informational (shared CPU); fails only above 8 ms/tick average.
 for (const cls of HEROES) {
   const w = world([cls], 9), p = w.heroes[0];
-  p.passives.push({ id: 'reach', lvl: 5 }, { id: 'multishot', lvl: 5 }, { id: 'duration', lvl: 5 }); w.setRanks(p, p.weapons[0], 9, true);
+  p.passives.push({ id: 'reach', lvl: 5 }, { id: 'multishot', lvl: 5 }, { id: 'duration', lvl: 5 }); w.setForm(p, p.weapons[0], ED.WEAPONS[p.weapons[0].root].paths[0].forms[0], 2);
   for (const sk of p.skills) sk.lvl = 4;
   const rng = U.RNG(3);
   let tot = 0, worst = 0, n = 0, err = null;
@@ -209,7 +211,7 @@ for (const cls of HEROES) {
   };
   for (const cls of ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell']) {
     const sig = ED.HEROES[cls].sig;
-    for (const wid of [sig, ED.WEAPONS[sig].paths[0].form]) {
+    for (const wid of [sig, ED.WEAPONS[sig].paths[0].forms[0]]) {
       const { w, p, b } = setup(cls, wid), lim = 0.4 + w.weaponS(p, 0).cd + 0.9;
       let t = 0, shots = 0, err = null;
       try {

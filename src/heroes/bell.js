@@ -1,8 +1,8 @@
 // Bell (controller / tank): hero data, signature Toll and its Forms, Q Great Peal. Design and numbers: docs/heroes/bell.md.
 // Toll: bells orbit the hero; every cd each bell peals a shockwave ring. Paths: Peal (bigger echoing rings that stun), Resonance (chill, ice bursts on ring kills, frost ground,
 // bonus vs held foes), Pendulum (wide swinging orbit, more and heavier bells). Forms: Cathedral (Peal; bells peal in sequence, then great rings from the hero), Glacier Toll
-// (Resonance; rings freeze, the next ring shatters the frozen), Carillon (Pendulum; a wheel of bells sweeps out and back), Undertow (Peal + Pendulum; a ring closes in, dragging
-// the horde onto the bells, then a stunning clap), Windchime (Resonance + Pendulum; bells drop chimes that keep ringing where they fell).
+// (Resonance; rings freeze, the next ring shatters the frozen), Carillon (Pendulum; a wheel of bells sweeps out and back), Undertow (Peal; a ring closes in, dragging
+// the horde onto the bells, then a stunning clap), Windchime (Resonance; bells drop chimes that keep ringing where they fell).
 // Waves are team 0 zones whose radius moves from R0 to R; every foe the front reaches is hit once (per-wave id Set, pooled state). Bells, frost ground and chimes are zones, so
 // clients see them through the zone snapshot. Zone looks: tollb glacb carb cathb (bells), tollw tollf cathw glacw underw chimew pealw (rings), rime (frost ground), chime.
 (function (ED) {
@@ -135,20 +135,20 @@
     id: 'toll', name: 'Toll', icon: 'weapon.bronzebell', sig: 'bell', mode: 'around', txt: 'A bell orbits you; peals push foes',
     base: { dmg: 9, cd: 1.5, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 160, range: 0, r: 70, orbit: 32, spin: 2.4, body: 0.5, stun: 0, echo: 0, chill: 0, shard: 0, frost: 0, res: 0, swing: 0 },
     paths: [
-      { id: 'peal', name: 'Peal', form: 'cathedral', ranks: [
+      { id: 'peal', name: 'Peal', forms: ['cathedral', 'undertow'], ranks: [
         { mods: { area: 0.3, knock: 0.5 }, txt: '+30% ring size, rings push harder' },
         { mods: { echo: 1 }, txt: 'Each peal echoes in a wider ring' },
         { mods: { stun: 0.5, cd: -0.15 }, txt: 'Rings stun 0.5 s, peal 15% faster' }] },
-      { id: 'resonance', name: 'Resonance', form: 'glaciertoll', ranks: [
+      { id: 'resonance', name: 'Resonance', forms: ['glaciertoll', 'windchime'], ranks: [
         { mods: { chill: 0.4 }, txt: 'Rings chill foes, slowing them 40%' },
         { mods: { shard: 1 }, txt: 'Foes slain by rings burst into ice' },
         { mods: { frost: 1, res: 0.4 }, txt: 'Peals leave frost; +40% vs chilled foes' }] },
-      { id: 'pendulum', name: 'Pendulum', form: 'carillon', ranks: [
+      { id: 'pendulum', name: 'Pendulum', forms: ['carillon'], ranks: [
         { mods: { orbit: 40, body: 1 }, txt: 'Bell swings wide and hits harder' },
         { mods: { n: 1 }, txt: '+1 bell' },
         { mods: { n: 1, swing: 1 }, txt: '+1 bell, bells swing out and back' }] },
     ],
-    hybrids: [{ need: [0, 2], form: 'undertow' }, { need: [1, 2], form: 'windchime' }], noAmount: true,
+    noAmount: true,
   }, {
     tick(w, p, ws, S, dt) { orbit(w, p, ws, S.n, tollR(ws, S, dt), S.spin, S.dmg * S.body, 10, dt, 'tollb'); },
     fire(w, p, ws, S) { pealAll(w, p, ws, S, 0.3, 1, S.chill > 0 ? 'tollf' : 'tollw'); return true; },
