@@ -82,6 +82,8 @@
   let animOn = false;
   const animCanvas = UI.animCanvas = (id, size, cls, vk) => { const cv = UI.iconCanvas(id, size, cls, vk); cv._anim = id; cv._f = 0; anims.push(cv); kick(); return cv; };
   const kick = () => { if (!animOn) { animOn = true; requestAnimationFrame(animLoop); } };
+  // Registers a canvas whose cv._scene(t) the loop calls while it is visible (title art, stage cards).
+  UI.addScene = (cv) => { if (anims.indexOf(cv) < 0) anims.push(cv); kick(); };
   function animLoop(now) {
     const A = ED.Atlas, t = now / 1000;
     for (let i = anims.length - 1; i >= 0; i--) {
@@ -123,13 +125,7 @@
     $('name-row').hidden = A.hasProfile;
     const pl = $('profile-line');
     pl.innerHTML = A.hasProfile ? `<span translate="no">${esc(p.name)}</span><span>${T('{0} gold', `<b>${p.gold}</b>`)}</span><span>${T('{0} runs', `<b>${p.stats.runs}</b>`)}</span><span>${T('{0} wins', `<b>${p.stats.wins}</b>`)}</span>` : '';
-    const th = $('title-heroes'); th.textContent = '';
-    ED.HERO_IDS.forEach((cls, i) => {
-      if (!ED.HEROES[cls]) return;
-      const cv = animCanvas(heroIcon(cls), 64, '', heroVar(cls)); cv._off = i * 0.37;
-      if (!M.heroOpen(p, cls)) cv.classList.add('locked');
-      th.appendChild(cv);
-    });
+    if (ED.Title) ED.Title.mount();
     const ok = netOk();
     $('btn-host').disabled = !ok; $('btn-join').disabled = !ok;
   };

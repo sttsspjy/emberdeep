@@ -16,23 +16,25 @@
   <div id="loading" data-i18n>Loading...</div>
 
   <section id="scr-title" class="screen" hidden>
+    <div class="title-bg" aria-hidden="true"><canvas id="title-bg"></canvas></div>
     <div class="title-wrap">
-      <h1 class="logo" translate="no">Wickdeep</h1>
+      <h1 class="logo" translate="no"><span class="sr-only">Wickdeep</span><canvas id="title-logo" aria-hidden="true"></canvas></h1>
       <p class="kicker" data-i18n>Survive the horde. Alone or with three friends.</p>
-      <div class="title-heroes" id="title-heroes" aria-hidden="true"></div>
-      <div class="name-row" id="name-row" hidden>
-        <label for="inp-name" data-i18n>Your name</label>
-        <input id="inp-name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Wanderer">
+      <div class="title-panel">
+        <div class="name-row" id="name-row" hidden>
+          <label for="inp-name" data-i18n>Your name</label>
+          <input id="inp-name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Wanderer">
+        </div>
+        <nav class="menu" aria-label="Main menu" data-i18n-attr="aria-label">
+          <button class="btn btn-primary btn-big" id="btn-play" data-focus data-i18n>Play solo</button>
+          <div class="menu-pair"><button class="btn" id="btn-host" data-i18n>Host co-op</button><button class="btn" id="btn-join" data-i18n>Join co-op</button></div>
+          <button class="btn" id="btn-camp" data-i18n>Camp shop</button>
+          <div class="menu-pair"><button class="btn" id="btn-achieve" data-i18n>Achievements</button><button class="btn" id="btn-codex" data-i18n>Encyclopedia</button></div>
+          <div class="menu-pair"><button class="btn" id="btn-settings" data-i18n>Settings</button><button class="btn" id="btn-credits" data-i18n>Credits</button></div>
+        </nav>
+        <div class="msg" id="title-msg" role="status"></div>
+        <div class="profile-line" id="profile-line"></div>
       </div>
-      <nav class="menu" aria-label="Main menu" data-i18n-attr="aria-label">
-        <button class="btn btn-primary btn-big" id="btn-play" data-focus data-i18n>Play solo</button>
-        <div class="menu-pair"><button class="btn" id="btn-host" data-i18n>Host co-op</button><button class="btn" id="btn-join" data-i18n>Join co-op</button></div>
-        <button class="btn" id="btn-camp" data-i18n>Camp shop</button>
-        <div class="menu-pair"><button class="btn" id="btn-achieve" data-i18n>Achievements</button><button class="btn" id="btn-codex" data-i18n>Encyclopedia</button></div>
-        <div class="menu-pair"><button class="btn" id="btn-settings" data-i18n>Settings</button><button class="btn" id="btn-credits" data-i18n>Credits</button></div>
-      </nav>
-      <div class="msg" id="title-msg" role="status"></div>
-      <div class="profile-line" id="profile-line"></div>
     </div>
   </section>
 
@@ -273,6 +275,7 @@
 <script src="src/client/aim.js" defer></script>
 <script src="src/client/hud.js" defer></script>
 <script src="src/client/ui.js" defer></script>
+<script src="src/client/title.js" defer></script>
 <script src="src/client/codex.js" defer></script>
 <script src="src/client/wardrobe.js" defer></script>
 <script src="src/main.js" defer></script>

@@ -34,6 +34,7 @@
 // pickup.<xp1|xp5|xp25|gold|food|magnet|bomb (2f)|chest|chest.open (3f)> run pickups; pickup.<xp|coin|heart|flask.red|flask.yellow> base sprites; cos.platino (DawnLike's Platino)
 // icon.w.<weaponId>      16x16 weapon icons (centre pivot): 12 general + evolutions, 7 signatures + evolutions, 28 hero Forms (4 per hero) (ids in art-src/wickdeep/icons.js W)
 // icon.p.<passiveId>     16x16 passive icons: might haste reach velocity duration multishot vigor plating mending swiftness magnet fortune
+// title.logo             the WICKDEEP wordmark (top-left pivot; anchors.wick, anchors.drips); title.flame (4f) its wick flame
 // proj.<arrow|bolt|knife|fireball|hammer|shield|bone|trident|skull|web|thorn>      hero/foe projectile sprites (the other kinds are procedural orbs)
 // fx.<cut|cutx|cslash|slash.arc|slash.small|hit.spark|explosion|flam|ice.burst|thunder|circle.spark|circle.white|shield.gold|spark.magic|smoke|smoke.ring|ember|glint|flame>
 // fx.<blast.red|blast.blue|foam|ring.shock|burst|puff>, fx.<star.stun|sigil.skull|glyph.corroded|chain> (hand-authored)
@@ -510,6 +511,10 @@ add('pickup.chest.open', 'fx', 'ox', oxn('chest_full_open_anim', 3), { fps: 8, l
 // Icons (centre pivot): icon.w.<weaponId>, icon.p.<passiveId>; the longbow is drawn pointing left and mirrored here.
 for (const [id, rows] of Object.entries(HA.W)) add('icon.w.' + id, 'fx', null, null, { ascii: [rows], pal: HA.PAL, pivot: 'centre', fps: 0, flip: id === 'longbow' });
 for (const [id, rows] of Object.entries(HA.P)) add('icon.p.' + id, 'fx', null, null, { ascii: [rows], pal: HA.PAL, pivot: 'centre', fps: 0 });
+// Title wordmark (art-src/wickdeep/title.js, drawn by src/client/title.js): anchors.wick = wick tip (title.flame stands on it), anchors.drips = falling-drop starts.
+const TL = require('../art-src/wickdeep/title.js');
+add('title.logo', 'fx', null, null, { make: (H) => [TL.bake(H)], pivot: 'tl', anchors: TL.marks(), fps: 0 });
+add('title.flame', 'fx', null, null, { ascii: TL.FLAME, pal: TL.FLAME_PAL, pivot: [3, 11], fps: 9, loop: true });
 
 const PR = (id, src, rect, dir, o) => add(id, 'fx', src, [rect], Object.assign({ pivot: 'centre', anchors: { dir }, fps: 0 }, o || {}));
 PR('proj.arrow', 'nf_arrow', [0, 0, 13, 5], 90);

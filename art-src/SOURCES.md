@@ -31,7 +31,7 @@ Changes made to all packs by `tools/art.js`: frames cropped and packed into atla
 | `aim/` | Explosions - Pixel Art | https://aim-studios.itch.io/explosions-pixel-art | Aim studios | CC0 (author page "CC0 License ... without credit"; no licence file in the download) |
 | `ansimuz/` | Explosion Animations Pack | https://ansimuz.itch.io/explosion-animations-pack | ansimuz | CC0 (itch licence field; the download carries public-license.pdf, 835 KB, not vendored) |
 | `codemanu/` | Free Pixel Effects Pack | https://codemanu.itch.io/pixelart-effect-pack | CodeManu / Davit Masia | CC-BY 4.0 (itch licence field; README.txt says public domain: the stricter reading is taken), attribution required, see below |
-| `wickdeep/` | Wickdeep hand-authored pixel art (icons, pickups, props as ASCII maps in icons.js; the Wickmother and Wick-Eater in bosses.js) | this repository | Wickdeep contributors | CC0 1.0 (own work) |
+| `wickdeep/` | Wickdeep hand-authored pixel art (icons, pickups, props as ASCII maps in icons.js; the Wickmother and Wick-Eater in bosses.js; the title wordmark and its flame in title.js) | this repository | Wickdeep contributors | CC0 1.0 (own work) |
 
 ## Files
 
@@ -160,3 +160,4 @@ Changes made to all packs by `tools/art.js`: frames cropped and packed into atla
 | `puny/monsters/PunyMonsters/Purple-Spider-32x32.png` | 18873 | 16x16 Puny Characters and PunyMonsters | https://merchant-shade.itch.io/16x16-puny-characters | Shade | CC0 | `91246a5396d190795ff89efa02f116919ac43128dc12319f5967da6b8683efe7` |
 | `wickdeep/bosses.js` | own work | Wickdeep hand-authored art | this repository | Wickdeep contributors | CC0 1.0 | (edited in place; no pinned hash) |
 | `wickdeep/icons.js` | own work | Wickdeep hand-authored art | this repository | Wickdeep contributors | CC0 1.0 | (edited in place; no pinned hash) |
+| `wickdeep/title.js` | own work | Wickdeep hand-authored art | this repository | Wickdeep contributors | CC0 1.0 | (edited in place; no pinned hash) |

@@ -58,6 +58,7 @@ src/client/music.js         synthesized per-stage tracks (run / mid-boss / final
 src/client/input.js aim.js  keyboard/mouse (e.code), aim
 src/client/hud.js           in-run HUD (canvas)
 src/client/ui.js            DOM screens
+src/client/title.js         title art (ED.Title): pixel wordmark with wick flame and falling drops, backdrop (stage-1 floor, candle-lit arc of unlocked heroes, embers, foe eyes); menu scenes via ED.UI.addScene
 src/client/codex.js         Achievements (unlock progress, records) and Encyclopedia (heroes, weapons, passives, foes, bosses, stages) screens (ED.Codex)
 src/client/wardrobe.js      Wardrobe screen (ED.Wardrobe, from the Camp): tabs per kind, skins per hero, preview, Buy / Wear / Take off
 src/main.js                 app state machine + frame loop
@@ -65,7 +66,7 @@ src/main.js                 app state machine + frame loop
 
 Node load order (`tools/sim.js` FILES): util, data/foes, data/stages, data/passives, data/meta, data/cosmetics, save, sim/stats, sim/arena, sim/grid, sim/world, sim/combat, sim/foes, sim/ai, sim/spawner, sim/weapons, sim/skills, sim/progress, sim/bosses, sim/lap, sim/sanctum, sim/boss-{warden, spore, king, hollow, twins, cyclops, samurai, weaver, wickeater, wickmother}, heroes/{knight, ranger, pyro, necro, cleric, shade, bell}. `require('./tools/sim.js').load()` resets `globalThis.ED`, runs FILES and returns ED.
 
-Browser order (index.html): vendor/peerjs.min.js, the sim list above, src/net.js, src/game.js, src/client/i18n.js, src/i18n/ko-data.js, src/i18n/ko-ui.js, src/art/*.js, client atlas, pixfx, gl, render, post, actors, fx, hfx-{knight, ranger, pyro, necro, cleric, shade, bell}, wfx-a, wfx-b, bfx-a, bfx-b, bfx-c, bfx-d, cosfx, audio, music, input, aim, hud, ui, codex, wardrobe, src/main.js.
+Browser order (index.html): vendor/peerjs.min.js, the sim list above, src/net.js, src/game.js, src/client/i18n.js, src/i18n/ko-data.js, src/i18n/ko-ui.js, src/art/*.js, client atlas, pixfx, gl, render, post, actors, fx, hfx-{knight, ranger, pyro, necro, cleric, shade, bell}, wfx-a, wfx-b, bfx-a, bfx-b, bfx-c, bfx-d, cosfx, audio, music, input, aim, hud, ui, title, codex, wardrobe, src/main.js.
 
 ## 3. Registries (how lanes plug in without editing core files)
 
