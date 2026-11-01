@@ -300,10 +300,25 @@
   };
   function syncSettings() {
     const s = App().settings;
-    for (const b of $('set-quality').children) { const on = (s.quality || 'auto') === b.dataset.v; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); b.setAttribute('role', 'radio'); }
+    const seg = (id, v) => { for (const b of $(id).children) { const on = v === b.dataset.v; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); b.setAttribute('role', 'radio'); } };
+    seg('set-quality', s.quality || 'auto'); seg('set-lang', ED.I18N.lang);
     for (const k of ['music', 'sfx']) { $('set-' + k).value = s[k]; $('set-' + k + '-v').textContent = s[k]; }
-    const tog = (id, v) => { const b = $(id); b.setAttribute('aria-pressed', v ? 'true' : 'false'); b.textContent = v ? 'On' : 'Off'; };
+    const tog = (id, v) => { const b = $(id); b.setAttribute('aria-pressed', v ? 'true' : 'false'); b.textContent = v ? ED.t('On') : ED.t('Off'); };
     tog('set-numbers', s.numbers !== false); tog('set-shake', s.shake !== false); tog('set-full', !!document.fullscreenElement);
+  }
+  // Language change: the visible screen re-renders in place (no focus move); offer cards rebuild; settings toggles relabel.
+  function relang() {
+    const on = (s) => !$('scr-' + s).hidden;
+    if (on('title')) UI.renderTitle();
+    if (on('hero')) UI.renderHeroes();
+    if (on('stage')) UI.renderStages();
+    if (on('camp')) UI.renderCamp();
+    if (on('achieve')) ED.Codex.renderAchievements();
+    if (on('codex')) ED.Codex.renderCodex();
+    if (on('wardrobe')) ED.Wardrobe.render();
+    if (on('lobby')) UI.renderLobby();
+    UI.offerSig = '';
+    syncSettings();
   }
   // Screen shake off: the camera offset read by render.js (ED.FX.shakeXY) is zeroed; ED.FX.shakeOn mirrors the setting for the FX lane.
   function hookShake() {
@@ -661,7 +676,7 @@
     const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, W, H); g.imageSmoothingEnabled = false;
     const tl = sum.tl || [], fs = 16 * dpr, css = getComputedStyle(document.documentElement), col = (n, d) => (css.getPropertyValue(n) || d).trim() || d;
     const MUT = col('--mut', '#b9a68c'), GOLD = col('--gold', '#ffd27a'), EMB = col('--ember', '#ff8a3d'), VIO = col('--violet', '#b49cff'), EDGE = '#3a2c22';
-    g.font = fs + 'px "Pixel Operator", monospace'; g.textBaseline = 'alphabetic';
+    g.font = fs + 'px "Pixel Operator", "Wickdeep Hangul", monospace'; g.textBaseline = 'alphabetic';
     if (!tl.length) { g.fillStyle = MUT; g.fillText('No full minute played.', 4 * dpr, fs + 4 * dpr); return; }
     let maxK = 1, maxLv = 1; for (const e of tl) { maxK = Math.max(maxK, e.k); maxLv = Math.max(maxLv, e.lv); }
     maxK = niceMax(maxK); maxLv = Math.max(5, Math.ceil(maxLv / 5) * 5);
@@ -957,6 +972,8 @@
     // settings
     $('btn-settings-close').onclick = closeSettings;
     for (const b of $('set-quality').children) b.onclick = () => { A.settings.quality = b.dataset.v; store(); syncSettings(); };
+    for (const b of $('set-lang').children) b.onclick = () => { if (ED.I18N.lang !== b.dataset.v) ED.I18N.set(b.dataset.v); };
+    ED.I18N.on(relang);
     for (const k of ['music', 'sfx']) $('set-' + k).addEventListener('input', (e) => { A.settings[k] = +e.target.value; $('set-' + k + '-v').textContent = e.target.value; store(); });
     $('set-numbers').onclick = () => { A.settings.numbers = A.settings.numbers === false; store(); syncSettings(); };
     $('set-shake').onclick = () => { A.settings.shake = A.settings.shake === false; if (ED.FX) ED.FX.shakeOn = A.settings.shake; store(); syncSettings(); };

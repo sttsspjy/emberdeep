@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it. Never opens a visible window.
-// Usage: node tools/browse.js [smoke|shots|forms|crowdN|coop|botwatch|lap ...] [--scen=a,b] [--cls=knight,...] [--form=id,...] [--support=id,...|all] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1]
+// Usage: node tools/browse.js [smoke|shots|forms|crowdN|coop|botwatch|lap|ko ...] [--scen=a,b] [--cls=knight,...] [--form=id,...] [--support=id,...|all] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1]
 //                             [--software] [--quality=high|low] [--gate] [--prof] [--ff=480] [--timeout=600] [--cos=id,...]
 //   --cos: cosmetic ids (src/data/cosmetics.js) the profile owns and wears in every solo run the harness starts (skins apply to their own hero).
 //   smoke: for each hero (--cls, default all 7) a solo stage-1 run driven ~--seconds (16) s (circling, aim at the nearest foe, Q / E, dash, first card picked); fails on a page or console error,
@@ -28,6 +28,10 @@
 //         run on both peers for --seconds (6) s: the guest's mirror shows 2 heroes and foes, snapshots <= 12 KB.
 //   botwatch: ?bot=1&speed=8&seed=--seed with the real tools/bot-brain.js; a knight solo run on stage 0 watched --seconds (20) s: fails on sim time < 3x real time (notes < 6x),
 //         a hero that never left a 40 px radius, no automatic level-up pick, no BOT tag, [ / ] not changing the speed, Esc not pausing, a missing file or a page / console error.
+//   ko: the UI in Korean (ED.I18N.set('ko')): title, hero select, stage select, camp, wardrobe, achievements, each encyclopedia tab, settings, credits, a knight run (HUD, level-up
+//       overlay, chest, pause) and the results; one PNG each into a fresh folder <outdir>/ko-<stamp>-<browser>. Fails on a page / console error, a visible text node with a Latin word of
+//       3+ letters (allowlist KO_ALLOW, the player name, anything under [lang="en"] or [translate="no"]) or a box whose text overflows it (scrollWidth > clientWidth); the full list goes to
+//       the result JSON (results[].audit).
 //   bossart: PNGs of the Wickmother in a stand-in Sanctum (w.sanctum at the hero, foes and spawner off, god cheat; P1 idle and an attack, a kneel, P2 with two sconces lit, P3 mid-burn)
 //            and of the Wick-Eater (idle, maw open); fails on a page / console error or a boss that did not spawn. A viewport of 1280x960 shows the whole 720 x 480 room.
 // In-page debug API (injected only by this harness, absent in normal play; every call is a no-op without a solo / host run): ED.Debug.{fastForward(sec), give(id, lvl), evolve(wid?),
@@ -41,7 +45,9 @@ const fs = require('fs'), os = require('os'), path = require('path'), http = req
 const FLAGS = { scen: 's', cls: 's', form: 's', support: 's', cos: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', prof: 'b', json: 'b', help: 'b' };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
-const SCEN_RE = /^(smoke|shots|coop|botwatch|lap|sanctum|bossart|results|crowd\d{1,4}|late[abc]?|forms)$/;
+const SCEN_RE = /^(smoke|shots|coop|botwatch|lap|sanctum|bossart|results|ko|crowd\d{1,4}|late[abc]?|forms)$/;
+// Latin words allowed on Korean screens: the game name, stat abbreviations, key and button names.
+const KO_ALLOW = ['Wickdeep', 'HP', 'DPS', 'XP', 'Esc', 'Enter', 'Space', 'Shift', 'Tab', 'Ctrl', 'Alt', 'LMB', 'RMB', 'MMB', 'Mouse', 'Up', 'Down', 'Left', 'Right', 'Arrow', 'Backspace', 'English'];
 function parseArgs(argv) {
   const o = { scen: '', cls: HEROES.join(','), form: '', support: '', cos: '', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
   const pos = [];
@@ -57,7 +63,7 @@ function parseArgs(argv) {
   }
   o.scens = (o.scen ? o.scen.split(',') : []).concat(pos).map(s => s.trim()).filter(Boolean);
   if (!o.scens.length) o.scens = ['smoke'];
-  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, forms, crowdN, late[a|b|c], coop, botwatch, lap, sanctum, results, bossart)');
+  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, forms, crowdN, late[a|b|c], coop, botwatch, lap, sanctum, results, ko, bossart)');
   if (!['chromium', 'firefox'].includes(o.browser)) throw new Fail('--browser is chromium or firefox');
   const vp = /^(\d{3,5})x(\d{3,5})$/.exec(o.viewport);
   if (!vp) throw new Fail('--viewport is WxH');
@@ -307,6 +313,25 @@ function pageBoot(cfg) {
   };
   BR.stop = () => { BR.drive = false; BR.crowd = 0; clearInterval(BR.holdT); const E = ED(); if (E.App.state === 'run') E.App.quitRun(); };
   BR.debug = (name, args) => { const D = ED().Debug; return D && D[name] ? D[name](...(args || [])) : null; };
+  // Korean audit of the visible DOM UI: text nodes with a Latin word (3+ letters) not in allow, and boxes whose text overflows them (scrollWidth > clientWidth).
+  BR.audit = (allow) => {
+    const ok = new Set(allow), latin = [], over = [], seen = new Set();
+    const tag = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : el.className && typeof el.className === 'string' ? '.' + el.className.split(' ')[0] : '');
+    const shown = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+    const tw = document.createTreeWalker(document.getElementById('ui'), NodeFilter.SHOW_TEXT);
+    for (let n = tw.nextNode(); n; n = tw.nextNode()) {
+      const t = n.nodeValue.replace(/\s+/g, ' ').trim(), el = n.parentElement;
+      if (!t || !el || !shown(el) || el.closest('[lang="en"], [translate="no"], script, style')) continue;
+      const bad = (t.match(/[A-Za-z]{3,}/g) || []).filter(wd => !ok.has(wd));
+      if (bad.length) latin.push({ el: tag(el), words: [...new Set(bad)].join(' '), text: t.slice(0, 80) });
+      let box = el; while (box && box.clientWidth === 0) box = box.parentElement;
+      if (box && !seen.has(box)) {
+        seen.add(box);
+        if (box.scrollWidth > box.clientWidth + 1) over.push({ el: tag(box), sw: box.scrollWidth, cw: box.clientWidth, text: box.textContent.replace(/\s+/g, ' ').trim().slice(0, 60) });
+      }
+    }
+    return { latin, over };
+  };
   BR.visible = (id) => { const el = document.getElementById(id); return !!el && !el.hidden && el.getClientRects().length > 0; };
   // Keeps n foes alive on a ring 120-330 px around the hero (spawned directly; foes stay put when far by recycling). late: the last timeline roster at real HP, refilled every 50 ms.
   BR.hold = (n, late) => {
@@ -945,13 +970,99 @@ function table(results) {
       if (r.name === 'smoke') out.push(`  ${w.cls.padEnd(7)} t ${w.time}s foes ${w.foes} kills ${w.kills} lvl ${w.level} hp ${w.hp} Q ${w.q} sig dmg ${w.sigDealt} weapons ${w.weapons.join(',')}`);
       else if (r.name === 'shots') out.push(`  ${w.cls.padEnd(7)} ff ${(w.ffMs / 1000).toFixed(1)} s wall -> t ${w.time}s lvl ${w.level} foes ${w.foes} projs ${w.projs} kills ${w.kills} weapons ${w.weapons.join(',')} passives ${w.passives.join(',')}`);
       else if (r.name === 'forms') out.push(`  ${w.cls.padEnd(7)} ${w.form.padEnd(14)} paths ${w.pr} refine ${w.fl} foes ${w.foes} kills ${w.kills} | ${w.looks}`);
+      else if (r.name === 'ko') out.push(`  ${w.screen.padEnd(10)} latin ${String(w.latin).padStart(3)}  overflow ${String(w.over).padStart(2)}${w.sample ? '  e.g. ' + w.sample : ''}`);
       else if (r.name === 'coop' || r.name === 'botwatch') out.push('  ' + Object.entries(w).map(([k, v]) => k + ' ' + v).join(', '));
       else out.push(`  ${w.quality}: foes ${w.foes}, frames ${w.frames}, frame ms p50/p95/max ${tri(w.frame)}, work ms ${tri(w.work)}, sim ms/tick ${tri(w.tick)}, render ms ${tri(w.render)}, batch ${w.batch}, post ${w.usePost ? 'on' : 'off'}${w.soft ? ' (software)' : ''}, canvas ${w.canvas.join('x')}`);
     }
-    if (r.name !== 'shots' && r.name !== 'forms') for (const f of r.shots) out.push('  shot ' + f);
+    if (r.name !== 'shots' && r.name !== 'forms' && r.name !== 'ko') for (const f of r.shots) out.push('  shot ' + f);
     else out.push(`  ${r.shots.length} shots`);
   }
   return out.join('\n');
+}
+
+// Korean UI audit: every screen and overlay in Korean, one PNG and one BR.audit each; fails on errors, Latin words or overflowing text.
+async function scenKo() {
+  const o = S.opt, res = newResult('ko');
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+  const dir = S.shotDir = path.join(o.outdir, 'ko-' + stamp + '-' + o.browser);
+  fs.mkdirSync(dir, { recursive: true });
+  res.notes.push('folder ' + dir);
+  const { ctx, page, errors, info } = await openPage();
+  res.audit = [];
+  let k = 1, nl = 0, no = 0;
+  const audit = async (name) => {
+    await wait(250);
+    const a = await page.evaluate((allow) => window.__BR.audit(allow), KO_ALLOW.concat(['Tester']));
+    res.audit.push({ screen: name, latin: a.latin, over: a.over });
+    res.rows.push({ screen: name, latin: a.latin.length, over: a.over.length, sample: a.latin.slice(0, 3).map(x => x.words).join(' | ') });
+    nl += a.latin.length; no += a.over.length;
+    await shoot(page, res, String(k++).padStart(2, '0') + '-' + name, dir);
+  };
+  const click = async (sel) => { await page.click(sel); await wait(150); };
+  const need = (cond, note) => { if (!cond) fail(res, note); };
+  try {
+    res.notes.push(bootNote(info));
+    await call(page, 'settings', o.quality);
+    const lang = await page.evaluate(() => { window.ED.I18N.set('ko'); return window.ED.I18N.lang + ' / ' + document.documentElement.lang + ' / stored ' + window.ED.App.settings.lang; });
+    res.notes.push('lang: ' + lang);
+    need(lang === 'ko / ko / stored ko', 'language did not switch to ko');
+    await page.fill('#inp-name', 'Tester').catch(() => {});
+    await page.evaluate(() => document.fonts.ready);
+    await audit('title');
+    await click('#btn-play'); need(await call(page, 'visible', 'scr-hero'), 'hero select not shown'); await audit('hero');
+    await click('#btn-hero-next'); need(await call(page, 'visible', 'scr-stage'), 'stage select not shown'); await audit('stage');
+    await click('#btn-stage-back'); await click('#btn-hero-back');
+    await page.evaluate(() => { const A = window.ED.App; A.profile.gold = 2400; A.persist(); });
+    await click('#btn-camp'); need(await call(page, 'visible', 'scr-camp'), 'camp not shown'); await audit('camp');
+    await click('#btn-wardrobe'); need(await call(page, 'visible', 'scr-wardrobe'), 'wardrobe not shown'); await audit('wardrobe');
+    await click('#btn-wd-back'); await click('#btn-camp-back');
+    await click('#btn-achieve'); need(await call(page, 'visible', 'scr-achieve'), 'achievements not shown'); await audit('achieve');
+    await click('#btn-ach-back');
+    await click('#btn-codex'); need(await call(page, 'visible', 'scr-codex'), 'encyclopedia not shown');
+    const tabs = await page.locator('#cx-tabs button').count();
+    for (let i = 0; i < tabs; i++) { await page.locator('#cx-tabs button').nth(i).click(); await wait(100); await audit('codex-' + (i + 1)); }
+    await click('#btn-codex-back');
+    await click('#btn-settings'); need(await call(page, 'visible', 'ov-settings'), 'settings not shown'); await audit('settings');
+    await click('#btn-settings-close');
+    await click('#btn-credits'); need(await call(page, 'visible', 'ov-credits'), 'credits not shown'); await audit('credits');
+    await click('#btn-credits-close');
+    // round trip: English back, then Korean again (DOM sources cached on first apply)
+    const back = await page.evaluate(() => { const I = window.ED.I18N, q = (id) => document.getElementById(id).textContent; I.set('en'); const en = q('btn-play') + ' / ' + q('btn-settings'); I.set('ko'); return en + ' | ' + q('btn-play'); });
+    res.notes.push('round trip: ' + back);
+    need(/^Play solo \/ Settings \| /.test(back) && !/Play solo$/.test(back), 'switching back to English (and again to Korean) did not relabel the title');
+    // run: HUD, level-up overlay, chest, pause, results
+    await call(page, 'start', 'knight', 0, { god: true });
+    await page.evaluate(() => { window.__BR.autoPick = false; window.__BR.still = true; });
+    await wait(1200);
+    await audit('run-hud');
+    await dbg(page, 'levelUp', 1);
+    await page.waitForFunction(() => { const el = document.getElementById('ov-offer'); return el && !el.hidden; }, null, { timeout: 3000 }).catch(() => {});
+    need(await call(page, 'visible', 'ov-offer'), 'level-up overlay not shown');
+    await wait(700);
+    await audit('levelup');
+    await page.evaluate(() => { window.__BR.autoPick = true; });
+    await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 3000 }).catch(() => {});
+    await page.evaluate(() => { window.__BR.autoPick = false; });
+    await dbg(page, 'give', 'might', 1);
+    const chest = await dbg(page, 'chest');
+    need(Array.isArray(chest) && chest.length > 0, 'chest gave nothing');
+    await wait(300);
+    await audit('chest');
+    await page.waitForFunction(() => document.getElementById('ov-chest').hidden, null, { timeout: 6000 }).catch(() => {});
+    await page.keyboard.press('Escape'); await wait(300);
+    need(await call(page, 'visible', 'ov-pause'), 'pause not shown');
+    await audit('pause');
+    await page.keyboard.press('Escape'); await wait(200);
+    await dbg(page, 'win');
+    await page.waitForFunction(() => window.ED.App.state === 'results', null, { timeout: 5000 }).catch(() => {});
+    need(await call(page, 'visible', 'scr-results'), 'results screen not shown');
+    await wait(1700);
+    await audit('results');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (nl) fail(res, nl + ' text node(s) with Latin words');
+  if (no) fail(res, no + ' box(es) with overflowing text');
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
 }
 
 // Results screen from synthetic summaries (no run): a solo 21:05 knight victory with a Form, two supports, six passives, four bosses and the Last Light lap, a 4-hero co-op victory,
@@ -1028,7 +1139,7 @@ async function main() {
     for (const sc of S.opt.scens) {
       const t0 = Date.now();
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'forms' ? await scenForms() : sc === 'coop' ? await scenCoop() : sc === 'botwatch' ? await scenBotwatch() : sc === 'lap' ? await scenLap() : sc === 'sanctum' ? await scenSanctum() : sc === 'bossart' ? await scenBossArt() : sc === 'results' ? await scenResults() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'forms' ? await scenForms() : sc === 'coop' ? await scenCoop() : sc === 'botwatch' ? await scenBotwatch() : sc === 'lap' ? await scenLap() : sc === 'sanctum' ? await scenSanctum() : sc === 'bossart' ? await scenBossArt() : sc === 'results' ? await scenResults() : sc === 'ko' ? await scenKo() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
       catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); fail(r, 'harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); }
       r.wallMs = Date.now() - t0;
       if (S.server.missing.size) { r.missing = [...S.server.missing]; fail(r, 'missing files: ' + r.missing.join(', ')); S.server.missing.clear(); }

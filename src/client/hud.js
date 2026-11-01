@@ -1,12 +1,12 @@
 // In-run HUD on the screen canvas (device px). Sizes are CSS px at 1280x720 scaled by k = dpr x clamp(viewport / 1280x720, 1, 2), so text never drops below its CSS size (numbers >= 16 px).
 // Draws: XP bar across the top with the level, timer, kills / gold, 3 weapon slots (hero weapon + 2 supports, empty ones dim; level; Form = gold frame) + 6 passive slots with levels,
 // HP bar, Q cooldown dial and the dash dial with charge pips, boss bar, Last Light (view.lap: a VICTORY banner during the calm; the lap countdown and lap gold in place of the timer), the Sanctum's VICTORY banner (view.sanctum st 2), teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
-// low-HP edge glow, banners and the bot-watch tag (view.botTag / view.botPick, bottom-left). No per-frame allocation: strings are cached by value. Font 'Pixel Operator'.
+// low-HP edge glow, banners and the bot-watch tag (view.botTag / view.botPick, bottom-left). No per-frame allocation: strings are cached by value. Font 'Pixel Operator' (Hangul falls back to 'Wickdeep Hangul').
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = Math.PI * 2;
   const H = ED.HUD = { banner: null, k: 1 };
-  const FONT = 'px "Pixel Operator", monospace';
+  const FONT = 'px "Pixel Operator", "Wickdeep Hangul", monospace';
   const SLOT_COL = ['#ffd27a', '#6ad7ff', '#7fe39a', '#ff8ad8'];
   const NUM = []; for (let i = 0; i <= 99; i++) NUM.push(String(i));
   let c = null, k = 1, W = 0, Hh = 0, now = 0, hudTop = 0;

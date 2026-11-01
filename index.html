@@ -18,18 +18,18 @@
   <section id="scr-title" class="screen" hidden>
     <div class="title-wrap">
       <h1 class="logo">Wickdeep</h1>
-      <p class="kicker">Survive the horde. Alone or with three friends.</p>
+      <p class="kicker" data-i18n>Survive the horde. Alone or with three friends.</p>
       <div class="title-heroes" id="title-heroes" aria-hidden="true"></div>
       <div class="name-row" id="name-row" hidden>
-        <label for="inp-name">Your name</label>
+        <label for="inp-name" data-i18n>Your name</label>
         <input id="inp-name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Wanderer">
       </div>
-      <nav class="menu" aria-label="Main menu">
-        <button class="btn btn-primary btn-big" id="btn-play" data-focus>Play solo</button>
-        <div class="menu-pair"><button class="btn" id="btn-host">Host co-op</button><button class="btn" id="btn-join">Join co-op</button></div>
-        <button class="btn" id="btn-camp">Camp shop</button>
-        <div class="menu-pair"><button class="btn" id="btn-achieve">Achievements</button><button class="btn" id="btn-codex">Encyclopedia</button></div>
-        <div class="menu-pair"><button class="btn" id="btn-settings">Settings</button><button class="btn" id="btn-credits">Credits</button></div>
+      <nav class="menu" aria-label="Main menu" data-i18n-attr="aria-label">
+        <button class="btn btn-primary btn-big" id="btn-play" data-focus data-i18n>Play solo</button>
+        <div class="menu-pair"><button class="btn" id="btn-host" data-i18n>Host co-op</button><button class="btn" id="btn-join" data-i18n>Join co-op</button></div>
+        <button class="btn" id="btn-camp" data-i18n>Camp shop</button>
+        <div class="menu-pair"><button class="btn" id="btn-achieve" data-i18n>Achievements</button><button class="btn" id="btn-codex" data-i18n>Encyclopedia</button></div>
+        <div class="menu-pair"><button class="btn" id="btn-settings" data-i18n>Settings</button><button class="btn" id="btn-credits" data-i18n>Credits</button></div>
       </nav>
       <div class="msg" id="title-msg" role="status"></div>
       <div class="profile-line" id="profile-line"></div>
@@ -171,16 +171,17 @@
 
   <div id="ov-settings" class="overlay" hidden>
     <div class="plate settings">
-      <h2>Settings</h2>
+      <h2 data-i18n>Settings</h2>
       <div class="set-grid">
-        <span class="set-lbl">Quality</span><div class="seg" id="set-quality" role="radiogroup" aria-label="Quality"><button class="btn btn-sm" data-v="auto">Auto</button><button class="btn btn-sm" data-v="high">High</button><button class="btn btn-sm" data-v="low">Low</button></div>
-        <label class="set-lbl" for="set-music">Music</label><div class="slide"><input type="range" id="set-music" min="0" max="100" step="5"><b id="set-music-v">0</b></div>
-        <label class="set-lbl" for="set-sfx">Effects</label><div class="slide"><input type="range" id="set-sfx" min="0" max="100" step="5"><b id="set-sfx-v">0</b></div>
-        <span class="set-lbl">Damage numbers</span><button class="btn btn-sm tog" id="set-numbers" aria-pressed="true">On</button>
-        <span class="set-lbl">Screen shake</span><button class="btn btn-sm tog" id="set-shake" aria-pressed="true">On</button>
-        <span class="set-lbl">Fullscreen</span><button class="btn btn-sm tog" id="set-full" aria-pressed="false">Off</button>
+        <span class="set-lbl" data-i18n>Language</span><div class="seg" id="set-lang" role="radiogroup" aria-label="Language" data-i18n-attr="aria-label"><button class="btn btn-sm" data-v="en" lang="en">English</button><button class="btn btn-sm" data-v="ko" lang="ko">한국어</button></div>
+        <span class="set-lbl" data-i18n>Quality</span><div class="seg" id="set-quality" role="radiogroup" aria-label="Quality" data-i18n-attr="aria-label"><button class="btn btn-sm" data-v="auto" data-i18n>Auto</button><button class="btn btn-sm" data-v="high" data-i18n>High</button><button class="btn btn-sm" data-v="low" data-i18n>Low</button></div>
+        <label class="set-lbl" for="set-music" data-i18n>Music</label><div class="slide"><input type="range" id="set-music" min="0" max="100" step="5"><b id="set-music-v">0</b></div>
+        <label class="set-lbl" for="set-sfx" data-i18n>Effects</label><div class="slide"><input type="range" id="set-sfx" min="0" max="100" step="5"><b id="set-sfx-v">0</b></div>
+        <span class="set-lbl" data-i18n>Damage numbers</span><button class="btn btn-sm tog" id="set-numbers" aria-pressed="true">On</button>
+        <span class="set-lbl" data-i18n>Screen shake</span><button class="btn btn-sm tog" id="set-shake" aria-pressed="true">On</button>
+        <span class="set-lbl" data-i18n>Fullscreen</span><button class="btn btn-sm tog" id="set-full" aria-pressed="false">Off</button>
       </div>
-      <div class="row"><button class="btn btn-primary" id="btn-settings-close" data-back data-focus>Done</button></div>
+      <div class="row"><button class="btn btn-primary" id="btn-settings-close" data-back data-focus data-i18n>Done</button></div>
     </div>
   </div>
 
@@ -190,6 +191,7 @@
       <p>DawnLike tileset by DragonDePlatino (CC-BY 4.0, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/</a> ; <a href="https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181" target="_blank" rel="noopener">https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181</a>), using the DawnBringer DB16 palette by DawnBringer. Cropped and recoloured for Wickdeep.</p>
       <p>Free Pixel Effects Pack by CodeManu (Davit Masia), CC-BY 4.0 (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/</a> ; <a href="https://codemanu.itch.io/pixelart-effect-pack" target="_blank" rel="noopener">https://codemanu.itch.io/pixelart-effect-pack</a>). Frames subsampled and recoloured for Wickdeep.</p>
       <p class="mut">Pixel Operator font by Jayvee Enaguas (HarvettFox96), CC0.</p>
+      <p class="mut">Korean text: NeoDunggeunmo font by Eunbin Jeong (Dalgona.), SIL Open Font License 1.1 (<a href="https://github.com/neodgm/neodgm" target="_blank" rel="noopener">https://github.com/neodgm/neodgm</a>), subset as "Wickdeep Hangul".</p>
       <p class="mut">16x16 DungeonTileset II by 0x72 (Robert); Dungeon Tileset II Extended by nijikokun; 16x16 Dark Dungeon by kosinaz; Ninja Adventure by Pixel-boy and AAA; Puny Characters by Shade; LuizMelo; Kenney; o_lobster; Aim studios; ansimuz.</p>
       <p class="mut">Music and sound are synthesized in your browser.</p>
       <div class="row"><button class="btn btn-primary" id="btn-credits-close" data-back data-focus>Done</button></div>
@@ -240,6 +242,9 @@
 <script src="src/weapons/support-b.js" defer></script>
 <script src="src/net.js" defer></script>
 <script src="src/game.js" defer></script>
+<script src="src/client/i18n.js" defer></script>
+<script src="src/i18n/ko-data.js" defer></script>
+<script src="src/i18n/ko-ui.js" defer></script>
 <script src="src/art/meta.js" defer onerror="this.remove()"></script>
 <script src="src/art/world.js" defer onerror="this.remove()"></script>
 <script src="src/art/actors.js" defer onerror="this.remove()"></script>

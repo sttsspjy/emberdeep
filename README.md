@@ -25,6 +25,8 @@ Mouse buttons do nothing in a run by default; the mouse aims. Your weapon fires 
 
 Menus work with the keyboard too: arrows or WASD move between buttons, Enter presses, Esc goes back.
 
+**Language:** English or Korean (한국어), under Settings → Language. A Korean browser starts in Korean. Co-op players can each use their own language.
+
 ## A run
 
 1. Pick a hero, then a stage.
@@ -97,6 +99,8 @@ DawnLike tileset by DragonDePlatino (CC-BY 4.0, https://creativecommons.org/lice
 Free Pixel Effects Pack by CodeManu (Davit Masia), CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/ ; https://codemanu.itch.io/pixelart-effect-pack). Frames subsampled and recoloured for Wickdeep.
 
 Pixel Operator font by Jayvee Enaguas (HarvettFox96), CC0.
+
+Korean text: NeoDunggeunmo font by Eunbin Jeong (Dalgona.), SIL Open Font License 1.1 (https://github.com/neodgm/neodgm), subset as "Wickdeep Hangul".
 
 16x16 DungeonTileset II by 0x72 (Robert); Dungeon Tileset II Extended by nijikokun; 16x16 Dark Dungeon by kosinaz; Ninja Adventure by Pixel-boy and AAA; Puny Characters by Shade; LuizMelo; Kenney; o_lobster; Aim studios; ansimuz.
 

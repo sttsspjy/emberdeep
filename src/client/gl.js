@@ -285,7 +285,7 @@
   D.text = (s, x, y, color, k, align, alpha) => {
     const A = ED.Atlas;
     if (A.font && A.covers(s)) return A.text(c, s, x, y, hexCss(color), k || 1, align, alpha);
-    c.font = Math.round(8 * (k || 1)) + 'px "Pixel Operator", monospace'; c.textAlign = align === 'l' ? 'left' : align === 'r' ? 'right' : 'center'; c.textBaseline = 'middle';
+    c.font = Math.round(8 * (k || 1)) + 'px "Pixel Operator", "Wickdeep Hangul", monospace'; c.textAlign = align === 'l' ? 'left' : align === 'r' ? 'right' : 'center'; c.textBaseline = 'middle';
     const ga = c.globalAlpha; if (alpha !== undefined) c.globalAlpha = alpha;
     c.fillStyle = hexCss(color); c.fillText(s, x, y); c.globalAlpha = ga;
     return true;
@@ -620,7 +620,7 @@ void main(){
     if (!cv) {
       if (textCache.size > 64) textCache.clear();
       cv = document.createElement('canvas');
-      const g = cv.getContext('2d'), font = Math.round(8 * k) + 'px "Pixel Operator", monospace';
+      const g = cv.getContext('2d'), font = Math.round(8 * k) + 'px "Pixel Operator", "Wickdeep Hangul", monospace';
       g.font = font; const w = Math.ceil(g.measureText(s).width) + 4, h = Math.ceil(10 * k) + 4;
       cv.width = w; cv.height = h;
       g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = hexCss(color); g.fillText(s, w / 2, h / 2);

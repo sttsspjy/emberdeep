@@ -1,4 +1,4 @@
-/* Wickdeep survivors UI. One font: Pixel Operator. Root size scales with the viewport (min 20 px), so card text >= 20 px CSS at any size. */
+/* Wickdeep survivors UI. One font: Pixel Operator (Hangul: Wickdeep Hangul, a NeoDunggeunmo subset). Root size scales with the viewport (min 20 px), so card text >= 20 px CSS at any size. */
 :root {
   --bg: #0b0908; --bg2: #16100c; --plate: rgba(22, 16, 12, 0.94); --plate2: #20170f; --edge: #5a4636; --edge2: #8a6a4a; --ink: #f6ead4; --mut: #b9a68c; --dim: #7d6c58;
   --gold: #ffd27a; --ember: #ff8a3d; --ember2: #c2541e; --blue: #6ad7ff; --green: #7fe39a; --red: #ff6a5a; --violet: #b49cff;
@@ -6,7 +6,7 @@
   --u: max(20px, 2.15vh); /* base text unit */
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; font-family: 'Pixel Operator', monospace; font-size: var(--u); line-height: 1.25; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; font-family: 'Pixel Operator', 'Wickdeep Hangul', monospace; font-size: var(--u); line-height: 1.25; }
 #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; cursor: var(--aim-cur); }
 #post { image-rendering: pixelated; }
 #ui { position: fixed; inset: 0; pointer-events: none; }
