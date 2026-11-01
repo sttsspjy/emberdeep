@@ -196,7 +196,7 @@
       if (q) kit.appendChild(kitRow(q.icon, keyOf('skill1', 'Q'), q.name, q.txt));
       if (sig && sig.paths && sig.paths.length) {
         const ps = document.createElement('div'); ps.className = 'hd-paths';
-        ps.innerHTML = `<div class="hd-ph"><span>${T('Paths')}</span><span class="mut">${T('Each path hides a Form')}</span></div>` +
+        ps.innerHTML = `<div class="hd-ph">${T('Paths')}</div>` +
           sig.paths.map(pa => `<div class="path"><b>${esc(L(pa.name))}</b><span>${esc(L(pa.ranks && pa.ranks[0] ? pa.ranks[0].txt : ''))}</span></div>`).join('');
         kit.appendChild(ps);
       }

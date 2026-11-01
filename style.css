@@ -131,7 +131,7 @@ h1.logo {
 .kit b .key { color: var(--blue); margin-right: 0.35em; }
 .kit span { color: var(--mut); font-size: var(--u); }
 .hd-paths { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.2em 0.9em; align-items: baseline; background: rgba(0, 0, 0, 0.25); border: 2px solid #3a2c22; padding: 0.35em 0.6em 0.45em; }
-.hd-ph { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 1em; color: var(--gold); padding-bottom: 0.15em; border-bottom: 2px solid #3a2c22; margin-bottom: 0.1em; }
+.hd-ph { grid-column: 1 / -1; color: var(--gold); padding-bottom: 0.15em; border-bottom: 2px solid #3a2c22; margin-bottom: 0.1em; }
 .path { display: contents; }
 .path b { font-weight: normal; color: var(--hc); padding-left: 0.85em; position: relative; white-space: nowrap; }
 .path b::before { content: ''; position: absolute; left: 0.05em; top: 0.42em; width: 0.36em; height: 0.36em; background: var(--hc); transform: rotate(45deg); }
