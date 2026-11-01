@@ -5,7 +5,7 @@ The tables give each path's shape ranks. dps.js figures (`node tools/dps.js supp
 
 ## Censer
 Horde (Garlic). An aura around you; every cooldown a pulse hits every foe inside, pushes it out (knock 50) and staggers it (0.1 s stun).
-Base: 6 dmg, cd 0.7 s, radius 40. dps.js base crowd 414, single 8.
+Base: 8 dmg, cd 0.7 s, radius 52. dps.js base crowd 709, single 11.
 
 | Path | Rank 1 | Rank 2 | Rank 3 |
 |---|---|---|---|
@@ -13,8 +13,8 @@ Base: 6 dmg, cd 0.7 s, radius 40. dps.js base crowd 414, single 8.
 | Ward | foes inside slowed 25% | pulses push harder (knock +60), +20% dmg | every 3rd pulse blasts foes back (knock 240, 0.3 s stun) |
 | Embers | pulses burn (40% dmg per s, 2 s) | each pulse drops a burning ember (12 px, 2.5 s, 80% per s) | burning foes slain burst (24 px, 60%; never chains) |
 
-Form **Holy Censer** (base 9 dmg, cd 0.55 s, radius 60, push 110, slow 20%): kills inside the aura heal you 1 HP each, at most 3 HP/s. Refines: aura +20% · heals allies inside too, cap 5 HP/s.
-dps.js: t5 773 / 14 · p0 1,252 / 28 · p1 800 / 28 · p2 1,340 / 22 · f00 1,889 / 34 · f10 1,377 / 55 · f20 2,097 / 50.
+Form **Holy Censer** (base 10 dmg, cd 0.55 s, radius 60, push 110, slow 20%): kills inside the aura heal you 1 HP each, at most 3 HP/s. Refines: aura +20% · heals allies inside too, cap 5 HP/s.
+dps.js: t5 1,243 / 17 · p0 1,984 / 33 · p1 1,267 / 38 · p2 1,982 / 34 · f00 2,408 / 38 · f10 1,712 / 62 · f20 2,788 / 61.
 
 ## Orbit Lanterns
 Horde. Lanterns circle you (pierce all), each re-hitting a foe every 0.4 s; the ring is permanent and rebuilds in phase when it changes.
@@ -44,7 +44,7 @@ dps.js: t5 298 / 20 · p0 610 / 44 · p1 542 / 50 · p2 517 / 74 · f00 1,215 / 
 
 ## Frost Ring
 Control. Every cooldown a ring grows from you to its radius in 0.45 s; its front hits each foe once: damage, push 70, slow 40% for 1.5 s. Extra rings of a volley follow 0.25 s apart at 50% dmg.
-Base: 5 dmg, cd 2.4 s, radius 60. dps.js base crowd 235, single 2.
+Base: 8 dmg, cd 2 s, radius 60. dps.js base crowd 324, single 4.
 
 | Path | Rank 1 | Rank 2 | Rank 3 |
 |---|---|---|---|
@@ -53,7 +53,7 @@ Base: 5 dmg, cd 2.4 s, radius 60. dps.js base crowd 235, single 2.
 | Shatter | every 3rd ring freezes 0.9 s | a shatter ring 0.7 s behind each freezing ring breaks frozen foes (+50%, ice burst, thaw) | every 2nd ring freezes |
 
 Form **Glacier** (base 15 dmg, cd 2.2 s, radius 60, slow 50%): every ring freezes, stays where it rose and holds 1.2 s as a frost wall (every 0.5 s: 30% dmg and a refreeze in its band). Refines: +1 ring · walls hold 1 s longer.
-dps.js: t5 424 / 4 · p0 628 / 4 · p1 663 / 7 · p2 716 / 6 · f00 1,067 / 21 · f10 845 / 65 · f20 856 / 67.
+dps.js: t5 578 / 6 · p0 1,097 / 8 · p1 951 / 12 · p2 1,072 / 11 · f00 1,211 / 21 · f10 977 / 65 · f20 974 / 67.
 
 Single-target numbers of these four stay below 15-30: the yardstick's lone foe at 50 px sits on the rim of 40-60 px auras and orbits, so it meets one hit window per pulse or pass.
 
@@ -71,17 +71,17 @@ Form **Avalanche** (base 18 dmg, 2 axes, pierce 4, area 1.1, knock 300): a landi
 dps.js: t5 188 / 20 · p0 631 / 31 · p1 332 / 26 · p2 312 / 151 · f00 787 / 65 · f10 617 / 61 · f20 476 / 397.
 
 ## Bramble Trail
-Control. Thorn patches root foes (0.5 s stun, then 0.8 s immune; bosses never, elites half) and prick them for little damage (3 per s, one hit per second). Walking drops a patch every 22 px; each cooldown a ring erupts around you, starting on the cursor side.
-Base: cd 1.6 s, ring of 5 patches at 48 px, patch radius 8.5, 1.8 s. dps.js base crowd 99, single 4 (standing still: ring only).
+Control. Thorn patches root foes (0.5 s stun, then 0.8 s immune; bosses never, elites half) and prick them (8 per s, one hit per second). Walking drops a patch every 22 px; each cooldown a ring erupts around you, starting on the cursor side.
+Base: cd 1.6 s, ring of 5 patches at 56 px, patch radius 8.5, 1.8 s. dps.js base crowd 241, single 10 (standing still: ring only).
 
 | Path | Rank 1 | Rank 2 | Rank 3 |
 |---|---|---|---|
 | Length | thorns last 30% longer | trail 3 thorns wide | trail 5 wide, +30% duration |
-| Snare | +2 ring thorns | thorns 20% wider, roots +0.3 s | second ring at 1.7x radius |
+| Snare | +3 ring thorns | thorns 20% wider, roots +0.3 s | second ring at 1.7x radius |
 | Barbs | a root also stabs (70% of a hit) | rooted kills sprout a patch (6 per cooldown) | stabs always crit, roots +0.2 s |
 
-Form **Thornwood** (base 2.5 dmg, cd 1.8 s, 5 thickets, radius 10, area 1.1, 2.2 s, root 0.6 s, immune only 0.4 s): thickets last longer and re-grab. Refines: +20% dmg, 15% wider · +2 thickets, roots +0.2 s.
-At most 140 live patches per hero. dps.js: t5 171 / 6 · p0 342 / 12 · p1 369 / 8 · p2 603 / 12 · f00 530 / 14 · f10 520 / 0 · f20 918 / 16.
+Form **Thornwood** (base 6.5 dmg, ring at 58 px, cd 1.8 s, 5 thickets, radius 10, area 1.1, 2.2 s, root 0.6 s, immune only 0.4 s): thickets last longer and re-grab. Refines: +20% dmg, 15% wider · +2 thickets, roots +0.2 s.
+At most 140 live patches per hero. dps.js: t5 368 / 15 · p0 662 / 29 · p1 783 / 0 · p2 1,289 / 30 · f00 1,041 / 0 · f10 1,085 / 0 · f20 1,863 / 0.
 
 ## Glaive
 Lane. Boomerangs thrown along the cursor fly out half their range and back; each trip cuts the first foe for a full hit and the next 3 for 30%, the rest for nothing. A fan of n glaives deals (1 + 0.4 (n - 1)) x one glaive.

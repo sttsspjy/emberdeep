@@ -11,24 +11,25 @@
   // Every knight weapon attacks in strings: fire() strikes at once, then S.n - 1 more strikes FORM.gap s apart (directional strikes alternate +-0.3 rad).
   // Strike keys (base + path / refine mods): arc (rad), back (directional strikes mirror behind at 0.5x damage, without waves or slams; follow-up strikes 0.8x), spin (a string's last strike is 360 deg), wave (crescents per strike), ret (crescents fly back),
   // slam (directional: blast at each strike tip; 360 Forms: ring around the hero on the string's last strike), stag (stun s on strike hits).
-  // Form keys: cracks (Colossus: crack lines across the first front sweep of a string), cutT (Gale: cut line life s), quake + fiss (Earthsplitter: every quake-th attack, fiss radial fissures), orbit (Tempest: spiral blades).
-  // FORM[wid]: full (strikes are 360 spins), spin (honours S.spin; Forms ignore it), gap (s between strikes), one (a single strike per attack; each S.n above 1 adds 2 cracks instead), heart (foes within half reach take that much extra), crack, swirl (spin hits push foes around the hero), gale (big crescents + cut lines), spiral (spiral blades per attack),
+  // Form keys: cracks (Colossus: crack lines across the first front sweep of a string), cutT (Gale: cut line life s), quake + fiss (Earthsplitter: every quake-th attack, fiss radial fissures), orbit (Tempest: spiral blades), twist (Whirlwind: twisters per whirl).
+  // FORM[wid]: full (strikes are 360 spins), spin (honours S.spin; Forms ignore it), gap (s between strikes), one (a single strike per attack; each S.n above 1 adds 2 cracks instead), heart (foes within half reach take that much extra), crack, swirl (spin hits push foes around the hero), gale (big crescents + cut lines), spiral (spiral blades per attack), twist (twisters per attack),
   // quake (fissure ring every S.quake attacks), move (cooldown runs this much faster while moving), big (big foes take that many x from sweeps and Gale crescents; bigAll: from slams too; never from Edge Wave crescents),
   // cone (half-angle rad: the swing arc is at most 2 x cone, no back swing, follow-up strikes on the aim line, crescents and cut lines fan within +-0.6 x cone).
   const FORM = {
     cleave: { gap: 0.15, spin: true, big: 1.6, bigAll: true },
     colossus: { gap: 0.3, crack: true, one: true, heart: 2.5, big: 1.6 },
-    whirlwind: { full: true, gap: 0.14, swirl: true, move: 0.3, heart: 1 },
+    whirlwind: { full: true, gap: 0.14, swirl: true, move: 0.3, heart: 1, twist: true, big: 1.5 },
     gale: { gap: 0.18, gale: true, big: 1.6, cone: PI / 6 },
-    earthsplitter: { full: true, gap: 0.2, quake: true, heart: 1 },
-    tempest: { full: true, gap: 0.16, spiral: true, heart: 1 },
+    earthsplitter: { full: true, gap: 0.2, quake: true, heart: 1, big: 1.6, bigAll: true },
+    tempest: { full: true, gap: 0.16, spiral: true, heart: 1, big: 1.6 },
   };
   const CRACK_MAX = 200; // crack / fissure / cut reach (px): stays inside the view
   const SPIN_K = 0.6; // Cleave's path spin (Whirl rank 3) deals x SPIN_K
   // Big foes (radius >= BIG_R: brutes, elites, bosses) hit by a weapon with F.big take the extra (big - 1) x dealt as a second, no-crit, no-knock hit.
-  const BIG_R = 12;
-  const heavy = (w, p, wid, e, dealt) => {
-    const k = FORM[wid] ? FORM[wid].big || 1 : 1;
+  // Seeking hits (Whirlwind twisters, Tempest blades) deal x SEEK_BIG to big foes instead.
+  const BIG_R = 12, SEEK_BIG = 2.2;
+  const heavy = (w, p, wid, e, dealt, kk) => {
+    const k = kk || (FORM[wid] ? FORM[wid].big || 1 : 1);
     if (k <= 1 || !(dealt > 0) || e.dead || !(e.r >= BIG_R || e.elite || e.boss)) return;
     const s = w.src(p, wid, 'weapon', 0); s.critC = 0; s.x = e.x; s.y = e.y;
     w.hitFoe(e, dealt * (k - 1) / (e.takeMul || 1), s);
@@ -36,16 +37,17 @@
   let HP = null, HW = '';
   const arcBig = (w, e, dealt) => heavy(w, HP, HW, e, dealt);
   const projBig = (w, pr, e, dealt) => heavy(w, pr.p, pr.wid, e, dealt);
+  const seekBig = (w, pr, e, dealt) => heavy(w, pr.p, pr.wid, e, dealt, SEEK_BIG);
 
   let DK = 1; // damage factor of the current strike: back side 0.5, follow-up strikes (k > 0) 0.8
   // Swirl: tangential push (counter-clockwise, spiralling outward) around (SX, SY); elites take half (on top of w.knock's elite factor).
   let SX = 0, SY = 0, SWF = 0;
-  const swirl = (w, e) => { const dx = e.x - SX, dy = e.y - SY; w.knock(e, -dy + dx * 0.5, dx + dy * 0.5, SWF * (e.elite ? 0.5 : 1)); };
+  const swirl = (w, e, dealt) => { const dx = e.x - SX, dy = e.y - SY; w.knock(e, -dy + dx * 0.5, dx + dy * 0.5, SWF * (e.elite ? 0.5 : 1)); arcBig(w, e, dealt); };
   const ARC = { knock: 0, look: 'slash', stun: 0, onHit: null, noEv: false };
   const SLAM = { knock: 0, look: 'quake', stun: 0, onHit: null };
   // Leg cap: the crescents of one strike hit one foe at most cap times per leg (out / back; Edge Wave WAVE_CAP, Gale GALE_CAP). Each strike takes a record of a per-slot ring
   // (WSET records, lazily built in ws.st.wr) holding per leg the foe ids hit and their counts (WIDS foes each; past that, no limit).
-  const WSET = 16, WIDS = 64, WAVE_CAP = 1, GALE_CAP = 7;
+  const WSET = 16, WIDS = 64, WAVE_CAP = 1, GALE_CAP = 6;
   const legOk = (L, id, cap) => {
     for (let i = 0; i < L.n; i++) if (L.ids[i] === id) { if (L.c[i] >= cap) return false; L.c[i]++; return true; }
     if (L.n < WIDS) { L.ids[L.n] = id; L.c[L.n++] = 1; }
@@ -89,21 +91,43 @@
     SLAM.knock = S.knock * 1.2; SLAM.stun = (S.stag || 0) + 0.3; SLAM.onHit = FORM[ws.id].bigAll ? arcBig : null; HP = p; HW = ws.id;
     w.blast(p, ws.id, x, y, r, S.dmg * k * DK, SLAM);
   };
-  // Spiral blade (Tempest): circles its hero at up to 48 px for 0.4 s, then spirals out to ~200 px (pr.oa angle, pr.od turn sign), re-hits a foe every 0.6 s.
+  // Nearest elite / boss inside hero p's view, or null.
+  const small = (e) => !(e.elite || e.boss);
+  const bigFoe = (w, p) => w.heroFoe(p, 400, small);
+  // Spiral blade (Tempest): circles its hero at up to 48 px for 0.4 s, then spirals out to ~200 px (pr.oa angle, pr.od turn sign), re-hits a foe every 0.6 s, big foes x SEEK_BIG.
+  // With a target (pr.tgt: the nearest elite / boss in view at the attack) it flies at it instead (<= 320 px/s) and circles it at its radius + 6 px until the blade's life ends.
   const spiral = (w, pr, dt) => {
     const p = pr.p; if (!p || dt <= 0) return;
     pr.oa += pr.od * 4.2 * dt;
-    const r = Math.min(48, 22 + pr.t * 110) + Math.max(0, pr.t - 0.4) * 150, tx = p.x + Math.cos(pr.oa) * r, ty = p.y - 4 + Math.sin(pr.oa) * r * 0.8;
-    pr.vx = (tx - pr.x) / dt; pr.vy = (ty - pr.y) / dt;
+    const e = pr.tgt;
+    let tx, ty;
+    if (pr.t > 0.4 && e && !e.dead && e.id === pr.tgtId) { const r = e.r + 6; tx = e.x + Math.cos(pr.oa) * r; ty = e.y + Math.sin(pr.oa) * r * 0.8; }
+    else { const r = Math.min(48, 22 + pr.t * 110) + Math.max(0, pr.t - 0.4) * 150; tx = p.x + Math.cos(pr.oa) * r; ty = p.y - 4 + Math.sin(pr.oa) * r * 0.8; }
+    let vx = (tx - pr.x) / dt, vy = (ty - pr.y) / dt;
+    const v = Math.hypot(vx, vy); if (pr.t > 0.4 && v > 320) { vx *= 320 / v; vy *= 320 / v; }
+    pr.vx = vx; pr.vy = vy;
   };
-  const ORB = { look: 'crescent', speed: 1, dmg: 0, pierce: 999, r: 10, life: 1.4, knock: 0, rehit: 0.6, tick: spiral };
+  const ORB = { look: 'crescent', speed: 1, dmg: 0, pierce: 999, r: 10, life: 1.4, knock: 0, rehit: 0.6, tick: spiral, onHit: seekBig };
   const spirals = (w, p, ws, S, k) => {
-    const n = (S.orbit | 0) + (S.wave | 0), sets = S.back ? 2 : 1;
-    ORB.dmg = S.dmg * 0.18; ORB.r = 10 * S.area; ORB.knock = S.knock * 0.3;
+    const n = (S.orbit | 0) + (S.wave | 0), sets = S.back ? 2 : 1, e = bigFoe(w, p);
+    ORB.dmg = S.dmg * 0.18; ORB.r = 10 * S.area; ORB.knock = S.knock * 0.3; ORB.life = e ? 2.6 : 1.4;
     for (let s = 0; s < sets; s++) for (let i = 0; i < n; i++) {
       const a = (i + 0.5 * (k & 1) + 0.25 * s) / n * TAU, pr = w.shoot(p, ws.id, p.x + Math.cos(a) * 22, p.y - 4 + Math.sin(a) * 18, a + PI / 2, S, ORB);
-      pr.oa = a; pr.od = s ? -1 : 1;
+      pr.oa = a; pr.od = s ? -1 : 1; pr.tgt = e; pr.tgtId = e ? e.id : 0;
     }
+  };
+  // Twister (Whirlwind): leaves along the hero's heading; with a target (pr.tgt: the nearest elite / boss in view at the whirl) it turns toward it at 9 rad/s and keeps circling through it.
+  // Pierces, re-hits a foe every 0.3 s, big foes x SEEK_BIG.
+  const twistTick = (w, pr, dt) => {
+    const e = pr.tgt; if (!e || e.dead || e.id !== pr.tgtId) return;
+    const a = Math.atan2(pr.vy, pr.vx), d = U.angDiff(a, Math.atan2(e.y - pr.y, e.x - pr.x)), st = 9 * dt, na = a + (Math.abs(d) < st ? d : Math.sign(d) * st);
+    pr.vx = Math.cos(na) * pr.sp; pr.vy = Math.sin(na) * pr.sp;
+  };
+  const TWIST = { look: 'whirl', speed: 150, dmg: 0, pierce: 999, r: 12, life: 2.5, knock: 0, rehit: 0.3, tick: twistTick, onHit: seekBig };
+  const twisters = (w, p, ws, S) => {
+    TWIST.dmg = S.dmg * S.twist; TWIST.r = 12 * S.area; TWIST.knock = S.knock * 0.2;
+    const e = bigFoe(w, p), pr = w.shoot(p, ws.id, p.x, p.y - 4, e ? Math.atan2(e.y - p.y, e.x - p.x) : p.mdir, S, TWIST);
+    pr.tgt = e; pr.tgtId = e ? e.id : 0;
   };
 
   // Strike reach: range x area; full spins leave out Velocity (S.range carries it): spin radius grows with area only.
@@ -138,6 +162,7 @@
       const F = FORM[ws.id], st = ws.st, n = F.one ? 1 : S.n | 0, a = aim(w, p, ws);
       st.k = 0; st.a = a; st.left = n - 1; st.t = F.gap;
       if (F.spiral) spirals(w, p, ws, S, st.q = (st.q | 0) + 1);
+      if (F.twist) twisters(w, p, ws, S);
       strike(w, p, ws, S, a, 0, n <= 1);
       if (F.quake && (st.q = (st.q | 0) + 1) >= (S.quake | 0)) {
         st.q = 0;
@@ -176,10 +201,10 @@
     ],
     noAmount: true,
   }, IMPL);
-  // Whirlwind (Whirl): 360 spins (60 px at Form base), hits swirl foes around and out from the hero, the cooldown runs 1.3x while moving.
+  // Whirlwind (Whirl): 360 spins (60 px at Form base), hits swirl foes around and out from the hero, the cooldown runs 1.3x while moving; each whirl hurls a twister.
   ED.addWeapon({
     id: 'whirlwind', name: 'Whirlwind', icon: 'weapon.alt.double_axe', sig: 'knight', mode: 'around', evolved: true, form: true, from: 'cleave', txt: 'Nonstop spins, faster while moving',
-    base: { dmg: 8.4, cd: 0.9, n: 1, pierce: 0, area: 1.2, speed: 0, dur: 0, knock: 150, range: 50, arc: TAU, wave: 0, stag: 0, slam: 0 },
+    base: { dmg: 8.4, cd: 0.9, n: 1, pierce: 0, area: 1.2, speed: 0, dur: 0, knock: 150, range: 50, arc: TAU, wave: 0, stag: 0, slam: 0, twist: 0.4 },
     refine: [
       { mods: { n: 1 }, txt: '+1 spin per whirl' },
       { mods: { area: 0.15 }, txt: '+15% spin size' },

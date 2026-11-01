@@ -24,7 +24,7 @@ Blight pool: radius 22 × area, 3 s, 0.3 × weapon damage per second to every fo
 | **Bone Storm** | Shards 5 | 6 shards (4.9 dmg, knock 80) orbit the hero (radius 30, 1 s, re-hitting every 0.25 s at 0.3×), then launch along the cursor direction at full damage and home; splinters as Shards 2 | +2 orbiting shards | +25% damage, pierce 2 more |
 | **Plague Field** | Plague 5 | Lobs 2 blight globs at the densest cluster (the rest around it; no foe: 90 px out along the cursor direction); plague pools 1.35 × dmg per second, 3.5 s, area +20%; a foe dying in a pool seeds a new pool where it fell | +1 glob, pools grow larger | +25% damage, pools last longer (+1.5 s) |
 | **Lich** | Plague 5 | The army rises as ghouls: 14 dmg base, cap 5, raise 2 per volley, 5 s life, 140 px/s) that rush a foe and burst on contact (radius 34, 1.15 × dmg), leaving a blight pool | +2 ghouls, raised faster | +25% damage, bigger bursts (+10 px) |
-| **Ossuary** | Legion 5 | The army rises as skeleton archers (cap 4, raise 2): hold 60–110 px off, loose a homing shard every 0.6 s (0.55 × dmg, pierce 9) | +2 skeleton archers | Archers loose 2 shards, +25% damage |
+| **Ossuary** | Legion 5 | The army rises as skeleton archers (cap 4, raise 2): target the nearest elite or boss within 170 px first, hold 60–110 px off, loose a homing shard every 0.6 s (0.65 × dmg, pierce 9; homes on elites and bosses first) | +2 skeleton archers | Archers loose 2 shards, +25% damage |
 
 All Forms keep the hero's own shards except Plague Field (globs) and Bone Storm (orbit).
 
@@ -43,15 +43,15 @@ Zero damage. A curved bone wall at the cursor for 5 s (scales with duration): a 
 
 | build | form | kind | crowd wpn | kills/s | single wpn | boss wpn |
 |---|---|---|---|---|---|---|
-| base | - |  | 643 | 8.8 | 61 | 61 |
-| t5 | - |  | 770 | 10.8 | 85 | 85 |
-| p0 | - |  | 1,521 | 21.4 | 187 | 187 |
-| p1 | - |  | 1,321 | 18.8 | 246 | 247 |
-| p2 | - |  | 1,648 | 22.6 | 140 | 140 |
-| f00 | bonelord | dir | 2,798 | 38.4 | 379 | 380 |
-| f01 | ossuary | dir | 2,555 | 34.3 | 374 | 374 |
-| f10 | bonestorm | 360째 | 1,488 | 19.7 | 152 | 207 |
-| f20 | plaguefield | dir | 3,154 | 44.4 | 556 | 632 |
-| f21 | lich | dir | 2,463 | 34.3 | 452 | 452 |
+| base | - |  | 591 | 4.7 | 61 | 61 |
+| t5 | - |  | 746 | 6.5 | 85 | 85 |
+| p0 | - |  | 2,045 | 17.6 | 187 | 187 |
+| p1 | - |  | 1,677 | 14.8 | 246 | 247 |
+| p2 | - |  | 2,087 | 17.9 | 140 | 140 |
+| f00 | bonelord | dir | 2,656 | 21.7 | 380 | 380 |
+| f01 | ossuary | dir | 3,373 | 27.9 | 428 | 428 |
+| f10 | bonestorm | 360° | 1,658 | 13.7 | 166 | 207 |
+| f20 | plaguefield | dir | 3,921 | 34.0 | 595 | 632 |
+| f21 | lich | dir | 3,252 | 27.6 | 451 | 452 |
 
-Role rule (f rows): Bone Storm (360° orbit) crowd ≤ 0.6 × directional mean (2,742 → ≤ 1,645): met; directional single ≥ 2 × Bone Storm (152 → ≥ 304): met; each kind within ±25% of its mean.
+Role rule (f rows): Bone Storm (360° orbit) crowd ≤ 0.6 × directional mean (3,301 → ≤ 1,980): met; directional single ≥ 2 × Bone Storm (166 → ≥ 332): met; each kind within ±25% of its mean.

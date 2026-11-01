@@ -21,13 +21,14 @@
   }
 
   // ---------------- hits ----------------
-  // True when a pinning dagger of slot state st sits in foe e (Reaper's Return).
-  const pinned = (st, e) => { const P = st.pins; if (P) for (let i = 0; i < P.length; i++) if (P[i].id === e.id) return true; return false; };
+  // Pinning daggers of slot state st sitting in foe e (Reaper's Return); a foe holds at most PIN_MAX.
+  const PIN_MAX = 2;
+  const pins = (st, e) => { const P = st.pins; let n = 0; if (P) for (let i = 0; i < P.length; i++) if (P[i].id === e.id) n++; return n; };
   // Live Assassinate mark of slot state st, or null.
   const markOf = (st) => { const m = st.mark; return m && !m.dead && m.id === st.mid ? m : null; };
   // One weapon hit on e: a forced crit on a crit stab, the mark (dmg x S.mk) or a pinned foe, else no crit; then execute (a non-boss foe left at or under S.exec of its max HP dies).
   function strike(w, p, ws, S, e, dmg, crit, kx, ky) {
-    const st = ws.st, onMark = S.mark && e === markOf(st), sure = crit || onMark || (S.pin && pinned(st, e));
+    const st = ws.st, onMark = S.mark && e === markOf(st), sure = crit || onMark || (S.pin && pins(st, e) > 0);
     const s = w.src(p, ws.id, 'weapon', S.knock); s.kx = kx; s.ky = ky; s.crit = sure; s.critC = sure ? -1 : 0;
     w.hitFoe(e, onMark ? dmg * S.mk : dmg, s);
     if (S.exec > 0 && !e.dead && !e.boss && e.hp <= e.maxHp * S.exec) execute(w, p, ws, S, e);
@@ -93,7 +94,7 @@
   // ---------------- thrown daggers ----------------
   // Every S.tcd s: S.thrown daggers fanned 0.35 rad along the cursor, out S.trange x area px and back (dmg x S.tdm, pierce all; each foe hit once out, once back);
   // S.hover: they spin 0.4 s at the far end, re-hitting every 0.15 s. S.fan (Shadow Fan): S.fan + S.thrown daggers fanned forward and as many behind; the return leg always crits.
-  // S.pin (Reaper's Return): a dagger sticks in the first foe it hits for S.pdur s (strikes on that foe crit), then tears out (a TEAR px cut, forced crits) and flies back as a forced crit.
+  // S.pin (Reaper's Return): a dagger sticks in the first foe it hits holding fewer than PIN_MAX pins for S.pdur s (strikes on that foe crit), then tears out (a TEAR px cut, forced crits) and flies back as a forced crit.
   // Per-dagger state st { h (hovering), e / id (pinned foe), t (pin time left), ws } from a pool, returned on the dagger's end.
   const HOVER = 0.4, TSPEED = 320, TEAR = 24, MBURST = { kind: 'weapon', knock: 80, noEv: true, crit: true };
   const stPool = [];
@@ -121,7 +122,7 @@
   function thrownHit(w, pr, e) {
     const p = pr.p; if (!p || !p.weapons[0]) return;
     const ws = p.weapons[0], S = w.weaponS(p, 0), s = pr.st;
-    if (s && S.pin && !pr.back && !s.e && !e.dead && ws.st.pins) { s.e = e; s.id = e.id; s.t = S.pdur; s.ws = ws; ws.st.pins.push(s); }
+    if (s && S.pin && !pr.back && !s.e && !e.dead && ws.st.pins && pins(ws.st, e) < PIN_MAX) { s.e = e; s.id = e.id; s.t = S.pdur; s.ws = ws; ws.st.pins.push(s); }
     if (S.exec > 0 && !e.dead && !e.boss && e.hp <= e.maxHp * S.exec) execute(w, p, ws, S, e);
   }
   const TO = { look: 'rknife', pierce: 999, ret: true, r: 5, speed: TSPEED, dmg: 0, life: 1, st: null, tick: thrownTick, onHit: thrownHit, onEnd: giveSt };
@@ -234,7 +235,7 @@
   // Thousand Cuts (Flurry): the stab storm, each stab jittered within +-S.cone of the aim.
   ED.addWeapon({
     id: 'thousand', name: 'Thousand Cuts', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A storm of stabs in a narrow cone',
-    base: base({ dmg: 15, cd: 0.4, n: 6, pierce: 0, area: 1, speed: 0, dur: 0, knock: 2, range: 0, crit: 0.1, len: 68, wid: 12, cone: 0.36, scap: 4 }),
+    base: base({ dmg: 15, cd: 0.4, n: 6, pierce: 0, area: 1, speed: 0, dur: 0, knock: 2, range: 0, crit: 0.1, len: 68, wid: 12, cone: 0.36 }),
     refine: [
       { mods: { n: 2 }, txt: '+2 stabs per storm' },
       { mods: { cone: 0.12, len: 14 }, txt: 'Storm widens, stabs reach farther' },
@@ -243,16 +244,16 @@
   // Assassinate (Lethality): stabs + the mark and the shadow's X cuts.
   ED.addWeapon({
     id: 'assassinate', name: 'Assassinate', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A shadow hunts the toughest foe',
-    base: base({ dmg: 12.6, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.15, mark: true, mk: 1.1, mcd: 0.45, mlen: 64 }),
+    base: base({ dmg: 12.6, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.15, mark: true, mk: 0.95, mcd: 0.45, mlen: 64, scap: 2 }),
     refine: [
-      { mods: { mcd: -0.2 }, txt: 'The shadow strikes far more often' },
+      { mods: { mcd: -0.15 }, txt: 'The shadow strikes far more often' },
       { mods: { mlen: 40 }, txt: 'Shadow cuts reach twice as far' },
     ],
   }, stabImpl);
   // Death Lotus (Lethality): crit stabs bloom into a ring of blades around their first foe.
   ED.addWeapon({
     id: 'lotus', name: 'Death Lotus', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Crits bloom into a ring of blades',
-    base: base({ dmg: 13.3, cd: 0.45, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 10, range: 0, crit: 0.15, bloom: 0.32, petals: 6, plen: 0.6 }),
+    base: base({ dmg: 13.3, cd: 0.45, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 10, range: 0, crit: 0.15, bloom: 0.32, petals: 6, plen: 0.6, scap: 4 }),
     refine: [
       { mods: { petals: 2 }, txt: '+2 blades per bloom' },
       { mods: { crit: 0.1, plen: 0.4 }, txt: '+10% crit, blades reach farther' },
@@ -261,7 +262,7 @@
   // Reaper's Return (Return): stabs + thrown daggers that pin a foe (strikes on it crit), then tear back as crits.
   ED.addWeapon({
     id: 'reaper', name: "Reaper's Return", icon: 'weapon.knives', look: 'pknife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Daggers pin foes, then tear back',
-    base: base({ dmg: 12.6, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, thrown: 3, tcd: 1, trange: 120, tdm: 1, pin: true, pdur: 1.2 }),
+    base: base({ dmg: 12.6, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, thrown: 3, tcd: 1, trange: 120, tdm: 1, pin: true, pdur: 1.2, scap: 2 }),
     refine: [
       { mods: { thrown: 1 }, txt: '+1 pinning dagger' },
       { mods: { thrown: 1, tcd: -0.3 }, txt: '+1 pinning dagger, thrown more often' },

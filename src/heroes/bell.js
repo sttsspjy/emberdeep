@@ -20,12 +20,12 @@
     return ZO;
   };
   // Every bell weapon hit (rings, bodies) on a big foe (radius >= BIG_R: brutes, elites, bosses) deals x BIG_K.
-  const BIG_R = 12, BIG_K = 3;
+  const BIG_R = 12, BIG_K = 5;
 
   // ---------------- waves ----------------
   // Wave options (scratch; wopt resets, wave copies): R0 start radius, R end radius (R < R0: the ring closes in), dur s (ease out) after delay s, dmg, stun s, knock (away from the centre),
   // pull (> 0: pull every foe reached toward that radius instead; a foe that cannot be moved (boss, no knockback) takes x crush), slow k (2 s), freeze s, res (+dmg share vs slowed / stunned / frozen foes), shatter (+dmg share vs frozen foes,
-  // then a shard burst and the ice breaks), shard (ring kills burst in shards), seen (a Set shared by several waves: a foe is hit once across all of them; null: per wave).
+  // then a shard burst and the ice breaks; bosses take the share without the burst), shard (ring kills burst in shards), seen (a Set shared by several waves: a foe is hit once across all of them; null: per wave).
   const WO = { R0: 0, R: 0, dur: 0, delay: 0, dmg: 0, stun: 0, knock: 0, pull: 0, slow: 0, freeze: 0, res: 0, shatter: 0, shard: 0, crush: 0, seen: null };
   const wopt = (R0, R, dur, dmg) => {
     WO.R0 = R0; WO.R = R; WO.dur = dur; WO.dmg = dmg;
@@ -58,6 +58,7 @@
       const held = e.freezeT > 0, shat = s.shatter > 0 && held;
       let m = shat ? 1 + s.shatter : s.res && (held || e.stunT > 0 || e.slowT > 0) ? 1 + s.res : 1;
       if (e.r >= BIG_R && s.kind === 'weapon') m *= BIG_K;
+      if (s.shatter > 0 && e.boss) m *= 1 + s.shatter; // bosses never freeze: every shattering ring deals its shatter bonus to them
       if (s.crush > 0 && (e.boss || !(e.def.kb > 0))) m *= s.crush;
       const src = w.src(p, z.wid, s.kind, s.knock); src.x = z.x; src.y = z.y;
       // knock decays at 10/s, so travel ~ force / 10: a push carries a foe at most to the ring's rim (+6 px); a pull drags it toward radius s.pull
@@ -158,9 +159,9 @@
   // One toll hits a foe once with the bell rings and once with their echoes, however many bells reach it (shared Sets, two pairs alternating per toll); a toll never restarts mid-sequence.
   ED.addWeapon({
     id: 'cathedral', name: 'Cathedral', icon: 'weapon.greatbell', sig: 'bell', mode: 'around', evolved: true, form: true, from: 'toll', txt: 'Great bells peal in sequence',
-    base: { dmg: 4.9, cd: 1.8, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 300, range: 0, r: 84, orbit: 62, spin: 1.7, body: 0.8, stun: 0.2, great: 1 },
+    base: { dmg: 4.9, cd: 1.8, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 300, range: 0, r: 84, orbit: 62, spin: 1.7, body: 0.8, stun: 0.2, great: 2 },
     refine: [
-      { mods: { great: 1 }, txt: 'The great ring tolls twice' },
+      { mods: { great: 1 }, txt: 'The great ring tolls three times' },
       { mods: { area: 0.25 }, txt: '+25% ring size' },
     ], noAmount: true,
   }, {
@@ -244,24 +245,25 @@
   });
 
   // ---------------- Undertow ----------------
-  // Bells hold a fixed orbit (S.orbit x sqrt(area) x 0.75); each fire a ring closes in from S.r x area x 2.2 to the hero over 0.5 s (80% damage), dragging every foe it reaches
-  // toward the bells' orbit; then a clap ring from the hero out to the orbit + 26 px (60% damage) stuns them S.stun + 0.4 s.
+  const UT_O = 1.25;
+  // Bells hold a fixed orbit (S.orbit x sqrt(area) x UT_O); each fire a ring closes in from S.r x area x 2.2 to the hero over 0.5 s (80% damage), dragging every foe it reaches
+  // toward the bells' orbit; then a clap ring from the hero out to the orbit + 26 px (60% damage) stuns them S.stun + 0.6 s.
   ED.addWeapon({
     id: 'undertow', name: 'Undertow', icon: 'weapon.greatbell', sig: 'bell', mode: 'around', evolved: true, form: true, from: 'toll', txt: 'Peals drag the horde onto your bells',
-    base: { dmg: 3.15, cd: 1.6, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 60, range: 0, r: 80, orbit: 44, spin: 2.6, body: 1, stun: 0 },
+    base: { dmg: 3.15, cd: 1.6, n: 3, pierce: 0, area: 1, speed: 0, dur: 0, knock: 60, range: 0, r: 80, orbit: 44, spin: 2.6, body: 1, stun: 0 },
     refine: [
       { mods: { n: 1 }, txt: '+1 bell' },
       { mods: { area: 0.25 }, txt: 'Drags from 25% farther' },
     ], noAmount: true,
   }, {
-    tick(w, p, ws, S, dt) { orbit(w, p, ws, S.n, S.orbit * Math.sqrt(S.area) * 0.75, S.spin, S.dmg * S.body, 13, dt, 'tollb'); },
+    tick(w, p, ws, S, dt) { orbit(w, p, ws, S.n, S.orbit * Math.sqrt(S.area) * UT_O, S.spin, S.dmg * S.body, 13, dt, 'tollb'); },
     fire(w, p, ws, S) {
-      const Ro = S.orbit * Math.sqrt(S.area) * 0.75;
+      const Ro = S.orbit * Math.sqrt(S.area) * UT_O;
       let o = wopt(S.r * S.area * 2.2, 12, 0.5, S.dmg * 0.8);
       o.pull = Ro; o.crush = 6; o.slow = S.chill || 0; o.res = S.res || 0; o.shard = S.shard || 0;
       wave(w, p, ws.id, p.x, p.y - 6, 'underw', 'weapon');
       o = wopt(0, Ro + 26, 0.2, S.dmg * 0.6);
-      o.delay = 0.5; o.stun = (S.stun || 0) + 0.4; o.knock = S.knock; o.res = S.res || 0; o.shard = S.shard || 0;
+      o.delay = 0.5; o.stun = (S.stun || 0) + 0.6; o.knock = S.knock; o.res = S.res || 0; o.shard = S.shard || 0;
       wave(w, p, ws.id, p.x, p.y - 6, 'cathw', 'weapon');
       return true;
     },

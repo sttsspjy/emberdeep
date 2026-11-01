@@ -87,7 +87,7 @@
   };
   ED.addWeapon({
     id: 'censer', name: 'Censer', icon: 'shield.gold', look: 'censer', support: true, role: 'horde', mode: 'around', txt: 'A smoking aura burns foes near you', noAmount: true,
-    base: { dmg: 6, cd: 0.7, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 0, range: 0, rad: 40, swing: 0, push: 50, slowK: 0, ward: 0, burn: 0, embers: 0, burst: 0, heal: 0 },
+    base: { dmg: 8, cd: 0.7, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 0, range: 0, rad: 52, swing: 0, push: 50, slowK: 0, ward: 0, burn: 0, embers: 0, burst: 0, heal: 0 },
     paths: [
       { id: 'size', name: 'Size', forms: ['holycenser'], ranks: [
         { mods: { area: 0.2 }, txt: 'Aura 20% wider' },
@@ -106,7 +106,7 @@
   ED.addWeapon({
     id: 'holycenser', name: 'Holy Censer', icon: 'fx.burst', look: 'holycenser', support: true, role: 'horde', mode: 'around', evolved: true, form: true, from: 'censer',
     txt: 'Kills in the aura heal you', noAmount: true,
-    base: { dmg: 9, cd: 0.55, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 0, range: 0, rad: 60, swing: 0, push: 110, slowK: 0.2, heal: 3 },
+    base: { dmg: 10, cd: 0.55, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 0, range: 0, rad: 60, swing: 0, push: 110, slowK: 0.2, heal: 3 },
     refine: [
       { mods: { area: 0.2 }, txt: 'Holy aura 20% wider' },
       { mods: { heal: 2, allies: true }, txt: 'Heals allies too, up to 5 HP/s' },
@@ -403,7 +403,7 @@
   ED.addWeapon({
     id: 'frostring', name: 'Frost Ring', icon: 'fx.ice.burst', look: 'frostring', support: true, role: 'control', mode: 'around', txt: 'A ring of frost slows foes near you',
     noAmount: true,
-    base: { dmg: 5, cd: 2.4, n: 1, pierce: 0, area: 1, speed: 0, dur: 1.5, knock: 70, range: 0, rad: 60, exp: 0.45, slowK: 0.4, shards: 0, frost: 0, freezeEv: 0, shatter: 0 },
+    base: { dmg: 8, cd: 2, n: 1, pierce: 0, area: 1, speed: 0, dur: 1.5, knock: 70, range: 0, rad: 60, exp: 0.45, slowK: 0.4, shards: 0, frost: 0, freezeEv: 0, shatter: 0 },
     paths: [
       { id: 'reach', name: 'Reach', forms: ['glacier'], ranks: [
         { mods: { area: 0.2 }, txt: 'Rings 20% wider' },

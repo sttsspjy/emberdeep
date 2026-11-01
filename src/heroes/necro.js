@@ -48,7 +48,8 @@
   const sigSlot = (p) => { for (let i = 0; i < p.weapons.length; i++) if (ROOTS[p.weapons[i].id]) return i; return -1; };
   const MHIT = { knock: 70, noEv: true, kind: 'minion' }, KHIT = { knock: 200, noEv: true, kind: 'minion', stun: 0.3 };
   const SLAM = { knock: 260, noEv: true, kind: 'minion', stun: 0.4 }, GBOOM = { knock: 180, kind: 'minion', look: 'ghoul' };
-  const ASHOT = { look: 'bone', speed: 300, dmg: 0, pierce: 2, r: 6, life: 0.75, homing: 2.5, knock: 30 };
+  const smallFoe = (f) => !(f.elite || f.boss); // archers and their shards prefer elites and bosses
+  const ASHOT = { look: 'bone', speed: 300, dmg: 0, pierce: 2, r: 6, life: 0.75, homing: 2.5, hskip: smallFoe, knock: 30 };
   const VZ = { team: 0, p: null, wid: '', x: 0, y: 0, r: 0, dur: 0.3, look: 'boneslam' };
   // Visual-only zone (no damage): look at (x, y), radius r, dur s.
   const vfx = (w, p, wid, look, x, y, r, dur) => { VZ.p = p; VZ.wid = wid; VZ.look = look; VZ.x = x; VZ.y = y; VZ.r = r; VZ.dur = dur; w.zone(VZ); };
@@ -67,14 +68,14 @@
     const far = p.dead || U.dist2(z.x, z.y, p.x, p.y) > LEASH * LEASH;
     let e = s.tgt;
     if (far) e = null;
-    else if (!e || e.dead || e.id !== s.tid || s.rt <= 0) { e = w.nearestFoe(z.x, z.y, K === 2 ? 170 : 150); s.rt = 0.3; }
+    else if (!e || e.dead || e.id !== s.tid || s.rt <= 0) { e = (K === 2 && w.nearestFoe(z.x, z.y, 170, smallFoe)) || w.nearestFoe(z.x, z.y, K === 2 ? 170 : 150); s.rt = 0.3; }
     s.tgt = e; s.tid = e ? e.id : 0;
     let tx, ty, sp = s.spd;
     if (e) { tx = e.x; ty = e.y; }
     else { const a = s.slot * 2.4 + w.time * 0.6; tx = p.x + Math.cos(a) * 34; ty = p.y + Math.sin(a) * 24; if (far) sp *= 1.7; }
     const dx = tx - z.x, dy = ty - z.y, d = Math.hypot(dx, dy);
     if (d > 0.5) z.a = Math.atan2(dy, dx);
-    if (K === 2) { // archer: holds 60-110 px from its target, looses shards
+    if (K === 2) { // archer: targets the nearest elite / boss within 170 px first; holds 60-110 px from its target, looses shards
       let mv = 0;
       if (!e) mv = d > 6 ? 1 : 0; else if (d > 110) mv = 1; else if (d < 60) mv = -0.7;
       if (mv && d > 0.5) { const st = Math.min(Math.abs(d - 85) + 1, sp * TICK) * mv; ED.Arena.move(w.arena, z, dx / d * st, dy / d * st, z.r); }
@@ -290,10 +291,10 @@
       { mods: { dmg: 0.25, gr: 10 }, txt: '+25% damage, bigger bursts' },
     ],
   }, SHOT);
-  // Ossuary: the army rises as skeleton archers (keep 60-110 px off, loose S.avol homing shards every S.acd s that split as Bone Shard); shards as Bone Shard.
+  // Ossuary: the army rises as skeleton archers (keep 60-110 px off, loose S.avol homing shards every S.acd s; archers and shards go for elites and bosses first); shards as Bone Shard.
   ED.addWeapon({
-    id: 'ossuary', name: 'Ossuary', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'Your army takes up bows of bone',
-    base: base({ dmg: 9.8, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 2, kind: 2, life: 12, mk: 0.55, acd: 0.6, avol: 1, apierce: 9 }),
+    id: 'ossuary', name: 'Ossuary', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'Bone archers hunt the biggest foes',
+    base: base({ dmg: 9.8, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 2, kind: 2, life: 12, mk: 0.65, acd: 0.6, avol: 1, apierce: 9 }),
     refine: [
       { mods: { cap: 2 }, txt: '+2 skeleton archers' },
       { mods: { avol: 1, dmg: 0.25 }, txt: 'Archers loose 2 shards, +25% damage' },

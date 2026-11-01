@@ -173,14 +173,14 @@
   };
   ED.addWeapon({
     id: 'bramble', name: 'Bramble Trail', look: 'bramble', held: 'proj.thorn', support: true, role: 'control', mode: 'around', txt: 'Thorns root foes where you walk',
-    base: { dmg: 3, cd: 1.6, n: 5, pierce: 0, area: 1, speed: 0, dur: 1.8, knock: 0, range: 0, gap: 22, size: 8.5, rows: 1, ringR: 48, ring2: false, root: 0.5, imm: 0.8, barb: 0, rcrit: false, burst: false },
+    base: { dmg: 8, cd: 1.6, n: 5, pierce: 0, area: 1, speed: 0, dur: 1.8, knock: 0, range: 0, gap: 22, size: 8.5, rows: 1, ringR: 56, ring2: false, root: 0.5, imm: 0.8, barb: 0, rcrit: false, burst: false },
     paths: [
       { id: 'length', name: 'Length', forms: ['thornwood'], ranks: [
         { mods: { dur: 0.3 }, txt: 'Thorns last 30% longer' },
         { mods: { rows: 2 }, txt: 'The trail grows 3 thorns wide' },
         { mods: { rows: 2, dur: 0.3 }, txt: 'Trail 5 wide, thorns last longer' }] },
       { id: 'snare', name: 'Snare', forms: ['thornwood'], ranks: [
-        { mods: { n: 2 }, txt: '+2 thorns in the ring' },
+        { mods: { n: 3 }, txt: '+3 thorns in the ring' },
         { mods: { area: 0.2, root: 0.3 }, txt: 'Thorns 20% wider, roots 0.3 s longer' },
         { mods: { ring2: true }, txt: 'A second, outer ring of thorns' }] },
       { id: 'barbs', name: 'Barbs', forms: ['thornwood'], ranks: [
@@ -191,7 +191,7 @@
   }, bramble);
   ED.addWeapon({
     id: 'thornwood', name: 'Thornwood', look: 'thicket', held: 'proj.thorn', support: true, role: 'control', mode: 'around', evolved: true, form: true, from: 'bramble', txt: 'Thickets persist and grab',
-    base: { dmg: 2.5, cd: 1.8, n: 5, pierce: 0, area: 1.1, speed: 0, dur: 2.2, knock: 0, range: 0, gap: 20, size: 10, rows: 1, ringR: 50, ring2: false, root: 0.6, imm: 0.4, barb: 0, rcrit: false, burst: false },
+    base: { dmg: 6.5, cd: 1.8, n: 5, pierce: 0, area: 1.1, speed: 0, dur: 2.2, knock: 0, range: 0, gap: 20, size: 10, rows: 1, ringR: 58, ring2: false, root: 0.6, imm: 0.4, barb: 0, rcrit: false, burst: false },
     refine: [
       { mods: { dmg: 0.2, area: 0.15 }, txt: '+20% damage, thickets 15% wider' },
       { mods: { n: 2, root: 0.2 }, txt: '+2 thickets, roots 0.2 s longer' },

@@ -108,7 +108,7 @@
         { mods: { bounce: 2 }, txt: 'Arrows bounce to 2 more foes' },
         { mods: { kshot: 1 }, txt: 'Kills loose an arrow at the next foe' },
         { mods: { dmg: 0.25, bounce: 2 }, txt: '+25% damage, +2 bounces' }] },
-    ],
+    ],
   }, {
     fire: (w, p, ws, S) => { volley(w, p, ws, S, ARROW, FAN, FANK); return true; },
     kill: killShot,
@@ -129,7 +129,7 @@
   const HAIL = { look: 'arrow', pierce: 0, bk: 0.5, onHit: split };
   ED.addWeapon({
     id: 'hail', name: 'Hail of Arrows', icon: 'weapon.twinbows', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'Arrows split on hit',
-    base: { dmg: 15.4, cd: 1.05, n: 3, pierce: 1, area: 1, speed: 440, dur: 0, knock: 30, range: 320, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 14.8, cd: 1.05, n: 3, pierce: 1, area: 1, speed: 440, dur: 0, knock: 30, range: 320, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows' },
       { mods: { dmg: 0.25, pierce: 2 }, txt: '+25% damage, pierce 2 more' },

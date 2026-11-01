@@ -75,12 +75,15 @@
     pool(w, p, ws, S, z.x, z.y, z.r * 0.7, S.dmg * 0.45);
     bomblets(w, p, z.wid, S, z.x, z.y, z.r, z.st);
   };
-  // Mortar emitter (root, Inferno, Wildfire, Pyre): every 2 x S.cd, S.shells shells (1.25 x dmg), the first on the densest cluster within SHELL_RANGE, the rest on random foes in view.
+  // Shell aim of hero p within range: the nearest elite or boss in view, else the densest cluster point (w.pt), else null.
+  const smallFoe = (e) => !(e.elite || e.boss);
+  const shellAim = (w, p, range) => w.heroFoe(p, range, smallFoe) || w.target('densest', p, range);
+  // Mortar emitter (root, Inferno, Wildfire, Pyre): every 2 x S.cd, S.shells shells (1.25 x dmg), the first on shellAim within SHELL_RANGE, the rest on random foes in view.
   const mortarTick = (w, p, ws, S, dt) => {
     const s = ws.st;
     s.mt = (s.mt === undefined ? 1 : s.mt) - dt;
     if (s.mt > 0) return;
-    const t = w.target('densest', p, SHELL_RANGE);
+    const t = shellAim(w, p, SHELL_RANGE);
     if (!t) { s.mt = 0.3; return; }
     s.mt = S.cd * 2;
     const tx = t.x, ty = t.y, n = S.shells | 0, r = 34 * S.area;
@@ -192,7 +195,7 @@
         { mods: { dur: 0.6, pools: 4 }, txt: 'Fire pools last 60% longer' },
         { mods: { flare: 0.8, dmg: 0.2 }, txt: 'Pools flare as they die, +20% damage' }] },
       { id: 'mortar', name: 'Mortar', forms: ['firestorm', 'napalm'], ranks: [
-        { mods: { shells: 1 }, txt: 'Lobs a shell at the thickest crowd' },
+        { mods: { shells: 1 }, txt: 'Lobs a shell at elites or crowds' },
         { mods: { shells: 1 }, txt: '+1 shell' },
         { mods: { cluster: 4 }, txt: 'Shells scatter 4 burning bomblets' }] },
       { id: 'combust', name: 'Combustion', forms: ['wildfire', 'pyre'], ranks: [
@@ -240,17 +243,17 @@
   }, impl((w, p, ws, S) => fan(w, p, ws, S, IBOLT, 0.18)));
 
   // ---------------- Firestorm (Mortar) ----------------
-  // A walking salvo: S.n + S.shells shells land in a line across the densest cluster within SHELL_RANGE along the line of fire (26 px x area apart, 0.08 s apart);
+  // A walking salvo: S.n + S.shells shells land in a line across shellAim within SHELL_RANGE along the line of fire (26 px x area apart, 0.08 s apart);
   // each blasts, leaves a fire pool and scatters S.cluster bomblets. No foe: the salvo walks 120 px out along the cursor dir.
   ED.addWeapon({
     id: 'firestorm', name: 'Firestorm', icon: 'weapon.inferno', look: 'shell', sig: 'pyro', mode: 'densest', evolved: true, form: true, from: 'firebolt', shellForm: true, txt: 'A walking salvo of shells',
-    base: { dmg: 16.8, cd: 1.6, n: 3, pierce: 0, area: 1.2, speed: 0, dur: 2.5, knock: 100, range: SHELL_RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    base: { dmg: 16, cd: 1.6, n: 3, pierce: 0, area: 1.2, speed: 0, dur: 2.5, knock: 100, range: SHELL_RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 2 }, txt: '+2 shells per salvo' },
       { mods: { area: 0.25, cluster: 2 }, txt: 'Blasts 25% wider, +2 bomblets' },
     ],
   }, impl((w, p, ws, S) => {
-    const t = w.target('densest', p, S.range);
+    const t = shellAim(w, p, S.range);
     let tx, ty;
     if (t) { tx = t.x; ty = t.y; } else { const a = w.aimDir(p); tx = p.x + Math.cos(a) * 120; ty = p.y + Math.sin(a) * 120; }
     const a = Math.atan2(ty - p.y, tx - p.x), c = Math.cos(a), s = Math.sin(a), n = Math.max(1, (S.n | 0) + (S.shells | 0)), step = 26 * S.area, r = 34 * S.area;
@@ -310,8 +313,8 @@
   }, impl((w, p, ws, S) => fan(w, p, ws, S, PBOLT, 0.45)));
 
   // ---------------- Napalm (Mortar) ----------------
-  // S.n + S.shells canisters lob onto the densest cluster and random foes within SHELL_RANGE (no foe: 120 px out along the cursor dir, extras fanned 0.5 rad); each splashes (26 px x area, 0.6 x dmg) and leaves a fire line
-  // (90 px x area long, 16 px x area wide, across the throw, 0.45 x dmg per second, 1.3 x S.dur s); S.cluster bomblets.
+  // S.n + S.shells canisters lob onto shellAim and random foes within SHELL_RANGE (no foe: 120 px out along the cursor dir, extras fanned 0.5 rad); each splashes (26 px x area, 0.6 x dmg) and leaves a fire line
+  // (90 px x area long, 16 px x area wide, across the throw, 0.6 x dmg per second, 1.3 x S.dur s); S.cluster bomblets.
   const LINE = { team: 0, p: null, wid: '', x: 0, y: 0, r: 0, a: 0, len: 0, w: 0, dur: 0, dps: 0, tick: 0.5, burn: null, look: 'napalm', onEnd: null };
   const SPL = { look: 'fire', burn: null, knock: 60 };
   const canEnd = (w, z) => {
@@ -320,19 +323,19 @@
     w.blast(p, z.wid, z.x, z.y, 26 * S.area, z.st, SPL);
     const a = z.a + Math.PI / 2, len = 90 * S.area;
     LINE.p = p; LINE.wid = z.wid; LINE.a = a; LINE.len = len; LINE.w = 16 * S.area; LINE.x = z.x - Math.cos(a) * len / 2; LINE.y = z.y - Math.sin(a) * len / 2;
-    LINE.dur = S.dur * 1.3; LINE.dps = S.dmg * 0.45; LINE.onEnd = null;
+    LINE.dur = S.dur * 1.3; LINE.dps = S.dmg * 0.6; LINE.onEnd = null;
     ground(w, ws, S, LINE);
     bomblets(w, p, z.wid, S, z.x, z.y, 26 * S.area, z.st);
   };
   ED.addWeapon({
     id: 'napalm', name: 'Napalm', icon: 'weapon.inferno', look: 'shell', sig: 'pyro', mode: 'densest', evolved: true, form: true, from: 'firebolt', shellForm: true, txt: 'Shells that leave walls of fire',
-    base: { dmg: 11.2, cd: 1.4, n: 2, pierce: 0, area: 1.2, speed: 0, dur: 3, knock: 60, range: SHELL_RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    base: { dmg: 12.6, cd: 1.4, n: 2, pierce: 0, area: 1.2, speed: 0, dur: 3, knock: 60, range: SHELL_RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 1 }, txt: '+1 canister' },
       { mods: { area: 0.25, dur: 0.3 }, txt: 'Fire walls 25% longer, last longer' },
     ],
   }, impl((w, p, ws, S) => {
-    const t = w.target('densest', p, S.range);
+    const t = shellAim(w, p, S.range);
     let tx, ty;
     if (t) { tx = t.x; ty = t.y; } else { const a = w.aimDir(p); tx = p.x + Math.cos(a) * 120; ty = p.y + Math.sin(a) * 120; }
     const n = Math.max(1, (S.n | 0) + (S.shells | 0));

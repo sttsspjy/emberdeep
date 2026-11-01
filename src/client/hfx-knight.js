@@ -1,4 +1,4 @@
-// Knight visuals (pixel only: atlas sprites + Batch primitives): crescent outlines, gale crescents and spiral blades (projectiles), crack / cut zones, Q ward zones (shove cast wave, bulwark ward),
+// Knight visuals (pixel only: atlas sprites + Batch primitives): crescent outlines, gale crescents, spiral blades and twisters (projectiles), crack / cut zones, Q ward zones (shove cast wave, bulwark ward),
 // spin fans (full-spin swing events), big slam rims (quake booms), a blade glint orbiting a knight holding a spin Form (HeroFx). Everything derives from render-visible fields and view time; per-zone variation from U.hash3(z.id, i, ...).
 (function (ED) {
   'use strict';
@@ -42,7 +42,18 @@
     for (let i = 1; i <= 3; i++) B.rect(Math.round(pr.x - c * i * 9 + ((pr.id + i) % 3 - 1) * 4), Math.round(pr.y - s * i * 9), 2, 1, rgba(WIND, 200 - i * 50));
     return true;
   };
-  const knightProj = (B, pr, t) => (pr.k === 'gale' ? galeProj(B, pr, t) : crescent(B, pr));
+  // Twister (Whirlwind, look 'whirl'): three stacked open rings narrowing upward, each spinning (ellipse 0.45 tall), dust outer stroke over a 1 px white core.
+  const twistProj = (B, pr, t) => {
+    const R = U.clamp(pr.r, 8, 30);
+    for (let j = 0; j < 3; j++) {
+      const r = R * (1 - j * 0.28), cy = pr.y - j * R * 0.55, a0 = t * (14 - j * 3) + pr.id + j * 2.1;
+      for (let i = 0; i < 9; i++) { const b = a0 + i / 8 * 4.6; PT[i * 2] = pr.x + Math.cos(b) * r; PT[i * 2 + 1] = cy + Math.sin(b) * r * 0.45; }
+      B.poly(PT, 9, 2, rgba(DUST, 210 - j * 30));
+      B.poly(PT, 5, 1, rgba(0xffffff, 150));
+    }
+    return true;
+  };
+  const knightProj = (B, pr, t) => (pr.k === 'gale' ? galeProj(B, pr, t) : pr.k === 'whirl' ? twistProj(B, pr, t) : crescent(B, pr));
 
   // ---------------- zones ----------------
   // Crack: a jagged dark fissure grows along the line until it erupts at dur (dust puffs and rock flecks along it in the last 30%).
