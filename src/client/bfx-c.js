@@ -1,4 +1,4 @@
-// Client draw hooks for bosses weaver and wickeater: ED.BossFx bodies (scaled foe art plus a procedural aura), ED.ZoneFx by zone look (rift, riftgate, strand, maw, inhale, darkring),
+// Client draw hooks for bosses weaver and wickeater: ED.BossFx bodies (weaver: scaled foe art; wickeater: its own art; plus a procedural aura), ED.ZoneFx by zone look (rift, riftgate, strand, maw, inhale, darkring),
 // ED.WeaponFx by shot look (voidbolt, voidorb), and death bursts / phase flashes wrapped around ED.FX.handle. Only render-visible fields are read (snapshot-safe).
 (function (ED) {
   'use strict';
@@ -89,12 +89,14 @@
   };
 
   // ---------- Wick-Eater ----------
+  // Own art (boss.wickeater.*, drawn at e.scale): idle pulse, maw open while it winds up and acts, a hurt flinch on hits.
   const FLAMES = 5;
   ED.BossFx.wickeater = {
     draw(B, e, t) {
       const A = ED.Atlas;
       if (!A || !A.ok) return false;
-      const m = tr(e, t), moving = t - m.mv < 0.25, id = moving && A.has('foe.horror.walk') ? 'foe.horror.walk' : 'foe.horror.idle';
+      tr(e, t);
+      const act = e.st === 1 || e.st === 2, hurt = !act && hit(e), id = act ? 'boss.wickeater.open' : hurt ? 'boss.wickeater.hit' : 'boss.wickeater.idle';
       if (!A.has(id)) return false;
       const sc = e.scale || 1, h = heightOf(id, 28) * sc, a = toHero(e), o = reset(), p = 0.5 + 0.5 * Math.sin(t * 3 + e.id);
       // a pool of swallowed light under it
@@ -102,8 +104,8 @@
       B.shadow(e.x, e.y, e.r * 1.1);
       cues(B, e, t, EMBER);
       o.sx = o.sy = sc; o.flip = (e.st ? Math.cos(a) : e.face) < 0;
-      o.tint = e.enraged ? 0xff7060 : 0xb898ff;
-      o.flash = hit(e) ? 0.45 : (e.st === 1 && Math.floor(t * 12) % 2 ? 0.3 : 0);
+      o.tint = e.enraged ? 0xff7060 : 0;
+      o.flash = hurt ? 0.3 : (e.st === 1 && Math.floor(t * 12) % 2 ? 0.3 : 0);
       B.spr(id, A.frameAt(id, t + e.id * 0.37), e.x, e.y, o);
       // the maw glows toward its target while it winds up and acts
       if (e.st === 1 || e.st === 2) {

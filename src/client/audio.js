@@ -148,6 +148,20 @@
     s.F(73, 1.41, 3, 2.6, 0.6); s.T('sine', 55, 28, 2, 0.8); s.N('bandpass', 1800, 600, 0.08, 0.5, 2);
   });
   def('boss.phase', { d: 1.5, n: 1, g: 0.8, cap: 1, gap: 0.5, pr: 3, rv: 0.35 }, (s) => { s.T('sawtooth', 130, 55, 1.1, 0.4, 0, 0.1); s.T('sawtooth', 138, 58, 1.1, 0.3, 0, 0.1); s.N('lowpass', 800, 100, 1, 0.5, 1, 0, 0.1); s.T('sine', 62, 34, 0.5, 0.9); s.N('lowpass', 500, 90, 0.4, 0.6); });
+  // Wickmother (boss events by phase name, booms by look): hand slam, clap, sweep, tide, sconce lit / snuffed, kneel, the wick's last seconds, the flood, a hand breaking
+  def('wm.wmslam', { d: 0.9, n: 2, g: 0.7, cap: 2, gap: 0.08, pr: 2, rv: 0.2 }, (s) => { s.T('sine', 70, 28, 0.6, 1); s.N('lowpass', 900, 60, 0.5, 0.9); s.N('bandpass', 400, 120, 0.3, 0.6, 2); s.T('triangle', 140, 50, 0.2, 0.4); });
+  def('wm.wmclap', { d: 0.7, n: 2, g: 0.75, cap: 2, gap: 0.1, pr: 2, rv: 0.25 }, (s) => { s.N('bandpass', 1400, 500, 0.12, 1, 1.2); s.N('lowpass', 2400, 200, 0.3, 0.8); s.T('sine', 110, 40, 0.35, 0.8); });
+  def('wm.wmsnuff', { d: 0.8, n: 1, g: 0.6, cap: 1, gap: 0.2, pr: 2, rv: 0.2 }, (s) => { s.T('sine', 80, 30, 0.5, 0.9); s.N('highpass', 3000, 800, 0.4, 0.5, 0.7); s.N('lowpass', 700, 80, 0.4, 0.6); });
+  def('wm.tide', { d: 0.6, n: 1, g: 0.5, cap: 1, gap: 0.3 }, (s) => { s.N('lowpass', 300, 900, 0.5, 0.8, 1); s.T('sine', 60, 50, 0.5, 0.5); });
+  def('wm.sweep', { d: 0.8, n: 1, g: 0.55, cap: 1, gap: 0.2, rv: 0.15 }, (s) => { s.N('bandpass', 300, 1600, 0.6, 0.7, 1.5); s.N('lowpass', 500, 200, 0.6, 0.6); });
+  def('wm.wmlimp', { d: 0.9, n: 1, g: 0.7, cap: 1, gap: 0.2, pr: 2, rv: 0.2 }, (s) => { s.N('lowpass', 1200, 90, 0.7, 0.9); for (let i = 0; i < 6; i++) s.T('sine', rnd(200, 420), rnd(60, 120), 0.12, 0.3, i * 0.07); });
+  def('wm.lit', { d: 0.9, n: 1, g: 0.6, cap: 1, gap: 0.2, pr: 2, rv: 0.3 }, (s) => { s.N('bandpass', 900, 3000, 0.25, 0.6, 1.5); [523, 784].forEach((f, i) => s.T('triangle', f, f, 0.6, 0.25, 0.08 + i * 0.07)); });
+  def('wm.snuff', { d: 0.8, n: 1, g: 0.55, cap: 1, gap: 0.2, pr: 2, rv: 0.2 }, (s) => { s.N('highpass', 5000, 1200, 0.5, 0.6, 0.7); s.T('sine', 392, 196, 0.4, 0.25); });
+  def('wm.kneel', { d: 1.8, n: 1, g: 0.85, cap: 1, gap: 0.5, pr: 3, rv: 0.4 }, (s) => { s.T('sawtooth', 98, 49, 1.2, 0.35, 0, 0.05); s.T('sine', 49, 30, 1.2, 0.9); s.N('lowpass', 600, 60, 1.2, 0.7); [659, 784, 988].forEach((f, i) => s.T('sine', f, f, 0.8, 0.12, 0.3 + i * 0.1)); });
+  def('wm.rise', { d: 1.0, n: 1, g: 0.6, cap: 1, gap: 0.5, pr: 2, rv: 0.3 }, (s) => { s.T('sawtooth', 55, 110, 0.8, 0.3); s.N('lowpass', 300, 900, 0.8, 0.5); });
+  def('wm.break', { d: 0.9, n: 1, g: 0.7, cap: 1, gap: 0.1, pr: 2, rv: 0.2 }, (s) => { s.N('bandpass', 2200, 400, 0.3, 0.9, 2); s.T('square', 300, 80, 0.25, 0.2); s.T('sine', 90, 35, 0.6, 0.8); });
+  def('wm.wick', { d: 2.0, n: 1, g: 0.85, cap: 1, gap: 1, pr: 3, rv: 0.3 }, (s) => { for (let i = 0; i < 6; i++) { s.T('square', 880, 860, 0.1, 0.25, i * 0.3); s.T('sine', 440, 430, 0.15, 0.3, i * 0.3); } s.N('highpass', 4000, 2500, 1.8, 0.2, 0.6); });
+  def('wm.flood', { d: 3.0, n: 1, g: 0.95, cap: 1, gap: 1, pr: 3, rv: 0.4 }, (s) => { s.N('lowpass', 200, 3000, 2.5, 1, 0.8, 0, 0.6); s.T('sawtooth', 50, 120, 2.5, 0.4, 0, 0.5); s.T('sine', 40, 30, 2.6, 0.8); });
   def('boss.enrage', { d: 2.1, n: 1, g: 0.85, cap: 1, gap: 1, pr: 3, rv: 0.3 }, (s) => {
     s.T('sawtooth', 70, 150, 1, 0.4); s.T('sawtooth', 75, 158, 1, 0.35); s.N('bandpass', 300, 1800, 0.9, 0.5, 2);
     [0.95, 1.2].forEach((d) => { s.T('sine', 62, 34, 0.22, 0.9, d); s.N('lowpass', 500, 90, 0.18, 0.5, 1, d); });
@@ -464,7 +478,7 @@
         break;
       }
       case 'boom': {
-        const g = posGain(ev.x, ev.y), r = ev.r || 60, c = ev.team === 1 ? C['boom.foe'] : ev.wid === 'bomb' ? null : bcue(ev.look || ev.wid);
+        const g = posGain(ev.x, ev.y), r = ev.r || 60, c = ev.team === 1 ? C['wm.' + ev.look] || C['boom.foe'] : ev.wid === 'bomb' ? null : bcue(ev.look || ev.wid); // Wickmother looks ring their own cue
         if (c) { agg(c, g * Math.min(1.6, 0.45 + r / 150), ev.team === 1 ? 2 : mine ? 1 : 0); if (r > c.ar || c.an === 1) c.ar = r; }
         break;
       }
@@ -490,7 +504,7 @@
       case 'down': aggHero(C.down, ev.pid, mine, mine ? 1 : 2); break;
       case 'dead': aggHero(C.dead, ev.pid, mine, mine ? 1 : 2); break;
       case 'revive': aggHero(C.revive, ev.pid, mine, mine ? 1 : 2); break;
-      case 'boss': pp = 0; agg(C[ev.phase === 0 ? 'boss.intro' : ev.phase === -1 ? 'boss.die' : ev.phase === 'enrage' ? 'boss.enrage' : 'boss.phase'], 1, 3); if (ev.phase === 0 || ev.phase === -1) A.duck(0.3, 2.2); break;
+      case 'boss': pp = 0; agg(C[typeof ev.phase === 'string' && C['wm.' + ev.phase] && ev.id === 'wickmother' ? 'wm.' + ev.phase : ev.phase === 0 ? 'boss.intro' : ev.phase === -1 ? 'boss.die' : ev.phase === 'enrage' ? 'boss.enrage' : 'boss.phase'], 1, 3); if (ev.phase === 0 || ev.phase === -1) A.duck(0.3, 2.2); break;
       case 'brazier': agg(C.brazier, posGain(ev.x, ev.y), 1); break;
       case 'victory': pp = 0; agg(C.fanfare, 1, 3); A.duck(0.25, 3); break;
       case 'lap': pp = 0; agg(C[ev.ph === 1 ? 'lap.horn' : 'boss.die'], 1, 3); break;

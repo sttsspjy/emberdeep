@@ -204,6 +204,7 @@
     samurai: ['Dash slash along a warned lane, sword waves, a screen-long iaido cut', '66%: double dashes, five waves', '33%: triple dashes, a crossed iaido, spin slashes'],
     weaver: ['Rift gates open into portals that shoot; threads cross your spot; blink with a bolt ring', '66%: three gates, threads stay as strands, adds', '33%: four gates firing faster, four threads per weave'],
     wickeater: ['Devour: a warned cone drags you toward its bite', 'Closing dark: a shrinking ring, walk through its gap or dash', 'Lash fans and spiralling orb blooms; it swells at 33%'],
+    wickmother: ['Her heart is warded: break both wax hands at once and she kneels, heart exposed', '70%: the room darkens; light all four sconces at once to make her kneel', '35%: no ward; slay her before the great wick burns out and the flame floods the room'],
   };
   const bossOf = (key) => { const [si, bi] = key.split(':').map(Number); return ED.STAGES[si].bosses[bi]; }; // 'stage:index' -> stage boss row { id, t, final }
   const bossDetail = (box, key) => {

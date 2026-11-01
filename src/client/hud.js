@@ -174,7 +174,7 @@
       const bw = Math.round(Math.min(W * 0.5, R(620))), bx = Math.round(W / 2 - bw / 2), by = xh + R(52);
       const on = !!(bb && bb.on), en = on ? !!bb.enraged : !!b.enraged, q = on ? bb.q : b.hpQ, col = en ? ((now * 6 | 0) % 2 ? '#ff2a2a' : '#ff8a3a') : '#c03ad0';
       bar(bx, by, bw, R(18), q / 255, col, en ? '#ffb0a0' : '#f0a0ff');
-      if (on && bb.rev >= 0) bar(bx, by + R(19), Math.round(bw * bb.rev), R(4), 1, '#7fe39a', '#7fe39a');
+      if (on && bb.rev >= 0) { const wk = bb.id === 'wickmother' && bb.phase === 3, rc = wk ? (bb.rev < 0.15 && (now * 6 | 0) % 2 ? '#ff2a2a' : '#ff9a3a') : '#7fe39a'; bar(bx, by + R(19), Math.round(bw * bb.rev), R(4), 1, rc, rc); } // Wickmother P3: the wick clock
       const k = on ? Math.max(0, ED.FOE_IDS.indexOf(bb.id)) : b.k;
       txt(cs('boss', (k << 1) | (en ? 1 : 0), bossName), W / 2, by + R(21) + (on && bb.rev >= 0 ? R(4) : 0), en ? '#ff8a7a' : '#ffd27a', 20, 'center');
     }
