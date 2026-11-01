@@ -120,6 +120,8 @@
   };
   // Wax pool: pale wax spreading on the floor (slows).
   ZF.wmwax = (B, z, t) => { const k = Math.min(1, z.t / 0.25, (z.dur - z.t) / 0.6); B.circ(z.x, z.y, z.r * k, rgba(WAXD, 150), 0); B.circ(z.x - 3, z.y - 2, z.r * 0.6 * k, rgba(WAXC, 120), 0); B.circ(z.x, z.y, z.r * k, rgba(0x5e3a3c, 200), 1); return true; };
+  // Slam warning: a thin wax circle at the shock ring's reach (WM.slam.ring[1]) under the default telegraph.
+  ZF.wmslam = (B, z) => { const S = ED.Bosses.WICKMOTHER.slam, k = z.dur > 0 ? Math.min(1, z.t / z.dur) : 0; B.circ(z.x, z.y, S.ring[1], rgba(WAXC, 70 + 90 * k), 1); return false; };
   // Shock ring: a low wave of wax.
   ZF.wmshock = (B, z) => { const k = 1 - z.t / (z.dur || 1); B.circ(z.x, z.y, z.r, rgba(WAXC, 220 * k + 30), 4); B.circ(z.x, z.y, z.r - 4, rgba(0xfff1d6, 160 * k), 1); return true; };
   // Sweep palm hazard: the hand draws itself.

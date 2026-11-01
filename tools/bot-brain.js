@@ -4,7 +4,7 @@
 // Pure reader: linear scans of w.foes / w.projs / w.zones / w.pickups (never the foe grid, whose lazy rebuild is sim state); own seeded RNG; ED read lazily from globalThis on each call.
 // Movement (re-plan every PLAN thinks, sooner on a new threat): 16 directions + stay, each scored over samples at H s ahead: contact danger (foes closing at their speed, dashers along
 // their dash), foe shots (closest approach on the predicted path), hostile zones (warned shapes at their resolve time; live hazards while inside, moved by their observed drift and
-// sub-stepped when they sweep), walls and edges; minus attraction (pickup target, boss at weapon reach, hysteresis, crowd, back toward the arena centre).
+// sub-stepped when they sweep; Wickmother: a slam's shock ring, tide walls up to 4 s ahead, her body as a wall), walls and edges; minus attraction (pickup target, boss at weapon reach, hysteresis, crowd, back toward the arena centre).
 // Stance: a short-reach weapon (REACH, by the slot's current id) while healthy keeps the nearest foe at 0.75 x its reach (narrower contact band, pull to the crowd edge), else
 // the bot keeps away from the crowd centroid; bosses are held inside that reach, or at 190 px when the weapon is ranged.
 // The Q skill fires by a per-skill rule; an escape skill (Charge, Shadow Step) also fires when the best plan still gets hit soon (i-frames modelled). E is never pressed.
@@ -79,7 +79,7 @@
     this.lastX = 0; this.lastY = 0; this.stuckN = 0; this.wander = -1; this.wanderT = 0; this.planT = 0;
     this.castGap = 0; this.zSeen = 0; this.pSeen = 0;
     this.f = { mx: 0, my: 0, ax: 0, ay: 0, dash: false, q: false, e: false, pick: 0, banish: 0, reroll: false, skip: false };
-    this.near = 0; this.crowd = 0; this.cx = 0; this.cy = 0; this.dx = 0; this.dy = 0; this.boss = null; this.goalOn = false; this.goalX = 0; this.goalY = 0; this.zPrev = new Map(); // zone id -> [x, y, r, a, time, think n]
+    this.near = 0; this.crowd = 0; this.cx = 0; this.cy = 0; this.dx = 0; this.dy = 0; this.boss = null; this.goalOn = false; this.goalIn = false; this.goalX = 0; this.goalY = 0; this.goalS = null; this.wmCore = null; this.wmB = null; this.zPrev = new Map(); // zone id -> [x, y, r, a, time, think n]
     this.gmin = Infinity; this.gx = 0; this.gy = 0; // nearest contact foe: gap and position
     this.reach = 0; this.close = false; this.bossFn = null; this.bossS = null; this.bossOn = false; // stance(): main weapon reach to a typical foe's edge (0 = ranged), crowd / boss stance
   }
@@ -132,18 +132,28 @@
     this.close = r > 0 && hpF > (this.close ? 0.55 : 0.65);
     this.bossOn = this.bossFn ? hpF > (this.bossOn ? 0.55 : 0.65) : hpF > 0.5;
   };
-  // Centre distance to hold from boss B: 0.75 x the boss stance weapon's reach to its edge, else 190 px.
-  Brain.prototype.bossHold = function (p, B) { return this.bossFn ? B.r + Math.max(p.r + 4, this.bossFn(this.bossS, B.r) * 0.75) : 190; };
+  // Centre distance to hold from boss B: a Wickmother body (core, hands: no contact damage) right beside it, else 0.75 x the boss stance weapon's reach to its edge; ranged 190 px.
+  Brain.prototype.bossHold = function (p, B) { return this.bossFn ? B.r + (B.def && (B.def.id === 'wickmother' || B.def.id === 'wmhand') ? p.r + 12 : Math.max(p.r + 4, this.bossFn(this.bossS, B.r) * 0.75)) : 190; };
 
-  // Wickmother (src/sim/boss-wickmother.js e.vars, read only): while her core is warded, P1 engages the nearest hand and P2 walks to the nearest unlit sconce (goalOn / goalX / goalY).
+  // Wickmother (src/sim/boss-wickmother.js e.vars, read only): unwarded (kneel, P3) the core is the boss target (wmCore); warded, P1 engages the nearest hand and P2 walks to an unlit
+  // sconce (the current one while unlit, else the nearest) and stands in it until lit (goalOn / goalIn / goalX / goalY).
   Brain.prototype.wmGoal = function (w, p) {
-    this.goalOn = false;
-    const e = this.boss, v = e && e.def.id === 'wickmother' ? e.vars : null;
-    if (!v || !v.ward) return;
+    this.goalOn = false; this.goalIn = false; this.wmCore = null; this.wmB = null;
+    const BL = w.bossList;
+    let e = null;
+    for (let i = 0; i < BL.length; i++) if (!BL[i].dead && BL[i].def.id === 'wickmother') { e = BL[i]; break; }
+    const v = e && e.vars;
+    if (!v || !v.R) return;
+    this.wmB = e; // her body blocks movement (danger())
+    if (!v.ward) { this.boss = e; this.wmCore = e; return; }
     if (v.phase === 2 && v.sc && v.sc.length) {
-      let best = null, bd = Infinity;
-      for (const sc of v.sc) { if (sc.lit) continue; const d = (sc.x - p.x) ** 2 + (sc.y - p.y) ** 2; if (d < bd) { bd = d; best = sc; } }
-      if (best) { this.goalOn = true; this.goalX = best.x; this.goalY = best.y; }
+      let best = this.goalS && !this.goalS.lit && v.sc.indexOf(this.goalS) >= 0 ? this.goalS : null, bd = Infinity;
+      if (!best) for (const sc of v.sc) { if (sc.lit) continue; const d = (sc.x - p.x) ** 2 + (sc.y - p.y) ** 2; if (d < bd) { bd = d; best = sc; } }
+      this.goalS = best;
+      if (best) {
+        const WM = root.ED.Bosses.WICKMOTHER, rr = WM.sconce.r + p.r - 4;
+        this.goalOn = true; this.goalX = best.x; this.goalY = best.y; this.goalIn = (best.x - p.x) ** 2 + (best.y - p.y) ** 2 <= rr * rr;
+      }
       return;
     }
     let hand = null, hd = Infinity;
@@ -197,19 +207,24 @@
       const z = Z[i]; if (z.dead || z.team !== 1 || (z.st && z.st.inert) || z.t < this.react || (z.warn && this.miss > 0 && hsh(z.id ^ this.mix ^ 0x5a5a5a5a) < this.miss)) continue;
       const ext = (z.len > 0 ? z.len : z.r) + ZONE_PAD;
       if ((z.x - p.x) * (z.x - p.x) + (z.y - p.y) * (z.y - p.y) > ext * ext) continue;
-      const o = ZL[ZN] || (ZL[ZN] = { z: null, rem: 0, cost: 0, kind: 0, test: null, soft: false, vx: 0, vy: 0, dr: 0, da: 0, mov: false });
+      const o = ZL[ZN] || (ZL[ZN] = { z: null, rem: 0, cost: 0, kind: 0, test: null, soft: false, vx: 0, vy: 0, dr: 0, da: 0, mov: false, ring: null, ringCost: 0 });
       const pv = this.zPrev.get(z.id), dt = pv ? w.time - pv[4] : 0;
       if (dt > 1e-6 && dt < 0.5) { o.vx = (z.x - pv[0]) / dt; o.vy = (z.y - pv[1]) / dt; o.dr = (z.r - pv[2]) / dt; o.da = ((z.a - pv[3] + 3 * Math.PI) % (2 * Math.PI) - Math.PI) / dt; } else { o.vx = o.vy = o.dr = o.da = 0; }
       o.mov = Math.abs(o.dr) > 25 || Math.abs(o.da) > 0.6 || o.vx * o.vx + o.vy * o.vy > 900;
       const nv = pv || []; nv[0] = z.x; nv[1] = z.y; nv[2] = z.r; nv[3] = z.a; nv[4] = w.time; nv[5] = this.n; if (!pv) this.zPrev.set(z.id, nv);
       const src = z.src && !z.src.dead && z.src.id === z.srcId ? z.src : null, sd = src ? src.dmg : w.contactDmg();
-      o.z = z; o.rem = z.dur - z.t; o.test = null; o.soft = false;
-      if (z.warn) { o.kind = z.dmg > 0 ? 1 : 2; o.cost = Math.max(0.5, (z.dmg > 0 ? z.dmg : sd * 1.3) * hpK); }
+      o.z = z; o.rem = z.dur - z.t; o.test = null; o.soft = false; o.ring = null;
+      if (z.warn) {
+        o.kind = z.dmg > 0 ? 1 : 2; o.cost = Math.max(0.5, (z.dmg > 0 ? z.dmg : sd * 1.3) * hpK);
+        if (z.k === 'wmslam') { const S = ED.Bosses.WICKMOTHER.slam; o.ring = S; o.ringCost = Math.max(1.5, 2 * sd * S.rmul * hpK); } // the shock ring that follows a Wickmother slam (weighed x2: worth leaving her hand for)
+      }
       else {
         o.kind = 3;
         const st = z.st;
         if (st && typeof st.test === 'function') { o.test = st.test; o.soft = true; }
         o.cost = Math.max(0.4, (st && st.mul > 0 ? sd * st.mul : sd * 0.6) * hpK);
+        if (z.k === 'wmshock') { o.cost = Math.max(1.5, o.cost * 2); o.dr = (st.r1 - st.r0) / z.dur; o.mov = true; } // known growth from its first tick
+        else if (z.k === 'wmtide') { o.vx = 0; o.vy = st.vy; o.mov = true; } // known roll speed from its first tick
       }
       ZN++;
     }
@@ -217,6 +232,8 @@
   };
 
   // ---------- scoring ----------
+  // True when (x, y) lies inside the Wickmother body e pushes heroes out of (the band above the lower edge of her body ellipse; boss-wickmother.js brain).
+  const wmIn = (e, x, y) => { const K = root.ED.Bosses.WICKMOTHER.core, dx = (x - e.x) / K.rx; return Math.abs(dx) < 1 && y < e.y - K.oy + K.ry * Math.sqrt(1 - dx * dx) + 2; };
   // Danger of candidate c (c = NDIR: stand still) for hero p; dash: the first DASH.t s at dash speed with i-frames. Writes NEAR[c] (danger in the next ~0.35 s). Returns total danger.
   Brain.prototype.danger = function (ED, w, p, c, dash) {
     const A = w.arena, Ar = ED.Arena, D = ED.CONST.DASH, still = c === NDIR;
@@ -229,7 +246,7 @@
       const h = H[k];
       if (!stuck) {
         const s = travel(h), tx = p.x + ux * s, ty = p.y + uy * s;
-        if (Ar.blocked(A, tx, ty, p.r + 1)) { stuck = true; tot += k === 0 ? 1.2 : 0.5; }
+        if (Ar.blocked(A, tx, ty, p.r + 1) || (this.wmB && wmIn(this.wmB, tx, ty))) { stuck = true; tot += k === 0 ? 1.2 : 0.5; }
         else { x = tx; y = ty; }
       }
       // contact
@@ -267,6 +284,12 @@
       }
       h0 = h; x0 = x; y0 = y;
     }
+    // Wickmother tide walls arriving after the horizon (up to 4 s): the end spot must stand in a gap column when the wall reaches its row
+    for (let j = 0; j < ZN; j++) {
+      const o = ZL[j], z = o.z; if (o.kind !== 3 || z.k !== 'wmtide' || !(o.vy > 0)) continue;
+      const tt = HMAX + (y - z.y - o.vy * HMAX) / o.vy;
+      if (tt > HMAX && tt < 4 && x > z.x - p.r - 4 && x < z.x + z.len + p.r + 4) tot += o.cost * 0.7;
+    }
     // warned zones: the hero's spot when they resolve (plus the act that follows a dmg-0 warning)
     const wr = p.r + 5;
     for (let j = 0; j < ZN; j++) {
@@ -276,6 +299,15 @@
       let hit = warnHit(w, o, Math.max(0, t), wr, stuck, x, y);
       if (!hit && o.kind === 2) hit = warnHit(w, o, Math.min(HMAX, t + 0.2), wr, stuck, x, y) || warnHit(w, o, Math.min(HMAX, t + 0.45), wr, stuck, x, y);
       if (hit) { const v = o.cost * wt; tot += v; if (o.rem < 0.4) near += v; }
+      if (o.ring) { // shock ring after the slam: r0 -> r1 over ringT s from the resolve, checked every ringT / 6 s
+        const S = o.ring;
+        for (let m = 0; m <= 6; m++) {
+          const tt = o.rem + S.ringT * m / 6; if (tt > HMAX + 0.4) break;
+          if (tt < iv || (dash && tt <= D.t)) continue;
+          const s = travel(tt), px = stuck ? x : CD.x + CD.ux * s, py = stuck ? y : CD.y + CD.uy * s, rr = S.ring[0] + (S.ring[1] - S.ring[0]) * m / 6;
+          if (Math.abs(Math.hypot(px - o.z.x, py - o.z.y) - rr) <= S.band + p.r + 8) { tot += o.ringCost; if (tt < 0.4) near += o.ringCost; break; }
+        }
+      }
     }
     // foe shots: closest approach on the predicted path (dash: no hit during the i-frames)
     if (PN) {
@@ -309,7 +341,7 @@
     CG = close ? Math.min(30, Math.max(6, gP * 0.35)) : 30; CK = close ? 0.5 : 1;
     // attraction inputs
     let tx = 0, ty = 0, tw = 0;
-    if (this.tgt) { const dx = this.tgt.x - p.x, dy = this.tgt.y - p.y, d = Math.hypot(dx, dy) || 1; tx = dx / d; ty = dy / d; tw = this.tgtK; }
+    if (this.tgt) { const dx = this.tgt.x - p.x, dy = this.tgt.y - p.y, d = Math.hypot(dx, dy) || 1; tx = dx / d; ty = dy / d; tw = this.tgtK * (this.goalOn ? 0.3 : 1); }
     // crowd: ranged keeps away from the centroid; short reach walks toward it (else the nearest foe) until the nearest gap is gP, backs off below gP / 2
     let ax = 0, ay = 0, away = 0;
     if (close) {
@@ -327,7 +359,7 @@
       const dx = B.x - p.x, dy = B.y - p.y, d = Math.hypot(dx, dy) || 1;
       if (d < 650) { bx = dx / d; by = dy / d; bw = 0.7 * Math.max(-1, Math.min(1, (d - this.bossHold(p, B)) / 90)); }
     }
-    if (this.goalOn) { const dx = this.goalX - p.x, dy = this.goalY - p.y, d = Math.hypot(dx, dy) || 1; bx = dx / d; by = dy / d; bw = 1.1 * Math.min(1, d / 30); } // a spot to stand on (Wickmother sconce)
+    if (this.goalOn) { const dx = this.goalX - p.x, dy = this.goalY - p.y, d = Math.hypot(dx, dy) || 1; bx = dx / d; by = dy / d; bw = 1.4 * Math.min(1, d / 12); } // a spot to stand on (Wickmother sconce): inside it, standing still scores +0.9
     const pd = this.dir;
     let best = -1, bs = -Infinity;
     if (this.noise > 0 && w.time >= this.jitT) { this.jit = Math.floor(this.rnd() * NDIR); this.jitT = w.time + 0.6 + this.rnd() * 0.8; }
@@ -342,7 +374,7 @@
         if (pd >= 0 && pd < NDIR) s += 0.35 * (ux * DX[pd] + uy * DY[pd]);
         if (this.wanderT > 0 && this.wander >= 0) s += 0.8 * (ux * DX[this.wander] + uy * DY[this.wander]);
         if (this.noise > 0) s += this.noise * (ux * DX[this.jit] + uy * DY[this.jit]);
-      } else s -= 0.25 + (pd === NDIR ? -0.1 : 0);
+      } else s -= (this.goalIn ? -0.9 : 0.25) + (pd === NDIR ? -0.1 : 0);
       if (s > bs) { bs = s; best = c; }
     }
     this.dir = best;
@@ -410,7 +442,7 @@
       if (e.takeMul < 0.01) continue; // warded (Wickmother core): hits do nothing
       if ((e.elite || e.boss) && d < bb && d <= rb2) { bb = d; b = e; }
     }
-    const t = b || n;
+    const c = this.wmCore, t = c && !c.dead && (c.x - p.x) * (c.x - p.x) + (c.y - p.y) * (c.y - p.y) <= rb2 ? c : b || n; // an unwarded Wickmother core first
     if (t) { f.ax = t.x; f.ay = t.y; } else { f.ax = p.x + this.mx * 80; f.ay = p.y + this.my * 80; }
   };
 

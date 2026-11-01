@@ -75,7 +75,7 @@ try {
   const { w, e, R } = h, v = e.vars;
   ok(e.x === R.x && e.y === R.y - R.h / 2 + WM.core.dy, 'core anchored at the room top + ' + WM.core.dy + ' px');
   ok(e.maxHp === Math.round(ED.bossHp(1200, w.partyHp() * ((w.sdef.foe && w.sdef.foe.hp) || 1)) * WM.hp), 'HP = boss HP x ' + WM.hp + ' (' + e.maxHp + ')');
-  ok(handsUp(h).length === 2 && handsUp(h).every((H) => H.e.maxHp === Math.round(e.maxHp * WM.hand.hp)), 'two hands at ' + WM.hand.hp + ' x her HP');
+  ok(handsUp(h).length === 2 && handsUp(h).every((H) => H.e.maxHp === Math.round(e.maxHp / WM.hp * WM.hand.hp)), 'two hands at ' + WM.hand.hp + ' x the normal boss HP');
   run(h, 3);
   const hp0 = e.hp, d1 = big(h, e, 5000);
   run(h, 0.2);
@@ -158,7 +158,7 @@ try {
   ok(hf.e.vars.phase === 3, 'flood run: P3');
   hf.w.update = ((u) => function (dt) { for (const p of this.living) p.hp = Math.max(p.hp, 1e6); return u.call(this, dt); })(hf.w.update); // nothing but the flood can down the hero
   const st0 = hf.e.vars.burn0;
-  run(hf, WM.burn.t - 1);
+  run(hf, WM.burn.t + WM.burn.flood - 0.4); // the HP floor holds until just before the flood resolves
   hf.w.update = ED.World.prototype.update;
   for (const p of hf.w.heroes) p.hp = p.maxHp;
   let downAt = -1;

@@ -5,7 +5,9 @@
 //   elites: [{ k (foe id), t (spawn s), hit (first hit s, null if never hit), ttk (death - first hit, null if not killed before the run ends or the win is banked), on }],
 //   on: s under fire between first hit and death (ticks within ON s after an HP drop; a fight's bodies summed). dealt: { id: dmg }, taken: { cause: dmg }, hurt (total taken),
 //   build: { weapons: [{ id, lvl, evo, pr: [path ranks], fl (refine) }], passives: [{ id, lvl }] }, evolved: { rootId: s (Form taken) }, hpLow (min HP fraction), ticks, ms (wall clock), skill,
-//   botMs (think() time, sampled every 16th tick x 16), sanctum (true once the run reached the Sanctum room: a death after that died inside it) }.
+//   botMs (think() time, sampled every 16th tick x 16), sanctum (true once the run reached the Sanctum room: a death after that died inside it),
+//   wm (the Wickmother fight, null when she never spawned): { ph (phase reached), hp (core HP fraction at the end), t: [s in P1, P2, P3], kneel: [in P1 (hands), P2 (sconces), P3 (hands)], lit (sconces lit),
+//   snuff, brk (hand breaks), rage (stall enrages), taken: { look: dmg } (taken during the fight), raw: { warded, core, hand } (hero hit damage before crits and her damage factor, by target), hpLost } }.
 // Optional cfg: skill 0..1 (bot reflexes, default 1).
 // CLI: node tools/bot.js --stage 0 --hero knight [--seed 1] [--meta max] [--max 1380] [--skill 0.5]  -> prints the result JSON and ms per game minute.
 'use strict';
@@ -33,7 +35,18 @@ function runOne(cfg) {
   // damage taken per cause (wraps this world's hurtHero; the sim result is unchanged)
   const taken = {}, hurt = w.hurtHero;
   let lastCause = null;
-  w.hurtHero = function (h, dmg, src) { const d = hurt.call(this, h, dmg, src); if (d > 0 && h === p) { lastCause = cause(src); taken[lastCause] = (taken[lastCause] || 0) + d; } return d; };
+  let wm = null;
+  w.hurtHero = function (h, dmg, src) {
+    const d = hurt.call(this, h, dmg, src);
+    if (d > 0 && h === p) { lastCause = cause(src); taken[lastCause] = (taken[lastCause] || 0) + d; if (wm && wm.e) { const k = lastCause.split(' ').pop(); wm.taken[k] = (wm.taken[k] || 0) + d; wm.hpLost += d; } }
+    return d;
+  };
+  // Wickmother: hero hit damage by target (wraps this world's hitFoe; the sim result is unchanged)
+  const hitFoe = w.hitFoe;
+  w.hitFoe = function (e, dmg, src) {
+    if (wm && wm.e && src && src.p === p && !e.dead && !(e.invulnT > 0)) { const id = e.def.id; if (id === 'wmhand') wm.raw.hand += dmg; else if (id === 'wickmother') wm.raw[e.takeMul < 0.01 ? 'warded' : 'core'] += dmg; }
+    return hitFoe.call(this, e, dmg, src);
+  };
   // boss fights: phase-0 event opens one; every boss body (bossList, incl. split / revived bodies) maps to the newest open fight; a kill (phase -1) closes the body's fight
   const bosses = [], evolved = {}, fights = [], bodyFight = new Map();
   // elites: one record per spawner elite ('warn' elite event); live ones keep the foe ref (pooled: valid while its id matches) until the 'die' event or a despawn
@@ -57,6 +70,8 @@ function runOne(cfg) {
         if (F) F.open = false;
         const at = Math.round(w.time * 10) / 10;
         bosses.push({ id: F ? F.id : e.id, at, spawn: F ? F.spawn : null, hit: F ? (F.hit === null ? at : F.hit) : null, on: F ? r1(F.on + C.TICK) : null });
+      } else if (e.t === 'boss' && e.id === 'wickmother' && wm) {
+        if (e.phase === 'kneel') wm.kneel[wm.ph - 1]++; else if (e.phase === 'lit') wm.lit++; else if (e.phase === 'snuff') wm.snuff++; else if (e.phase === 'break') wm.brk++; else if (e.phase === 'enrage') wm.rage++;
       } else if (e.t === 'evolve' && e.pid === 'p1') evolved[e.from] = Math.round(w.time * 10) / 10;
       else if (e.t === 'warn' && e.kind === 'elite') {
         const F = w.foes; let f = null;
@@ -81,6 +96,12 @@ function runOne(cfg) {
       if (E.hit === null && f.hp < f.maxHp) E.hit = r1(w.time);
       if (E.hit !== null) fire(E, f.hp);
     }
+    if (!wm && w.boss && w.boss.def.id === 'wickmother' && w.boss.vars && w.boss.vars.R) wm = { ph: 1, hp: 1, t: [0, 0, 0], kneel: [0, 0, 0], lit: 0, snuff: 0, brk: 0, rage: 0, taken: {}, raw: { warded: 0, core: 0, hand: 0 }, hpLost: 0, e: w.boss, id: w.boss.id };
+    if (wm && wm.e) {
+      const e = wm.e;
+      if (e.dead || e.id !== wm.id) { if (w.won) wm.hp = 0; wm.e = null; }
+      else { wm.ph = e.vars.phase; wm.hp = e.hp / e.maxHp; wm.t[wm.ph - 1] += C.TICK; }
+    }
     const BL = w.bossList, Fn = fights.length ? fights[fights.length - 1] : null;
     if (Fn && Fn.open) {
       let h = 0;
@@ -101,8 +122,13 @@ function runOne(cfg) {
     bosses, elites: elites.map(E => ({ k: E.k, t: E.t, hit: E.hit, ttk: E.ttk, on: E.ttk === null ? null : r1(E.on) })), dealt: {}, taken, hurt: 0,
     build: { weapons: p.weapons.map(ws => ({ id: ws.id, lvl: ws.lvl, evo: !!ws.evo, tune: ws.tune, path: ws.path, pr: ws.pr.slice(), fl: ws.fl })), passives: p.passives.map(ps => ({ id: ps.id, lvl: ps.lvl })) },
     evolved, hpLow: Math.round(hpLow * 1000) / 1000, ticks: w.tick, ms: 0, botMs: Math.round(Number(botNs) / 1e6),
-    sanctum: !!(w.sanctum && w.sanctum.st >= 1),
+    sanctum: !!(w.sanctum && w.sanctum.st >= 1), wm: null,
   };
+  if (wm) {
+    r.wm = { ph: wm.ph, hp: Math.round(wm.hp * 1000) / 1000, t: wm.t.map(r1), kneel: wm.kneel, lit: wm.lit, snuff: wm.snuff, brk: wm.brk, rage: wm.rage, taken: {}, raw: {}, hpLost: Math.round(wm.hpLost) };
+    for (const k in wm.taken) r.wm.taken[k] = Math.round(wm.taken[k]);
+    for (const k in wm.raw) r.wm.raw[k] = Math.round(wm.raw[k]);
+  }
   for (const k in p.dealt) r.dealt[k] = Math.round(p.dealt[k]);
   for (const k in taken) r.hurt += taken[k];
   r.ms = Date.now() - t0;

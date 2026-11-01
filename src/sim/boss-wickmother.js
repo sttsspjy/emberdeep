@@ -1,13 +1,19 @@
 // Boss 'wickmother' (The Wickmother, the Wickdeep finale in the Sanctum room w.sanctum = { st, t0, x, y, w, h }; without it a 720 x 480 room is set at spawn): a colossal wax being anchored to
 // the room's north wall. Bodies: the heart-flame core (ED.FOES.wickmother: the boss pool, fixed in her chest; heroes are pushed out of her body ellipse) and two wax hands (boss parts 'wmhand',
-// WM.hand.hp x her max HP each; a broken hand goes limp WM.hand.limp s, then regrows). Her script drives the hands; their own brain only stands still.
+// WM.hand.hp x the normal final-boss HP each (her HP before WM.hp); a broken hand goes limp WM.hand.limp s, then regrows). Her script drives the hands; their own brain only stands still.
 // P1 Hands (100-70%): the core is warded (hits deal 1 and her HP is held); hands slam (warned circle, then an expanding shock ring), sweep (a warned lane, then a hand drags across it) and clap
-//   (both hands close on a warned band with one gap); the head rains wax (warned drips leave slowing pools). Both hands broken at once: she kneels (core lowered, x WM.kneel.mul damage, WM.kneel.t s).
+//   (both hands close on a warned band with one gap); the head rains wax (warned drips leave slowing pools). Both hands broken at once: she kneels (core lowered, x WM.kneel.mul damage, WM.kneel.t s;
+//   kneeling cracks the core for WM.kneel.crack[phase - 1] x her max HP).
 // P2 Snuffing (70-35%): the room darkens; 4 sconces near the corners; a hero lights one by standing in it WM.sconce.light s; a hand snuffs the lit one farthest from the heroes every
 //   WM.sconce.snuff[party - 1] s (warned slam; breaking that hand saves it). All 4 lit at once: she kneels, the sconces go out after. Head: flame spirals from the wick crown, wax tides, rain.
 // P3 Burn-down (35-0%): no ward; the wick burns WM.burn.t s (bossBar.rev), the side and bottom walls melt inward (hazard band, WM.burn.melt px at the end), everything faster, patterns combine
-//   (spiral + slams, tide + clap with the clap gap in a tide gap); at 0 the flame floods the room (WM.burn.flood s warning, then a lethal hazard). Phase changes clamp HP at the threshold.
-// Every attack telegraphs >= 0.6 s; hazards that follow a telegraph keep its lead in st.tw. The global final-boss enrage does not apply (the Sanctum skips it).
+//   (spiral + slams, tide + clap with the clap gap in a tide gap); at 0 the flame floods the room (WM.burn.flood s warning, then a lethal hazard). Both hands broken at once: she kneels
+//   WM.kneel.t3 s (the wick keeps burning). Phase changes clamp HP at the threshold.
+// Spawn: every WM.adds.every[phase - 1] s (not while kneeling) her body sheds WM.adds.n (+1 per extra hero) stage kin of WM.adds.ids in front of it (warned 'summon' circles), at most WM.adds.cap
+//   alive (+2 per extra hero): fuel for on-kill builds and the room's crowd.
+// Stall: WM.stall.t[phase - 1] s into P1 / P2 she enrages (e.enraged, 'enrage' event): her hand, head and shedding pauses shrink to x WM.stall.min over WM.stall.ramp s (v.rage)
+//   and her damage (hands too) grows by WM.stall.dmg x her base per WM.stall.ramp s without a cap; the next phase calms her. The global final-boss enrage does not apply (the Sanctum skips it).
+// Every attack telegraphs >= 0.6 s; hazards that follow a telegraph keep its lead in st.tw; a slam's warning also shows its shock ring's reach (client).
 // Client state (snapshot-safe): core e.st = 1 cast | 2 roar | 4 ward | 8 kneel | (phase - 1) << 4; hand e.st = pose (0 hover, 1 raised, 2 flat, 3 sweep, 4 clap side, 6 regrow);
 // zones 'wmbody' (w = core st + 64 x wick %), 'wmsconce' (w = 1 lit, else progress in eighths), 'wmmelt' (room centre, r = half width, w = inset px + 1000 x half height), 'wmlimp' (a broken hand, w = side). Zones with st.inert never hurt (bots skip them).
 (function (ED) {
@@ -17,22 +23,26 @@
   const { hz } = B.libB;
   ED.regLook('wmbody', 'wmsconce', 'wmmelt', 'wmlimp', 'wmslam', 'wmshock', 'wmlane', 'wmsweep', 'wmclap', 'wmdrip', 'wmwax', 'wmcrown', 'wmflame', 'wmtidew', 'wmtide', 'wmsnuff', 'wmflood');
   const WM = B.WICKMOTHER = {
-    hp: 3.0,                  // x the normal boss HP (ED.bossHp x party x stage)
+    hp: 10.5,                 // x the normal boss HP (ED.bossHp x party x stage)
+    dmg: 3.3,                 // x her contact-curve damage (hands share it; every attack's mul applies on top)
     phases: [0.7, 0.35],      // core HP fractions that start P2 and P3
     core: { dy: 170, rx: 156, ry: 56, oy: 20, crown: 150 }, // core below the room top; body ellipse half-axes, its centre above the core; wick crown height above the core
-    kneel: { t: 10, mul: 1.5, dy: 48, speed: 110 },        // s, damage taken, px lowered, px/s
-    hand: { hp: 0.04, spd: 300, limp: 8, regrow: 0.8, rest: [196, 30], p3: 1.25 }, // x core max HP; px/s; s limp; s rising; rest offset from the core; P3 speed factor
-    pause: { hand: [1.5, 1.3, 0.85], head: [5.0, 3.2, 2.4] }, // s between hand / head attacks per phase
+    kneel: { t: 6, t3: 5, mul: 1.5, dy: 48, speed: 110, crack: [0.05, 0.08, 0.03] }, // s (P3: t3), damage taken, px lowered, px/s; x max HP lost when she kneels, per phase
+    hand: { hp: 0.12, spd: 300, limp: 8, regrow: 0.8, rest: [196, 30], p3: 1.25 }, // x the normal boss HP (her max HP / WM.hp); px/s; s limp; s rising; rest offset from the core; P3 speed factor
+    pause: { hand: [0.9, 0.8, 0.6], head: [3.2, 2.4, 1.9] }, // s between hand / head attacks per phase
     tele: 0.85,               // P3 telegraph factor (floor 0.6 s)
-    slam: { w: 3, r: 58, warn: 1.0, mul: 1.6, ring: [58, 150], ringT: 1.2, band: 6, rmul: 0.45, hold: 0.5 }, // warned circle; then a shock ring r0 -> r1 px over ringT s (band half-width px, x boss damage)
+    combo: [0, 0.5, 1],       // chance per phase that a tide / spiral brings the hands along (clap in the tide gap / a slam per free hand)
+    slam: { w: 3, r: 58, warn: 1.0, mul: 1.6, ring: [58, 170], ringT: 1.25, band: 6, rmul: 0.55, hold: 0.5 }, // warned circle; then a shock ring r0 -> r1 px over ringT s (band half-width px, x boss damage)
     sweep: { w: 2, lane: 64, warn: 1.1, speed: 460, mul: 1.4, pre: 0.8 }, // lane width; hand speed along it; s of the warning spent travelling to the lane at most
-    clap: { p: [0.3, 0.25, 0.4], band: 60, gap: 88, off: 110, warn: 1.25, close: 0.35, mul: 2.0, hold: 0.45 }, // chance when both hands are free; gap offset from the hero (px)
+    clap: { p: [0.3, 0.25, 0.4], band: 60, gap: 88, off: 110, warn: 1.25, close: 0.35, mul: 1.6, hold: 0.45 }, // chance when both hands are free; gap offset from the hero (px)
     rain: { n: [4, 5, 6], r: 30, warn: 1.0, stag: 0.18, spread: 110, mul: 1.2, pool: 32, life: 4.5, slow: 0.4 },
     spiral: { w: 3, arms: [3, 3, 4], rate: 0.12, dur: 3.4, speed: 104, spin: 1.7, warn: 0.9, mul: 0.9, r: 5 },
-    tide: { w: 2, warn: 1.3, speed: 110, band: 24, gaps: [2, 2, 1], gap: 90, mul: 1.9 },
+    tide: { w: 2, warn: 1.3, speed: 110, band: 24, gaps: [2, 2, 1], gap: 90, mul: 1.5 },
     rainW: [1, 2, 1],         // head attack weight of rain per phase (spiral / tide from P2)
-    sconce: { inset: 64, r: 20, light: 1.3, decay: 0.5, snuff: [18, 13, 10, 8], first: 8, warn: 1.2, mul: 1.4 }, // light s; unlit progress lost per s (x light rate); snuff s by party size
-    burn: { t: 90, melt: 96, mul: 0.5, tick: 0.5, flood: 2.5, kill: 1e4 }, // wick s; melt inset px at 0; melt x boss damage per tick (no i-frames); flood warning s; flood x boss damage
+    sconce: { inset: 110, r: 20, light: 1.3, decay: 0.5, snuff: [22, 15, 11, 9], first: 10, warn: 1.2, mul: 1.4 }, // px from the side walls (top row 20 px lower); light s; unlit progress lost per s (x light rate); snuff s by party size
+    stall: { t: [60, 85], ramp: 45, min: 0.5, dmg: 1.0 }, // s into P1 / P2 before she enrages; s to reach min; pause factor floor; damage growth per ramp s
+    adds: { every: [7, 6, 6], n: [3, 4, 4], ids: ['cinderbat', 'shade', 'cinderbat', 'shade'], cap: 10, warn: 0.9, w: 150, dy: [16, 70] }, // s between sheddings per phase; adds per shedding; kin ids; alive cap; warning s; half width and depth (px below her body front)
+    burn: { t: 70, melt: 96, mul: 0.5, tick: 0.5, flood: 2.5, kill: 1e4 }, // wick s; melt inset px at 0; melt x boss damage per tick (no i-frames); flood warning s; flood x boss damage
   };
   ED.addFoe('wickmother', { name: 'The Wickmother', look: 'boss.wickmother', ai: 'boss', boss: true, hp: 0, spd: 0, dmg: 2, r: 30, xp: 0, kb: 0, noElite: true, noContact: true });
   ED.addFoe('wmhand', { name: 'Wax Hand', look: 'boss.wmhand', ai: 'boss', boss: true, hp: 0, spd: 0, dmg: 2, r: 26, xp: 0, kb: 0, noElite: true, noContact: true });
@@ -70,7 +80,7 @@
   function grow(w, e, v, H, x, y) {
     const f = w.spawnFoe('wmhand', x, y);
     if (!f) return;
-    f.maxHp = f.hp = Math.max(1, Math.round(e.maxHp * WM.hand.hp)); f.hpQ = 255; f.dmg = e.dmg; f.face = H.side; f.st = 6; f.invulnT = WM.hand.regrow;
+    f.maxHp = f.hp = Math.max(1, Math.round(e.maxHp / WM.hp * WM.hand.hp)); f.hpQ = 255; f.dmg = e.dmg; f.face = H.side; f.st = 6; f.invulnT = WM.hand.regrow;
     H.e = f; H.id = f.id; H.st = 'grow'; H.t = WM.hand.regrow; H.a = null;
   }
   // Hand H broke: a limp hand puddle stays where it fell (zone 'wmlimp') for WM.hand.limp s (held while she kneels).
@@ -81,7 +91,7 @@
     H.z = z; H.zid = z.id;
     w.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r: 44, look: 'wmlimp', team: 1 });
     ev(w, e, 'break');
-    if (v.phase === 1 && v.kneelT <= 0 && v.H.every((o) => o.st === 'limp')) kneel(w, e, v); // both broken at once
+    if (v.phase !== 2 && v.kneelT <= 0 && v.H.every((o) => o.st === 'limp')) kneel(w, e, v); // both broken at once (P1, P3)
   }
   // Rest spot of hand H beside her body.
   const restX = (v, H) => v.core.x + H.side * WM.hand.rest[0], restY = (v) => v.core.ay + WM.hand.rest[1];
@@ -104,7 +114,7 @@
         return a.t >= a.warn + q.hold;
       },
     },
-    // Sweep: the hand travels to its own wall at the target's height while the lane warns, then drags across the room.
+    // Sweep: the hand travels to its own wall at the target's height while the lane warns, then drags across the room (its palm hazard ends with the drag).
     sweep: {
       start(w, e, v, H, p) {
         const R = v.R, q = WM.sweep, y = U.clamp(p.y, front(v) + q.lane / 2, R.b - 24), x0 = H.side < 0 ? R.l + 28 : R.r - 28;
@@ -116,10 +126,10 @@
         const a = H.a, f = H.e, q = WM.sweep;
         f.st = 3; f.face = a.x1 > a.x0 ? 1 : -1;
         if (a.t < a.warn) { mvHand(v, f, a.x0, a.y, a.sp, dt); return false; }
-        if (!a.go) { a.go = true; f.x = a.x0; f.y = a.y; ev(w, e, 'sweep'); hz(w, f, { look: 'wmsweep', x: f.x, y: f.y, r: f.r + 6, dur: Math.abs(a.x1 - a.x0) / (q.speed * fast(v)) + 0.3 }, { mul: q.mul, tw: a.warn, upd: follow }); }
+        if (!a.go) { a.go = true; f.x = a.x0; f.y = a.y; ev(w, e, 'sweep'); a.z = hz(w, f, { look: 'wmsweep', x: f.x, y: f.y, r: f.r + 6, dur: Math.abs(a.x1 - a.x0) / (q.speed * fast(v)) + 0.3 }, { mul: q.mul, tw: a.warn, upd: follow }); a.zid = a.z.id; }
         return mvHand(v, f, a.x1, a.y, q.speed * fast(v), dt);
       },
-      end(w, e, v, H) { if (H.e) H.e.face = H.side; },
+      end(w, e, v, H) { if (H.e) H.e.face = H.side; if (zLive(H.a.z, H.a.zid)) H.a.z.dead = true; },
     },
     // Clap (one per hand, shared band): the hand goes to its wall, then closes on the gap edge as its half of the band resolves.
     clap: {
@@ -269,9 +279,34 @@
     if (lit === 4 && v.kneelT <= 0) kneel(w, e, v);
   }
 
+  // ---------- adds ----------
+  // Shedding: warned 'summon' circles in front of her body; each spawns its kin when it resolves (rechecked against the brain cap). Live adds are tracked in v.adds / v.addIds.
+  function shed(w, e, v) {
+    for (let i = v.adds.length - 1; i >= 0; i--) { const f = v.adds[i]; if (f.dead || f.id !== v.addIds[i]) { v.adds.splice(i, 1); v.addIds.splice(i, 1); } }
+    const q = WM.adds, extra = Math.min(3, w.partyN - 1), room = q.cap + 2 * extra - v.adds.length - v.addPend;
+    const n = Math.min(room, q.n[v.phase - 1] + extra), y0 = front(v);
+    for (let i = 0; i < n; i++) {
+      const id = w.addKin(q.ids[(v.addI++) % q.ids.length]); if (!id) continue;
+      const x = v.core.ax + w.rng.range(-q.w, q.w), y = y0 + w.rng.range(q.dy[0], q.dy[1]);
+      tele(w, e, x, y, 12, T(v, q.warn), 0, { look: 'summon', wid: 'summon', st: id, onEnd: addUp });
+      v.addPend++;
+    }
+  }
+  function addUp(w, z) {
+    const e = z.src, v = e && !e.dead && e.id === z.srcId ? e.vars : null;
+    if (!v) return;
+    v.addPend = Math.max(0, v.addPend - 1);
+    const d = ED.FOES[z.st];
+    if (!d || w.foeAtCap(d)) return;
+    const f = w.spawnFoe(z.st, z.x, z.y);
+    if (f) { v.adds.push(f); v.addIds.push(f.id); }
+  }
+
   // ---------- kneel ----------
   function kneel(w, e, v) {
-    v.kneelT = WM.kneel.t; v.kneelN++;
+    v.kneelT = v.phase === 3 ? WM.kneel.t3 : WM.kneel.t; v.kneelN++;
+    const d = Math.min(e.hp - 1, Math.round(e.maxHp * WM.kneel.crack[v.phase - 1]));
+    if (d > 0) { e.hp -= d; e.hpQ = Math.max(1, Math.round(255 * e.hp / e.maxHp)); w.addHit(e, d, true); }
     v.head = null; v.headT = Math.max(v.headT, 1.5);
     ev(w, e, 'kneel');
   }
@@ -285,6 +320,7 @@
   // ---------- phases ----------
   function nextPhase(w, e, v) {
     const ph = ++v.phase;
+    v.ph0 = w.time; v.rage = 1; e.enraged = false; e.dmg = v.dmg0;
     e.hp = Math.max(e.hp, Math.floor(e.maxHp * WM.phases[ph - 2])); e.hpQ = Math.max(1, Math.round(255 * e.hp / e.maxHp));
     e.invulnT = 1;
     if (v.kneelT > 0) { v.kneelT = 0; for (const H of v.H) if (H.st === 'limp') H.t = Math.min(H.t, 2.0); }
@@ -314,6 +350,11 @@
     const R = room(w, v), c = v.core;
     c.ax = R.x; c.ay = R.t + WM.core.dy;
     e.vx = e.vy = 0;
+    // stall enrage (P1-P2)
+    if (v.phase < 3) {
+      const s = w.time - v.ph0 - WM.stall.t[v.phase - 1];
+      if (s > 0) { v.rage = Math.max(WM.stall.min, 1 - (1 - WM.stall.min) * s / WM.stall.ramp); e.dmg = v.dmg0 * (1 + WM.stall.dmg * s / WM.stall.ramp); if (!e.enraged) { e.enraged = true; ev(w, e, 'enrage'); } }
+    }
     // phase thresholds
     if (v.phase < 3 && e.hp / e.maxHp < WM.phases[v.phase - 1]) nextPhase(w, e, v);
     const ph = v.phase, kneeling = v.kneelT > 0;
@@ -336,6 +377,7 @@
         continue;
       }
       const f = H.e;
+      f.dmg = e.dmg;
       if (H.st === 'grow') { f.st = 6; if ((H.t -= dt) <= 0) { H.st = 'rest'; f.st = 0; } continue; }
       if (H.a) {
         H.a.t += dt;
@@ -373,7 +415,7 @@
     if (zLive(v.body, v.bodyId)) { const bw = e.st + 64 * Math.round((ph === 3 ? v.wick : 1) * 100); if (v.body.w !== bw) v.body.w = bw; }
   }
 
-  // Attack choice: hands every WM.pause.hand s (P2 snuffs first when due; a clap when both are free), the head every WM.pause.head s; P3 head attacks bring the hands along.
+  // Attack choice: hands every WM.pause.hand s (P2 snuffs first when due; a clap when both are free), the head every WM.pause.head s; a tide or spiral brings the free hands along at WM.combo.
   function think(w, e, v, dt) {
     const ph = v.phase, Lv = w.living;
     if (!Lv.length) return;
@@ -381,7 +423,7 @@
     if ((v.handT -= dt) <= 0) {
       const fr = v.H.filter(freeHand);
       if (fr.length) {
-        v.handT = WM.pause.hand[ph - 1];
+        v.handT = WM.pause.hand[ph - 1] * v.rage;
         let sc = null;
         if (ph === 2 && v.snuffT <= 0) { // the lit sconce farthest from every hero, not already targeted
           let bd = -1;
@@ -400,8 +442,9 @@
         }
       } else v.handT = 0.3;
     }
+    if ((v.addT -= dt) <= 0) { v.addT = WM.adds.every[ph - 1] * v.rage; shed(w, e, v); }
     if (v.head || (v.headT -= dt) > 0) return;
-    v.headT = WM.pause.head[ph - 1];
+    v.headT = WM.pause.head[ph - 1] * v.rage;
     let k = 'rain';
     if (ph >= 2) {
       const ks = ['rain', 'spiral', 'tide'].filter((x) => x !== v.lastHead);
@@ -409,17 +452,19 @@
     }
     const a = v.head = { k, t: 0 };
     v.lastHead = k;
-    if (ph === 3 && k === 'tide' && v.H.every(freeHand)) { const p = pick(w, v), R = v.R; a.gx = U.clamp(p.x + w.rng.range(-WM.clap.off, WM.clap.off), R.l + WM.clap.gap / 2 + 40, R.r - WM.clap.gap / 2 - 40); clap(w, e, v, p, a.gx); }
+    const combo = w.rng.chance(WM.combo[ph - 1]);
+    if (combo && k === 'tide' && v.H.every(freeHand)) { const p = pick(w, v), R = v.R; a.gx = U.clamp(p.x + w.rng.range(-WM.clap.off, WM.clap.off), R.l + WM.clap.gap / 2 + 40, R.r - WM.clap.gap / 2 - 40); clap(w, e, v, p, a.gx); }
     HEAD[k].start(w, e, v, a);
-    if (ph === 3 && k === 'spiral') for (const H of v.H) if (freeHand(H)) ACT.slam.start(w, e, v, H, pick(w, v));
+    if (combo && k === 'spiral') for (const H of v.H) if (freeHand(H)) ACT.slam.start(w, e, v, H, pick(w, v));
   }
 
-  // Spawn hook: HP x WM.hp, the room, her anchor, both hands, the body zone.
+  // Spawn hook: HP x WM.hp, damage x WM.dmg, the room, her anchor, both hands, the body zone.
   function spawn(w, e) {
-    e.maxHp = e.hp = Math.max(1, Math.round(e.maxHp * WM.hp)); e.hpQ = 255;
+    e.maxHp = e.hp = Math.max(1, Math.round(e.maxHp * WM.hp)); e.hpQ = 255; e.dmg *= WM.dmg;
+    const dmg0 = e.dmg;
     const S = w.sanctum, R = { x: S ? S.x : e.x, y: S ? S.y : e.y - WM.core.dy + 240, w: S ? S.w : 720, h: S ? S.h : 480, l: 0, r: 0, t: 0, b: 0 };
     const v = e.vars = { phase: 1, R, core: { x: 0, ax: 0, ay: 0 }, H: [], head: null, headT: 2.5, handT: 1.6, lastHead: '', hi: 0, ti: 0, ward: false, lock: 0, kneelT: 0, kneelN: 0,
-      sc: [], lit: 0, snuffT: 0, burn0: 0, wick: 1, wickCue: 0, flood: 0, melt: null, meltId: 0, body: null, bodyId: 0 };
+      sc: [], lit: 0, snuffT: 0, burn0: 0, wick: 1, wickCue: 0, flood: 0, melt: null, meltId: 0, body: null, bodyId: 0, adds: [], addIds: [], addPend: 0, addI: 0, addT: WM.adds.every[0], ph0: w.time, rage: 1, dmg0 };
     room(w, v);
     const c = v.core; c.x = c.ax = R.x; c.ay = R.t + WM.core.dy;
     e.x = c.ax; e.y = c.ay;
@@ -433,10 +478,10 @@
     for (const H of v.H) if (live(H)) { w.emit({ t: 'boom', x: Math.round(H.e.x), y: Math.round(H.e.y), r: 40, look: 'wmwax', team: 1 }); w.despawnFoe(H.e); }
     return true;
   }
-  // Boss bar: rev = the kneel left (P1-P2 while kneeling), the lit share (P2), the wick (P3).
+  // Boss bar: rev = the kneel left (P1-P2 while kneeling), the lit share (P2), the wick (P3, kneeling too).
   function bar(w, e, b) {
     const v = e.vars; if (!v || !v.R) return;
-    b.rev = v.kneelT > 0 ? v.kneelT / WM.kneel.t : v.phase === 2 ? v.lit / 4 : v.phase === 3 ? v.wick : -1;
+    b.rev = v.kneelT > 0 && v.phase < 3 ? v.kneelT / WM.kneel.t : v.phase === 2 ? v.lit / 4 : v.phase === 3 ? v.wick : -1;
   }
   brain.spawn = spawn; brain.kill = kill; brain.bar = bar;
   B.wickmother = brain;

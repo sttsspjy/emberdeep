@@ -71,7 +71,8 @@ ok(w.heroes.every(p => !p.dead && !p.downed && p.hp === p.maxHp && inRoom(R, p.x
 ok(w.xp + w.level * 1e6 > xp0 && !w.pickups.some(g => !g.dead && /^xp/.test(g.k)), 'gems on the floor became party XP');
 ok(w.pickups.some(g => !g.dead && g.k === 'chest' && inRoom(R, g.x, g.y, 0)) && !w.pickups.some(g => !g.dead && !inRoom(R, g.x, g.y, 0)), 'the chest moved into the room; nothing left outside');
 
-// 4. clamping
+// 4. clamping (god mode: these prove the room bounds, not survival against the boss)
+w.cheats.god = true;
 const ob = w.arena.obstacles.find(o => inRoom(R, o.x, o.y, 0));
 for (let i = 0; i < 720; i++) { w.input('a', { mx: 1, my: -1, ax: pa.x + 50, ay: pa.y }); w.update(C.TICK); w.events.length = 0; }
 ok(Math.abs(pa.x - (R.x1 - C.HERO_BODY)) < 1 && Math.abs(pa.y - (R.y0 + C.HERO_BODY)) < 1, 'a hero walking into a corner stops at the room walls (' + Math.round(pa.x) + ', ' + Math.round(pa.y) + ')');

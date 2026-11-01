@@ -143,7 +143,7 @@
         pal: { bg: '#060403', wall: '#2b1a10', accent: '#ffb347', light: '#fff0c0' },
       },
       arena: { size: 3200, obstacles: [30, 40], braziers: [40, 55], clear: 220 },
-      foe: { hp: 1.55, dmg: 1.45 }, gold: 2,
+      foe: { hp: 1.35, dmg: 1.75 }, gold: 2,
       timeline: timeline(
         RATE.map(r => Math.round(r * 1.1 * 10) / 10),
         {
