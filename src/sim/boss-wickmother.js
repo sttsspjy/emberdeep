@@ -19,17 +19,17 @@
   const WM = B.WICKMOTHER = {
     hp: 3.0,                  // x the normal boss HP (ED.bossHp x party x stage)
     phases: [0.7, 0.35],      // core HP fractions that start P2 and P3
-    core: { dy: 170, rx: 156, ry: 86, oy: 20, crown: 150 }, // core below the room top; body ellipse half-axes, its centre above the core; wick crown height above the core
+    core: { dy: 170, rx: 156, ry: 56, oy: 20, crown: 150 }, // core below the room top; body ellipse half-axes, its centre above the core; wick crown height above the core
     kneel: { t: 10, mul: 1.5, dy: 48, speed: 110 },        // s, damage taken, px lowered, px/s
     hand: { hp: 0.04, spd: 300, limp: 8, regrow: 0.8, rest: [196, 30], p3: 1.25 }, // x core max HP; px/s; s limp; s rising; rest offset from the core; P3 speed factor
     pause: { hand: [1.5, 1.3, 0.85], head: [5.0, 3.2, 2.4] }, // s between hand / head attacks per phase
     tele: 0.85,               // P3 telegraph factor (floor 0.6 s)
-    slam: { w: 3, r: 58, warn: 1.0, mul: 1.6, ring: [58, 170], ringT: 1.0, band: 6, rmul: 0.6, hold: 0.5 }, // warned circle; then a shock ring r0 -> r1 px over ringT s (band half-width px, x boss damage)
+    slam: { w: 3, r: 58, warn: 1.0, mul: 1.6, ring: [58, 150], ringT: 1.2, band: 6, rmul: 0.45, hold: 0.5 }, // warned circle; then a shock ring r0 -> r1 px over ringT s (band half-width px, x boss damage)
     sweep: { w: 2, lane: 64, warn: 1.1, speed: 460, mul: 1.4, pre: 0.8 }, // lane width; hand speed along it; s of the warning spent travelling to the lane at most
     clap: { p: [0.3, 0.25, 0.4], band: 60, gap: 88, off: 110, warn: 1.25, close: 0.35, mul: 2.0, hold: 0.45 }, // chance when both hands are free; gap offset from the hero (px)
-    rain: { n: [4, 5, 6], r: 30, warn: 1.0, stag: 0.18, spread: 110, mul: 1.0, pool: 32, life: 4.5, slow: 0.4 },
-    spiral: { w: 3, arms: [3, 3, 4], rate: 0.12, dur: 3.4, speed: 92, spin: 1.7, warn: 0.9, mul: 0.7, r: 5 },
-    tide: { w: 2, warn: 1.3, speed: 110, band: 24, gaps: [2, 2, 1], gap: 90, mul: 1.6 },
+    rain: { n: [4, 5, 6], r: 30, warn: 1.0, stag: 0.18, spread: 110, mul: 1.2, pool: 32, life: 4.5, slow: 0.4 },
+    spiral: { w: 3, arms: [3, 3, 4], rate: 0.12, dur: 3.4, speed: 104, spin: 1.7, warn: 0.9, mul: 0.9, r: 5 },
+    tide: { w: 2, warn: 1.3, speed: 110, band: 24, gaps: [2, 2, 1], gap: 90, mul: 1.9 },
     rainW: [1, 2, 1],         // head attack weight of rain per phase (spiral / tide from P2)
     sconce: { inset: 64, r: 20, light: 1.3, decay: 0.5, snuff: [18, 13, 10, 8], first: 8, warn: 1.2, mul: 1.4 }, // light s; unlit progress lost per s (x light rate); snuff s by party size
     burn: { t: 90, melt: 96, mul: 0.5, tick: 0.5, flood: 2.5, kill: 1e4 }, // wick s; melt inset px at 0; melt x boss damage per tick (no i-frames); flood warning s; flood x boss damage
