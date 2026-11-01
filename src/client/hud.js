@@ -1,6 +1,6 @@
 // In-run HUD on the screen canvas (device px). Sizes are CSS px at 1280x720 scaled by k = dpr x clamp(viewport / 1280x720, 1, 2), so text never drops below its CSS size (numbers >= 16 px).
 // Draws: XP bar across the top with the level, timer, kills / gold, 3 weapon slots (hero weapon + 2 supports, empty ones dim; level; Form = gold frame) + 6 passive slots with levels,
-// HP bar, Q cooldown dial and the dash dial with charge pips, boss bar, Last Light (view.lap: a VICTORY banner during the calm; the lap countdown and lap gold in place of the timer), teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
+// HP bar, Q cooldown dial and the dash dial with charge pips, boss bar, Last Light (view.lap: a VICTORY banner during the calm; the lap countdown and lap gold in place of the timer), the Sanctum's VICTORY banner (view.sanctum st 2), teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
 // low-HP edge glow, banners and the bot-watch tag (view.botTag / view.botPick, bottom-left). No per-frame allocation: strings are cached by value. Font 'Pixel Operator'.
 (function (ED) {
   'use strict';
@@ -178,7 +178,10 @@
       const k = on ? Math.max(0, ED.FOE_IDS.indexOf(bb.id)) : b.k;
       txt(cs('boss', (k << 1) | (en ? 1 : 0), bossName), W / 2, by + R(21) + (on && bb.rev >= 0 ? R(4) : 0), en ? '#ff8a7a' : '#ffd27a', 20, 'center');
     }
-    if (lp && lp.ph === 1) victory(lp.rem);
+    const sc = view.sanctum;
+    if (sc && sc.st === 2) { if (winT < 0 || view.time < winT) winT = view.time; } else winT = -1;
+    if (lp && lp.ph === 1) victory(lp.rem, ED.CONST.LAP.calm, 'THE LAST LIGHT IS COMING');
+    else if (winT >= 0) victory(Math.max(0, ED.CONST.SANCTUM.end - (view.time - winT)), ED.CONST.SANCTUM.end, 'THE WICKDEEP IS SNUFFED OUT');
     if (!me) { banner(dt); return; }
     // weapon and passive slots (top-left)
     const x0 = R(10), ws = R(42), ps = R(32);
@@ -217,12 +220,13 @@
     }
     banner(dt);
   };
-  // VICTORY banner of the Last Light calm (rem: s left of it): pops in, pulses, fades out over the last 0.3 s.
-  function victory(rem) {
-    const age = Math.max(0, ED.CONST.LAP.calm - rem), s = 1 + Math.max(0, 0.3 - age) * 1.5 + 0.04 * Math.sin(now * 6), a = Math.min(1, age / 0.12, rem / 0.3 + 0.15), y = Math.round(Hh * 0.22);
+  // VICTORY banner of the Last Light calm or the Sanctum's end (rem: s left of its dur s, sub: the line under it): pops in, pulses, fades out over the last 0.3 s.
+  let winT = -1; // view time the Sanctum fight was won (view.sanctum.st 2), -1 none
+  function victory(rem, dur, sub) {
+    const age = Math.max(0, dur - rem), s = 1 + Math.max(0, 0.3 - age) * 1.5 + 0.04 * Math.sin(now * 6), a = Math.min(1, age / 0.12, rem / 0.3 + 0.15), y = Math.round(Hh * 0.22);
     c.globalAlpha = a;
     txt('VICTORY', W / 2, y, '#ffd27a', 72 * s, 'center', 'middle');
-    txt('THE LAST LIGHT IS COMING', W / 2, y + R(58), '#fff1d6', 24, 'center', 'middle');
+    txt(sub, W / 2, y + R(58), '#fff1d6', 24, 'center', 'middle');
     c.globalAlpha = 1;
   }
   function banner(dt) {

@@ -207,7 +207,7 @@
     CD.spd = p.stats.speed * (p.slowT > 0 ? 1 - (p.slowK || 0) : 1); CD.dv = D.dist / D.t; CD.dt = D.t; CD.dd = D.dist;
     const ux = CD.ux, uy = CD.uy, spd = CD.spd, iv = Math.max(p.invuln, p.dashT);
     let tot = 0, near = 0, x = p.x, y = p.y, stuck = false, h0 = 0, x0 = p.x, y0 = p.y;
-    const size = A.size;
+    const size = A.size, RM = A.room;
     for (let k = 0; k < NH; k++) {
       const h = H[k];
       if (!stuck) {
@@ -229,9 +229,9 @@
       cs = Math.min(1.6, cs * ck);
       if (!safe) { const v = cs * HW[k]; tot += v; if (k < 2) near += v; }
       else tot += cs * HW[k] * 0.15;
-      // edges
-      const b = Math.min(x, y, size - x, size - y);
-      if (b < 160) tot += (1 - b / 160) * 0.8 * HW[k];
+      // edges (the Sanctum room: its walls, a shorter margin)
+      const b = RM ? Math.min(x - RM.x0, y - RM.y0, RM.x1 - x, RM.y1 - y) : Math.min(x, y, size - x, size - y), em = RM ? 70 : 160;
+      if (b < em) tot += (1 - b / em) * 0.8 * HW[k];
       // live hazards (harmless during i-frames); moving ones (rings, sweeping beams) are checked every 0.05 s since the last sample
       for (let j = 0; j < ZN; j++) {
         const o = ZL[j]; if (o.kind !== 3) continue;

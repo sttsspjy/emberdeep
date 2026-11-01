@@ -13,6 +13,7 @@
 // Brain caps: a roster pick of a ranged-brain foe while alive ranged foes >= W.shooterCap (summoner: W.summonerCap; charger / diver / blinker together: W.dasherCap; brute: W.bruteCap) is re-picked among the uncapped roster rows;
 // packs shrink to the room left under their cap; elites never promote a capped kind (elite brutes may exceed the brute cap by 2); stampedes skip dasher members at the cap.
 // Elites: a non-swarm, non-exploder roster foe promoted. Bosses: a 5 s 'warn' event, then w.spawnBoss; a stage boss id without an ED.Bosses script spawns the stage's brute as an elite boss stand-in.
+// Sanctum (sanctum.js): a boss entry with sanctum: true starts it (W.enterSanctum); nothing spawns from then on (the boss and its adds come from sanctum.js and the boss script).
 // Last Light lap (lap.js): alive cap = W.lapCap, density floor 100%, the final-minute roster; no flocks, swarm events, elites or bosses; nothing spawns during the calm before it.
 // Stage kin (boss adds, bosses.js W.addKin): w.stageKin(id) maps a foe id to this stage's foe of the same kind, from a table built once at initSpawner; w.foeAtCap(def) counts its brain cap fresh.
 (function (ED) {
@@ -209,7 +210,7 @@
 
   W.updateSpawner = function (dt) {
     const L = this.living, lap = this.lap;
-    if (!L.length || (lap && !lap.ph)) return;
+    if (!L.length || (lap && !lap.ph) || this.sanctum) return;
     const sd = this.sdef, row = lap ? sd.timeline[sd.timeline.length - 1] : this.timelineRow(), party = 1 + 0.25 * (this.partyN - 1), cap = lap ? this.lapCap() : this.aliveCap(), sp = this.sp;
     sp.nR = sp.nS = sp.nD = sp.nB = -1;
     const deficit = (lap ? 1 : row.floor || 0) * cap - this.foes.length;
@@ -253,6 +254,7 @@
       if (sp.warnI < sp.bossI && this.time >= b.t - BOSS_WARN) { sp.warnI = sp.bossI; this.emit({ t: 'warn', kind: 'boss', id: b.id, final: !!b.final }); }
       if (this.time >= b.t) {
         sp.bossI++;
+        if (b.sanctum) { this.enterSanctum(b); return; }
         const scripted = ED.FOES[b.id] && typeof ED.Bosses[b.id] === 'function';
         if (!(scripted && this.spawnBoss(b))) this.standInBoss(b);
       }

@@ -3,6 +3,8 @@
 // presented through Post (upload) when it is usable, else a nearest-neighbour 2D blit.
 // Layer order (ARCHITECTURE §10): floor chunks -> own-team zones (faded by coverage) -> enemy zones / telegraph fills -> pickups -> y-sorted actors (heroes, foes, bosses, obstacles, braziers)
 // -> projectiles -> zone overlays -> FX -> hostile telegraph outlines (over the horde) -> hero markers (Actors.heroTop) -> overlays (names, bars, numbers).
+// Sanctum (view.props.room set, sanctum.js): a baked room (blood-ember floor, sigil rings, walls, corner columns) over a void, flickering wall candles, no obstacles / braziers / deco,
+// the camera clamped to the room (+ its walls), the 'sanctum' grade; view.sanctum st 0 fades to black over the second half of the entry fade, st 1 fades in over ROOM_IN s.
 // Every list is culled to the view rect; the y-sort is an allocation-free radix sort on typed arrays. Weapon tints (ED.Cos): each owner's projectiles, weapon zones, zone overlays and
 // HeroFx draw inside its tint scope; name tags (title + name colour) show in co-op and for a solo hero that wears either.
 (function (ED) {
@@ -10,7 +12,7 @@
   const U = ED.U, C = ED.CONST;
   const R = ED.Render = { canvas: null, ctx: null, buf: null, bctx: null, dpr: 1, scale: 3, bw: 640, bh: 360, camX: 0, camY: 0, quality: 'high', usePost: false, gpu: false, ms: 0, crowd: 0 };
   const CHUNK = 256, TILE = 16;
-  let theme = null, stageId = '', chunks = new Map(), frameN = 0, arenaRef = null, bgHex = 0, bgCss = '#000', wallRgba = 0;
+  let theme = null, stageId = '', chunks = new Map(), frameN = 0, arenaRef = null, roomOn = null, bgHex = 0, bgCss = '#000', wallRgba = 0;
   const SH = { x: 0, y: 0 };
   const PO_ARGS = { biome: null, t: 0, scale: 1, fx: 0, fy: 0, aberr: 0, flash: [0, 0, 0, 0], tex: null };
   ED.ZoneActor = ED.ZoneActor || {}; // look -> fn(B, z, t): zones drawn as y-sorted actors (lanes register in their fx files)
@@ -73,6 +75,59 @@
       B.img(ch.cv, rx * CHUNK, ry * CHUNK, CHUNK, CHUNK);
     }
     if (chunks.size > 40) for (const [k, ch] of chunks) if (frameN - ch.used > 120) chunks.delete(k);
+  }
+
+  // ---------------- Sanctum room ----------------
+  const ROOM_TILES = [['tile.floor.sanctum.1', 30], ['tile.floor.sanctum.2', 6], ['tile.floor.sanctum.3', 6], ['tile.floor.sanctum.4', 4], ['tile.floor.sanctum.5', 3], ['tile.floor.sanctum.6', 3]];
+  const ROOM_PAL = { bg: '#030101', wall: '#3a1a10', accent: '#ff6a2a', light: '#ffd0a0' }, ROOM_BG = 0x030101, ROOM_IN = 0.9, TOP = 18; // TOP: extra px of the top wall's front face
+  let roomCv = null, roomRef = null;
+  const roomTile = (tx, ty, seed) => { let tot = 0; for (const f of ROOM_TILES) tot += f[1]; let r = U.hash3(tx, ty, seed ^ 0x5a17) % tot; for (const f of ROOM_TILES) { r -= f[1]; if (r < 0) return f[0]; } return ROOM_TILES[0][0]; };
+  // Hard-edged pixel ring (radius r, width lw) at (cx, cy) on 2D context g.
+  const pxRing = (g, cx, cy, r, lw, col) => {
+    g.fillStyle = col; const R0 = Math.ceil(r + lw);
+    for (let y = -R0; y <= R0; y++) for (let x = -R0; x <= R0; x++) { const d = Math.hypot(x + 0.5, y + 0.5); if (d >= r && d < r + lw) g.fillRect(cx + x, cy + y, 1, 1); }
+  };
+  // Bakes room R (inner rect) with its walls: canvas origin = (R.x0 - m, R.y0 - m - TOP).
+  function bakeRoom(R, seed) {
+    const m = C.SANCTUM.wall, iw = R.x1 - R.x0, ih = R.y1 - R.y0, cv = document.createElement('canvas'), At = ED.Atlas, ox = m, oy = m + TOP;
+    cv.width = iw + 2 * m; cv.height = ih + 2 * m + TOP;
+    const g = cv.getContext('2d'); g.imageSmoothingEnabled = false;
+    g.fillStyle = ROOM_PAL.bg; g.fillRect(0, 0, cv.width, cv.height);
+    for (let ty = 0; ty < ih / TILE; ty++) for (let tx = 0; tx < iw / TILE; tx++) At.draw(g, roomTile(tx, ty, seed), 0, ox + tx * TILE, oy + ty * TILE);
+    // sigil: three rings, eight rune marks, all dim ember
+    const cx = ox + iw / 2, cy = oy + ih / 2;
+    pxRing(g, cx, cy, 150, 2, 'rgba(255,106,42,0.22)'); pxRing(g, cx, cy, 118, 1, 'rgba(255,140,60,0.18)'); pxRing(g, cx, cy, 46, 2, 'rgba(255,106,42,0.25)');
+    g.fillStyle = 'rgba(255,160,80,0.35)';
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, rx = Math.round(cx + Math.cos(a) * 134), ry = Math.round(cy + Math.sin(a) * 134); g.fillRect(rx - 2, ry - 3, 5, 1); g.fillRect(rx, ry - 3, 1, 7); g.fillRect(rx - 2, ry + 3, 5, 1); }
+    // walls: dark stone bands; the top wall shows a bricked front face, inner lips catch the light, ember cracks glow in the stone
+    g.fillStyle = '#1c0e09'; g.fillRect(0, 0, cv.width, oy); g.fillRect(0, oy + ih, cv.width, m); g.fillRect(0, oy, ox, ih); g.fillRect(ox + iw, oy, m, ih);
+    g.fillStyle = '#2e170d'; g.fillRect(ox, oy - TOP, iw, TOP);
+    g.fillStyle = '#120805';
+    for (let y = oy - TOP; y < oy; y += 6) { g.fillRect(ox, y, iw, 1); for (let x = ox + ((y / 6) & 1) * 8; x < ox + iw; x += 16) g.fillRect(x, y, 1, 6); }
+    g.fillStyle = '#5c301a'; g.fillRect(ox, oy - 1, iw, 1); g.fillRect(ox - 1, oy - TOP, 1, ih + TOP); g.fillRect(ox + iw, oy - TOP, 1, ih + TOP); g.fillRect(ox, oy + ih, iw, 1);
+    g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(ox, oy, iw, 4); g.fillRect(ox, oy, 3, ih); g.fillRect(ox + iw - 3, oy, 3, ih);
+    g.fillStyle = '#ff7a2a';
+    for (let i = 0; i < 90; i++) {
+      const h = U.hash3(i, 7, seed) >>> 0, side = h & 3, k = ((h >>> 2) % 1000) / 1000, j = h >>> 12;
+      const x = side < 2 ? ox + k * iw : side === 2 ? 2 + (j % (m - 4)) : ox + iw + 2 + (j % (m - 4)), y = side === 0 ? oy - TOP + 1 + (j % (TOP - 2)) : side === 1 ? oy + ih + 2 + (j % (m - 4)) : oy + k * ih;
+      g.fillRect(Math.round(x), Math.round(y), 1, 1);
+    }
+    // corner columns and candles on the top wall
+    for (const pt of [[ox + 12, oy + 14], [ox + iw - 12, oy + 14], [ox + 12, oy + ih - 4], [ox + iw - 12, oy + ih - 4]]) At.draw(g, 'prop.pillar', 0, pt[0], pt[1]);
+    for (let x = ox + 60, i = 0; x < ox + iw - 40; x += 120, i++) At.draw(g, 'deco.candle.' + (i & 3), 0, x, oy - 2);
+    return cv;
+  }
+  function drawRoom(B, Rm, seed, t) {
+    if (!ED.Atlas.ok) return;
+    if (roomRef !== Rm) { roomRef = Rm; roomCv = bakeRoom(Rm, seed); }
+    const m = C.SANCTUM.wall;
+    B.img(roomCv, Rm.x0 - m, Rm.y0 - m - TOP, roomCv.width, roomCv.height);
+    for (let x = Rm.x0 + 60, i = 0; x < Rm.x1 - 40; x += 120, i++) { const fl = 0.5 + 0.5 * Math.sin(t * 8 + i * 1.7) * Math.sin(t * 4.3 + i); B.circ(x, Rm.y0 - 10, 9 + fl * 3, (0xff8a3a00 | Math.round(22 + 22 * fl)) >>> 0, 0); }
+  }
+  // Fade to black over the second half of the entry fade (st 0), back in over ROOM_IN s after the teleport (st 1+).
+  function roomFade(B, S, t, x, y) {
+    const F = C.SANCTUM.fade, k = S.st === 0 ? U.clamp((t - (S.t0 - F / 2)) / (F / 2), 0, 1) : 1 - U.clamp((t - S.t0) / ROOM_IN, 0, 1);
+    if (k > 0.01) B.rect(x, y, R.bw, R.bh, Math.round(k * 255) >>> 0);
   }
 
   // ---------------- view rect ----------------
@@ -181,14 +236,19 @@
   R.frame = (view, dt) => {
     const t0 = performance.now(), B = ED.Batch, P = ED.Post, t = view.time;
     frameN++;
-    const sd = ED.STAGES[view.stage] || ED.STAGES[0];
-    if (sd.id !== stageId || view.props !== arenaRef) {
-      stageId = sd.id; theme = sd.theme; arenaRef = view.props; chunks.clear();
-      bgHex = parseInt(theme.pal.bg.slice(1), 16); bgCss = theme.pal.bg; wallRgba = (parseInt(theme.pal.wall.slice(1), 16) * 256 + 255) >>> 0;
-      PO_ARGS.biome = { id: sd.id, pal: theme.pal };
+    const sd = ED.STAGES[view.stage] || ED.STAGES[0], room = (view.props && view.props.room) || null;
+    if (sd.id !== stageId || view.props !== arenaRef || room !== roomOn) {
+      stageId = sd.id; theme = sd.theme; arenaRef = view.props; roomOn = room; chunks.clear(); roomRef = null;
+      bgHex = room ? ROOM_BG : parseInt(theme.pal.bg.slice(1), 16); bgCss = room ? ROOM_PAL.bg : theme.pal.bg; wallRgba = (parseInt(theme.pal.wall.slice(1), 16) * 256 + 255) >>> 0;
+      PO_ARGS.biome = room ? { id: 'sanctum', pal: ROOM_PAL } : { id: sd.id, pal: theme.pal };
     }
     const me = view.me, A = view.props;
     if (me) { R.camX = Math.round(me.x) - (R.bw >> 1); R.camY = Math.round(me.y) - 10 - (R.bh >> 1); } // whole world px, a fixed offset from the hero's drawn px: the hero never jitters against the screen
+    if (room) { // Sanctum: the camera stays on the room and its walls (centred on an axis the view already covers)
+      const m = C.SANCTUM.wall + 6, lx = room.x0 - m, hx = room.x1 + m - R.bw, ly = room.y0 - m - TOP, hy = room.y1 + m - R.bh;
+      R.camX = hx > lx ? U.clamp(R.camX, lx, hx) : Math.round((room.x0 + room.x1 - R.bw) / 2);
+      R.camY = hy > ly ? U.clamp(R.camY, ly, hy) : Math.round((room.y0 + room.y1 - TOP - R.bh) / 2);
+    }
     ED.FX.shakeXY(SH);
     const cx = R.camX + Math.round(SH.x), cy = R.camY + Math.round(SH.y);
     const postOk = R.quality === 'high' && P && P.ready && !P.soft;
@@ -196,7 +256,7 @@
     if (!gpu) B.use('2d');
     B.size(R.bw, R.bh);
     B.begin(cx, cy, 1, bgHex);
-    drawFloor(B, A, view.seed | 0, cx, cy);
+    if (room) drawRoom(B, room, view.seed | 0, t); else drawFloor(B, A, view.seed | 0, cx, cy);
     vx0 = cx - 48; vy0 = cy - 48; vx1 = cx + R.bw + 48; vy1 = cy + R.bh + 64;
     const zones = view.zones;
     let tele = 0, zn = 0, za = 0;
@@ -215,8 +275,7 @@
     for (let i = 0; i < foes.length; i++) { const e = foes[i]; if (!e.dead && inView(e)) { items[n++] = e; crowd++; } }
     B.crowd = crowd; R.crowd = crowd;
     for (let i = 0; i < heroes.length; i++) { const p = heroes[i]; if (!p.dead && inView(p)) items[n++] = p; }
-    for (const o of A.obstacles) if (inView(o)) items[n++] = o;
-    for (const b of A.braziers) if (inView(b)) items[n++] = b;
+    if (!room) { for (const o of A.obstacles) if (inView(o)) items[n++] = o; for (const b of A.braziers) if (inView(b)) items[n++] = b; }
     const ZA = ED.ZoneActor;
     for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && ZA[z.k] && inView(z)) items[n++] = z; } // zones with a body (minions): ED.ZoneActor[look](B, z, t)
     if (items.length > n) items.length = n;
@@ -251,6 +310,7 @@
       if (coopN && p.downed) { B.rect(p.x - 12, p.y - 24, 24, 3, 0x000000aa); B.rect(p.x - 12, p.y - 24, 24 * p.revive, 3, 0x7fe39aff); }
     }
     for (let i = 0; i < n; i++) { const e = items[i]; if (e.def && e.elite && e.hpQ < 255) { const w = 24; B.rect(e.x - w / 2, e.y - e.r * 2 - 8, w, 2, 0x000000aa); B.rect(e.x - w / 2, e.y - e.r * 2 - 8, w * e.hpQ / 255, 2, 0xffc94aff); } }
+    if (view.sanctum) roomFade(B, view.sanctum, t, cx, cy);
     ED.FX.drawTop(B);
     B.end();
     // present

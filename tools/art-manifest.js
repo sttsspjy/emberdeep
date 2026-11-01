@@ -26,7 +26,7 @@
 // boss.<id>.<state>      bonewarden: idle walk attack(8f) shield hit death | sporemother: idle walk attack charge hit | drownedking: idle walk attack1 attack2 attack3 hit death
 //                        hollowking: idle walk attack hit death, crown overlay boss.hollowking.crown | cyclops: idle walk attack hit death | samurai: idle walk charge attack hit death
 //                        (all face right; anchors centre/top/eye shared across each boss's states)
-// tile.floor.<1..8>, tile.dark.floor.<1..6> (base sets), tile.floor.<ossuary 1..8|glowmire 1..6|abyss 1..8> (per-stage recolours), tile.torch.floor (8f)
+// tile.floor.<1..8>, tile.dark.floor.<1..6> (base sets), tile.floor.<ossuary 1..8|glowmire 1..6|abyss 1..8|wickdeep 1..8> (per-stage recolours), tile.floor.sanctum.<1..6> (Sanctum room), tile.torch.floor (8f)
 // prop.<pillar|pillar.broken|column|ruin.0..2|ruin.void.0..2|grave.0..4|coffin|bonepile|shroom.0..1|crystal.0..1|crystal.void.0..1|obelisk>   obstacles (feet pivot)
 // prop.<brazier (8f)|brazier.broken|chest.closed|chest.open|chest.empty>
 // deco.<bones.0..4|skull|moss.0..2|candle.0..3|urn.0..5|mushroom.0..3|root.0..1|puddle.0..3|crystal.0..2|shard.0..2|shell.0..2|seaweed.0..1|coral.0..1|pillarstub|chain>
@@ -274,7 +274,7 @@ const foeNa4Shared = (id, srcId, cast) => {
   NA_DIRS.forEach((d) => add('foe.' + id + '.walk.' + d, 'actors', null, null, { use: 'foe.' + srcId + '.walk.' + d, set: 'foe.' + id, fps: 6.67, loop: true, eye: 'auto' }));
   if (cast) NA_DIRS.forEach((d) => add('foe.' + id + '.cast.' + d, 'actors', null, null, { use: 'foe.' + srcId + '.cast.' + d, set: 'foe.' + id, fps: 0, loop: false, eye: 'auto', core: false }));
 };
-foeNa4('bat', 'na_bat'); foeNa4Shared('cinderbat', 'bat');
+foeNa4('bat', 'na_bat');
 foeNa4('slime', 'na_slime'); foeNa4Shared('glowslime', 'slime');
 foeNa4('myconid', 'na_myconid'); foeNa4('spitter', 'na_spitter'); foeNa4('mireworm', 'na_mireworm');
 foeNa4('frostwisp', 'na_wisp'); foeNa4Shared('shade', 'frostwisp');
@@ -332,6 +332,8 @@ foeOx('bloatling', null, 'muddy_anim', RAMP(['#14261e', '#2a5a48', '#4aa080', '#
 foeDl('mirecrab', 'dl_aq', 80, 0, RAMP(['#1a2414', '#2f4a24', '#5a7a34', '#9ab84a', '#e0f0a0']));
 foeOx('stalker', 'chort', null, RAMP(['#140c24', '#3a2060', '#7040b0', '#c58aff', '#ffe0ff']));
 foeOx('colossus', 'ogre', null, RAMP(['#0c1020', '#1c2a50', '#34508a', '#6a9ad0', '#d0e8ff']));
+// Cinder Bat (stage 4 swarmer): the bat sheet through an ember ramp.
+NA_DIRS.forEach((d, c) => add('foe.cinderbat.walk.' + d, 'actors', 'na_bat', [0, 1, 2, 3].map((i) => [c * 16, i * 16, 16, 16]), Object.assign({ set: 'foe.cinderbat', fps: 6.67, loop: true, eye: 'auto' }, RAMP(['#1a0a06', '#5a1c0c', '#c0441a', '#ff9a3a', '#fff0b0']))));
 
 // --------------------------------------------------------------------------- bosses (page bosses)
 // LuizMelo bosses have no outline in the source, so a 1 px #222222 outline is stamped at bake.
@@ -387,10 +389,15 @@ const FLOOR_RAMP = {
   ossuary: { ramp: ['#140f0d', '#2c221d', '#4a3a31', '#73604f'], lo: 0.08, hi: 0.45 },
   glowmire: { ramp: ['#070d0c', '#0f1f1b', '#1a3530', '#2b5048'], lo: 0.04, hi: 0.3 },
   abyss: { ramp: ['#0a0711', '#181029', '#271b3e', '#3c2d57'], lo: 0.08, hi: 0.45 },
+  wickdeep: { ramp: ['#120906', '#28150b', '#432516', '#6b3b20'], lo: 0.08, hi: 0.45 },
+  sanctum: { ramp: ['#0b0505', '#1f0d0a', '#3c1910', '#702c14'], lo: 0.06, hi: 0.5 },
 };
 for (let i = 1; i <= 8; i++) T('tile.floor.ossuary.' + i, 'floor_' + i, FLOOR_RAMP.ossuary);
 DARK.forEach(([x, y], i) => add('tile.floor.glowmire.' + (i + 1), 'world', 'kos', [[x, y, 16, 16]], Object.assign({ pivot: 'tl', fps: 0 }, FLOOR_RAMP.glowmire)));
 for (let i = 1; i <= 8; i++) T('tile.floor.abyss.' + i, 'floor_' + i, FLOOR_RAMP.abyss);
+for (let i = 1; i <= 8; i++) T('tile.floor.wickdeep.' + i, 'floor_' + i, FLOOR_RAMP.wickdeep);
+// Sanctum floor (the stage 4 final fight's room, src/client/render.js): the dark set through a blood-ember ramp.
+DARK.forEach(([x, y], i) => add('tile.floor.sanctum.' + (i + 1), 'world', 'kos', [[x, y, 16, 16]], Object.assign({ pivot: 'tl', fps: 0 }, FLOOR_RAMP.sanctum)));
 add('tile.torch.floor', 'world', 'ext', strip(128, 400, 16, 24, 8), { fps: 10, loop: true });
 // Brazier (destructible, drops pickups): an iron bowl on a stand with the ext flame loop (8f) burning in it; broken = the bowl tipped over with spilled coals.
 add('prop.brazier', 'world', null, null, {

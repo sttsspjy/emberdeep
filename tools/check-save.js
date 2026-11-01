@@ -121,6 +121,15 @@ ok(r.unlocked.indexOf('bell') < 0 && eq(a.pure, []), 'a no-Camp loss does not un
 r = S.applyRun(a, summary({ won: true, stage: 1, perHero: [{ pid: 'p2', cls: 'pyro', kills: 10, ranks: 0 }, { pid: 'p1', cls: 'ranger', kills: 10, ranks: 0, form: true }] }), undefined, 'p1');
 ok(eq(r.unlocked, ['bell']) && eq(a.pure, [1]) && eq(r.stages, [2]) && S.stageUnlocked(a, 2) && a.stats.coopWins === 1 && eq(a.won, ['knight', 'ranger']) && eq(a.formed, ['ranger']),
   'co-op no-Camp win of stage 2 (stage from the summary): Bell (my hero), stage 3, co-op win, my win and Form only');
+ok(!S.stageUnlocked(a, 3) && S.stageHidden(a, 3) && !S.stageHidden(a, 2), 'stage 4 hidden while locked; stage 3 never hidden');
+r = S.applyRun(a, summary({ won: true, stage: 2 }), 2, 'p1');
+ok(eq(r.stages, [3]) && S.stageUnlocked(a, 3) && !S.stageHidden(a, 3) && r.news.some(n => n.kind === 'stage' && n.id === 'wickdeep' && /stirs below/.test(n.txt)), 'beating stages 1-3 reveals stage 4 (beatAll) with its reveal line');
+const hid = S.defaultProfile(); hid.beat = [0, 2];
+ok(!S.stageUnlocked(hid, 3) && S.stageHidden(hid, 3), 'beatAll needs every listed stage (1 and 3 beaten: still hidden)');
+r = S.applyRun(a, summary({ won: true, stage: 3 }), 3, 'p1');
+ok(a.beat.indexOf(3) >= 0 && r.achs.some(x => x.id === 'beat3' && x.gold === 600) && ED.ACH_IDS[ED.ACH_IDS.length - 1] === 'beat3', 'a stage 4 win: Wickdeep Cleared (+600), appended last');
+const a4 = S.decode(S.encode(a));
+ok(a4.beat.indexOf(3) >= 0 && a4.ach.indexOf('beat3') >= 0 && a4.best.wickdeep && a4.best.wickdeep.won, 'save code round trip keeps stage 4 records and its achievement');
 ok(ED.HERO_IDS.every(c => S.heroUnlocked(a, c)), 'every hero unlocked');
 const hp = S.heroProgress(S.defaultProfile(), 'necro');
 ok(hp.prog === 0 && hp.need === 900 && !hp.done, 'hero progress of a fresh profile');
@@ -245,7 +254,7 @@ ok(olN.some(x => x.id === 'beat0') && olN.some(x => x.id === 'heroes') && eq(ol.
 // 11. economy
 ok(S.shopLeft(S.defaultProfile()) === 41160, 'shop total (every rank) = 41160 gold: ' + S.shopLeft(S.defaultProfile()));
 const C = ED.CONST;
-ok(C.GOLD.bounty === 62 && C.GOLD.minute === 10 && C.GOLD.mid === 100 && C.GOLD.final === 300 && C.GOLD.win === 300 && eq(ED.STAGES.map(s => s.gold), [1, 1.25, 1.5]), 'gold table: 1 per 62 kills, 10 per minute, mid-boss 100, final 300, win 300; stage gold 1 / 1.25 / 1.5');
+ok(C.GOLD.bounty === 62 && C.GOLD.minute === 10 && C.GOLD.mid === 100 && C.GOLD.final === 300 && C.GOLD.win === 300 && eq(ED.STAGES.map(s => s.gold), [1, 1.25, 1.5, 2]), 'gold table: 1 per 62 kills, 10 per minute, mid-boss 100, final 300, win 300; stage gold 1 / 1.25 / 1.5 / 2');
 const endGold = (stage, kills, time, won) => { const w = new ED.World({ seed: 3, stage, players: [{ pid: 'p1', cls: 'knight', meta: { shop: {}, sigs: [] } }] }); w.kills = kills; w.time = time; w.end(won); return w.gold; };
 ok(endGold(0, 3100, 630, false) === 150 && endGold(2, 3100, 630, false) === 225, 'a 10:30 loss with 3100 kills pays 50 + 100 (x1.5 on stage 3)');
 ok(endGold(1, 12400, 1205, true) === Math.round(400 * 1.25) + Math.round(300 * 1.25), 'a win pays bounty + minutes, then the win bonus');

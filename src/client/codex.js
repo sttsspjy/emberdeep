@@ -3,7 +3,7 @@
 // (progress, gold reward) from ED.App.profile, plus lifetime and per-stage records. ED.Codex.achIcon(id): atlas icon of an achievement.
 // ED.Codex.renderCodex(tab?): tab row (heroes | weapons (hero weapons, then a Supports section) | passives | foes | bosses | stages), entry list and detail pane, read from the data tables. Only what the profile has met
 // (profile.seen via ED.Save.isSeen; bosses by their foe id) is described: the rest lists as a '???' silhouette whose detail says 'Not discovered yet' (plus the unlock line for
-// locked heroes / stages), and cross-references to unmet entries read '???'.
+// locked heroes / stages), and cross-references to unmet entries read '???'. A hidden stage (ED.Save.stageHidden) and its foes, bosses, records and achievement stay out of every list until it unlocks.
 // List entries select on click or on keyboard focus (a hover-focus never changes the detail).
 (function (ED) {
   'use strict';
@@ -49,12 +49,13 @@
       out.push({ sec: 'Heroes', icon: UI.heroIcon(cls), name: h.name, rule: r.txt || '', k: done ? 1 : pr.k, txt: done ? 'Done' : pr.txt || 'Not yet', done });
     }
     ED.STAGES.forEach((sd, i) => {
-      const r = U0.stages[i]; if (!r || r.start) return;
+      const r = U0.stages[i]; if (!r || r.start || SV.stageHidden(p, i)) return;
       const done = SV.stageUnlocked(p, i);
       out.push({ sec: 'Stages', icon: stageIcon(i), name: (i + 1) + '. ' + sd.name, rule: r.txt || '', k: done ? 1 : 0, txt: done ? 'Done' : 'Not yet', done });
     });
     for (const a of ED.ACHIEVEMENTS) {
       const g = SV.achProgress(p, a), t = SV.achText(a);
+      if (a.rule.beat !== undefined && SV.stageHidden(p, a.rule.beat)) { out.push({ sec: 'Achievements', icon: 'pickup.chest', name: '???', rule: 'Something waits below', k: 0, txt: 'Not yet', done: false, gold: a.gold, reward: '' }); continue; }
       out.push({ sec: 'Achievements', icon: C.achIcon(a.id), name: t.name, rule: t.txt, k: g.k, txt: achTxt(a, g), done: g.done, gold: a.gold, reward: a.reward || '' });
     }
     return out;
@@ -81,6 +82,7 @@
       [['Runs', st.runs], ['Wins', st.wins], ['Lifetime kills', U.fmtNum(st.kills)], ['Best time', U.fmtTime(st.bestTime)], ['Best kills (one run)', U.fmtNum(st.bestKills)], ['Best level', st.bestLevel]]
         .map(x => `<span>${x[0]}</span><b>${x[1]}</b>`).join('') + '</div><span class="cx-h">Stage bests</span>';
     ED.STAGES.forEach((sd, i) => {
+      if (SV.stageHidden(p, i)) return;
       const b = p.best[sd.id];
       h += `<div class="rec-stage"><span class="rec-sn">${i + 1}. ${esc(sd.name)}</span>` + (b
         ? `<span class="${b.won ? 'won' : 'mut'}">${b.won ? 'Beaten' : 'Not beaten yet'}</span><div class="rec-grid"><span>Time</span><b>${U.fmtTime(b.time)}</b><span>Kills</span><b>${U.fmtNum(b.kills)}</b><span>Level</span><b>${b.level}</b></div>`
@@ -165,9 +167,9 @@
 
   // Foe appearances: { id: [{ stage, min }] } from the stage timelines and flocks; split children inherit the parent's.
   const appearances = () => {
-    const out = {};
+    const out = {}, pr = App().profile;
     const add = (id, i, m) => { const a = out[id] || (out[id] = []); const e = a.find(x => x.stage === i); if (!e) a.push({ stage: i, min: m }); else e.min = Math.min(e.min, m); };
-    ED.STAGES.forEach((sd, i) => { sd.timeline.forEach((row, m) => { for (const r of row.roster) if (r[1] > 0) add(r[0], i, m); }); const fl = sd.events && sd.events.flock; if (fl) add(fl.id, i, Math.floor(fl.first / 60)); });
+    ED.STAGES.forEach((sd, i) => { if (SV.stageHidden(pr, i)) return; sd.timeline.forEach((row, m) => { for (const r of row.roster) if (r[1] > 0) add(r[0], i, m); }); const fl = sd.events && sd.events.flock; if (fl) add(fl.id, i, Math.floor(fl.first / 60)); });
     for (const id in out) { const sp = ED.FOES[id] && ED.FOES[id].split; if (sp) for (const a of out[id]) add(sp.id, a.stage, a.min); }
     return out;
   };
@@ -213,7 +215,7 @@
     h3(box, 'Attacks');
     lvls(box, (BOSS_TXT[b.id] || []).map((t, i) => [String(i + 1), t]));
     para(box, 'Every attack is telegraphed: a red outline marks where it lands.', 'mut');
-    para(box, b.final ? 'Beat it to win the stage. Still alive at ' + U.fmtTime(ED.CONST.ENRAGE_T) + ', it enrages: x3 damage and speed.' : 'Drops a chest: pick a Form for a ready weapon (from the 10:00 boss on), else a path, else an extra level-up.');
+    para(box, b.sanctum ? 'Fought alone in the Sanctum: every other foe is gone. Beat it to win the stage.' : b.final ? 'Beat it to win the stage. Still alive at ' + U.fmtTime(ED.CONST.ENRAGE_T) + ', it enrages: x3 damage and speed.' : 'Drops a chest: pick a Form for a ready weapon (from the 10:00 boss on), else a path, else an extra level-up.');
     para(box, 'HP grows with the party size.', 'mut');
   };
   const stageDetail = (box, i) => {
@@ -277,11 +279,11 @@
     } },
     { id: 'bosses', name: 'Bosses', kind: 'foes', seenId: (k) => bossOf(k).id, detail: bossDetail, hidden: (box, k) => unseenDetail(box, foeIcon(bossOf(k).id)), list: () => {
       const out = [];
-      ED.STAGES.forEach((sd, i) => { out.push({ sec: sd.name }); (sd.bosses || []).forEach((b, j) => { if (ED.FOES[b.id]) out.push({ key: i + ':' + j, icon: foeIcon(b.id), name: ED.FOES[b.id].name, cls: b.final ? 'evo' : '' }); }); });
+      ED.STAGES.forEach((sd, i) => { if (SV.stageHidden(App().profile, i)) return; out.push({ sec: sd.name }); (sd.bosses || []).forEach((b, j) => { if (ED.FOES[b.id]) out.push({ key: i + ':' + j, icon: foeIcon(b.id), name: ED.FOES[b.id].name, cls: b.final ? 'evo' : '' }); }); });
       return out;
     } },
     { id: 'stages', name: 'Stages', kind: 'stages', seenId: (k) => ED.STAGE_IDS[+k], detail: (box, k) => stageDetail(box, +k),
-      hidden: (box, k) => unseenDetail(box, stageIcon(+k), SV.stageUnlocked(App().profile, +k) ? null : ED.UNLOCKS.stages[+k] || {}), list: () => ED.STAGES.map((sd, i) => ({ key: String(i), icon: stageIcon(i), name: (i + 1) + '. ' + sd.name, cls: SV.stageUnlocked(App().profile, i) ? '' : 'locked' })) },
+      hidden: (box, k) => unseenDetail(box, stageIcon(+k), SV.stageUnlocked(App().profile, +k) ? null : ED.UNLOCKS.stages[+k] || {}), list: () => ED.STAGES.map((sd, i) => ({ key: String(i), icon: stageIcon(i), name: (i + 1) + '. ' + sd.name, cls: SV.stageUnlocked(App().profile, i) ? '' : 'locked' })).filter(r => !SV.stageHidden(App().profile, +r.key)) },
   ];
   const tabOf = (id) => TABS.find(t => t.id === id) || TABS[0];
   const met = (tab, key) => seen(tab.kind, tab.seenId ? tab.seenId(key) : key);

@@ -1,11 +1,11 @@
 // Headless bot run: one solo hero driven by tools/bot-brain.js through a whole survival run, sped up (no rendering). Deterministic per cfg.
-// API: const { runOne } = require('./bot.js'); runOne({ stage: 0..2, cls, seed, meta: 'none' | 'max', maxTime: s (default 23 * 60) }) -> result (sync). The hero holds only its signature.
+// API: const { runOne } = require('./bot.js'); runOne({ stage: 0..3, cls, seed, meta: 'none' | 'max', maxTime: s (default 23 * 60) }) -> result (sync). The hero holds only its signature.
 // meta (Bot.metaFor): 'max' = every ED.SHOP rank at max (a full profile); 'none' = an empty profile.
 // result: { stage, stageId, cls, seed, meta, won, time, level, kills, gold, death (killer / 'timeout' / null), bosses: [{ id (stage boss id), at (killed), spawn, hit (first hero hit on any body), on }],
 //   elites: [{ k (foe id), t (spawn s), hit (first hit s, null if never hit), ttk (death - first hit, null if not killed before the run ends or the win is banked), on }],
 //   on: s under fire between first hit and death (ticks within ON s after an HP drop; a fight's bodies summed). dealt: { id: dmg }, taken: { cause: dmg }, hurt (total taken),
 //   build: { weapons: [{ id, lvl, evo, pr: [path ranks], fl (refine) }], passives: [{ id, lvl }] }, evolved: { rootId: s (Form taken) }, hpLow (min HP fraction), ticks, ms (wall clock), skill,
-//   botMs (think() time, sampled every 16th tick x 16) }.
+//   botMs (think() time, sampled every 16th tick x 16), sanctum (true once the run reached the Sanctum room: a death after that died inside it) }.
 // Optional cfg: skill 0..1 (bot reflexes, default 1).
 // CLI: node tools/bot.js --stage 0 --hero knight [--seed 1] [--meta max] [--max 1380] [--skill 0.5]  -> prints the result JSON and ms per game minute.
 'use strict';
@@ -101,6 +101,7 @@ function runOne(cfg) {
     bosses, elites: elites.map(E => ({ k: E.k, t: E.t, hit: E.hit, ttk: E.ttk, on: E.ttk === null ? null : r1(E.on) })), dealt: {}, taken, hurt: 0,
     build: { weapons: p.weapons.map(ws => ({ id: ws.id, lvl: ws.lvl, evo: !!ws.evo, tune: ws.tune, path: ws.path, pr: ws.pr.slice(), fl: ws.fl })), passives: p.passives.map(ps => ({ id: ps.id, lvl: ps.lvl })) },
     evolved, hpLow: Math.round(hpLow * 1000) / 1000, ticks: w.tick, ms: 0, botMs: Math.round(Number(botNs) / 1e6),
+    sanctum: !!(w.sanctum && w.sanctum.st >= 1),
   };
   for (const k in p.dealt) r.dealt[k] = Math.round(p.dealt[k]);
   for (const k in taken) r.hurt += taken[k];

@@ -1,5 +1,5 @@
 // ED.World: host-authoritative survival run. Fixed step 1/60, deterministic per seed (w.rng only; entity ids from w.nextId()).
-// Tick order (ARCHITECTURE §5): inputs -> heroes -> spawner -> foes -> grid + separation -> weapons -> skills -> projectiles -> zones -> pickups/progress -> bosses -> hit flush -> compaction -> run state.
+// Tick order (ARCHITECTURE §5): inputs -> heroes -> spawner -> foes -> grid + separation -> weapons -> skills -> projectiles -> zones -> pickups/progress -> bosses -> sanctum -> hit flush -> compaction -> run state.
 // Entity arrays (heroes, foes, projs, zones, pickups) are pooled and compacted in place once per tick: a dead object may be reused under a new id, so holders keep (object, id) and check both.
 (function (ED) {
   'use strict';
@@ -15,7 +15,7 @@
     this.heroes = []; this.byPid = {}; this.living = [];
     this.foes = []; this.projs = []; this.zones = []; this.pickups = []; this.events = [];
     this.xp = 0; this.level = 1; this.xpNext = W.xpFor(1); this.gold = 0; this.kills = 0;
-    this.boss = null; this.bossId = 0; this.won = false; this.lap = null; // won: the win is banked (final boss dead, lap.js); lap: Last Light state
+    this.boss = null; this.bossId = 0; this.won = false; this.lap = null; this.sanctum = null; // won: the win is banked (final boss dead, lap.js / sanctum.js); lap: Last Light state; sanctum: the Sanctum fight (sanctum.js)
     this.tl = []; this.tlK = 0; this.tlD = 0; this.dmgAll = 0; this.bossLog = []; // run stats for summary(): per-minute timeline, party damage, boss spawn / kill times
     this.cheats = cfg.cheats || {};
     this.initCombat(); this.initFoes(); this.initSpawner(); this.initProgress(); this.initBosses();
@@ -179,6 +179,7 @@
     this.updatePickups(dt);
     this.updateProgress(dt);
     this.updateBosses(dt);
+    if (this.sanctum) this.updateSanctum();
     this.flushHits();
     this.compact();
     if (this.tick % 3600 === 0) this.trackMinute();

@@ -167,8 +167,8 @@ async function main() {
     await page.evaluate(() => { const p = ED.App.profile; p.stats.bestTime = 432; p.stats.bestKills = 1840; p.stats.bestLevel = 21; p.played = ['knight']; ED.App.persist(); });
     await page.locator('#btn-achieve').click();
     check(await vis(page, 'scr-achieve'), 'Achievements opens');
-    const nAch = await page.evaluate(() => { const U0 = ED.UNLOCKS; return ED.HERO_IDS.filter(c => !U0.heroes[c].start).length + Object.keys(U0.stages).filter(i => !U0.stages[i].start).length + ED.ACHIEVEMENTS.length; });
-    check(await page.locator('.ach-row').count() === nAch, nAch + ' rows (hero and stage unlocks, achievements)');
+    const nAch = await page.evaluate(() => { const U0 = ED.UNLOCKS; return ED.HERO_IDS.filter(c => !U0.heroes[c].start).length + Object.keys(U0.stages).filter(i => !U0.stages[i].start && !ED.Save.stageHidden(ED.App.profile, +i)).length + ED.ACHIEVEMENTS.length; });
+    check(await page.locator('.ach-row').count() === nAch, nAch + ' rows (hero and stage unlocks but hidden stages, achievements)');
     check(await page.locator('.ach-row.done').count() === 2, 'done: Shade (bought) and Still Standing (best time 7:12)');
     const at = await page.locator('#ach-list').innerText();
     check(/7:12 \/ 15:00/.test(at) && /1840 \/ 3000/.test(at) && /21 \/ 40/.test(at) && /\+100 gold/.test(at), 'progress texts (Necro 15:00, one-run kills, level 40) and gold rewards');

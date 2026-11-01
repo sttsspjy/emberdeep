@@ -12,7 +12,7 @@
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST, W = ED.World.prototype;
-  const FORM_T = 600, GEM_CAP = 350, MERGE_R = 80, MAG_FIRST = 140, MAG_GAP = 100, MAG_P = 0.0048, TOUCH = 6, GOLD_CARD = 25, HEAL_CARD = 30, RELIGHT = 60, RELIGHT_R = 700;
+  const NONE = [], FORM_T = 600, GEM_CAP = 350, MERGE_R = 80, MAG_FIRST = 140, MAG_GAP = 100, MAG_P = 0.0048, TOUCH = 6, GOLD_CARD = 25, HEAL_CARD = 30, RELIGHT = 60, RELIGHT_R = 700;
 
   W.initProgress = function () { this.pickPool = []; this.gemCount = 0; this.magT = MAG_FIRST - MAG_GAP; this.magG = null; this.magId = 0; };
   W.initHeroProgress = function (p) { p.rerolls = p.stats.rerolls | 0; p.skips = p.stats.skips | 0; p.banishes = p.stats.banishes | 0; p.banned = []; p.pendPath = 0; p.pendForm = 0; };
@@ -82,7 +82,7 @@
       }
     }
     this.gemCount = gems;
-    const B = this.arena.braziers;
+    const B = this.arena.room ? NONE : this.arena.braziers; // the Sanctum has no braziers
     for (const p of this.living) for (let i = 0; i < B.length; i++) { const b = B[i]; if (!b.broken && U.dist2(p.x, p.y, b.x, b.y) <= (C.HERO_BODY + b.r + 4) ** 2) this.breakBrazier(b, p); }
     // relight (checked once a second): a brazier broken RELIGHT s ago lights again while no living hero is within RELIGHT_R px
     if (this.tick % 60 === 0) for (let i = 0; i < B.length; i++) {

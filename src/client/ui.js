@@ -27,6 +27,7 @@
     refundAll: (p) => SV.refundAll(p),
     heroOpen: (p, cls) => SV.heroUnlocked(p, cls),
     stageOpen: (p, i) => SV.stageUnlocked(p, i),
+    stageHidden: (p, i) => SV.stageHidden(p, i),
     heroCost: (p, cls) => SV.heroCost(p, cls),
     buyHero: (p, cls) => SV.buyHero(p, cls),
     evalAch: (p) => SV.evalAch(p),
@@ -219,6 +220,7 @@
     const A = App(), list = $('stage-list');
     list.textContent = '';
     ED.STAGES.forEach((sd, i) => {
+      if (M.stageHidden(A.profile, i)) return; // a hidden stage shows no card until it unlocks
       const open = M.stageOpen(A.profile, i), best = A.profile.best[sd.id], rule = ED.UNLOCKS.stages[i] || {}, on = A.sel.stage === i;
       const b = document.createElement('button');
       b.className = 'stage-card' + (on ? ' on' : '') + (open ? '' : ' locked');
@@ -821,6 +823,7 @@
     const sr = $('lobby-stages'); sr.textContent = '';
     const stage = s.stage !== undefined ? s.stage : A.sel.stage;
     ED.STAGES.forEach((sd, i) => {
+      if (stage !== i && M.stageHidden(A.profile, i)) return; // hidden until unlocked (shown when the host picked it)
       const b = document.createElement('button');
       b.className = 'pick-btn txt' + (stage === i ? ' on' : ''); b.textContent = (i + 1) + '. ' + sd.name;
       b.disabled = !host || !M.stageOpen(A.profile, i);

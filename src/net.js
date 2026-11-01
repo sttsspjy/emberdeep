@@ -329,7 +329,7 @@
 
   // ---------------- snapshot encode (host) ----------------
   // Layout: u8 SNAP, u32 seq, u32 tick, u32 ack (last input seq applied for this client), f32 xp, f32 xpNext, u16 level, u32 kills, u32 gold, u8 state (0 play, 1 won, 2 lost),
-  // i16 ox, oy (cull rect origin), boss (varint id + 1 or 0; varint k, u8 hpQ, u8 flags), boss bar (u8 flags 1 on 2 final 4 enraged; if on: varint foe index, u8 q, u8 phase, u8 n, u8 rev (255 none)), Last Light (u8 phase 0 none / 1 calm / 2 lap; if set: u16 s left x 100, varint lap gold, varint lap kills), braziers (u8 n + broken bitmask), u8 heroes + records,
+  // i16 ox, oy (cull rect origin), boss (varint id + 1 or 0; varint k, u8 hpQ, u8 flags), boss bar (u8 flags 1 on 2 final 4 enraged; if on: varint foe index, u8 q, u8 phase, u8 n, u8 rev (255 none)), Last Light (u8 phase 0 none / 1 calm / 2 lap; if set: u16 s left x 100, varint lap gold, varint lap kills), Sanctum (u8 st + 1, 0 none; if set: f32 t0; the room is the arena centre and C.SANCTUM), braziers (u8 n + broken bitmask), u8 heroes + records,
   // then u16-counted sections: zones (+ u16-counted ids of zones gone), foes, projectiles, pickups, hits, deaths, misc binary events, JSON events.
   // Foes / projectiles / pickups / positional events are kept only inside the client's view + MARGIN; their positions are 3 bytes (12 + 12 bits at 0.5 px from the rect origin).
   // Ids: arrays are in spawn order, so ids ascend: each id is written as delta from the previous (with 2 flag bits); a delta of 0 escapes to an absolute id.
@@ -372,6 +372,7 @@
     if (bb && bb.on) { w8(1 | (bb.final ? 2 : 0) | (bb.enraged ? 4 : 0)); wv(Math.max(0, ED.FOE_IDS.indexOf(bb.id))); w8(U.clamp(Math.round(bb.q), 0, 255)); w8(bb.phase | 0); w8(bb.n | 0); w8(bb.rev < 0 ? 255 : U.clamp(Math.round(bb.rev * 254), 0, 254)); } else w8(0);
     const lv = w.lapView(LV);
     w8(lv.ph); if (lv.ph) { w16(U.clamp(Math.round(lv.rem * 100), 0, 65535)); wv(lv.gold); wv(lv.kills); }
+    const sc = w.sanctum; if (sc) { w8(sc.st + 1); wf32(sc.t0); } else w8(0);
     const BR = w.arena.braziers, nb = Math.min(BR.length, 255);
     w8(nb); for (let i = 0; i < nb; i += 8) { let m = 0; for (let k = 0; k < 8 && i + k < nb; k++) if (BR[i + k].broken) m |= 1 << k; w8(m); }
     // heroes (all, full)
@@ -594,7 +595,7 @@
   // cfg: { stage, seed, roster: [{ pid, slot, name, cls }] (World hero order), myPid }. view: the ARCHITECTURE §10 view model, arrays rebuilt by frame(rt).
   N.Mirror = function (cfg) {
     this.roster = cfg.roster; this.myPid = cfg.myPid; this.seq = 0; this.T = 0; this.ack = 0; this.ready = false; this.state = 'play';
-    this.view = { me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: ED.Arena.generate(cfg.stage | 0, cfg.seed >>> 0), stage: cfg.stage | 0, seed: cfg.seed >>> 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, lap: null, events: [] };
+    this.view = { me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: ED.Arena.generate(cfg.stage | 0, cfg.seed >>> 0), stage: cfg.stage | 0, seed: cfg.seed >>> 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, lap: null, sanctum: null, events: [] };
     this.heroes = cfg.roster.map((r, i) => { const h = mkTrack(heroFields()); h.pid = r.pid; h.slot = r.slot | 0; h.cls = r.cls; h.name = r.name || 'Hero'; h.idx = i; return h; });
     this.myIdx = this.heroes.findIndex(h => h.pid === cfg.myPid);
     this.me = this.heroes[this.myIdx] || null; // view.me from the first snapshot on
@@ -602,6 +603,7 @@
     this.boss = { id: 0, k: 0, x: 0, y: 0, hpQ: 255, enraged: false, final: false, dead: false };
     this.bossBar = { on: false, id: '', name: '', q: 0, phase: 0, final: false, enraged: false, n: 0, rev: -1 };
     this.lapV = { ph: 0, rem: 0, gold: 0, kills: 0 };
+    const c = this.view.props.size / 2; this.sanV = { st: 0, t0: 0, x: c, y: c, w: C.SANCTUM.w, h: C.SANCTUM.h }; // view.sanctum (null outside the Sanctum)
     this.foes = new Tracks(() => ({ id: 0, k: 0, def: null, x: 0, y: 0, r: 7, hpQ: 255, face: 1, flash: 0, st: 0, stT: 0, st0: 0, elite: false, boss: false, scale: 1, enraged: false, freezeT: 0, stunT: 0, burnT: 0, slowT: 0 }), foeApply);
     this.projs = new Tracks(() => ({ id: 0, k: '', wid: '', team: 0, x: 0, y: 0, a: 0, r: 4, t: 0 }), projApply);
     this.picks = new Tracks(() => ({ id: 0, k: 'xp1', x: 0, y: 0 }), null);
@@ -632,6 +634,8 @@
     const LP = this.lapV; LP.ph = r8();
     if (LP.ph) { LP.rem = r16() / 100; LP.gold = rv(); LP.kills = rv(); } else LP.rem = LP.gold = LP.kills = 0;
     v.lap = LP;
+    const sst = r8(), A = v.props;
+    if (sst) { const SV = this.sanV; SV.st = sst - 1; SV.t0 = rf32(); v.sanctum = SV; if (SV.st >= 1 && !A.room) A.room = ED.sanctumRoom(SV, {}); } else { v.sanctum = null; A.room = null; }
     const nb = r8(), BR = v.props.braziers;
     for (let i = 0; i < nb; i += 8) { const m = r8(); for (let k = 0; k < 8 && i + k < nb; k++) if (BR[i + k]) { const br = !!(m & (1 << k)); BR[i + k].broken = br; BR[i + k].hp = br ? 0 : 1; } }
     // heroes

@@ -3,7 +3,7 @@
 //   stat (ED.Stats key), per (value per rank), cost (rank 1 price), txt }.
 //   Price of rank r + 1 (r ranks owned): cost x (r + 1)^2 (ED.shopPrice).
 // ED.UNLOCKS: heroes: { cls: rule } where rule is { start } | { survive: s } (one run) | { beat: stage index } | { buy: gold } (Camp purchase) | { pure: true } (win any stage
-//   with 0 Camp ranks at run start), txt = the lock line; stages: { index: rule }.
+//   with 0 Camp ranks at run start), txt = the lock line; stages: { index: rule } (stage rules: start | beat | beatAll: [stage indices] every one beaten; hidden: not listed anywhere until unlocked).
 // ED.ACHIEVEMENTS: save order (append only): { id, name, txt, icon ('' = derived from the rule by the UI), gold (paid once when earned), reward (ED.COSMETICS id granted when earned, '' = none), rule }.
 //   Rule kinds (ED.Save.achProgress): { time: s } best run time | { beat: i } stage i beaten | { winWith: cls } a win as cls | { form: cls } cls's weapon reached a Form |
 //   { runKills: n } own kills in one run | { kills: n } lifetime kills | { level: n } one run | { wins: n } lifetime | { pure: true } a win with 0 Camp ranks |
@@ -42,7 +42,7 @@
       shade: { buy: 4000, txt: 'Buy at Camp for 4000 gold' },
       bell: { pure: true, txt: 'Win any stage with no Camp ranks' },
     },
-    stages: { 0: { start: true }, 1: { beat: 0, txt: 'Beat stage 1' }, 2: { beat: 1, txt: 'Beat stage 2' } },
+    stages: { 0: { start: true }, 1: { beat: 0, txt: 'Beat stage 1' }, 2: { beat: 1, txt: 'Beat stage 2' }, 3: { beatAll: [0, 1, 2], hidden: true, txt: 'Beat stages 1, 2 and 3' } },
   };
   const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
   const A = (id, name, txt, gold, rule, icon, reward) => ({ id, name, txt, icon: icon || '', gold, reward: reward || '', rule });
@@ -67,6 +67,7 @@
       A('coop', 'Fellowship', 'Win a co-op run', 200, { coop: 1 }, 'fx.shield.gold', 'title.companion'),
       A('heroes', 'Full Roster', 'Unlock every hero', 300, { heroes: true }, 'fx.star.stun', 'title.paragon'),
       A('camp', 'Fully Stocked', 'Max every Camp rank', 0, { camp: true }, 'pickup.gold', 'ncol.prism'),
+      A('beat3', 'Wickdeep Cleared', 'Beat stage 4', 600, { beat: 3 }),
     ]);
   ED.ACH_IDS = ED.ACHIEVEMENTS.map(a => a.id);
 })(globalThis.ED || (globalThis.ED = {}));

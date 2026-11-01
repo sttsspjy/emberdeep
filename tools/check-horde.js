@@ -30,7 +30,9 @@ const ART = (() => { const g = { ED: {} }; vm.runInNewContext(fs.readFileSync(pa
 const hasArt = (look) => !!(ART[look + '.walk'] || ART[look + '.idle'] || ART[look + '.walk.d'] || ART[look + '.walk.0']);
 
 // ---------------- 1. data ----------------
-const BOSSES = [['warden', 'twins', 'cyclops', 'hollow'], ['spore', 'cyclops', 'weaver', 'king'], ['samurai', 'weaver', 'twins', 'wickeater']];
+const BOSSES = [['warden', 'twins', 'cyclops', 'hollow'], ['spore', 'cyclops', 'weaver', 'king'], ['samurai', 'weaver', 'twins', 'wickeater'], ['hollow', 'king', 'wickeater', 'hollow']];
+// Flock / swarm numbers per stage: stages 1-3 share them, the Wickdeep (stage 4) runs earlier, more often and bigger.
+const FLOCK = (sd) => (sd.id === 'wickdeep' ? { first: 30, every: 16, n: '6,30,40', swarm: '18,36,44' } : { first: 40, every: 18, n: '5,26,34', swarm: '16,33,39' });
 const kinds = new Set();
 ED.STAGES.forEach((sd, si) => {
   const ids = new Set();
@@ -42,7 +44,8 @@ ED.STAGES.forEach((sd, si) => {
   const roster = new Set(); for (const row of sd.timeline) for (const r of row.roster) roster.add(r[0]);
   ok(roster.size >= 8, `${sd.id}: roster has ${roster.size} foes (>= 8)`);
   const fl = sd.events.flock, flyers = [...roster].filter(id => ED.FOES[id].ai === 'swarm' && !ED.FOES[id].solo);
-  ok(!flyers.length && fl && ED.FOES[fl.id].ai === 'swarm' && fl.first === 40 && fl.every === 18 && fl.n.join() === '5,26,34' && sd.events.swarm.n.join() === '16,33,39', `${sd.id}: flock ${fl && fl.id} every ${fl && fl.every} s from ${fl && fl.first} s; flyers in rosters: ${flyers.join(',') || 'none'}`);
+  const FL = FLOCK(sd);
+  ok(!flyers.length && fl && ED.FOES[fl.id].ai === 'swarm' && fl.first === FL.first && fl.every === FL.every && fl.n.join() === FL.n && sd.events.swarm.n.join() === FL.swarm, `${sd.id}: flock ${fl && fl.id} every ${fl && fl.every} s from ${fl && fl.first} s; flyers in rosters: ${flyers.join(',') || 'none'}`);
   for (const id of ids) kinds.add(ED.FOES[id].split ? 'splitter' : ED.FOES[id].ai);
   const tl = sd.timeline;
   ok(tl.length === 21 && tl[0].cap === 50 && tl[1].cap === 100 && tl[2].cap === 145 && tl[3].cap === 195 && tl.slice(12).every(r => r.cap === 455), `${sd.id}: 21 rows, cap ${tl[0].cap} -> ${tl[12].cap} (holds to 20:00)`);
@@ -50,7 +53,7 @@ ED.STAGES.forEach((sd, si) => {
   ok(tl[0].floor === 0 && tl[1].floor === 0.1 && tl[4].floor === 0.25 && tl[9].floor === 0.5 && tl[10].floor === 0.55 && tl[11].floor === 0.6 && tl.slice(12).every(r => r.floor === 0.7), `${sd.id}: density floor ${tl.map(r => r.floor).join(' ')} of the cap`);
   const kindsAt = (a, b) => { const s = new Set(); for (let m = a; m < b; m++) for (const r of tl[m].roster) s.add(r[0]); return s; };
   const A = kindsAt(0, 5), B = kindsAt(5, 10), Cc = kindsAt(10, 15), D = kindsAt(15, 21), newB = [...B].filter(id => !A.has(id)), newC = [...Cc].filter(id => !A.has(id) && !B.has(id)), newD = [...D].filter(id => !A.has(id) && !B.has(id) && !Cc.has(id));
-  const gone = [...kindsAt(0, 2)].filter(id => ED.FOES[id].ai !== 'swarm' && Cc.has(id) && !(sd.id === 'abyss' && id === 'shade'));
+  const gone = [...kindsAt(0, 2)].filter(id => ED.FOES[id].ai !== 'swarm' && Cc.has(id) && !((sd.id === 'abyss' || sd.id === 'wickdeep') && id === 'shade')); // Shade: the plain-chaser filler of Abyss and Wickdeep
   const filler = tl.slice(5).every(row => row.roster.some(r => ED.FOES[r[0]].ai === 'chaser' && !ED.FOES[r[0]].split && r[1] >= 3));
   ok(filler, `${sd.id}: every minute from 5:00 keeps a plain chaser (weight >= 3) as the brain-cap filler`);
   ok(newB.length >= 3 && newC.length >= 1 && !gone.length && sd.bench && sd.bench.t === 1020 && sd.bench.elite === 30, `${sd.id}: tiers - new at 5:00 ${newB.join(',')}; new at 10:00 ${newC.join(',')}; opening kinds gone by 10:00 except swarmers`);
