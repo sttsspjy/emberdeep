@@ -115,6 +115,14 @@
     focusLayer();
   };
   const ensureProfile = () => { const A = App(); if (!A.hasProfile) A.createProfile($('inp-name').value); };
+  // Title name field commit (Enter, change): renames and saves the profile (blank -> 'Wanderer'); before the first profile a non-blank name creates it. No re-render, so a
+  // button clicked right after typing stays under the pointer.
+  const commitName = () => {
+    const A = App(), el = $('inp-name');
+    if (!A.hasProfile) { if (!el.value.trim()) return; A.createProfile(el.value); }
+    else { const n = SV.sanitizeName(el.value); if (n !== A.profile.name) { A.profile.name = n; A.persist(); } }
+    el.value = A.profile.name;
+  };
   // Status line: text is a string or a function returning it (kept and re-run on a language change).
   const say = (id, text, err) => { const el = $(id); el._say = typeof text === 'function' ? text : null; el.textContent = (el._say ? el._say() : text) || ''; el.classList.toggle('err', !!err); };
   UI.say = say;
@@ -122,9 +130,10 @@
   // ---------------- title ----------------
   UI.renderTitle = () => {
     const A = App(), p = A.profile;
-    $('name-row').hidden = A.hasProfile;
+    const nf = $('inp-name');
+    if (A.hasProfile && document.activeElement !== nf) nf.value = p.name;
     const pl = $('profile-line');
-    pl.innerHTML = A.hasProfile ? `<span translate="no">${esc(p.name)}</span><span>${T('{0} gold', `<b>${p.gold}</b>`)}</span><span>${T('{0} runs', `<b>${p.stats.runs}</b>`)}</span><span>${T('{0} wins', `<b>${p.stats.wins}</b>`)}</span>` : '';
+    pl.innerHTML = A.hasProfile ? `<span>${T('{0} gold', `<b>${p.gold}</b>`)}</span><span>${T('{0} runs', `<b>${p.stats.runs}</b>`)}</span><span>${T('{0} wins', `<b>${p.stats.wins}</b>`)}</span>` : '';
     if (ED.Title) ED.Title.mount();
     const ok = netOk();
     $('btn-host').disabled = !ok; $('btn-join').disabled = !ok;
@@ -1058,6 +1067,8 @@
       return;
     }
     if ((e.code === 'Enter' || e.code === 'NumpadEnter') && typing && t.id === 'inp-join') { e.preventDefault(); UI.joinParty(); return; }
+    // Enter in the name field commits it and moves to Play (an IME composition keeps its Enter)
+    if ((e.code === 'Enter' || e.code === 'NumpadEnter') && typing && t.id === 'inp-name') { if (e.isComposing) return; e.preventDefault(); commitName(); $('btn-play').focus(); return; }
     const d = DIRS[e.code];
     if (!d) return;
     if (typing && (e.code.startsWith('Key') || e.code === 'ArrowLeft' || e.code === 'ArrowRight')) return;
@@ -1106,6 +1117,7 @@
     };
     $('btn-join-back').onclick = () => { if (ED.Net && ED.Net.leave) ED.Net.leave(); UI.renderTitle(); UI.show('title'); };
     $('btn-join-go').onclick = () => UI.joinParty();
+    $('inp-name').addEventListener('change', commitName);
     $('inp-join').addEventListener('input', () => { const N = ED.Net, el = $('inp-join'); el.value = N && N.cleanCode ? N.cleanCode(el.value) : el.value.toUpperCase(); });
     $('btn-lobby-leave').onclick = () => UI.leaveLobby('');
     $('btn-lobby-go').onclick = lobbyGo;

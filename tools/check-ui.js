@@ -67,6 +67,15 @@ async function main() {
     check(await active(page) === 'btn-join', 'ArrowRight moves to Join');
     await page.keyboard.press('ArrowUp');
     check(await active(page) === 'btn-play', 'ArrowUp returns to Play');
+    check(await vis(page, 'name-row') && !(await page.evaluate(() => ED.App.hasProfile)), 'name field shown before the first profile');
+    await page.click('#inp-name'); await page.keyboard.type('wasd');
+    check(await active(page) === 'inp-name' && await page.inputValue('#inp-name') === 'wasd' && await vis(page, 'scr-title'), 'typing in the name field stays in it (WASD are no menu keys there)');
+    await page.fill('#inp-name', '김 Kim!');
+    await page.keyboard.press('Enter');
+    check(await vis(page, 'scr-title') && await active(page) === 'btn-play' && await page.inputValue('#inp-name') === '김 Kim' && await page.evaluate(() => ED.Save.load().name === '김 Kim'),
+      'Enter in the name field saves the sanitized name (Hangul kept) and moves to Play');
+    await page.fill('#inp-name', 'Rowan'); await page.focus('#btn-play');
+    check(await vis(page, 'name-row') && await page.evaluate(() => ED.App.profile.name === 'Rowan' && ED.Save.load().name === 'Rowan'), 'leaving the name field renames the profile; the field stays');
     await page.keyboard.press('Enter');
     check(await vis(page, 'scr-hero'), 'Enter opens hero select');
 
@@ -118,7 +127,7 @@ async function main() {
     pr = await page.evaluate(() => ({ g: ED.App.profile.gold, s: ED.Save.heroUnlocked(ED.App.profile, 'shade') }));
     check(pr.g === 1000 && pr.s && await page.locator('.shop-row.hero-row').count() === 0 && /New hero: Shade/.test(await page.locator('#camp-msg').innerText()), 'buy Shade at Camp: 4000 gold, row gone, news line');
     await page.locator('#btn-code-toggle').click();
-    check(/^WK1-/.test(await page.locator('#inp-code').inputValue()), 'save code shown');
+    check(/^WK2-/.test(await page.locator('#inp-code').inputValue()), 'save code shown');
     check(await minFont(page, '.shop-row span, .shop-row button') >= 20, 'camp text >= 20 px');
     await page.keyboard.press('Escape');
     check(await vis(page, 'scr-title'), 'Esc leaves the camp');

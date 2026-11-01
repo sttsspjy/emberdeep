@@ -85,9 +85,9 @@ const code = pH.host('Hosty', 'knight');
 ED.App.profile = profC;
 pumpFor(100);
 ok(pH.lobby.status === 'open' && pH.lobby.code === code && pH.lobby.members.length === 1, 'host lobby open (' + code + ')');
-pC.join(code, 'Guesty', 'ranger');
+pC.join(code, '손님 Guest', 'ranger');
 pumpFor(300);
-ok(pC.lobby.status === 'open' && pC.lobby.me && pH.lobby.members.length === 2 && pC.lobby.members.length === 2, 'client joined: both lobbies list 2 members');
+ok(pC.lobby.status === 'open' && pC.lobby.me && pH.lobby.members.length === 2 && pC.lobby.members.length === 2 && pH.lobby.members[1].name === '손님 Guest' && pC.lobby.members[0].name === 'Hosty', 'client joined: both lobbies list 2 members; a Hangul name arrives intact');
 pC.setHero('pyro'); pumpFor(200);
 ok(pH.lobby.members[1].cls === 'pyro' && pC.lobby.members[1].cls === 'pyro', 'hero change reaches both lobbies');
 {
@@ -104,6 +104,7 @@ pumpFor(200, () => { gH.update(1 / 60); gC.update(1 / 60); });
 ok(gH.mode === 'host' && gC.mode === 'client' && pC.lobby.inRun && gC.view && gC.mir.ready, 'both peers run (client mirror has snapshots)');
 const w = gH.w, hostHero = w.hero('host'), cliPid = pC.lobby.me, cliHero = w.hero(cliPid);
 ok(!!cliHero && cliHero.cls === 'pyro' && gC.view.props.obstacles.length === w.arena.obstacles.length, 'client hero exists on the host; arena rebuilt from the seed');
+ok(cliHero.name === '손님 Guest' && gC.mir.heroes.some(h => h.pid === cliPid && h.name === '손님 Guest'), 'the Hangul name reaches the host world and the client mirror (start roster)');
 ok([gH, gC].every(g => g.cos.host && g.cos.host.skin === 'skin.knight.obsidian' && g.cos.host.title === 'title.lamplighter' && g.cos[cliPid] && g.cos[cliPid].skin === 'skin.pyro.ashen' && g.cos[cliPid].tint === 'tint.crimson' && g.cos[cliPid].ncol === 'ncol.ember'),
   'both run sessions know every hero’s worn cosmetics (from the start roster, not snapshots)');
 delete ED.App;
