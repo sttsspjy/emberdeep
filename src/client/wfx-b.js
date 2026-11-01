@@ -41,17 +41,24 @@
     B.cone(pr.x, pr.y, 7 * sc, rot - PI / 2 - 0.9, 1.4, ca(swish, 70), 2);
     if (!B.spr(id, 0, pr.x - Math.sin(rot) * off, pr.y + Math.cos(rot) * off, so(1, rot, sc, tint))) B.circ(pr.x, pr.y, pr.r, ca(tint, 255), 0);
   };
+  // Giant double axe (16x24 sprite, grip 8 px below its centre) centred on (x, y) at angle rot: scale 2 (3 from radius 17), a pale swish arc behind the spin; alpha a.
+  const hsAxe = (B, x, y, R, rot, a) => {
+    const sc = R >= 17 ? 3 : 2, off = 8 * sc;
+    rot %= TAU;
+    B.cone(x, y, 10 * sc, rot - PI / 2 - 1.1, 1.8, ca(0xe8ecf2, 80 * a), 2);
+    if (!B.spr('weapon.alt.double_axe', 0, x - Math.sin(rot) * off, y + Math.cos(rot) * off, so(a, rot, sc))) B.circ(x, y, R, ca(0xc8d2dc, 255 * a), 0);
+  };
 
   // ---------------- projectiles ----------------
   const PROJ = {
     axe(B, pr, t) { axe(B, pr, t, 'weapon.alt.throwing_axe', 0xffffff, 0xe8ecf2); },
-    // Avalanche axe: the double axe in a frosty tint with a snow trail.
-    avaxe(B, pr, t) {
-      const bx = Math.cos(pr.a), by = Math.sin(pr.a);
-      for (let i = 1; i <= 3; i++) B.rect(pr.x - bx * i * 6 - 1, pr.y - by * i * 6 - 1, 2, 2, ca(0xe8f4ff, 200 - i * 50));
-      axe(B, pr, t, 'weapon.alt.double_axe', 0xd8e8ff, 0xc8e6ff);
+    // Headsman axe: the giant double axe spinning fast along its line, a steel streak and fading afterimage rims behind it.
+    hsaxe(B, pr, t) {
+      const bx = Math.cos(pr.a), by = Math.sin(pr.a), R = Math.max(14, pr.r);
+      B.line(pr.x - bx * R * 3.2, pr.y - by * R * 3.2, pr.x - bx * R * 0.6, pr.y - by * R * 0.6, 3, ca(0xc8d2dc, 90));
+      if (!B.zoneLite) for (let i = 1; i <= 3; i++) B.circ(pr.x - bx * i * R * 0.8, pr.y - by * i * R * 0.8, R * (1 - i * 0.18), ca(0xe8ecf2, 70 - i * 18), 1);
+      hsAxe(B, pr.x, pr.y, R, t * 18 + pr.id * 0.7, 1);
     },
-    axebit(B, pr, t) { axe(B, pr, t, 'weapon.alt.throwing_axe', 0xc8dcff, 0xc8e6ff); },
     // Glaive: a spinning three-bladed steel disc inside a motion-blur halo.
     glaive(B, pr, t) {
       const r = Math.max(8, pr.r);
@@ -85,6 +92,16 @@
   const ZONE = {
     bramble(B, z, t) { thorns(B, z, t, 0x14300c, 0x3f7a18, 0x9be33c, 4, 1); },
     thicket(B, z, t) { thorns(B, z, t, 0x2a0c1c, 0x5a2f40, 0xd2ff82, 6, 1.25); if (!B.zoneLite) B.circ(z.x, z.y, z.r, ca(0x9be33c, 60 * fade(z, 0.5)), 1); },
+    // Headsman grind: a dark gouge with radial cracks, a steel rim of 8 dashes turning with the spin.
+    hsgrind(B, z, t) {
+      const k = fade(z, 0.3), g = grow(z, 0.1), r = z.r * (0.6 + 0.4 * g);
+      if (B.zoneLite) { B.zcirc(z.x, z.y, r, ca(0x2a1a10, 90 * k), 0); B.zcirc(z.x, z.y, r, ca(0xc8d2dc, 110 * k), 1); return; }
+      B.circ(z.x, z.y, r, ca(0x2a1a10, 80 * k), 0);
+      B.circ(z.x, z.y, r * 0.45, ca(0x140c08, 120 * k), 0);
+      for (let i = 0; i < 6; i++) { const a = hs(z.id + i * 3.7) * TAU, l = r * (0.55 + 0.4 * hs(z.id * 1.3 + i)); B.line(z.x, z.y, z.x + Math.cos(a) * l, z.y + Math.sin(a) * l, 1, ca(0x0a0604, 160 * k)); }
+      const sp = t * 6 + z.id;
+      for (let i = 0; i < 8; i++) B.cone(z.x, z.y, r, sp + i * TAU / 8, 0.35, ca(0xc8d2dc, 120 * k), 2);
+    },
     // Sky strike ground: a dark scorch shrinking as it fades.
     sbolt(B, z) { const k = fade(z, z.dur); (B.zoneLite ? B.zcirc : B.circ)(z.x, z.y, z.r * (1.2 - 0.4 * k), ca(0x2a3c80, 90 * k), 0); },
   };
@@ -99,6 +116,17 @@
   const TOP = {
     bramble(B, z) { if (!B.zoneLite) splinters(B, z, 0x9be33c, 4); },
     thicket(B, z) { if (!B.zoneLite) splinters(B, z, 0xd2ff82, 6); },
+    // Headsman grind: the giant axe spinning in place, juddering, sparks spraying off its rim (re-rolled 20 times a second); fades out over the last 0.3 s.
+    hsgrind(B, z, t) {
+      const k = fade(z, 0.3), R = Math.max(14, z.r * 0.47), j = (hs(Math.floor(t * 30) + z.id) - 0.5) * 2;
+      hsAxe(B, z.x + j, z.y - 4, R, t * 22 + z.id, k);
+      if (B.zoneLite) return;
+      const seed = Math.floor(t * 20) + z.id * 7;
+      for (let i = 0; i < 6; i++) {
+        const a = hs(seed + i * 5.1) * TAU, d = R * (0.8 + 0.9 * hs(seed + i * 2.3)), x = z.x + Math.cos(a) * d, y = z.y - 4 + Math.sin(a) * d * 0.7;
+        B.line(x, y, x + Math.cos(a) * 4, y + Math.sin(a) * 4 - 2, 2, ca(i & 1 ? 0xffe66b : 0xffffff, 230 * k));
+      }
+    },
     // Chain hop: a jagged bolt with a glow pass, flickering, plus a spark at the struck end.
     // Alpha holds full for the first half, then steps down in thirds; a 3 px white core over a 7 px blue glow.
     spark(B, z, t) {
@@ -138,5 +166,5 @@
     zone(B, z, t) { const f = ZONE[z.k]; if (f) f(B, z, t); return f !== undefined || TOP[z.k] !== undefined; },
     top(B, z, t) { const f = TOP[z.k]; if (f) f(B, z, t); },
   };
-  for (const id of ['waraxe', 'avalanche', 'bramble', 'thornwood', 'glaive', 'twinmoons', 'chainspark', 'stormcrown']) ED.WeaponFx[id] = fx;
+  for (const id of ['waraxe', 'headsman', 'bramble', 'thornwood', 'glaive', 'twinmoons', 'chainspark', 'stormcrown']) ED.WeaponFx[id] = fx;
 })(globalThis.ED || (globalThis.ED = {}));

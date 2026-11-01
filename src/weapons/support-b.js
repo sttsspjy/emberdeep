@@ -1,11 +1,10 @@
-// Support weapons (b): War Axe -> Avalanche, Bramble Trail -> Thornwood, Glaive -> Twin Moons, Chain Spark -> Storm Crown (docs/supports.md). Registered with ED.addWeapon(def with support: true, impl).
+// Support weapons (b): War Axe -> Headsman, Bramble Trail -> Thornwood, Glaive -> Twin Moons, Chain Spark -> Storm Crown (docs/supports.md). Registered with ED.addWeapon(def with support: true, impl).
 // w.shoot / w.zone read their options only during the call, so options go through module scratch objects; per-shot state rides on numeric pr.st / pr.rk / z.st. Nothing allocates per tick.
 // Visual-only zones (dps 0, no warn, no onTick): 'spark' lines (chain hops), 'sbolt' circles (sky strikes); 'scrown' is a hero-following aura.
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU, TICK = ED.CONST.TICK;
-  ED.regLook('axe', 'avaxe', 'axebit', 'bramble', 'thicket', 'glaive', 'moon', 'spark', 'sbolt', 'scrown');
-  const PROJ_SOFT_CAP = 500; // split children stop above this many live projectiles
+  ED.regLook('axe', 'hsaxe', 'hsgrind', 'bramble', 'thicket', 'glaive', 'moon', 'spark', 'sbolt', 'scrown');
 
   // ---------------- shared helpers ----------------
   const ZO = {};
@@ -34,82 +33,102 @@
   };
   const bigFoe = (e) => !(e.elite || e.boss); // skip fn: keeps only elites and bosses
 
-  // ---------------- War Axe / Avalanche (Control) ----------------
-  // S.n axes thrown upward toward the cursor's side (both: every 2nd axe to the other side), fanned by horizontal speed; gravity pulls them down across the screen; each pierces S.pierce foes
-  // and knocks every foe it hits S.knock away from the hero (bosses and knockback-immune foes ignore it); stag: hits stun. An axe falling back through its landing line (LAND px below the throw)
-  // bounces (S.bounce times; back: the bounce flies back toward the hero, hit list cleared) and, with S.split (Avalanche), lands: a knockback thud (no damage) and S.split small axes (KIDD damage, 1 pierce) in short arcs.
-  // pr.st bits: 0-1 bounces left, 2 back, 3-5 split count, 6 child; pr.rk = landing line y.
-  const G = 560, VY0 = -250, VX0 = 70, VXS = 42, LAND = 24, KIDK = 0.6, KIDD = 0.3; // KIDK / KIDD: split axe knockback / damage share
+  // ---------------- War Axe / Headsman (Control) ----------------
+  // War Axe: S.n axes thrown upward toward the cursor's side (both: every 2nd axe to the other side), fanned by horizontal speed; S.far scales the whole arc (speeds x sqrt(far));
+  // gravity pulls them down across the screen; each pierces S.pierce foes and knocks every foe it hits S.knock away from the hero (bosses and knockback-immune foes ignore it); stag: hits stun.
+  // Headsman: S.n giant axes fly straight along the aim (HFAN rad apart), pierce all, knock foes S.knock sideways off the path (stag: stun); each embeds at the cursor distance
+  // (HMIN .. S.range x S.far px) or at an obstacle and grinds S.dur s: a zone (HR x area px) hitting every GT s for S.dmg x GK (x BIGK on foes pushes cannot move: bosses, elites, knockback-immune) and pushing foes S.push px out from its centre.
+  // A foe takes at most one grind hit per GT s from all grinders of one volley (overlapping grinders never stack). pr.st / z.st = volley id (first axe's id); z.dmg = grind hit, z.knock = push px,
+  // z.tickT = own tick timer (dps 0). Foe stamp: e.hsI (id), e.hsV (volley), e.hsT (next grind hit, sim s).
+  const G = 560, VY0 = -250, VX0 = 70, VXS = 42;
+  const HFAN = 0.21, HMIN = 40, HR = 26, GT = 0.25, GK = 0.5, BIGK = 2.5;
   const AXE = { look: 'axe', r: 7, pierce: 0, life: 2.6, knock: 0, onHit: null, tick: null };
-  const KID = { look: 'axebit', r: 5, pierce: 1, life: 1.6, knock: 0, dmg: 0, speed: 1, onHit: null, tick: null };
-  const THUD = { knock: 0, look: 'axe' };
+  const HAXE = { look: 'hsaxe', r: 14, pierce: 1e6, life: 1, knock: 0, solid: true, onHit: null, onEnd: null };
   const axeHit = (w, pr, e) => {
     const p = pr.p, S = liveS(w, p, pr.wid);
     if (!S || e.dead) return;
-    w.knock(e, e.x - p.x, e.y - p.y, S.knock * (pr.st & 64 ? KIDK : 1));
+    w.knock(e, e.x - p.x, e.y - p.y, S.knock);
     if (S.stag > 0) w.stun(e, S.stag);
   };
-  const land = (w, pr) => {
-    const st = pr.st, b = st & 3, m = (st >> 3) & 7;
-    if (m > 0) {
-      const S = liveS(w, pr.p, pr.wid);
-      if (S) { THUD.knock = S.knock * KIDK; w.blast(pr.p, pr.wid, pr.x, pr.y, 24 * S.area, 0, THUD); }
-      if (w.projs.length < PROJ_SOFT_CAP) {
-        KID.dmg = pr.dmg * KIDD; KID.r = Math.max(4, pr.r * 0.6); KID.onHit = axeHit; KID.tick = axeTick;
-        for (let i = 0; i < m; i++) {
-          const c = w.shoot(pr.p, pr.wid, pr.x, pr.y, 0, null, KID);
-          c.vx = pr.vx * 0.3 + (i - (m - 1) / 2) * 80; c.vy = -170 - 30 * (i & 1); c.st = 64; c.rk = 1e9;
-        }
-      }
-    }
-    if (b > 0) {
-      pr.st = st - 1; pr.vy = -Math.abs(pr.vy) * 0.62; pr.hits.length = 0; pr.life = Math.max(pr.life, 1.3);
-      if (st & 4) pr.vx = -pr.vx * 0.9;
-    } else if (m > 0) pr.dead = true; // the split axes replace it
-    else pr.rk = 1e9; // falls on off the view
-  };
-  function axeTick(w, pr, dt) {
-    pr.vy += G * dt;
-    if (pr.vy > 0 && pr.y >= pr.rk) land(w, pr);
-  }
-  const axeThrow = (w, p, ws, S, look) => {
-    const a = w.aimDir(p), side = Math.cos(a) >= 0 ? 1 : -1, n = Math.max(1, S.n | 0), k = S.speed / 100;
-    const bits = Math.min(3, S.bounce | 0) | (S.back ? 4 : 0) | (Math.min(7, S.split | 0) << 3);
-    AXE.look = look; AXE.r = 7 * S.area; AXE.pierce = S.pierce | 0; AXE.onHit = axeHit; AXE.tick = axeTick;
+  function axeTick(w, pr, dt) { pr.vy += G * dt; }
+  const axeThrow = (w, p, ws, S) => {
+    const a = w.aimDir(p), side = Math.cos(a) >= 0 ? 1 : -1, n = Math.max(1, S.n | 0), k = S.speed / 100, f = Math.sqrt(S.far || 1);
+    AXE.r = 7 * S.area; AXE.pierce = S.pierce | 0; AXE.life = 2.6 * f; AXE.onHit = axeHit; AXE.tick = axeTick;
     for (let i = 0; i < n; i++) {
       const s = S.both && (i & 1) ? -side : side, j = S.both ? i >> 1 : i;
       const pr = w.shoot(p, ws.id, p.x, p.y - 8, 0, S, AXE);
-      pr.vx = s * (VX0 + j * VXS) * k; pr.vy = VY0 * (0.92 + 0.16 * w.rng.next()) - j * 12;
-      pr.st = bits; pr.rk = p.y - 8 + LAND;
+      pr.vx = s * (VX0 + j * VXS) * k * f; pr.vy = (VY0 * (0.92 + 0.16 * w.rng.next()) - j * 12) * f;
+    }
+    return true;
+  };
+  const hsHit = (w, pr, e) => {
+    const S = liveS(w, pr.p, pr.wid);
+    if (!S || e.dead) return;
+    const c = Math.cos(pr.a), s = Math.sin(pr.a), side = c * (e.y - pr.y) - s * (e.x - pr.x) >= 0 ? 1 : -1;
+    w.knock(e, -s * side + c * 0.3, c * side + s * 0.3, S.knock);
+    if (S.stag > 0) w.stun(e, S.stag);
+  };
+  let gZ = null, gW = null;
+  const grindFoe = (e) => {
+    const z = gZ, w = gW;
+    if (e.hsI === e.id && e.hsV === z.st && w.time < e.hsT) return;
+    e.hsI = e.id; e.hsV = z.st; e.hsT = w.time + GT * 0.9;
+    const s = w.src(z.p, z.wid, 'zone', 0); s.x = z.x; s.y = z.y;
+    w.hitFoe(e, e.boss || e.elite || !(e.def.kb > 0) ? z.dmg * BIGK : z.dmg, s);
+    if (!e.dead) w.push(e, z.x, z.y, z.knock);
+  };
+  const grindTick = (w, z) => {
+    if ((z.tickT -= TICK) > 0) return;
+    z.tickT += GT; gZ = z; gW = w;
+    w.zoneFoes(z, grindFoe);
+    gZ = gW = null;
+  };
+  const hsEmbed = (w, pr) => {
+    const S = liveS(w, pr.p, pr.wid);
+    if (!S || !w.alive(pr.p)) return;
+    const o = zo(); o.look = 'hsgrind'; o.x = pr.x; o.y = pr.y; o.r = HR * S.area; o.a = pr.a; o.dur = S.dur; o.p = pr.p; o.wid = pr.wid; o.onTick = grindTick;
+    o.st = pr.st; o.dmg = S.dmg * GK; o.knock = S.push;
+    w.zone(o);
+  };
+  const hsThrow = (w, p, ws, S) => {
+    const a = w.aimDir(p), n = Math.max(1, S.n | 0), I = p.in;
+    const d = U.clamp(Math.hypot(I.ax - p.x, I.ay - p.y), HMIN, S.range * (S.far || 1));
+    HAXE.r = 14 * S.area; HAXE.life = d / S.speed; HAXE.onHit = hsHit; HAXE.onEnd = hsEmbed;
+    let vol = 0;
+    for (let i = 0; i < n; i++) {
+      const pr = w.shoot(p, ws.id, p.x, p.y - 6, a + (i - (n - 1) / 2) * HFAN, S, HAXE);
+      if (!vol) vol = pr.id;
+      pr.st = vol;
     }
     return true;
   };
   ED.addWeapon({
     id: 'waraxe', name: 'War Axe', look: 'axe', held: 'weapon.alt.throwing_axe', support: true, role: 'control', mode: 'cursor', txt: 'Arcing axes knock the horde back',
-    base: { dmg: 20, cd: 1.5, n: 2, pierce: 4, area: 1, speed: 100, dur: 0, knock: 260, range: 0, both: false, stag: 0, bounce: 0, back: false, split: 0 },
+    base: { dmg: 20, cd: 1.5, n: 2, pierce: 4, area: 1, speed: 100, dur: 0, knock: 260, range: 0, both: false, stag: 0, far: 1 },
     paths: [
-      { id: 'count', name: 'Count', forms: ['avalanche'], ranks: [
+      { id: 'count', name: 'Count', forms: ['headsman'], ranks: [
         { mods: { n: 1 }, txt: '+1 axe' },
         { mods: { both: true }, txt: 'Axes fly to both sides' },
         { mods: { dmg: 0.15, n: 1 }, txt: '+15% damage, +1 axe' }] },
-      { id: 'heft', name: 'Heft', forms: ['avalanche'], ranks: [
+      { id: 'heft', name: 'Heft', forms: ['headsman'], ranks: [
         { mods: { area: 0.3, knock: 0.3 }, txt: 'Axes 30% bigger, push harder' },
         { mods: { stag: 0.35 }, txt: 'Axe hits stagger foes' },
         { mods: { pierce: 2, knock: 0.3 }, txt: 'Pierce 2 more, push even harder' }] },
-      { id: 'return', name: 'Return', forms: ['avalanche'], ranks: [
-        { mods: { bounce: 1 }, txt: 'Axes bounce once on landing' },
-        { mods: { back: true }, txt: 'The bounce flies back toward you' },
-        { mods: { dmg: 0.15, bounce: 1 }, txt: '+15% damage, +1 bounce' }] },
-    ],
-  }, { fire: (w, p, ws, S) => axeThrow(w, p, ws, S, 'axe') });
+      { id: 'fling', name: 'Fling', forms: ['headsman'], ranks: [
+        { mods: { far: 0.3 }, txt: 'Axes fly 30% higher and farther' },
+        { mods: { cd: -0.2 }, txt: 'Throws 20% faster' },
+        { mods: { dmg: 0.2, pierce: 1 }, txt: '+20% damage, +1 pierce' }] },
+    ],
+  }, { fire: axeThrow });
   ED.addWeapon({
-    id: 'avalanche', name: 'Avalanche', look: 'avaxe', held: 'weapon.alt.double_axe', support: true, role: 'control', mode: 'cursor', evolved: true, form: true, from: 'waraxe', txt: 'Axes land and split into 3',
-    base: { dmg: 18, cd: 1.5, n: 2, pierce: 4, area: 1.1, speed: 100, dur: 0, knock: 300, range: 0, both: false, stag: 0, bounce: 0, back: false, split: 3 },
+    id: 'headsman', name: 'Headsman', look: 'hsaxe', held: 'weapon.alt.double_axe', support: true, role: 'control', mode: 'cursor', evolved: true, form: true, from: 'waraxe',
+    txt: 'Giant axes fly where you aim and grind',
+    base: { dmg: 12, cd: 1.6, n: 2, pierce: 0, area: 1, speed: 380, dur: 1.2, knock: 220, range: 200, both: false, stag: 0, far: 1, push: 20 },
     refine: [
       { mods: { n: 1 }, txt: '+1 axe' },
-      { mods: { dmg: 0.2, split: 2 }, txt: '+20% damage, axes split into 5' },
+      { mods: { dmg: 0.2, dur: 0.5 }, txt: '+20% damage, grind 0.6 s longer' },
     ],
-  }, { fire: (w, p, ws, S) => axeThrow(w, p, ws, S, 'avaxe') });
+  }, { fire: hsThrow });
 
   // ---------------- Bramble Trail / Thornwood (Control) ----------------
   // Thorn patches are zones (radius S.size x area, S.dur s) ticking every PT s: every 4th tick (1 s) S.dmg to foes inside; every tick a root (stun S.root s) on foes not rooted in the last
@@ -187,7 +206,7 @@
         { mods: { barb: 0.7 }, txt: 'Rooting thorns also stab the foe' },
         { mods: { burst: true }, txt: 'Rooted foes sprout thorns on death' },
         { mods: { rcrit: true, root: 0.2 }, txt: 'Stabs always crit, roots 0.2 s longer' }] },
-    ],
+    ],
   }, bramble);
   ED.addWeapon({
     id: 'thornwood', name: 'Thornwood', look: 'thicket', held: 'proj.thorn', support: true, role: 'control', mode: 'around', evolved: true, form: true, from: 'bramble', txt: 'Thickets persist and grab',
@@ -260,7 +279,7 @@
         { mods: { area: 0.4, keep: 0.1 }, txt: 'Glaives 40% bigger, cut deeper' },
         { mods: { bcrit: true }, txt: 'The return trip always crits' },
         { mods: { dmg: 0.15, area: 0.3 }, txt: '+15% damage, glaives 30% bigger' }] },
-    ],
+    ],
   }, { fire: glaiveFire });
   ED.addWeapon({
     id: 'twinmoons', name: 'Twin Moons', look: 'moon', held: 'weapon.glaive', support: true, role: 'lane', mode: 'cursor', evolved: true, form: true, from: 'glaive', txt: 'Two moon pairs loop both ways',
@@ -353,7 +372,7 @@
         { mods: { kfork: 1 }, txt: 'Kills fork an arc onward' },
         { mods: { split: 1 }, txt: 'The arc splits in two at the first foe' },
         { mods: { kfork: 1 }, txt: 'Kills fork 2 arcs onward' }] },
-    ],
+    ],
   }, { fire: (w, p, ws, S) => sparkFire(w, p, ws, S, false) });
   ED.addWeapon({
     id: 'stormcrown', name: 'Storm Crown', look: 'spark', held: 'fx.thunder', support: true, role: 'lane', mode: 'nearest', evolved: true, form: true, from: 'chainspark', txt: 'Sky bolts fork at every jump',

@@ -119,7 +119,7 @@ const W = {
     'kcccccbbbbbbbbbk',
     'kbbbbbbbbbbbbbbk',
     'kkkkkkkkkkkkkkkk'],
-  // War Axe (its Form Avalanche uses the avalanche icon)
+  // War Axe (its Form Headsman uses the headsman icon)
   waraxe: [
     '.........kkk....',
     '........kSSSk...',
@@ -403,7 +403,7 @@ const W = {
     '....hkkkkkkh....',
     '...h..kook..h...',
     '..h....kk....h..'],
-  // Ricochet / Avalanche
+  // Ricochet
   ricochet: [
     '.k.........kkkk.',
     'kYk.......k1SSSk',
@@ -416,22 +416,24 @@ const W = {
     '...kYkwwwkYk....',
     '....k.kwk.k.....',
     '.......k........'],
-  avalanche: [
-    '.kkk............',
-    'k1SSk......kkk..',
-    'km11k.....k1SSk.',
-    '.kkk......km11k.',
-    '...........kkk..',
-    '..y.........y...',
-    '......y....y....',
-    '...........y....',
-    '.......kkkk.....',
-    '......k1SSSk....',
-    '.kkk.k11SSSSk...',
-    'k1SSkkm111SSk...',
-    'km11kkmm1111k...',
-    '.kkk..kmmm1k....',
-    '.......kkkk.....'],
+  // Headsman (War Axe Form): a giant double-bitted axe, blood on both edges
+  headsman: [
+    '...kk......kk...',
+    '..kSSk....kSSk..',
+    '.kSwSSkkkkSSwSk.',
+    'kSwSS1kddk1SSwSk',
+    'kSSS11kWdk11SSSk',
+    'kSSS11kWdk11SSSk',
+    'kxSS1kkWdkk1SSxk',
+    '.kxSk.kWdk.kSxk.',
+    '..kk..kWdk..kk..',
+    '......kWdk......',
+    '......kWdk......',
+    '......kWdk......',
+    '......kodk......',
+    '......kyok......',
+    '......kddk......',
+    '.......kk.......'],
   // Signature: Cleave / Whirlwind (knight)
   cleave: [
     '............kkkk',

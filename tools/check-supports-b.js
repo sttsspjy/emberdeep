@@ -3,7 +3,9 @@
 // 2. Every shape rank (path rank 1 / 3 / 5, tune full) changes the fired shape (projectiles, reach, zones, foe hits, crits, stuns, moved foes, sizes over 4 s into a still foe grid while walking);
 //    the Form changes the path-0-at-rank-5 pattern.
 // 3. Damage only in view: path 0 at rank 5 and the Form never hurt a pinned foe 340 px away while hurting near ones.
-// 4. Mechanics: the Glaive flies along the cursor past a nearer foe; axe knockback moves normal foes away from the hero but not bosses or knockback-immune brutes; thorn roots hold normal foes, not bosses.
+// 4. Mechanics: the Glaive flies along the cursor past a nearer foe; axe knockback moves normal foes away from the hero but not bosses or knockback-immune brutes; Fling throws higher;
+//    Headsman axes fly straight along the aim, pierce, embed at the cursor distance (capped at range) and grind (one hit per 0.25 s per volley; pushes normal foes, never bosses), no bounce;
+//    thorn roots hold normal foes, not bosses.
 // 5. Determinism: the same seed and inputs give the same digest; client draw hooks (wfx-b.js) run on a mock batch without non-finite args.
 'use strict';
 const path = require('path'), fs = require('fs'), vm = require('vm');
@@ -130,7 +132,67 @@ const axeRun = (kind) => {
   ok(b.hit > 0 && b.kb === 0 && b.moved === 0, `war axe hits bosses without knockback (${b.hit} hit, ${b.moved} moved)`);
   ok(c.hit > 0 && c.kb === 0 && c.moved === 0, `war axe hits knockback-immune brutes without moving them (${c.hit} hit, ${c.moved} moved)`);
 }
-// 4c. Roots: the first ring thorn erupts on the cursor side at the ring radius; a skeleton and a boss-flagged foe stand there.
+// 4c. Fling rank 1: the same throw arc 30% higher (apex above the throw point).
+{
+  const apex = (r) => {
+    const w = world(7), p = w.heroes[0], ws = build(w, p, 'waraxe', r);
+    ws.cd = 0; p.in.ax = p.x + 100; p.in.ay = p.y;
+    const y0 = p.y - 8; let top = 0;
+    for (let i = 0; i < 90; i++) { step(w, p); w.events.length = 0; for (const q of w.projs) if (!q.dead && q.wid === 'waraxe') top = Math.max(top, y0 - q.y); }
+    return top;
+  };
+  const a0 = apex([0, 0, 0]), a1 = apex([0, 0, 1]);
+  ok(a1 > a0 * 1.2 && a1 < a0 * 1.4, `Fling rank 1: axes fly 30% higher (apex ${a0.toFixed(0)} -> ${a1.toFixed(0)} px)`);
+}
+// 4d. Headsman: straight flight along the aim (no gravity, fan centred on it), pierces a line of foes, embeds at the cursor distance (capped at S.range) and grinds
+//     a knockback-immune brute standing there several times; no axe outlives its flight (no bounce, no return).
+for (const [cx, cy] of [[90, -60], [400, 0]]) {
+  const w = world(10), p = w.heroes[0], ws = build(w, p, 'waraxe', [3, 3, 3], 'headsman'), S = w.weaponS(p, 1), aim = Math.atan2(cy, cx);
+  const want = Math.min(Math.hypot(cx, cy), S.range), ex = p.x + Math.cos(aim) * want, ey = p.y - 6 + Math.sin(aim) * want;
+  const brute = w.spawnFoe('skelknight', ex, ey, { hpMul: 1000 }), line = [];
+  for (let k = 1; k <= 3; k++) line.push(w.spawnFoe('skeleton', p.x + Math.cos(aim) * want * k / 4, p.y - 6 + Math.sin(aim) * want * k / 4, { hpMul: 1000 }));
+  for (const e of w.foes) e.spd = 0;
+  ws.cd = 0; p.in.ax = p.x + cx; p.in.ay = p.y + cy;
+  step(w, p); w.events.length = 0; ws.cd = 1e9;
+  const axes = w.projs.filter(q => !q.dead && q.wid === 'headsman'), ang = axes.map(q => Math.atan2(q.vy, q.vx)), v0 = axes.map(q => [q.vx, q.vy]);
+  const mid = ang.reduce((s, a) => s + a, 0) / Math.max(1, ang.length);
+  let straight = true, ends = [], live = 0, grindHits = 0, maxT = 0;
+  const seen = new Map(axes.map(q => [q.id, q]));
+  for (let i = 0; i < 200; i++) {
+    p.in.ax = p.x + cx; p.in.ay = p.y + cy;
+    for (const q of w.projs) if (seen.has(q.id) && !q.dead) { const j = axes.indexOf(q); if (Math.abs(q.vx - v0[j][0]) > 1e-6 || Math.abs(q.vy - v0[j][1]) > 1e-6) straight = false; maxT = Math.max(maxT, q.t); }
+    const h0 = brute.hp;
+    step(w, p); w.events.length = 0;
+    for (const z of w.zones) if (!z.dead && z.wid === 'headsman' && ends.indexOf(z) < 0) ends.push(z);
+    if (brute.hp < h0 && ends.length) grindHits++;
+    live = w.projs.filter(q => !q.dead && seen.has(q.id)).length;
+  }
+  const dEnd = ends.map(z => Math.hypot(z.x - p.x, z.y - (p.y - 6)));
+  ok(axes.length === S.n && Math.abs(U.angDiff(mid, aim)) < 0.02 && straight, `headsman: ${axes.length} axes fly straight along the aim (${aim.toFixed(2)} rad, fan centre ${mid.toFixed(2)}), no gravity`);
+  ok(line.every(e => e.hp < e.maxHp), `headsman: pierces every foe on its line (${line.filter(e => e.hp < e.maxHp).length}/3 hurt)`);
+  ok(ends.length === S.n && dEnd.every(d => d >= want - 1 && d <= want + S.speed * C.TICK + 1), `headsman: embeds ${ends.length} grinders at the cursor distance capped at range (+ 1 tick of flight) (${want.toFixed(0)} px: ${dEnd.map(d => d.toFixed(0)).join(', ')})`);
+  ok(grindHits >= 4 && brute.hp > 0, `headsman: the grinder hits a knockback-immune brute standing in it ${grindHits} times`);
+  ok(live === 0 && maxT <= want / S.speed + 0.05, `headsman: no axe outlives its flight (${live} live, longest ${maxT.toFixed(2)} s): no bounce or return`);
+}
+// 4e. Headsman grind cap: the grinders of one volley hit a boss at most once per 0.25 s together; the grinder pushes normal foes out, never the boss.
+{
+  const w = world(11), p = w.heroes[0], ws = build(w, p, 'waraxe', [3, 0, 0], 'headsman');
+  const boss = w.spawnFoe('skeleton', p.x + 60, p.y - 6, { hpMul: 1e4 }), sk = w.spawnFoe('skeleton', p.x + 66, p.y + 8, { hpMul: 1e4 });
+  boss.boss = true; boss.spd = 0; sk.spd = 0;
+  ws.cd = 0; p.in.ax = p.x + 60; p.in.ay = p.y;
+  let hits = 0, t = 0, zones = 0;
+  const bx = boss.x, by = boss.y, d0 = Math.hypot(sk.x - (p.x + 60), sk.y - (p.y - 6));
+  for (let i = 0; i < 90; i++) {
+    const h0 = boss.hp;
+    step(w, p); w.events.length = 0; ws.cd = 1e9;
+    zones = Math.max(zones, w.zones.filter(z => !z.dead && z.wid === 'headsman').length);
+    if (zones && boss.hp < h0) { hits++; t = Math.max(t, w.time); }
+  }
+  const S = w.weaponS(p, 1), cap = Math.ceil(S.dur / 0.25) + 2;
+  ok(zones >= 3 && hits > 0 && hits <= cap, `headsman: ${zones} overlapping grinders hit a boss ${hits} times in one volley (cap ${cap})`);
+  ok(boss.x === bx && boss.y === by && Math.hypot(sk.x - (p.x + 60), sk.y - (p.y - 6)) > d0 + 6, `headsman: the grind pushes a normal foe out (${d0.toFixed(0)} -> ${Math.hypot(sk.x - (p.x + 60), sk.y - (p.y - 6)).toFixed(0)} px), never the boss`);
+}
+// 4f. Roots: the first ring thorn erupts on the cursor side at the ring radius; a skeleton and a boss-flagged foe stand there.
 {
   const w = world(8), p = w.heroes[0], ws = build(w, p, 'bramble', [0, 0, 0]), R = ED.WEAPONS.bramble.base.ringR;
   const sk = w.spawnFoe('skeleton', p.x + R, p.y - 3, { hpMul: 100 }), boss = w.spawnFoe('skeleton', p.x + R, p.y + 3, { hpMul: 1000 });
