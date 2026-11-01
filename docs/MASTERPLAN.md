@@ -42,6 +42,7 @@ North-star: a co-op browser survivors-like (solo or up to 4 friends, zero instal
 ## Next
 - [ ] Balance from your playtest (difficulty, Form strength, skill value)
 - [ ] Co-op test over a real internet connection
-- [ ] Art gaps: per-stage foe colours, own art for The Twins, Rift Weaver, Wick-Eater
+- [ ] Art gaps: per-stage foe colours, own art for The Twins and Rift Weaver
+- [x] Hidden 4th stage (The Wickdeep) with a Sanctum final fight against The Wickmother
 - [ ] Waves mode (planned): second game mode; rules to be decided with you
 - [ ] Publish on GitHub Pages
