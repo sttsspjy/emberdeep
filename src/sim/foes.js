@@ -7,7 +7,6 @@
   'use strict';
   const U = ED.U, W = ED.World.prototype;
   const CONTACT_CD = 1.0, FAR = 900, FAR_ELITE = 1300, RETARGET = 20, ATK_TOK = 2, FLY_OUT = 360, VW = ED.HERO_VIEW;
-  const ELITE_FLOOR = 60; // elite HP counts a def.hp below this as this much
   const SPLIT_ARC = 70 * Math.PI / 180, SPLIT_JIT = 0.08; // splitter children: half-arc half width, angle jitter (rad); sum < 90 deg
 
   W.initFoes = function () { this.foePool = []; };
@@ -22,9 +21,18 @@
   W.foeHp = function (def) { return def.hp * (def.boss ? 1 : FOE_HP_K) * (1 + (def.ai === 'swarm' ? 0.06 : def.boss ? 0.24 : 0.11) * this.time / 60) * this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1); };
   // Walk speed factor of foes spawned now: 0.8 at 0:00 rising to 1 at 4:00; fixed at spawn, bosses exempt, telegraphed dashes keep their own speed.
   W.foePace = function () { return 0.8 + 0.2 * Math.min(1, this.time / 240); };
-  // Boss HP for a boss due at t s (GAME-DESIGN §8): 1500 x (t / 300)^2, x2 from 15:00 (1500 / 6000 / 27000 / 48000 at 5 / 10 / 15 / 20 min) x k (party factor x the stage HP factor).
-  ED.bossHp = (t, k) => Math.round(1500 * Math.pow(t / 300, 2) * (t >= 900 ? 2 : 1) * k);
+  // Boss HP for a boss due at t s (GAME-DESIGN §8): BOSS_HP anchors [t, HP] (5 / 10 / 15 / 20 min), linear between, held past the ends; x k (party factor x the stage HP factor).
+  const BOSS_HP = [[300, 5000], [600, 9000], [900, 13000], [1200, 22000]];
+  ED.bossHp = (t, k) => {
+    const A = BOSS_HP; let i = 1;
+    while (i < A.length - 1 && t > A[i][0]) i++;
+    return Math.round(U.lerp(A[i - 1][1], A[i][1], U.clamp((t - A[i - 1][0]) / (A[i][0] - A[i - 1][0]), 0, 1)) * k);
+  };
   W.bossHp = function (t) { return ED.bossHp(t, this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1)); };
+  // Elite HP at t s (GAME-DESIGN §7), absolute (not from the spawned HP): (EL0 + EL1 x minute) x EL_BRUTE for brutes x def.take (equal effective HP for armoured kinds),
+  // x EL_BENCH in the benchmark phase (bench true), x k (party factor x the stage HP factor).
+  const EL0 = 600, EL1 = 330, EL_BRUTE = 1.6, EL_BENCH = 0.85;
+  ED.eliteHp = (t, def, k, bench) => Math.round((EL0 + EL1 * t / 60) * (def.brute ? EL_BRUTE : 1) * (def.take || 1) * (bench ? EL_BENCH : 1) * k);
 
   // Spawns foe k (id string or FOE_IDX) at (x, y). opts: { elite, hpMul, rush: [dx, dy, s, v] (fly-through: heading (dx, dy) at v px/s, rush time s) }. Returns the foe.
   W.spawnFoe = function (k, x, y, opts) {
@@ -44,10 +52,11 @@
     this.foes.push(e);
     return e;
   };
-  // Elite: 2x size, 15 x max(1, ELITE_FLOOR / def.hp) x its spawned HP, x1.5 contact damage; drops a chest (GAME-DESIGN §7). Brains widen its attacks (ai.js).
+  // Elite: 2x size, HP ED.eliteHp (benchmark factor from the stage's bench.t), x1.5 contact damage; drops a chest (GAME-DESIGN §7). Brains widen its attacks (ai.js).
   W.promoteElite = function (e) {
+    const bn = this.sdef.bench;
     e.elite = true; e.r = e.def.r * 2; e.scale = (e.def.scale || 1) * 2;
-    e.maxHp = e.hp = Math.round(e.hp * 15 * Math.max(1, ELITE_FLOOR / (e.def.hp || ELITE_FLOOR))); e.dmg *= 1.5;
+    e.maxHp = e.hp = Math.max(1, ED.eliteHp(this.time, e.def, this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1), !!(bn && this.time >= bn.t))); e.dmg *= 1.5;
   };
 
   // Moves e toward (tx, ty) at its speed x mul (slow applied), sliding around obstacles; sets face and vx/vy. Returns the distance to the target before the step.

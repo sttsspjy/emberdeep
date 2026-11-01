@@ -4,9 +4,11 @@
 // Builds (slot lifecycle, GAME-DESIGN §4): base (nothing); t5 (tune 5: damage 2, haste 2, area 1); p<i> (t5 + path i at rank 5); f<i><j> (p<i> + Form j of path i's list, refined twice).
 // Party level per build (w.level; offers only, no weapon numbers): base 1, t5 6, p 15, f 25.
 // crowd: 160 'skeleton' foes kept on the field (40-300 px around the hero, 3.4x base HP; a minute-10 foe has 2.1x); dps = damage dealt / s, kps = kills / s.
-// single: one knockback-immune 'skelknight' with near-infinite HP 50 px to the right of the hero; dps on it. Aim point = nearest foe.
+// single: one knockback-immune 'skelknight' (r 12) with near-infinite HP 50 px to the right of the hero; dps on it. Aim point = nearest foe.
+// boss: the same target as a boss body (boss flag: no execute, stun, freeze or displacement) at r 24, 60 px to the right; dps on it (big-body multi-hit check).
 // Hero runs end with the role check on f rows (GAME-DESIGN §4): kind 360 (OMNI, every Bell Form) vs dir; 360 crowd <= 0.6 x the hero's dir mean (Bell: the cross-hero dir mean);
-// dir single >= 2 x the hero's best 360 single; each kind within ±25% of the hero's kind mean. --md prints table rows as Markdown.
+// dir single >= 2 x the hero's best 360 single; each kind within ±25% of the hero's kind mean. Boss check over every hero run: a p row whose boss dps > 1.6 x the cross-hero
+// mean of p rows, or a directional f row whose boss dps > 1.6 x the cross-hero mean of directional f rows (360 Forms are Garlic-tier by rule), is flagged. --md prints table rows as Markdown.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U;
@@ -53,9 +55,10 @@ const run = (cls, sup, b, mode) => {
   const rng = U.RNG(3);
   let boss = null;
   const top = () => {
-    if (mode === 'single') {
-      if (!boss || boss.dead) boss = w.spawnFoe('skelknight', p.x + 50, p.y, { hpMul: 1e6 });
-      boss.x = p.x + 50; boss.y = p.y; return;
+    if (mode !== 'crowd') {
+      const big = mode === 'boss', dx = big ? 60 : 50;
+      if (!boss || boss.dead) { boss = w.spawnFoe('skelknight', p.x + dx, p.y, { hpMul: 1e6 }); if (big) { boss.r = 24; boss.scale = 2; boss.boss = true; } }
+      boss.x = p.x + dx; boss.y = p.y; return;
     }
     let n = 0; for (const e of w.foes) if (!e.dead) n++;
     for (; n < CROWD; n++) {
@@ -79,17 +82,17 @@ const builds = (root) => {
   return out;
 };
 const n0 = (v) => Math.round(v).toLocaleString('en-US');
-// Prints the table of one weapon; returns its rows [{ name, form, kind, crowd, kps, single }].
+// Prints the table of one weapon; returns its rows [{ name, form, kind, crowd, kps, single, boss }].
 const table = (cls, sup, root) => {
   const rows = [];
-  if (MD) console.log('| build | form | kind | crowd wpn | kills/s | single wpn |\n|---|---|---|---|---|---|');
-  else console.log('build  form            kind  crowd wpn  kills/s  single wpn');
+  if (MD) console.log('| build | form | kind | crowd wpn | kills/s | single wpn | boss wpn |\n|---|---|---|---|---|---|---|');
+  else console.log('build  form            kind  crowd wpn  kills/s  single wpn  boss wpn');
   for (const b of builds(root)) {
-    const c = run(cls, sup, b, 'crowd'), s = run(cls, sup, b, 'single'), kind = b.form && !sup ? kindOf(b.form) : '';
-    if (!c || !s) { console.log(`${b.name.padEnd(6)} ${String(b.form || '-').padEnd(15)} (not takeable)`); continue; }
-    rows.push({ name: b.name, form: b.form, kind, crowd: c.dps, kps: c.kps, single: s.dps });
-    if (MD) console.log(`| ${b.name} | ${b.form || '-'} | ${kind === '360' ? '360°' : kind} | ${n0(c.dps)} | ${c.kps.toFixed(1)} | ${n0(s.dps)} |`);
-    else console.log(`${b.name.padEnd(6)} ${(b.form || '-').padEnd(15)} ${kind.padEnd(4)} ${c.dps.toFixed(0).padStart(9)}  ${c.kps.toFixed(1).padStart(7)}  ${s.dps.toFixed(0).padStart(10)}`);
+    const c = run(cls, sup, b, 'crowd'), s = run(cls, sup, b, 'single'), g = run(cls, sup, b, 'boss'), kind = b.form && !sup ? kindOf(b.form) : '';
+    if (!c || !s || !g) { console.log(`${b.name.padEnd(6)} ${String(b.form || '-').padEnd(15)} (not takeable)`); continue; }
+    rows.push({ name: b.name, form: b.form, kind, crowd: c.dps, kps: c.kps, single: s.dps, boss: g.dps });
+    if (MD) console.log(`| ${b.name} | ${b.form || '-'} | ${kind === '360' ? '360°' : kind} | ${n0(c.dps)} | ${c.kps.toFixed(1)} | ${n0(s.dps)} | ${n0(g.dps)} |`);
+    else console.log(`${b.name.padEnd(6)} ${(b.form || '-').padEnd(15)} ${kind.padEnd(4)} ${c.dps.toFixed(0).padStart(9)}  ${c.kps.toFixed(1).padStart(7)}  ${s.dps.toFixed(0).padStart(10)}  ${g.dps.toFixed(0).padStart(8)}`);
   }
   return rows;
 };
@@ -111,9 +114,17 @@ const roleCheck = (R) => {
     for (const [L, m, k] of [[dir, dm, 'dir'], [omni, om, '360']]) for (const r of L) if (L.length > 1 && Math.abs(r.crowd / m - 1) > 0.25) flags.push(`${r.form} ${k} crowd ${n0(r.crowd)} outside ±25% of ${n0(m)}`);
     console.log(`${cls.padEnd(7)} dir mean ${n0(dm)}  360 mean ${n0(om)}  360 ceiling ${n0(ceil)}  360 best single ${n0(best)}  ${flags.length ? 'FLAGS: ' + flags.join('; ') : 'ok'}`);
   }
+  // boss check: p rows / directional f rows against 1.6 x the cross-hero boss dps mean of their class
+  for (const k of ['p', 'f']) {
+    const rs = []; for (const cls in R) for (const r of R[cls]) if (r.name[0] === k && r.kind !== '360') rs.push([cls, r]);
+    const m = mean(rs.map(x => x[1].boss)), cap = 1.6 * m, top = {};
+    for (const [cls, r] of rs) if (!top[cls] || r.boss > top[cls].boss) top[cls] = r;
+    const over = rs.filter(x => x[1].boss > cap).map(x => `${x[0]} ${x[1].form || x[1].name} ${n0(x[1].boss)}`);
+    console.log(`boss ${k === 'p' ? 'p' : 'dir f'} rows: cross-hero mean ${n0(m)}, cap 1.6x ${n0(cap)}; best per hero ${Object.keys(top).map(c => c + ' ' + n0(top[c].boss)).join(', ')}  ${over.length ? 'FLAGS: ' + over.join('; ') : 'ok'}`);
+  }
 };
 
-console.log(`dps.js: ${T} s per scenario; crowd ${CROWD} skeletons at ${HPK}x HP; single = immortal skelknight at 50 px; no Q casts`);
+console.log(`dps.js: ${T} s per scenario; crowd ${CROWD} skeletons at ${HPK}x HP; single = immortal skelknight (r 12) at 50 px; boss = immortal boss body (r 24) at 60 px; no Q casts`);
 if (SUPPORT) {
   const all = ED.WEAPON_IDS.filter(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].form);
   if (!all.length) console.log('\nno support weapons registered (support: true defs)');

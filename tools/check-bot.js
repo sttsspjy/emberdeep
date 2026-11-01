@@ -6,7 +6,8 @@
 // 5. Short-reach stance: a knight (Cleave only, supports banished) keeps a foe inside its swing reach on >= 20% of 120 s and holds bosses inside it.
 // 6. Card order: a chest pick (path pick, Form) > refine > hero path rank / tune > new support > a new passive below the quota > support path rank / tune > passive levels > skill.
 //    Path picks and Form forks follow a per-seed choice: seeds 1-12 pick every Cleave path and both Greatblade Forms; one seed always picks the same.
-// 7. Boss fights (knight seed 2, meta max, 780 s): every killed boss carries its spawn time under its stage id (the twins end on either body). skill 0.3 is deterministic and plays differently from skill 1.
+// 7. Boss fights (knight seed 2, meta max, 780 s): every killed boss carries its spawn time under its stage id (the twins end on either body) and a first hit between spawn and kill;
+//    every elite carries its spawn time and kind; a killed one a first hit and ttk = kill - first hit with 0 < on <= ttk + 0.15 (0.1 s rounding). skill 0.3 is deterministic and plays differently from skill 1.
 'use strict';
 let fails = 0;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
@@ -33,7 +34,7 @@ const strip = (r) => { const o = Object.assign({}, r); delete o.ms; delete o.bot
 const cfg = { stage: 1, cls: 'pyro', seed: 7, maxTime: 90 };
 const a = runOne(cfg), b = runOne(cfg);
 ok(strip(a) === strip(b), `runOne deterministic (90 s pyro: level ${a.level}, kills ${a.kills}, ${a.ms} ms / ${b.ms} ms)`);
-const FIELDS = ['stage', 'stageId', 'cls', 'seed', 'meta', 'won', 'time', 'level', 'kills', 'gold', 'death', 'bosses', 'dealt', 'taken', 'hurt', 'build', 'evolved', 'hpLow', 'ticks', 'ms', 'botMs', 'skill'];
+const FIELDS = ['stage', 'stageId', 'cls', 'seed', 'meta', 'won', 'time', 'level', 'kills', 'gold', 'death', 'bosses', 'elites', 'dealt', 'taken', 'hurt', 'build', 'evolved', 'hpLow', 'ticks', 'ms', 'botMs', 'skill'];
 const miss = FIELDS.filter(k => !(k in a));
 ok(!miss.length && !('weapon' in a) && !('fill' in a) && Array.isArray(a.bosses) && Array.isArray(a.build.weapons) && Array.isArray(a.build.passives) && typeof a.dealt === 'object',
   'result has every field, no weapon / fill' + (miss.length ? ': missing ' + miss.join(',') : ''));
@@ -143,7 +144,10 @@ ok(a.time >= 89 && a.time <= 91 && a.death === 'timeout' && a.ticks > 0, `maxTim
 {
   const r = runOne({ stage: 0, cls: 'knight', seed: 2, maxTime: 780, meta: 'max' }); // seed 2: the bot's Edge Wave path (seed 1 picks Whirl, whose 360 Form stalls on the twins)
   const ids = r.bosses.map(b => b.id + '@' + b.spawn + '-' + b.at).join(',');
-  ok(r.bosses.length >= 2 && r.bosses.every(b => b.spawn !== null && b.at >= b.spawn) && r.bosses.some(b => b.id === 'twins'), 'boss kills carry their spawn: ' + ids + ' (time ' + r.time + ', death ' + r.death + ')');
+  ok(r.bosses.length >= 2 && r.bosses.every(b => b.spawn !== null && b.at >= b.spawn && b.hit >= b.spawn && b.hit <= b.at && b.on > 0) && r.bosses.some(b => b.id === 'twins'), 'boss kills carry their spawn and first hit: ' + ids + ' (time ' + r.time + ', death ' + r.death + ')');
+  const ek = r.elites.filter(e => e.ttk !== null);
+  ok(r.elites.length >= 8 && r.elites.every(e => e.k && e.t >= 150) && ek.length >= 6 && ek.every(e => e.hit >= e.t && e.ttk >= 0 && e.on > 0 && e.on <= e.ttk + 0.15),
+    `elites carry spawn, kind, first hit and ttk: ${ek.length} / ${r.elites.length} killed, ttk ${ek.map(e => e.ttk).join(',')}`);
   const c = { stage: 2, cls: 'ranger', seed: 5, maxTime: 150, skill: 0.3 }, x = runOne(c), y = runOne(c), z = runOne(Object.assign({}, c, { skill: 1 }));
   ok(strip(x) === strip(y) && x.skill === 0.3, `skill 0.3 deterministic (kills ${x.kills} / ${y.kills})`);
   ok(x.hurt !== z.hurt || x.kills !== z.kills, `skill 0.3 plays differently from 1 (hurt ${x.hurt} / ${z.hurt}, kills ${x.kills} / ${z.kills})`);

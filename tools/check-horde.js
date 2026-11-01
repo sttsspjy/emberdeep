@@ -1,7 +1,7 @@
 // Horde regression check (exit 1 on failure): foe roster, stage timelines, brains, telegraphs, spawner events, recycling, arena layouts. Usage: node tools/check-horde.js
 // 1. Data: every roster / event / split id exists, has a brain and atlas art; timelines have 21 rows, caps 50 / 100 / 145 at 0:00-2:00 then 195 -> 455, rates rising until 19:00, density floors (none at 0:00); roster tiers (5:00 and 10:00 add kinds,
 //    early kinds fade out, 15:00 adds none; no charger or diver from 11:00); no swarm-brain flyer in any roster (flocks only); boss ids per stage; foe wire order (tier foes after the boss bodies); the XP curve;
-//    foe HP: base x 1.6 (non-boss) x (1 + 0.11 x minute) (swarm brain 0.06) x party x stage; swarmers and divers 10-11 HP; elite HP 15 x max(1, 60 / def.hp) x spawned HP.
+//    foe HP: base x 1.6 (non-boss) x (1 + 0.11 x minute) (swarm brain 0.06) x party x stage; swarmers and divers 10-11 HP; elite HP (600 + 330 x minute) x 1.6 brutes x def.take x 0.85 in the benchmark (GAME-DESIGN §7).
 // 2. Brains: each attack kind (ranged, exploder, charger, diver, brute, blinker) shows a warn zone >= 0.6 s before it deals damage; a stun cancels a wind-up and drops its telegraph;
 //    ranged streams (one lane, 'aim' look, shot life), lobs (a fixed circle at the hero's spot, then a blast there; killing the caster cancels it), the per-hero attack budget, no retreat;
 //    charge / dive reach (start only within min(range, lane - 12), 'dash' look, rest after the dash), divers close in without a token, charge / dive / blink starts spend atkTok;
@@ -75,11 +75,13 @@ const players = (list) => list.map((cls, i) => ({ pid: 'p' + (i + 1), name: 'P' 
   const swarmHp = ED.FOE_IDS.map(id => ED.FOES[id]).filter(d => (d.ai === 'swarm' || d.ai === 'diver') && !d.boss).map(d => d.hp);
   ok(r.join() === '32,67,16,26,16,14,80,178,132' && swarmHp.every(v => v >= 10 && v <= 11), `foe HP: skeleton ${r[0]} / ${r[1]} at 0:00 / 10:00, bat ${r[2]} / ${r[3]}, starspawn ${r[4]} (x0.9), glowlet ${r[5]} (x0.85), skeleton x4 ${r[6]}, skeleton knight ${r[7]}, spore pod ${r[8]} at 5:00; swarmers and divers ${swarmHp.join(',')}`);
 }
-{ // elite HP: 15 x max(1, 60 / def.hp) x spawned HP (small foes get the 60-HP floor, brutes 15x)
-  const w = new ED.World({ seed: 1, stage: 0, players: players(['knight']) }), el = (id) => w.spawnFoe(id, 0, 0, { elite: true }).maxHp;
-  const r = [el('skeleton'), el('icewolf'), el('skelknight')];
+{ // elite HP: (600 + 330 x minute) x 1.6 brutes x def.take x 0.85 from the stage's bench.t, x party x stage HP; independent of the spawned HP
+  const w = new ED.World({ seed: 1, stage: 0, players: players(['knight']) }), el = (id, o) => w.spawnFoe(id, 0, 0, Object.assign({ elite: true }, o)).maxHp;
+  const r = [el('skeleton'), el('icewolf'), el('skelknight'), el('bulwark'), el('skeleton', { hpMul: 3 })];
   w.time = 600; r.push(el('skeleton'));
-  ok(r.join() === '1440,1440,2670,3015', `elite HP: skeleton ${r[0]}, grave hound ${r[1]}, skeleton knight ${r[2]} at 0:00; skeleton ${r[3]} at 10:00`);
+  w.time = 1020; r.push(el('skeleton'));
+  const w2 = new ED.World({ seed: 1, stage: 1, players: players(['knight', 'knight']) }); w2.time = 600; r.push(w2.spawnFoe('glowslime', 0, 0, { elite: true }).maxHp);
+  ok(r.join() === '600,600,960,210,600,3900,5279,4973', `elite HP: skeleton ${r[0]}, grave hound ${r[1]}, skeleton knight ${r[2]}, bulwark ${r[3]} (take 0.35), skeleton x3 spawn HP ${r[4]} at 0:00; skeleton ${r[5]} at 10:00, ${r[6]} at 17:00 (bench); duo Glowmire glowslime ${r[7]} at 10:00`);
 }
 
 // ---------------- 2. brains ----------------
@@ -434,7 +436,7 @@ for (const st of [0, 1, 2]) {
   for (let i = 0; i < 70 * 60; i++) { w.input('p1', { mx: 0, my: 0, ax: p.x + 50, ay: p.y, pick: p.offer ? 1 : 0 }); w.update(C.TICK); for (const ev of w.events) if (ev.t === 'warn') (ev.kind === 'surge' ? surge : ev.kind === 'elite' ? el : []).push(Math.round(w.time)); w.events.length = 0; }
   ok(surge.join() === '1020' && el.join() === '1020,1050,1080', `benchmark: surge at ${surge.join()}, elites at ${el.join()}`);
 }
-{ // 15:00 mid-boss and 20:00 final boss per stage: ids, flags, HP 1500 x (t / 300)^2 x stage HP (twins: two halves); the final boss enrages at ENRAGE_T, not before
+{ // 15:00 mid-boss and 20:00 final boss per stage: ids, flags, HP 13000 / 22000 x stage HP (twins: two halves); the final boss enrages at ENRAGE_T, not before
   for (const st of [0, 1, 2]) {
     const sd = ED.STAGES[st], k = sd.foe.hp, seen = [];
     const w = new ED.World({ seed: 77, stage: st, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];
@@ -453,7 +455,7 @@ for (const st of [0, 1, 2]) {
     const fin = w.bossList.find(e => e.final), finHp = fin && fin.maxHp;
     w.time = 1318; step(1319.5); const pre = fin && fin.enraged; step(1320.5);
     const want = sd.bosses[2].id + '@900,' + sd.bosses[3].id + '@1200!';
-    ok(seen.join() === want && Math.abs(midHp - Math.round(27000 * k)) <= 1 && finHp === Math.round(48000 * k) && !pre && fin.enraged && w.state === 'play',
+    ok(seen.join() === want && Math.abs(midHp - Math.round(13000 * k)) <= 1 && finHp === Math.round(22000 * k) && !pre && fin.enraged && w.state === 'play',
       `${sd.id}: 15:00 ${seen[0]} (HP ${hps.join(' + ')}), final ${seen[1]} (HP ${finHp}), enraged at ${C.ENRAGE_T} s: ${!!pre} -> ${!!(fin && fin.enraged)}`);
   }
 }
@@ -473,7 +475,7 @@ for (const st of [0, 1, 2]) {
 { // a boss id without a script spawns a stand-in brute boss
   const r = spawnRun(0, 302, (w) => { w.sdef = Object.assign({}, w.sdef, { bosses: [{ t: 300, id: 'nobody' }] }); });
   const e = r.w.boss;
-  ok(e && e.boss && e.elite && e.def.brute && e.maxHp === 1500, `missing boss script: stand-in ${e && e.def.id} (hp ${e && e.maxHp})`);
+  ok(e && e.boss && e.elite && e.def.brute && e.maxHp === 5000, `missing boss script: stand-in ${e && e.def.id} (hp ${e && e.maxHp})`);
 }
 
 { // shooter caps: round(min(8, 3 + 0.4 x minute) x party) ranged alive, round(2 x party) summoners; a weaponless god hero never sees more (bosses off)

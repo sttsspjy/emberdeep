@@ -8,7 +8,8 @@
   ED.addHero({ id: 'ranger', name: 'Ranger', hp: 90, speed: 84, crit: 0.08, sig: 'longbow', skills: ['vault'], icon: 'hero.ranger.idle', col: '#9fd38a', txt: 'Piercing arrows down long lines.' });
 
   // ---------------- shared arrow mechanics ----------------
-  // Projectile fields used here: pr.st = bounces left (number), pr.rk = per-arrow counter (Seeker kill refreshes, Rebound segment pierce); pr.dmg drops from x FIRST to x1 after the first hit.
+  // Projectile fields used here: pr.st = bounces left (number), pr.rk = per-arrow counter (Seeker kill refreshes, Rebound segment pierce); pr.dmg drops from x FIRST to x1 after the first hit
+  // (Gale Barrage arrows: x GALE_FIRST, bounceK).
   const PROJ_SOFT_CAP = 600;  // spawn-on-hit / on-kill arrows stop above this many live projectiles
   const FIRST = 1.5;          // an arrow's first hit deals x1.5
   const HOP = 170;            // bounce / kill-shot search radius (px)
@@ -40,8 +41,8 @@
   };
   const steer = (pr, a) => { pr.vx = Math.cos(a) * pr.sp; pr.vy = Math.sin(a) * pr.sp; pr.a = a; };
   // Shared onHit: the first-hit bonus ends; on the last pierce with bounces left (pr.st) the arrow turns to the nearest unhit foe within HOP and flies on (homing arrows: it becomes their target).
-  const bounce = (w, pr, e) => {
-    if (pr.hits.length === 1) pr.dmg /= FIRST;
+  const bounceK = (K) => (w, pr, e) => {
+    if (pr.hits.length === 1) pr.dmg /= K;
     if (pr.pierce > 0 || !(pr.st > 0)) return;
     const t = pr.hskip !== null ? seekNext(w, pr, e.x, e.y) : nextFoe(w, pr, e.x, e.y);
     if (!t) return;
@@ -49,10 +50,11 @@
     steer(pr, Math.atan2(t.y - e.y, t.x - e.x)); pr.tgt = t; pr.tgtId = t.id;
     pr.life = Math.max(pr.life, HOP / pr.sp + 0.1);
   };
-  // Arrow from hero p along a with damage x k (x FIRST until its first hit); heavy: see HEAVY. Sets pr.st = S.bounce x opt.bk (default 1).
+  const bounce = bounceK(FIRST);
+  // Arrow from hero p along a with damage x k (x opt.first, default FIRST, until its first hit); heavy: see HEAVY. Sets pr.st = S.bounce x opt.bk (default 1).
   const loose = (w, p, wid, a, S, opt, k, heavy) => {
     const pr = w.shoot(p, wid, p.x, p.y - 6, a, S, opt);
-    pr.dmg *= FIRST * k * (heavy ? HEAVY : 1); pr.st = (S.bounce * (opt.bk !== undefined ? opt.bk : 1)) | 0; pr.rk = 0;
+    pr.dmg *= (opt.first || FIRST) * k * (heavy ? HEAVY : 1); pr.st = (S.bounce * (opt.bk !== undefined ? opt.bk : 1)) | 0; pr.rk = 0;
     if (heavy) { pr.r *= 2; pr.critC = 1; pr.pierce += 4; }
     return pr;
   };
@@ -185,9 +187,9 @@
   }, { fire: (w, p, ws, S) => { SEEK.pierce = S.pierce >> 2; volley(w, p, ws, S, SEEK, 0.2, 0.35); return true; }, kill: killShot });
 
   // Gale Barrage (Spread): each cooldown starts a stream of GALE_N + S.n arrows, one every 0.05 s, each re-aimed along the cursor with +-0.04 rad jitter (w.rng);
-  // two: every 2nd arrow goes along twoAim instead; every (2 x S.heavy)-th arrow is heavy.
-  const GALE_N = 1;
-  const GALE = { look: 'arrow', onHit: bounce };
+  // two: every 2nd arrow goes along twoAim instead; every (2 x S.heavy)-th arrow is heavy. First-hit bonus GALE_FIRST (the stream piles every first hit onto one target).
+  const GALE_N = 1, GALE_FIRST = 1.25;
+  const GALE = { look: 'arrow', onHit: bounceK(GALE_FIRST), first: GALE_FIRST };
   ED.addWeapon({
     id: 'galeshot', name: 'Gale Barrage', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'A rapid stream of arrows',
     base: { dmg: 18.2, cd: 0.95, n: 1, pierce: 16, area: 1, speed: 520, dur: 0, knock: 15, range: 330, heavy: 0, two: false, bounce: 0, kshot: 0 },

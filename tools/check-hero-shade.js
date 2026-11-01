@@ -104,7 +104,7 @@ const sp = (w, p, k, dx, dy, o) => { const e = w.spawnFoe(k, p.x + dx, p.y + dy,
 }
 { // Assassinate: the elite is marked over trash; the shadow's X cuts hit it 150 px away, forced crits
   const w = world(), p = w.heroes[0]; build(w, p, [0, 3, 0], 'assassinate');
-  for (let i = 0; i < 6; i++) sp(w, p, 'skeleton', -60 - i * 12, 40);
+  for (let i = 0; i < 6; i++) sp(w, p, 'skeleton', -60 - i * 12, 40, { hpMul: 1 }); // plain trash: elite HP no longer scales with the spawned HP
   const el = sp(w, p, 'skelknight', 150, 0); w.promoteElite(el); el.spd = 0;
   let crits = 0;
   step(w, 3, () => { for (const ev of w.events) if (ev.t === 'hit' && ev.id === el.id && ev.crit) crits++; });

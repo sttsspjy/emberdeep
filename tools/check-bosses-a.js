@@ -1,7 +1,7 @@
 // Headless check for bosses warden, spore, twins (exit 1 on failure). Usage: node tools/check-bosses-a.js
 // Per boss: spawned at its stage minute over a live horde vs a scripted hero (circles it, dashes, picks cards; HP kept topped up) for 60 s (keeps 220 px off the warden 8-18 s), HP forced through every phase:
 // no exceptions, every attack key used, phase events, foe telegraphs >= 0.6 s, normal spawns at 50% while it lives, deterministic digest, client draw hooks run on a mock batch.
-// Then killable with a cheat build (might x60, Cleave with Edge Wave at rank 5): one 'boss' phase -1 event, a chest drops, w.boss clears (twins also as the Abyss 15:00 mid-boss: two halves of 1500 x 3^2 x stage HP).
+// Then killable with a cheat build (might x60, Cleave with Edge Wave at rank 5): one 'boss' phase -1 event, a chest drops, w.boss clears (twins also as the Abyss 15:00 mid-boss: two halves of 13000 x stage HP).
 // Twins: a fallen twin rises after its revive circle; both down ends the fight.
 // Last Light (final boss kill at 20:00 over a live horde): 'victory', foes cleared, gems sent to heroes, a level-up pause holds the clock, no spawns in the calm, the lap floods to the hard cap
 // (no elites, bosses, chests, gems or XP), one coin per C.LAP.coin hero kills, the timer ends the run won, same seed same digest; every co-op hero down mid-lap or a solo death in the calm ends it won.
@@ -89,7 +89,7 @@ const t0 = Date.now();
 reset();
 const wdO = { id: 'warden', stage: 0, minute: 5, away: [8, 18], phaseAt: [[20, 0.6], [38, 0.3]] }, wd = fight(wdO), wdN = cover(wdO, ['warden']);
 ok(!wd.err, 'warden: 60 s throws nothing' + (wd.err ? ': ' + wd.err.stack : ''));
-ok(wd.boss && wd.boss.maxHp === 1500, 'warden: HP 1500 x (5 min / 5)^2.5 = 1500 (' + (wd.boss && wd.boss.maxHp) + ')');
+ok(wd.boss && wd.boss.maxHp === 5000, 'warden: HP 5000 at 5:00 (' + (wd.boss && wd.boss.maxHp) + ')');
 ok(allUsed('warden').length === 0, 'warden: every attack used within ' + wdN + ' fight(s) ' + JSON.stringify(used.warden));
 ok(wd.phases.join() === '2,3', 'warden: phases 2, 3 (' + wd.phases.join() + ')');
 ok(wd.st3 > 0, 'warden: punish window opened after a slam (' + wd.st3 + ' ticks)');
@@ -104,7 +104,7 @@ ok(wd.digest === wd2.digest, `warden: deterministic (${wd.digest} / ${wd2.digest
 reset();
 const spO = { id: 'spore', stage: 0, minute: 10, phaseAt: [[25, 0.6], [42, 0.3]] }, sp = fight(spO), spN = cover(spO, ['spore']);
 ok(!sp.err, 'spore: 60 s throws nothing' + (sp.err ? ': ' + sp.err.stack : ''));
-ok(sp.boss && sp.boss.maxHp === 6000, 'spore: HP 1500 x (10 min / 5)^2 = 6000 (' + (sp.boss && sp.boss.maxHp) + ')');
+ok(sp.boss && sp.boss.maxHp === 9000, 'spore: HP 9000 at 10:00 (' + (sp.boss && sp.boss.maxHp) + ')');
 ok(allUsed('spore').length === 0, 'spore: every attack used within ' + spN + ' fight(s) ' + JSON.stringify(used.spore));
 ok(sp.phases.join() === '2,3', 'spore: phases 2, 3 (' + sp.phases.join() + ')');
 ok(sp.pods === 4, 'spore: 4 pods rose (' + sp.pods + ')');
@@ -137,7 +137,7 @@ const twO = {
   },
 }, tw = fight(twO), twN = cover(twO, ['twins', 'twinhammer']);
 ok(!tw.err, 'twins: 75 s throws nothing' + (tw.err ? ': ' + tw.err.stack : ''));
-ok(tw.w.bossList.length === 2 && tw.w.bossList.every(b => b.maxHp === Math.round(Math.round(1500 * ED.STAGES[1].foe.hp) / 2)), 'twins: two bodies sharing the 5:00 boss HP (1500 x stage HP factor) half and half (' + tw.w.bossList.map(b => b.maxHp).join(' / ') + ')');
+ok(tw.w.bossList.length === 2 && tw.w.bossList.every(b => b.maxHp === Math.round(Math.round(5000 * ED.STAGES[1].foe.hp) / 2)), 'twins: two bodies sharing the 5:00 boss HP (5000 x stage HP factor) half and half (' + tw.w.bossList.map(b => b.maxHp).join(' / ') + ')');
 ok(allUsed('twins').length === 0, 'twins: every Lancer attack used within ' + twN + ' fight(s) ' + JSON.stringify(used.twins));
 ok(allUsed('twinhammer').length === 0, 'twins: every Hammer attack used within ' + twN + ' fight(s) ' + JSON.stringify(used.twinhammer));
 ok(tw.phases.join() === '2', 'twins: one phase-2 event at half combined HP (' + tw.phases.join() + ')');
