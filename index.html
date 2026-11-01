@@ -10,14 +10,14 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<canvas id="game" aria-label="Game view"></canvas>
+<canvas id="game" aria-label="Game view" data-i18n-attr="aria-label"></canvas>
 
 <div id="ui">
-  <div id="loading">Loading...</div>
+  <div id="loading" data-i18n>Loading...</div>
 
   <section id="scr-title" class="screen" hidden>
     <div class="title-wrap">
-      <h1 class="logo">Wickdeep</h1>
+      <h1 class="logo" translate="no">Wickdeep</h1>
       <p class="kicker" data-i18n>Survive the horde. Alone or with three friends.</p>
       <div class="title-heroes" id="title-heroes" aria-hidden="true"></div>
       <div class="name-row" id="name-row" hidden>
@@ -37,86 +37,86 @@
   </section>
 
   <section id="scr-hero" class="screen" hidden>
-    <h2>Choose your hero</h2>
-    <div class="hero-roster" id="hero-list" role="radiogroup" aria-label="Hero"></div>
+    <h2 data-i18n>Choose your hero</h2>
+    <div class="hero-roster" id="hero-list" role="radiogroup" aria-label="Hero" data-i18n-attr="aria-label"></div>
     <div class="hero-detail plate" id="hero-detail"></div>
-    <div class="row"><button class="btn" id="btn-hero-back" data-back>Back</button><button class="btn btn-primary" id="btn-hero-next" data-focus>Next</button></div>
+    <div class="row"><button class="btn" id="btn-hero-back" data-back data-i18n>Back</button><button class="btn btn-primary" id="btn-hero-next" data-focus>Next</button></div>
   </section>
 
   <section id="scr-stage" class="screen" hidden>
-    <h2>Choose a stage</h2>
-    <div class="stage-list" id="stage-list" role="radiogroup" aria-label="Stage"></div>
-    <div class="row"><button class="btn" id="btn-stage-back" data-back>Back</button><button class="btn btn-primary btn-big" id="btn-start" data-focus>Start run</button></div>
+    <h2 data-i18n>Choose a stage</h2>
+    <div class="stage-list" id="stage-list" role="radiogroup" aria-label="Stage" data-i18n-attr="aria-label"></div>
+    <div class="row"><button class="btn" id="btn-stage-back" data-back data-i18n>Back</button><button class="btn btn-primary btn-big" id="btn-start" data-focus data-i18n>Start run</button></div>
   </section>
 
   <section id="scr-camp" class="screen tall" hidden>
-    <div class="camp-head"><h2>Camp shop</h2><div class="gold-pill"><canvas class="icon icon-sm" id="camp-coin" width="32" height="32"></canvas><b id="camp-gold">0</b></div></div>
+    <div class="camp-head"><h2 data-i18n>Camp shop</h2><div class="gold-pill"><canvas class="icon icon-sm" id="camp-coin" width="32" height="32"></canvas><b id="camp-gold">0</b></div></div>
     <p class="hint" id="camp-hint">Permanent ranks for every run. Refund any time.</p>
     <div class="msg" id="camp-msg" role="status"></div>
     <div class="shop" id="shop-list"></div>
     <div class="row">
-      <button class="btn" id="btn-wardrobe">Wardrobe</button>
+      <button class="btn" id="btn-wardrobe" data-i18n>Wardrobe</button>
       <button class="btn" id="btn-refund">Refund all</button>
-      <button class="btn" id="btn-code-toggle" aria-expanded="false">Save code</button>
-      <button class="btn btn-primary" id="btn-camp-back" data-back data-focus>Back</button>
+      <button class="btn" id="btn-code-toggle" aria-expanded="false" data-i18n>Save code</button>
+      <button class="btn btn-primary" id="btn-camp-back" data-back data-focus data-i18n>Back</button>
     </div>
     <div class="code-box plate" id="code-box" hidden>
-      <label for="inp-code">Save code: copy it to keep your progress, paste one to restore</label>
+      <label for="inp-code" data-i18n>Save code: copy it to keep your progress, paste one to restore</label>
       <textarea id="inp-code" rows="3" spellcheck="false"></textarea>
-      <div class="row"><button class="btn btn-sm" id="btn-code-copy">Show my code</button><button class="btn btn-sm" id="btn-code-load">Load code</button></div>
+      <div class="row"><button class="btn btn-sm" id="btn-code-copy" data-i18n>Show my code</button><button class="btn btn-sm" id="btn-code-load" data-i18n>Load code</button></div>
       <div class="msg" id="code-msg" role="status"></div>
     </div>
   </section>
 
   <section id="scr-wardrobe" class="screen tall" hidden>
-    <div class="camp-head"><h2>Wardrobe</h2><div class="gold-pill"><canvas class="icon icon-sm" id="wd-coin" width="32" height="32"></canvas><b id="wd-gold">0</b></div></div>
+    <div class="camp-head"><h2 data-i18n>Wardrobe</h2><div class="gold-pill"><canvas class="icon icon-sm" id="wd-coin" width="32" height="32"></canvas><b id="wd-gold">0</b></div></div>
     <p class="hint" id="wd-hint">Looks only: skins, weapon tints, kill and level-up effects, titles and name colours.</p>
-    <div class="cx-tabs" id="wd-tabs" role="tablist" aria-label="Wardrobe sections"></div>
-    <div class="pick-row" id="wd-heroes" role="radiogroup" aria-label="Hero"></div>
+    <div class="cx-tabs" id="wd-tabs" role="tablist" aria-label="Wardrobe sections" data-i18n-attr="aria-label"></div>
+    <div class="pick-row" id="wd-heroes" role="radiogroup" aria-label="Hero" data-i18n-attr="aria-label"></div>
     <div class="msg" id="wd-msg" role="status"></div>
     <div class="wd-list" id="wd-list"></div>
-    <div class="row"><button class="btn btn-primary" id="btn-wd-back" data-back data-focus>Back</button></div>
+    <div class="row"><button class="btn btn-primary" id="btn-wd-back" data-back data-focus data-i18n>Back</button></div>
   </section>
 
   <section id="scr-achieve" class="screen tall" hidden>
-    <h2>Achievements</h2>
+    <h2 data-i18n>Achievements</h2>
     <p class="hint" id="ach-count"></p>
-    <div class="ach-body" id="ach-body" tabindex="0" data-scroll aria-label="Unlocks and records">
-      <div class="ach-list" id="ach-list" tabindex="0" data-scroll aria-label="Unlocks"></div>
-      <div class="ach-rec plate" id="ach-rec" tabindex="0" data-scroll aria-label="Records"></div>
+    <div class="ach-body" id="ach-body" tabindex="0" data-scroll aria-label="Unlocks and records" data-i18n-attr="aria-label">
+      <div class="ach-list" id="ach-list" tabindex="0" data-scroll aria-label="Unlocks" data-i18n-attr="aria-label"></div>
+      <div class="ach-rec plate" id="ach-rec" tabindex="0" data-scroll aria-label="Records" data-i18n-attr="aria-label"></div>
     </div>
-    <div class="row"><button class="btn btn-primary" id="btn-ach-back" data-back data-focus>Back</button></div>
+    <div class="row"><button class="btn btn-primary" id="btn-ach-back" data-back data-focus data-i18n>Back</button></div>
   </section>
 
   <section id="scr-codex" class="screen tall" hidden>
-    <h2>Encyclopedia</h2>
-    <div class="cx-tabs" id="cx-tabs" role="tablist" aria-label="Encyclopedia sections"></div>
-    <div class="cx-body" id="cx-body" tabindex="0" data-scroll aria-label="Encyclopedia">
-      <div class="cx-list" id="cx-list" role="listbox" aria-label="Entries"></div>
+    <h2 data-i18n>Encyclopedia</h2>
+    <div class="cx-tabs" id="cx-tabs" role="tablist" aria-label="Encyclopedia sections" data-i18n-attr="aria-label"></div>
+    <div class="cx-body" id="cx-body" tabindex="0" data-scroll aria-label="Encyclopedia" data-i18n-attr="aria-label">
+      <div class="cx-list" id="cx-list" role="listbox" aria-label="Entries" data-i18n-attr="aria-label"></div>
       <div class="cx-detail plate" id="cx-detail" tabindex="0" data-scroll aria-live="polite"></div>
     </div>
-    <div class="row"><button class="btn" id="btn-codex-back" data-back>Back</button></div>
+    <div class="row"><button class="btn" id="btn-codex-back" data-back data-i18n>Back</button></div>
   </section>
 
   <section id="scr-join" class="screen" hidden>
-    <h2>Join a party</h2>
-    <p class="hint">Ask your host for the 5-letter party code.</p>
-    <input id="inp-join" class="code-input" maxlength="5" autocomplete="off" spellcheck="false" placeholder="ABCDE" aria-label="Party code">
+    <h2 data-i18n>Join a party</h2>
+    <p class="hint" data-i18n>Ask your host for the 5-letter party code.</p>
+    <input id="inp-join" class="code-input" maxlength="5" autocomplete="off" spellcheck="false" placeholder="ABCDE" aria-label="Party code" data-i18n-attr="aria-label">
     <div class="msg" id="join-msg" role="status"></div>
-    <div class="row"><button class="btn" id="btn-join-back" data-back>Back</button><button class="btn btn-primary" id="btn-join-go">Join</button></div>
+    <div class="row"><button class="btn" id="btn-join-back" data-back data-i18n>Back</button><button class="btn btn-primary" id="btn-join-go" data-i18n>Join</button></div>
   </section>
 
   <section id="scr-lobby" class="screen" hidden>
     <h2 id="lobby-title">Party</h2>
-    <div class="lobby-code" id="lobby-code-box"><span class="hint" id="lobby-code-lbl">Party code</span><b id="lobby-code">-----</b><button class="btn btn-sm" id="btn-lobby-copy">Copy</button></div>
+    <div class="lobby-code" id="lobby-code-box"><span class="hint" id="lobby-code-lbl">Party code</span><b id="lobby-code" translate="no">-----</b><button class="btn btn-sm" id="btn-lobby-copy" data-i18n>Copy</button></div>
     <div class="lobby-slots" id="lobby-slots"></div>
     <div class="lobby-pick plate">
-      <span class="hint">Your hero</span>
-      <div class="pick-row" id="lobby-heroes" role="radiogroup" aria-label="Your hero"></div>
-      <div class="lobby-stage" id="lobby-stage-row"><span class="hint">Stage</span><div class="pick-row" id="lobby-stages" role="radiogroup" aria-label="Stage"></div></div>
+      <span class="hint" data-i18n>Your hero</span>
+      <div class="pick-row" id="lobby-heroes" role="radiogroup" aria-label="Your hero" data-i18n-attr="aria-label"></div>
+      <div class="lobby-stage" id="lobby-stage-row"><span class="hint" data-i18n>Stage</span><div class="pick-row" id="lobby-stages" role="radiogroup" aria-label="Stage" data-i18n-attr="aria-label"></div></div>
     </div>
     <div class="msg" id="lobby-msg" role="status"></div>
-    <div class="row"><button class="btn" id="btn-lobby-leave" data-back>Leave</button><button class="btn btn-primary btn-big" id="btn-lobby-go" data-focus>Ready</button></div>
+    <div class="row"><button class="btn" id="btn-lobby-leave" data-back data-i18n>Leave</button><button class="btn btn-primary btn-big" id="btn-lobby-go" data-focus>Ready</button></div>
   </section>
 
   <section id="scr-results" class="screen res" hidden>
@@ -124,20 +124,20 @@
       <header class="res-head"><h2 id="res-title" class="res-title">Victory</h2><div class="res-sub" id="res-sub"></div></header>
       <div class="res-tiles" id="res-tiles"></div>
       <div class="res-main">
-        <section class="plate res-panel res-load" aria-label="Weapons and build">
-          <div class="res-cap"><span>Weapons</span><span class="mut" id="res-dmg-tot"></span></div>
+        <section class="plate res-panel res-load" aria-label="Weapons and build" data-i18n-attr="aria-label">
+          <div class="res-cap"><span data-i18n>Weapons</span><span class="mut" id="res-dmg-tot"></span></div>
           <div class="res-wt" id="res-chart"></div>
           <div class="res-hl" id="res-hl"></div>
           <div class="res-pas" id="res-pas"></div>
         </section>
         <div class="res-side">
-          <section class="plate res-panel res-tl" aria-label="Timeline">
-            <div class="res-cap"><span>Timeline</span><span class="res-key"><i class="k-kill"></i>Kills / min <i class="k-lv"></i>Level <i class="k-boss"></i>Boss down <i class="k-lap" id="res-key-lap"></i><span id="res-key-lap-t">Last Light</span></span></div>
+          <section class="plate res-panel res-tl" aria-label="Timeline" data-i18n-attr="aria-label">
+            <div class="res-cap"><span data-i18n>Timeline</span><span class="res-key"><i class="k-kill"></i><span data-i18n>Kills / min</span> <i class="k-lv"></i><span data-i18n>Level</span> <i class="k-boss"></i><span data-i18n>Boss down</span> <i class="k-lap" id="res-key-lap"></i><span id="res-key-lap-t" data-i18n>Last Light</span></span></div>
             <div class="res-tl-box"><canvas id="res-tl" class="res-tl-cv"></canvas></div>
             <div class="res-tl-info mut" id="res-tl-info"></div>
           </section>
           <section class="plate res-panel res-tabs">
-            <div class="res-tabbar" role="tablist" id="res-tabbar"><button class="tab" data-tab="party" role="tab">Party</button><button class="tab" data-tab="bosses" role="tab">Bosses</button></div>
+            <div class="res-tabbar" role="tablist" id="res-tabbar"><button class="tab" data-tab="party" role="tab" data-i18n>Party</button><button class="tab" data-tab="bosses" role="tab" data-i18n>Bosses</button></div>
             <div class="res-pane" id="res-pane-party" role="tabpanel"></div>
             <div class="res-pane" id="res-pane-bosses" role="tabpanel"></div>
           </section>
@@ -145,7 +145,7 @@
       </div>
       <footer class="res-foot">
         <div class="res-unlocks" id="res-unlocks"></div>
-        <div class="row res-btns"><button class="btn" id="btn-res-back">Title</button><button class="btn btn-primary btn-big" id="btn-res-again" data-focus>Play again</button></div>
+        <div class="row res-btns"><button class="btn" id="btn-res-back" data-i18n>Title</button><button class="btn btn-primary btn-big" id="btn-res-again" data-focus data-i18n>Play again</button></div>
       </footer>
     </div>
   </section>
@@ -165,7 +165,7 @@
     <div class="plate pause">
       <h2>Paused</h2>
       <div class="pause-build" id="pause-build"></div>
-      <div class="col"><button class="btn btn-primary" id="btn-resume" data-focus>Resume</button><button class="btn" id="btn-pause-settings">Settings</button><button class="btn" id="btn-quit">Quit run</button></div>
+      <div class="col"><button class="btn btn-primary" id="btn-resume" data-focus data-i18n>Resume</button><button class="btn" id="btn-pause-settings" data-i18n>Settings</button><button class="btn" id="btn-quit">Quit run</button></div>
     </div>
   </div>
 
@@ -187,14 +187,9 @@
 
   <div id="ov-credits" class="overlay" hidden>
     <div class="plate credits">
-      <h2>Credits</h2>
-      <p>DawnLike tileset by DragonDePlatino (CC-BY 4.0, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/</a> ; <a href="https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181" target="_blank" rel="noopener">https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181</a>), using the DawnBringer DB16 palette by DawnBringer. Cropped and recoloured for Wickdeep.</p>
-      <p>Free Pixel Effects Pack by CodeManu (Davit Masia), CC-BY 4.0 (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/</a> ; <a href="https://codemanu.itch.io/pixelart-effect-pack" target="_blank" rel="noopener">https://codemanu.itch.io/pixelart-effect-pack</a>). Frames subsampled and recoloured for Wickdeep.</p>
-      <p class="mut">Pixel Operator font by Jayvee Enaguas (HarvettFox96), CC0.</p>
-      <p class="mut">Korean text: NeoDunggeunmo font by Eunbin Jeong (Dalgona.), SIL Open Font License 1.1 (<a href="https://github.com/neodgm/neodgm" target="_blank" rel="noopener">https://github.com/neodgm/neodgm</a>), subset as "Wickdeep Hangul".</p>
-      <p class="mut">16x16 DungeonTileset II by 0x72 (Robert); Dungeon Tileset II Extended by nijikokun; 16x16 Dark Dungeon by kosinaz; Ninja Adventure by Pixel-boy and AAA; Puny Characters by Shade; LuizMelo; Kenney; o_lobster; Aim studios; ansimuz.</p>
-      <p class="mut">Music and sound are synthesized in your browser.</p>
-      <div class="row"><button class="btn btn-primary" id="btn-credits-close" data-back data-focus>Done</button></div>
+      <h2 data-i18n>Credits</h2>
+      <div id="credits-body"></div>
+      <div class="row"><button class="btn btn-primary" id="btn-credits-close" data-back data-focus data-i18n>Done</button></div>
     </div>
   </div>
 </div>

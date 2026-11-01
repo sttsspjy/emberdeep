@@ -1,6 +1,7 @@
 // Translation coverage check (exit 1 on failure). Usage: node tools/check-i18n.js [--report] [--warn]
-// English sources: display fields (DISPLAY_KEYS) of the data registries (REGISTRIES, loaded with tools/sim.js), the literal card strings of src/sim/progress.js, literal first args
-// of ED.t / ED.tr / T calls in src/**/*.js (not src/art, src/i18n) and the data-i18n / data-i18n-attr sources of index.html.
+// English sources: display fields (DISPLAY_KEYS) of the data registries (REGISTRIES, loaded with tools/sim.js), the literal card strings of src/sim/progress.js, the player messages of
+// MSG_FILES (sentence literals the client shows through ED.tr), literal first args of ED.t / ED.tr / T calls in src/**/*.js (not src/art, src/i18n) and the data-i18n / data-i18n-attr
+// sources of index.html.
 // Tables: src/client/i18n.js + src/i18n/*.js run in a fresh vm context. Per language != 'en': a source is covered by its exact key or its numeric-normalised key (ED.I18N.norm).
 // Fails on missing keys (listed in normalised form) and on placeholder mismatches (a translation whose {n} set differs from its key's). Unused keys are listed, never fail.
 // --report: every missing key grouped by source. --warn: exit 0 whatever the result.
@@ -11,6 +12,8 @@ const ROOT = path.resolve(__dirname, '..'), SRC = path.join(ROOT, 'src');
 const REPORT = process.argv.includes('--report'), WARN = process.argv.includes('--warn');
 const REGISTRIES = ['HEROES', 'WEAPONS', 'SKILLS', 'PASSIVES', 'SHOP', 'TUNE', 'PATH_STEP', 'FOES', 'STAGES', 'ACHIEVEMENTS', 'UNLOCKS', 'COSMETICS'];
 const DISPLAY_KEYS = new Set(['name', 'txt', 'lines', 'desc', 'title', 'label', 'sub', 'tip', 'hint', 'flavor']);
+const EXTRA_KEYS = { HEROES: ['role'], STAGES: ['blurb'], UNLOCKS: ['short'] }; // per-registry display fields (support weapons' role is an id)
+const MSG_FILES = ['src/net.js', 'src/game.js', 'src/main.js'];
 
 const sources = new Map(); // English string -> Set of source labels
 const add = (s, from) => {
@@ -24,9 +27,10 @@ const add = (s, from) => {
 // 1. data registries
 const ED = load();
 for (const r of REGISTRIES) {
+  const keys = new Set([...DISPLAY_KEYS, ...(EXTRA_KEYS[r] || [])]);
   const walk = (v, key, depth) => {
     if (depth > 8 || v === null || v === undefined || typeof v === 'function') return;
-    if (typeof v === 'string') { if (DISPLAY_KEYS.has(key)) add(v, r); return; }
+    if (typeof v === 'string') { if (keys.has(key)) add(v, r); return; }
     if (Array.isArray(v)) { for (const x of v) walk(x, key, depth + 1); return; }
     if (typeof v === 'object') for (const k of Object.keys(v)) walk(v[k], k, depth + 1);
   };
@@ -40,6 +44,9 @@ const prog = fs.readFileSync(path.join(SRC, 'sim', 'progress.js'), 'utf8');
 for (const m of prog.matchAll(/\bname: ('(?:\\.|[^'\\])*')/g)) add(unq(m[1]), 'progress.js');
 for (const m of prog.matchAll(/\|\| ('(?:\\.|[^'\\])*')/g)) add(unq(m[1]), 'progress.js');
 for (const m of prog.matchAll(/\btxt: '([^']*)' \+ [^'\n]+? \+ '([^']*)'/g)) add(m[1] + '1' + m[2], 'progress.js'); // sample number: normalised to {0}
+
+// 2b. player messages: single-quoted sentence literals (capital first, ending in . or !)
+for (const f of MSG_FILES) for (const m of fs.readFileSync(path.join(ROOT, f), 'utf8').matchAll(/'([A-Z][^'\\\n]*[.!])'/g)) add(m[1], f);
 
 // 3. ED.t / ED.tr / T literal first args in src (generated art and the tables excluded)
 const jsFiles = [];

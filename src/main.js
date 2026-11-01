@@ -92,8 +92,7 @@
     const on = v === undefined ? (coop ? el.hidden : !ED.Game.paused) : v;
     if (!coop) ED.Game.paused = on;
     el.hidden = !on;
-    el.querySelector('h2').textContent = coop ? 'Menu' : 'Paused';
-    $('btn-quit').textContent = coop ? 'Leave run' : 'Quit run';
+    ED.UI.pauseLabels();
     ED.Input.mask();
   };
 
@@ -184,6 +183,6 @@
     A.lastT = performance.now();
     requestAnimationFrame(frame);
   };
-  const go = () => { try { A.boot(); } catch (e) { console.error(e); const l = $('loading'); l.hidden = false; l.textContent = 'Something went wrong while loading: ' + e.message; } };
+  const go = () => { try { A.boot(); } catch (e) { console.error(e); const l = $('loading'); l.hidden = false; l.textContent = ED.t ? ED.t('Something went wrong while loading: {0}', e.message) : 'Something went wrong while loading: ' + e.message; } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
 })(globalThis.ED || (globalThis.ED = {}));

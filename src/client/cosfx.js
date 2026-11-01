@@ -164,10 +164,10 @@
   Cos.titleOf = (id) => { const d = by(id); return d && d.kind === 'title' ? d.name : ''; };
   // True when hero pid wears a title or a name colour (solo runs then show its tag too).
   Cos.tagged = (pid) => { const c = Cos.of(pid); return !!(c.title || c.ncol); };
-  // Name tag over hero p: the title (small, muted gold) above the name in its name colour (default: cream for the local hero, blue for allies).
+  // Name tag over hero p: the title (small, muted gold, translated) above the name in its name colour (default: cream for the local hero, blue for allies); a Hangul line is 16 px tall.
   Cos.nameTag = (B, p, mine, t) => {
     const c = Cos.of(p.pid), rgb = Cos.nameRgb(c.ncol, t), title = Cos.titleOf(c.title), x = Math.round(p.x);
     B.text(p.name, x, Math.round(p.y - 30), rgb >= 0 ? rgb : mine ? 0xfff1d6 : 0xb8d8ff, 1);
-    if (title) B.text(title, x, Math.round(p.y - 40), 0xd8c08a, 1);
+    if (title) { const tl = ED.tr(title); B.text(tl, x, Math.round(p.y - 32 - ((B.textPx(p.name, 1) + B.textPx(tl, 1)) >> 1)), 0xd8c08a, 1); }
   };
 })(globalThis.ED || (globalThis.ED = {}));

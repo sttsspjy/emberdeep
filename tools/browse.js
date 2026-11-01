@@ -1,7 +1,8 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it. Never opens a visible window.
-// Usage: node tools/browse.js [smoke|shots|forms|crowdN|coop|botwatch|lap|ko ...] [--scen=a,b] [--cls=knight,...] [--form=id,...] [--support=id,...|all] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1]
+// Usage: node tools/browse.js [smoke|shots|forms|crowdN|coop|botwatch|lap|ko ...] [--scen=a,b] [--cls=knight,...] [--form=id,...] [--support=id,...|all] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1] [--lang=en|ko]
 //                             [--software] [--quality=high|low] [--gate] [--prof] [--ff=480] [--timeout=600] [--cos=id,...]
 //   --cos: cosmetic ids (src/data/cosmetics.js) the profile owns and wears in every solo run the harness starts (skins apply to their own hero).
+//   --lang: display language set right after boot on every page (ED.I18N.set), e.g. sanctum --lang=ko for the Korean banners.
 //   smoke: for each hero (--cls, default all 7) a solo stage-1 run driven ~--seconds (16) s (circling, aim at the nearest foe, Q / E, dash, first card picked); fails on a page or console error,
 //          a stalled sim, no Q or E cast, or a signature weapon that dealt nothing.
 //   shots: PNGs of title, hero select, stage select, camp, the slot lifecycle on a fresh knight run (a level-up with a tune card, an elite-chest path-pick offer, a boss-chest
@@ -28,8 +29,9 @@
 //         run on both peers for --seconds (6) s: the guest's mirror shows 2 heroes and foes, snapshots <= 12 KB.
 //   botwatch: ?bot=1&speed=8&seed=--seed with the real tools/bot-brain.js; a knight solo run on stage 0 watched --seconds (20) s: fails on sim time < 3x real time (notes < 6x),
 //         a hero that never left a 40 px radius, no automatic level-up pick, no BOT tag, [ / ] not changing the speed, Esc not pausing, a missing file or a page / console error.
-//   ko: the UI in Korean (ED.I18N.set('ko')): title, hero select, stage select, camp, wardrobe, achievements, each encyclopedia tab, settings, credits, a knight run (HUD, level-up
-//       overlay, chest, pause) and the results; one PNG each into a fresh folder <outdir>/ko-<stamp>-<browser>. Fails on a page / console error, a visible text node with a Latin word of
+//   ko: the UI in Korean (ED.I18N.set('ko')): title, hero select, stage select, camp, wardrobe, achievements, each encyclopedia tab (as met on a fresh profile, then with every entry
+//       discovered: each entry's detail audited, one PNG per tab), settings, credits, a knight run (HUD, level-up overlay, chest, pause) and the results; one PNG each into a fresh
+//       folder <outdir>/ko-<stamp>-<browser>. Fails on a page / console error, an English source that missed the Korean table (ED.I18N.missing, letterless templates aside), a visible text node with a Latin word of
 //       3+ letters (allowlist KO_ALLOW, the player name, anything under [lang="en"] or [translate="no"]) or a box whose text overflows it (scrollWidth > clientWidth); the full list goes to
 //       the result JSON (results[].audit).
 //   bossart: PNGs of the Wickmother in a stand-in Sanctum (w.sanctum at the hero, foes and spawner off, god cheat; P1 idle and an attack, a kneel, P2 with two sconces lit, P3 mid-burn)
@@ -42,7 +44,7 @@
 const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
 
 // ---------------- arguments ----------------
-const FLAGS = { scen: 's', cls: 's', form: 's', support: 's', cos: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', prof: 'b', json: 'b', help: 'b' };
+const FLAGS = { scen: 's', cls: 's', form: 's', support: 's', cos: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', lang: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', prof: 'b', json: 'b', help: 'b' };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
 const SCEN_RE = /^(smoke|shots|coop|botwatch|lap|sanctum|bossart|results|ko|crowd\d{1,4}|late[abc]?|forms)$/;
@@ -444,6 +446,7 @@ async function bootPage(ctx, query, errors, tag) {
   page.on('console', (m) => { if (m.type() !== 'error') return; const url = (m.location() && m.location().url) || ''; if (url && !url.startsWith(local) && !url.startsWith('data:') && !url.startsWith('blob:')) return; add('console', m.text()); });
   await page.goto(local + '/index.html' + (query || ''), { waitUntil: 'load' });
   const info = await page.evaluate(() => window.__BR.boot());
+  if (S.opt.lang) await page.evaluate((l) => window.ED.I18N.set(l), S.opt.lang);
   return { page, info };
 }
 async function openPage(query) {
@@ -990,13 +993,16 @@ async function scenKo() {
   const { ctx, page, errors, info } = await openPage();
   res.audit = [];
   let k = 1, nl = 0, no = 0;
-  const audit = async (name) => {
-    await wait(250);
+  // noShot: audit only (rows of the same screen name merge).
+  const audit = async (name, noShot) => {
+    await wait(noShot ? 30 : 250);
     const a = await page.evaluate((allow) => window.__BR.audit(allow), KO_ALLOW.concat(['Tester']));
     res.audit.push({ screen: name, latin: a.latin, over: a.over });
-    res.rows.push({ screen: name, latin: a.latin.length, over: a.over.length, sample: a.latin.slice(0, 3).map(x => x.words).join(' | ') });
+    const row = res.rows.find(r => r.screen === name);
+    if (row) { row.latin += a.latin.length; row.over += a.over.length; if (!row.sample) row.sample = a.latin.slice(0, 3).map(x => x.words).join(' | '); }
+    else res.rows.push({ screen: name, latin: a.latin.length, over: a.over.length, sample: a.latin.slice(0, 3).map(x => x.words).join(' | ') });
     nl += a.latin.length; no += a.over.length;
-    await shoot(page, res, String(k++).padStart(2, '0') + '-' + name, dir);
+    if (!noShot) await shoot(page, res, String(k++).padStart(2, '0') + '-' + name, dir);
   };
   const click = async (sel) => { await page.click(sel); await wait(150); };
   const need = (cond, note) => { if (!cond) fail(res, note); };
@@ -1021,6 +1027,13 @@ async function scenKo() {
     await click('#btn-codex'); need(await call(page, 'visible', 'scr-codex'), 'encyclopedia not shown');
     const tabs = await page.locator('#cx-tabs button').count();
     for (let i = 0; i < tabs; i++) { await page.locator('#cx-tabs button').nth(i).click(); await wait(100); await audit('codex-' + (i + 1)); }
+    // every entry discovered (a stage best too): each detail pane audited, the tab's PNG on its last entry
+    await page.evaluate(() => { const E = window.ED, p = E.App.profile; p.seen = { heroes: E.HERO_IDS.slice(), weapons: E.WEAPON_IDS.slice(), passives: E.PASSIVE_IDS.slice(), foes: E.FOE_IDS.slice(), stages: E.STAGE_IDS.slice() }; p.best[E.STAGE_IDS[0]] = { time: 754, kills: 3120, level: 31, won: true }; E.Codex.renderCodex(); });
+    for (let i = 0; i < tabs; i++) {
+      await page.locator('#cx-tabs button').nth(i).click(); await wait(80);
+      const n = await page.locator('#cx-list .cx-item').count();
+      for (let j = 0; j < n; j++) { await page.locator('#cx-list .cx-item').nth(j).click(); await audit('codex-all-' + (i + 1), j < n - 1); }
+    }
     await click('#btn-codex-back');
     await click('#btn-settings'); need(await call(page, 'visible', 'ov-settings'), 'settings not shown'); await audit('settings');
     await click('#btn-settings-close');
@@ -1058,6 +1071,9 @@ async function scenKo() {
     need(await call(page, 'visible', 'scr-results'), 'results screen not shown');
     await wait(1700);
     await audit('results');
+    const missAll = await page.evaluate(() => [...window.ED.I18N.missing]), miss = missAll.filter(s => /[A-Za-z]{2,}/.test(s.replace(/\{\d+\}/g, '')));
+    res.notes.push('table misses: ' + missAll.length + (missAll.length ? ' (' + missAll.slice(0, 6).map(s => JSON.stringify(s)).join(', ') + ')' : ''));
+    if (miss.length) fail(res, miss.length + ' English source(s) missed the Korean table: ' + miss.slice(0, 8).map(s => JSON.stringify(s)).join(', '));
   } finally { res.errors = errors; await ctx.close(); }
   if (nl) fail(res, nl + ' text node(s) with Latin words');
   if (no) fail(res, no + ' box(es) with overflowing text');
