@@ -26,6 +26,7 @@
 // boss.<id>.<state>      bonewarden: idle walk attack(8f) shield hit death | sporemother: idle walk attack charge hit | drownedking: idle walk attack1 attack2 attack3 hit death
 //                        hollowking: idle walk attack hit death, crown overlay boss.hollowking.crown | cyclops: idle walk attack hit death | samurai: idle walk charge attack hit death
 //                        (all face right; anchors centre/top/eye shared across each boss's states)
+//                        wickmother: torso, idle cast roar kneel (head poses on the torso frame), heart (3f), sconce; wmhand: idle (open) fist flat side limp hit | wickeater: idle (2f) open hit (hand-authored, drawn x2)
 // tile.floor.<1..8>, tile.dark.floor.<1..6> (base sets), tile.floor.<ossuary 1..8|glowmire 1..6|abyss 1..8|wickdeep 1..8> (per-stage recolours), tile.floor.sanctum.<1..6> (Sanctum room), tile.torch.floor (8f)
 // prop.<pillar|pillar.broken|column|ruin.0..2|ruin.void.0..2|grave.0..4|coffin|bonepile|shroom.0..1|crystal.0..1|crystal.void.0..1|obelisk>   obstacles (feet pivot)
 // prop.<brazier (8f)|brazier.broken|chest.closed|chest.open|chest.empty>
@@ -351,6 +352,17 @@ boss('hollowking', [['idle', 'lm_w_idle', 150, 150, 8, 8, true, HK([[72, 57], [7
 boss('sporemother', [['idle', 'nb_bamboo_idle', 62, 62, 6, 6, true], ['walk', 'nb_bamboo_walk', 62, 62, 12, 10, true], ['attack', 'nb_bamboo_attack', 62, 62, 5, 10, false],
   ['charge', 'nb_bamboo_charge', 62, 62, 3, 8, false], ['hit', 'nb_bamboo_hit', 62, 62, 4, 12, false]]);
 add('boss.hollowking.crown', 'bosses', null, null, { ascii: [['y...y...y', 'yy.yyy.yy', 'yyyyyyyyy', 'yRyyBYyRy', 'ooooooooo']], pal: { y: '#ffd36b', Y: '#fff2c0', o: '#c8922a', R: '#d8442a', B: '#5fb8ff' }, stamp: true, fps: 0 });
+// Wickmother (Wickdeep finale) and Wick-Eater: hand-authored maps (art-src/wickdeep/bosses.js), drawn at x2 by bfx-d.js / bfx-c.js. Body poses share the torso's frame (pivot = the heart core).
+const HB = require('../art-src/wickdeep/bosses.js'), WMA = (id, maps, o) => add('boss.' + id, 'bosses', null, null, Object.assign(maps ? { ascii: maps, pal: HB.PAL_WAX, fps: 0 } : {}, o));
+WMA('wickmother.torso', [HB.WM.torso], { pivot: HB.P.body });
+for (const k of ['idle', 'cast', 'roar', 'kneel']) WMA('wickmother.' + k, [HB.WM.head[k]], { pivot: HB.P.body });
+WMA('wickmother.heart', HB.WM.heart, { pivot: HB.P.heart, fps: 10, loop: true });
+WMA('wickmother.hit', null, { use: 'boss.wickmother.idle' });
+for (const k of ['open', 'fist', 'flat', 'side', 'limp']) WMA('wmhand.' + (k === 'open' ? 'idle' : k), [HB.WM.hand[k]], { pivot: HB.P.hand });
+WMA('wmhand.hit', null, { use: 'boss.wmhand.flat' });
+WMA('wickmother.sconce', [HB.WM.sconce], { pivot: HB.P.sconce });
+const WEA = (k, maps, o) => add('boss.wickeater.' + k, 'bosses', null, null, Object.assign({ ascii: maps, pal: HB.PAL_VOID, pivot: HB.P.eater, set: 'boss.wickeater', fps: 0 }, o));
+WEA('idle', HB.WE.idle, { fps: 3, loop: true }); WEA('open', [HB.WE.open], { core: false }); WEA('hit', [HB.WE.hurt], { core: false });
 
 // Ninja bosses with partial sheets get derived poses. crumble(keep): frames from index `keep` on turn to ash and lose pixels top-first (fixed hash dither, deterministic).
 const ASHR = ['#141010', '#3a3230', '#6a605a', '#a8a098'];

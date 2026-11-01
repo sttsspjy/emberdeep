@@ -28,6 +28,8 @@
 //         run on both peers for --seconds (6) s: the guest's mirror shows 2 heroes and foes, snapshots <= 12 KB.
 //   botwatch: ?bot=1&speed=8&seed=--seed with the real tools/bot-brain.js; a knight solo run on stage 0 watched --seconds (20) s: fails on sim time < 3x real time (notes < 6x),
 //         a hero that never left a 40 px radius, no automatic level-up pick, no BOT tag, [ / ] not changing the speed, Esc not pausing, a missing file or a page / console error.
+//   bossart: PNGs of the Wickmother in a stand-in Sanctum (w.sanctum at the hero, foes and spawner off, god cheat; P1 idle and an attack, a kneel, P2 with two sconces lit, P3 mid-burn)
+//            and of the Wick-Eater (idle, maw open); fails on a page / console error or a boss that did not spawn. A viewport of 1280x960 shows the whole 720 x 480 room.
 // In-page debug API (injected only by this harness, absent in normal play; every call is a no-op without a solo / host run): ED.Debug.{fastForward(sec), give(id, lvl), evolve(wid?),
 //   spawnBoss(id?), setTime(sec), levelUp(n), chest(), win() (the run ends won now), lap() (the final boss down now: the Last Light), lose(), god(on), state()}.
 // Mechanism: a read-only http server on 127.0.0.1 (random port) serves the repo; Playwright resolves via require('playwright'), else the npx cache (%LOCALAPPDATA%\npm-cache\_npx).
@@ -39,7 +41,7 @@ const fs = require('fs'), os = require('os'), path = require('path'), http = req
 const FLAGS = { scen: 's', cls: 's', form: 's', support: 's', cos: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', prof: 'b', json: 'b', help: 'b' };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
-const SCEN_RE = /^(smoke|shots|coop|botwatch|lap|sanctum|results|crowd\d{1,4}|late[abc]?|forms)$/;
+const SCEN_RE = /^(smoke|shots|coop|botwatch|lap|sanctum|bossart|results|crowd\d{1,4}|late[abc]?|forms)$/;
 function parseArgs(argv) {
   const o = { scen: '', cls: HEROES.join(','), form: '', support: '', cos: '', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
   const pos = [];
@@ -55,7 +57,7 @@ function parseArgs(argv) {
   }
   o.scens = (o.scen ? o.scen.split(',') : []).concat(pos).map(s => s.trim()).filter(Boolean);
   if (!o.scens.length) o.scens = ['smoke'];
-  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, forms, crowdN, late[a|b|c], coop, botwatch, lap, sanctum, results)');
+  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, forms, crowdN, late[a|b|c], coop, botwatch, lap, sanctum, results, bossart)');
   if (!['chromium', 'firefox'].includes(o.browser)) throw new Fail('--browser is chromium or firefox');
   const vp = /^(\d{3,5})x(\d{3,5})$/.exec(o.viewport);
   if (!vp) throw new Fail('--viewport is WxH');
@@ -642,6 +644,66 @@ async function scenSanctum() {
   return res;
 }
 
+// Wickmother phases and the Wick-Eater, staged in the live run (page-side harness: the room at the hero, every foe and the spawner off).
+async function scenBossArt() {
+  const o = S.opt, res = newResult('bossart');
+  const { ctx, page, errors, info } = await openPage();
+  const stage = (fn, arg) => page.evaluate(fn, arg);
+  try {
+    res.notes.push(bootNote(info));
+    await call(page, 'settings', o.quality);
+    await call(page, 'start', 'knight', 0, { god: true });
+    await page.evaluate(() => { window.__BR.still = true; window.__BR.autoPick = true; });
+    await wait(600);
+    const id = await stage(() => {
+      const E = window.ED, w = E.Game.w, p = w.heroes[0];
+      w.time = 1200; w.updateSpawner = () => {};
+      for (const f of w.foes) w.despawnFoe(f);
+      w.sanctum = { st: 1, t0: w.time, x: p.x, y: p.y, w: 720, h: 480 };
+      const e = w.spawnBoss({ t: 1200, id: 'wickmother', final: true });
+      p.y = w.sanctum.y + 60;
+      return e ? e.id : 0;
+    });
+    if (!id) fail(res, 'Wickmother did not spawn');
+    const ph = (k) => stage((k) => { const w = window.ED.Game.w, e = w.boss, v = e && e.vars; if (!v) return null; return { ph: v.phase, dy: Math.round(w.heroes[0].y - e.y), cy: Math.round(e.y - w.sanctum.y), kneel: +v.kneelT.toFixed(1), head: v.head ? v.head.k : '', hands: v.H.map(H => H.a ? H.a.k : H.st), zones: w.zones.filter(z => !z.dead && z.team === 1).map(z => z.k).join(',') }; }, k);
+    await wait(3500); await shoot(page, res, 'wm-p1');
+    await wait(2500); await shoot(page, res, 'wm-p1-attack');
+    res.notes.push('p1 ' + JSON.stringify(await ph()));
+    await stage(() => { const w = window.ED.Game.w, v = w.boss.vars; for (const H of v.H) if (H.e && !H.e.dead) w.hitFoe(H.e, 1e8, w.src(null, 'test')); });
+    await wait(1500); await shoot(page, res, 'wm-kneel');
+    res.notes.push('kneel ' + JSON.stringify(await ph()));
+    await stage(() => { const w = window.ED.Game.w, e = w.boss; w.hitFoe(e, (e.hp - e.maxHp * 0.6) / e.takeMul, w.src(null, 'test')); });
+    await wait(1500);
+    await stage(() => { const v = window.ED.Game.w.boss.vars; v.sc[0].lit = true; v.sc[3].lit = true; v.sc[1].prog = 0.5; });
+    await wait(3000); await shoot(page, res, 'wm-p2');
+    res.notes.push('p2 ' + JSON.stringify(await ph()));
+    await stage(() => { const w = window.ED.Game.w, e = w.boss, v = e.vars; for (const sc of v.sc) sc.lit = true; });
+    await wait(400);
+    await stage(() => { const w = window.ED.Game.w, e = w.boss; w.hitFoe(e, (e.hp - e.maxHp * 0.3) / e.takeMul, w.src(null, 'test')); });
+    await wait(1000);
+    await stage(() => { const w = window.ED.Game.w, v = w.boss.vars; v.burn0 = w.time - 60; });
+    await wait(3000); await shoot(page, res, 'wm-p3');
+    res.notes.push('p3 ' + JSON.stringify(await ph()));
+    // the Wick-Eater
+    const we = await stage(() => {
+      const E = window.ED, w = E.Game.w, p = w.heroes[0], b = w.boss;
+      if (b && !b.dead) { w.bossList.length = 0; w.boss = null; for (const f of w.foes) w.despawnFoe(f); }
+      for (const z of w.zones) if (z.team === 1) z.dead = true;
+      w.sanctum = null;
+      const e = w.spawnBoss({ t: 1200, id: 'wickeater', final: true });
+      if (e) { e.x = p.x + 110; e.y = p.y - 10; E.Bosses.lib.vars(e).t = 5; }
+      return e ? e.id : 0;
+    });
+    if (!we) fail(res, 'Wick-Eater did not spawn');
+    await wait(3200); await shoot(page, res, 'we-idle');
+    await stage(() => { const e = window.ED.Game.w.boss; if (e) window.ED.Bosses.lib.force(e, 'devour'); });
+    await wait(700); await shoot(page, res, 'we-devour');
+    await call(page, 'stop');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function scenCrowd(sc) {
   const o = S.opt, n = +sc.slice(5), res = newResult(sc), secs = o.seconds || 6;
   const { ctx, page, errors, info } = await openPage();
@@ -966,7 +1028,7 @@ async function main() {
     for (const sc of S.opt.scens) {
       const t0 = Date.now();
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'forms' ? await scenForms() : sc === 'coop' ? await scenCoop() : sc === 'botwatch' ? await scenBotwatch() : sc === 'lap' ? await scenLap() : sc === 'sanctum' ? await scenSanctum() : sc === 'results' ? await scenResults() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'forms' ? await scenForms() : sc === 'coop' ? await scenCoop() : sc === 'botwatch' ? await scenBotwatch() : sc === 'lap' ? await scenLap() : sc === 'sanctum' ? await scenSanctum() : sc === 'bossart' ? await scenBossArt() : sc === 'results' ? await scenResults() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
       catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); fail(r, 'harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); }
       r.wallMs = Date.now() - t0;
       if (S.server.missing.size) { r.missing = [...S.server.missing]; fail(r, 'missing files: ' + r.missing.join(', ')); S.server.missing.clear(); }

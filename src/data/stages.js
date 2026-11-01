@@ -167,7 +167,7 @@
       events: { flock: { id: 'cinderbat', first: 30, every: 16, n: [6, 30, 40] }, swarm: { first: 100, every: 100, ring: ['cinderbat'], stampede: ['cinderbat', 'shade', 'reaver', 'stalker'], n: [18, 36, 44] } },
       elites: { first: 90, every: 45 }, bench: BENCH,
       // 'hollow' at 20:00 is the placeholder Sanctum boss until the final boss script lands.
-      bosses: [{ t: 300, id: 'hollow' }, { t: 600, id: 'king' }, { t: 900, id: 'wickeater' }, { t: 1200, id: 'hollow', final: true, sanctum: true }],
+      bosses: [{ t: 300, id: 'hollow' }, { t: 600, id: 'king' }, { t: 900, id: 'wickeater' }, { t: 1200, id: 'wickmother', final: true, sanctum: true }],
     },
   ];
   ED.STAGE_IDS = ED.STAGES.map(s => s.id);

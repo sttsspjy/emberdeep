@@ -79,7 +79,7 @@
     this.lastX = 0; this.lastY = 0; this.stuckN = 0; this.wander = -1; this.wanderT = 0; this.planT = 0;
     this.castGap = 0; this.zSeen = 0; this.pSeen = 0;
     this.f = { mx: 0, my: 0, ax: 0, ay: 0, dash: false, q: false, e: false, pick: 0, banish: 0, reroll: false, skip: false };
-    this.near = 0; this.crowd = 0; this.cx = 0; this.cy = 0; this.dx = 0; this.dy = 0; this.boss = null; this.zPrev = new Map(); // zone id -> [x, y, r, a, time, think n]
+    this.near = 0; this.crowd = 0; this.cx = 0; this.cy = 0; this.dx = 0; this.dy = 0; this.boss = null; this.goalOn = false; this.goalX = 0; this.goalY = 0; this.zPrev = new Map(); // zone id -> [x, y, r, a, time, think n]
     this.gmin = Infinity; this.gx = 0; this.gy = 0; // nearest contact foe: gap and position
     this.reach = 0; this.close = false; this.bossFn = null; this.bossS = null; this.bossOn = false; // stance(): main weapon reach to a typical foe's edge (0 = ranged), crowd / boss stance
   }
@@ -135,6 +135,22 @@
   // Centre distance to hold from boss B: 0.75 x the boss stance weapon's reach to its edge, else 190 px.
   Brain.prototype.bossHold = function (p, B) { return this.bossFn ? B.r + Math.max(p.r + 4, this.bossFn(this.bossS, B.r) * 0.75) : 190; };
 
+  // Wickmother (src/sim/boss-wickmother.js e.vars, read only): while her core is warded, P1 engages the nearest hand and P2 walks to the nearest unlit sconce (goalOn / goalX / goalY).
+  Brain.prototype.wmGoal = function (w, p) {
+    this.goalOn = false;
+    const e = this.boss, v = e && e.def.id === 'wickmother' ? e.vars : null;
+    if (!v || !v.ward) return;
+    if (v.phase === 2 && v.sc && v.sc.length) {
+      let best = null, bd = Infinity;
+      for (const sc of v.sc) { if (sc.lit) continue; const d = (sc.x - p.x) ** 2 + (sc.y - p.y) ** 2; if (d < bd) { bd = d; best = sc; } }
+      if (best) { this.goalOn = true; this.goalX = best.x; this.goalY = best.y; }
+      return;
+    }
+    let hand = null, hd = Infinity;
+    for (const H of v.H) { const f = H.e; if (!f || f.dead || f.id !== H.id) continue; const d = (f.x - p.x) ** 2 + (f.y - p.y) ** 2; if (d < hd) { hd = d; hand = f; } }
+    if (hand) this.boss = hand;
+  };
+
   // ---------- perception ----------
   Brain.prototype.gather = function (ED, w, p) {
     const es = w.foes, R2 = FOE_R * FOE_R, cK = 1 / Math.max(1, w.contactDmg());
@@ -160,6 +176,7 @@
       n++;
     }
     FN = n; this.near = near; this.crowd = crowd; this.boss = boss; this.gmin = gmin; this.gx = gx; this.gy = gy;
+    this.wmGoal(w, p);
     this.cx = cw > 0 ? cx / cw : p.x; this.cy = cw > 0 ? cy / cw : p.y;
     // foe shots
     const P = w.projs, hpK = 10 / Math.max(1, p.maxHp);
@@ -177,7 +194,7 @@
     const Z = w.zones;
     ZN = 0;
     for (let i = 0; i < Z.length; i++) {
-      const z = Z[i]; if (z.dead || z.team !== 1 || z.t < this.react || (z.warn && this.miss > 0 && hsh(z.id ^ this.mix ^ 0x5a5a5a5a) < this.miss)) continue;
+      const z = Z[i]; if (z.dead || z.team !== 1 || (z.st && z.st.inert) || z.t < this.react || (z.warn && this.miss > 0 && hsh(z.id ^ this.mix ^ 0x5a5a5a5a) < this.miss)) continue;
       const ext = (z.len > 0 ? z.len : z.r) + ZONE_PAD;
       if ((z.x - p.x) * (z.x - p.x) + (z.y - p.y) * (z.y - p.y) > ext * ext) continue;
       const o = ZL[ZN] || (ZL[ZN] = { z: null, rem: 0, cost: 0, kind: 0, test: null, soft: false, vx: 0, vy: 0, dr: 0, da: 0, mov: false });
@@ -310,6 +327,7 @@
       const dx = B.x - p.x, dy = B.y - p.y, d = Math.hypot(dx, dy) || 1;
       if (d < 650) { bx = dx / d; by = dy / d; bw = 0.7 * Math.max(-1, Math.min(1, (d - this.bossHold(p, B)) / 90)); }
     }
+    if (this.goalOn) { const dx = this.goalX - p.x, dy = this.goalY - p.y, d = Math.hypot(dx, dy) || 1; bx = dx / d; by = dy / d; bw = 1.1 * Math.min(1, d / 30); } // a spot to stand on (Wickmother sconce)
     const pd = this.dir;
     let best = -1, bs = -Infinity;
     if (this.noise > 0 && w.time >= this.jitT) { this.jit = Math.floor(this.rnd() * NDIR); this.jitT = w.time + 0.6 + this.rnd() * 0.8; }
@@ -389,6 +407,7 @@
       const e = es[i]; if (e.dead || !ED.inView(p, e.x, e.y, e.r)) continue;
       const d = (e.x - p.x) * (e.x - p.x) + (e.y - p.y) * (e.y - p.y);
       if (d < bd && d <= r2) { bd = d; n = e; }
+      if (e.takeMul < 0.01) continue; // warded (Wickmother core): hits do nothing
       if ((e.elite || e.boss) && d < bb && d <= rb2) { bb = d; b = e; }
     }
     const t = b || n;

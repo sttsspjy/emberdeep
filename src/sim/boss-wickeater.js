@@ -1,4 +1,4 @@
-// Boss 'wickeater' (The Wick-Eater, stage 3 final boss; art foe.horror scaled): a void maw that eats light. Enrages at ED.CONST.ENRAGE_T (bosses.js), telegraphs x0.8 (floor 0.6 s).
+// Boss 'wickeater' (The Wick-Eater, stage 3 final boss; own art boss.wickeater.*, drawn x2): a void maw that eats light. Enrages at ED.CONST.ENRAGE_T (bosses.js), telegraphs x0.8 (floor 0.6 s).
 // P1: devour (warned cone, then it inhales: heroes in the cone are dragged toward a warned bite), closing dark (a ring of darkness shrinks onto its cast spot; walk through a gap or dash),
 // lashes (a warned fan of lanes toward the target), bloom (a warned pulse, then spiralling rings of void orbs).
 // P2 (66%): two closing rings with offset gaps, 5 lashes, 4 bloom rings, telegraphed adds. P3 (33%): it swells (x1.2 size), three rings, 7 lashes plus an interleaved second fan, 6 bloom rings.
@@ -8,7 +8,7 @@
   const { tele, line, cone, aim, approach, runner, force } = B.lib;
   const { T, hz, adds } = B.libB;
   ED.regLook('maw', 'inhale', 'darkring', 'voidorb');
-  ED.addFoe('wickeater', { name: 'The Wick-Eater', look: 'foe.horror', ai: 'boss', boss: true, hp: 0, spd: 32, dmg: 2, r: 26, xp: 25, kb: 0, noElite: true, scale: 3.4 });
+  ED.addFoe('wickeater', { name: 'The Wick-Eater', look: 'boss.wickeater', ai: 'boss', boss: true, hp: 0, spd: 32, dmg: 2, r: 26, xp: 25, kb: 0, noElite: true, scale: 2 });
 
   // Devour: cone radius / arc, warn s, inhale s, pull px/s at the mouth (half at the rim), bite radius and x boss damage.
   const DEVOUR = { r: 230, arc: 1.3, warn: 0.9, suck: 1.3, pull: 60, bite: 60, mul: 2.6 };

@@ -30,7 +30,7 @@ const ART = (() => { const g = { ED: {} }; vm.runInNewContext(fs.readFileSync(pa
 const hasArt = (look) => !!(ART[look + '.walk'] || ART[look + '.idle'] || ART[look + '.walk.d'] || ART[look + '.walk.0']);
 
 // ---------------- 1. data ----------------
-const BOSSES = [['warden', 'twins', 'cyclops', 'hollow'], ['spore', 'cyclops', 'weaver', 'king'], ['samurai', 'weaver', 'twins', 'wickeater'], ['hollow', 'king', 'wickeater', 'hollow']];
+const BOSSES = [['warden', 'twins', 'cyclops', 'hollow'], ['spore', 'cyclops', 'weaver', 'king'], ['samurai', 'weaver', 'twins', 'wickeater'], ['hollow', 'king', 'wickeater', 'wickmother']];
 // Flock / swarm numbers per stage: stages 1-3 share them, the Wickdeep (stage 4) runs earlier, more often and bigger.
 const FLOCK = (sd) => (sd.id === 'wickdeep' ? { first: 30, every: 16, n: '6,30,40', swarm: '18,36,44' } : { first: 40, every: 18, n: '5,26,34', swarm: '16,33,39' });
 const kinds = new Set();
