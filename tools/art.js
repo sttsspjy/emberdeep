@@ -423,16 +423,32 @@ function resolveSwaps(swaps, pal) {
 // art-src/fonts/*.ttf -> src/art/fonts.css (@font-face, WOFF 1.0 data URIs). px = font units per font pixel (the outline grid).
 // Each font is re-gridded to 1 em = 16 font px (unitsPerEm = 16 * px; outlines untouched), so every family is crisp at font-size = 16n device px.
 // Vertical metrics: hhea = OS/2 typo = win, rounded to whole font px, line gap 0, USE_TYPO_METRICS set (same line box on every platform).
+// subset: 'ko' keeps only koChars() and renames the font (name table) to `family`: the OFL Reserved Font Names may not label a modified version.
 const FONTS = [
   { family: 'Pixel Operator', file: 'pixel-operator/PixelOperator.ttf', px: 100, weight: '100 549' },
   { family: 'Pixel Operator', file: 'pixel-operator/PixelOperator-Bold.ttf', px: 100, weight: '550 1000' },
   { family: 'Pixel Operator 8', file: 'pixel-operator/PixelOperator8.ttf', px: 100, weight: '100 549' },
   { family: 'Pixel Operator 8', file: 'pixel-operator/PixelOperator8-Bold.ttf', px: 100, weight: '550 1000' },
   { family: 'Pixel Operator Mono', file: 'pixel-operator/PixelOperatorMono.ttf', px: 100, weight: '100 1000' },
+  { family: 'Wickdeep Hangul', file: 'neodgm/neodgm.ttf', px: 64, weight: '100 1000', subset: 'ko', ver: '1.601',
+    copyright: 'Copyright (c) 2017-2021, Eunbin Jeong (Dalgona.) <project-neodgm@dalgona.dev>, with Reserved Font Names "Neo\uB465\uADFC\uBAA8", "Neo\uB465\uADFC\uBAA8 Code", "NeoDunggeunmo" and "NeoDunggeunmo Code". Original font released into the public domain by Jungtae Kim in the 1990s. Subset and re-gridded for Wickdeep.' },
 ];
 const FONT_NOTICE = [
   'Pixel Operator, Pixel Operator 8, Pixel Operator Mono: Jayvee Enaguas (HarvettFox96), CC0 1.0 (art-src/fonts/pixel-operator/LICENSE.txt).',
+  'Wickdeep Hangul: a subset of NeoDunggeunmo 1.601, Copyright (c) 2017-2021 Eunbin Jeong (Dalgona.), SIL Open Font License 1.1 (art-src/fonts/neodgm/LICENSE.txt, https://openfontlicense.org).',
 ];
+const I18N_DIR = path.join(ROOT, 'src', 'i18n');
+// Korean subset: KS X 1001 Hangul syllables (2,350; EUC-KR 0xB0A1-0xC8FE), Hangul compatibility jamo, CJK symbols and punctuation, plus every non-ASCII char in
+// src/i18n/*.js. Returns { all, i18n } (Sets of codepoints).
+function koChars() {
+  const all = new Set(), i18n = new Set(), dec = new TextDecoder('euc-kr');
+  for (let hi = 0xb0; hi <= 0xc8; hi++) for (let lo = 0xa1; lo <= 0xfe; lo++) { const s = dec.decode(Buffer.from([hi, lo])); if (s.length === 1 && s !== '\uFFFD') all.add(s.codePointAt(0)); }
+  for (let c = 0x3131; c <= 0x318e; c++) all.add(c);
+  for (let c = 0x3000; c <= 0x303f; c++) all.add(c);
+  const files = fs.existsSync(I18N_DIR) ? fs.readdirSync(I18N_DIR).filter((f) => f.endsWith('.js')).sort() : [];
+  for (const f of files) for (const ch of fs.readFileSync(path.join(I18N_DIR, f), 'utf8')) { const c = ch.codePointAt(0); if (c > 0x7f) { all.add(c); i18n.add(c); } }
+  return { all, i18n };
+}
 const pad4 = (n) => (n + 3) & ~3;
 function sfntSum(buf) { let s = 0; const b = buf.length & 3 ? Buffer.concat([buf, Buffer.alloc(4 - (buf.length & 3))]) : buf; for (let i = 0; i < b.length; i += 4) s = (s + b.readUInt32BE(i)) >>> 0; return s; }
 function sfntRead(buf) {
@@ -473,15 +489,101 @@ function regridFont(ttf, px) {
   head.writeUInt32BE((0xb1b0afba - sfntSum(sfnt)) >>> 0, 8);
   return { woff: woffWrite(flavor, tabs, sfnt.length), asc: asc / px, desc: -desc / px };
 }
+// cmapRead(buf) -> Map codepoint -> glyph id from the (3,1) or (0,3) format 4 subtable.
+function cmapRead(cmap) {
+  const n = cmap.readUInt16BE(2), map = new Map();
+  for (let i = 0; i < n; i++) {
+    const pid = cmap.readUInt16BE(4 + i * 8), eid = cmap.readUInt16BE(6 + i * 8), o = cmap.readUInt32BE(8 + i * 8);
+    if (!((pid === 3 && eid === 1) || (pid === 0 && eid === 3)) || cmap.readUInt16BE(o) !== 4) continue;
+    const segX2 = cmap.readUInt16BE(o + 6), end = o + 14, start = end + segX2 + 2, delta = start + segX2, ro = delta + segX2;
+    for (let s = 0; s < segX2; s += 2) {
+      const e = cmap.readUInt16BE(end + s), st = cmap.readUInt16BE(start + s), d = cmap.readUInt16BE(delta + s), r = cmap.readUInt16BE(ro + s);
+      for (let c = st; c <= e && c !== 0xffff; c++) {
+        let g = r ? cmap.readUInt16BE(ro + s + r + 2 * (c - st)) : c;
+        if (g) g = (g + d) & 0xffff;
+        if (g) map.set(c, g);
+      }
+    }
+    return map;
+  }
+  throw new Error('font has no format 4 Unicode cmap');
+}
+// cmap with one format 4 (3,1) subtable; gids must rise with codepoints inside each run (idDelta segments only).
+function cmapWrite(pairs) { // pairs: [cp, gid] sorted by cp
+  const segs = [];
+  for (const [c, g] of pairs) { const l = segs[segs.length - 1]; if (l && c === l.e + 1 && g - c === l.d) l.e = c; else segs.push({ s: c, e: c, d: g - c }); }
+  segs.push({ s: 0xffff, e: 0xffff, d: 1 });
+  const n = segs.length, es = Math.floor(Math.log2(n)), sr = 2 << es, len = 16 + 8 * n, b = Buffer.alloc(12 + len);
+  b.writeUInt16BE(0, 0); b.writeUInt16BE(1, 2); b.writeUInt16BE(3, 4); b.writeUInt16BE(1, 6); b.writeUInt32BE(12, 8);
+  const o = 12; b.writeUInt16BE(4, o); b.writeUInt16BE(len, o + 2); b.writeUInt16BE(2 * n, o + 6); b.writeUInt16BE(sr, o + 8); b.writeUInt16BE(es, o + 10); b.writeUInt16BE(2 * n - sr, o + 12);
+  segs.forEach((g, i) => { b.writeUInt16BE(g.e, o + 14 + 2 * i); b.writeUInt16BE(g.s, o + 16 + 2 * n + 2 * i); b.writeUInt16BE(g.d & 0xffff, o + 16 + 4 * n + 2 * i); });
+  return b;
+}
+// name table (format 0, Windows English only): ids 0-6, 13, 14.
+function nameWrite(f) {
+  const recs = [[0, f.copyright], [1, f.family], [2, 'Regular'], [3, 'Wickdeep: ' + f.family + ' ' + f.ver], [4, f.family], [5, 'Version ' + f.ver], [6, f.family.replace(/\s+/g, '') + '-Regular'],
+    [13, 'This Font Software is licensed under the SIL Open Font License, Version 1.1.'], [14, 'https://openfontlicense.org']];
+  const strs = recs.map(([, s]) => Buffer.from(s, 'utf16le').swap16()), hdr = Buffer.alloc(6 + 12 * recs.length);
+  hdr.writeUInt16BE(recs.length, 2); hdr.writeUInt16BE(hdr.length, 4);
+  let off = 0;
+  recs.forEach(([id], i) => { const o = 6 + 12 * i; hdr.writeUInt16BE(3, o); hdr.writeUInt16BE(1, o + 2); hdr.writeUInt16BE(0x409, o + 4); hdr.writeUInt16BE(id, o + 6); hdr.writeUInt16BE(strs[i].length, o + 8); hdr.writeUInt16BE(off, o + 10); off += strs[i].length; });
+  return Buffer.concat([hdr, ...strs]);
+}
+// subsetFont(ttf, cps, f) -> { ttf, cps: codepoints kept }: glyf/loca/hmtx/cmap/maxp rebuilt for .notdef + the mapped cps (+ composite parts), gids in codepoint order;
+// post becomes format 3, name is rewritten (nameWrite), layout tables (GSUB/GPOS/GDEF) and cmap format 14 are dropped.
+function subsetFont(ttf, cps, f) {
+  const { flavor, tabs } = sfntRead(ttf), T = {}; for (const t of tabs) T[t.tag] = t.data;
+  const long = T.head.readInt16BE(50) === 1, nG = T.maxp.readUInt16BE(4), loca = (g) => (long ? T.loca.readUInt32BE(4 * g) : 2 * T.loca.readUInt16BE(2 * g));
+  const glyph = (g) => T.glyf.subarray(loca(g), loca(g + 1)), map = cmapRead(T.cmap);
+  const pairs = [...cps].filter((c) => map.has(c)).sort((a, b) => a - b).map((c) => [c, map.get(c)]);
+  const order = [0], idx = new Map([[0, 0]]), add = (g) => { if (!idx.has(g)) { idx.set(g, order.length); order.push(g); } };
+  for (const [, g] of pairs) add(g);
+  const parts = (g, fn) => { // calls fn(offsetOfGlyphIndex) per composite component
+    const d = glyph(g); if (d.length < 10 || d.readInt16BE(0) >= 0) return;
+    let o = 10, fl;
+    do { fl = d.readUInt16BE(o); fn(d, o + 2); o += 4 + (fl & 1 ? 4 : 2) + (fl & 8 ? 2 : fl & 0x40 ? 4 : fl & 0x80 ? 8 : 0); } while (fl & 0x20);
+  };
+  for (let i = 0; i < order.length; i++) parts(order[i], (d, o) => add(d.readUInt16BE(o)));
+  const nhm = T.hhea.readUInt16BE(34), aw = (g) => T.hmtx.readUInt16BE(4 * Math.min(g, nhm - 1)), lsb = (g) => (g < nhm ? T.hmtx.readInt16BE(4 * g + 2) : T.hmtx.readInt16BE(4 * nhm + 2 * (g - nhm)));
+  const n = order.length, gl = [], lo = Buffer.alloc(4 * (n + 1));
+  let off = 0, last = n - 1;
+  order.forEach((g, i) => {
+    const d = Buffer.from(glyph(g)); parts(g, (_, o) => d.writeUInt16BE(idx.get(d.readUInt16BE(o)), o));
+    lo.writeUInt32BE(off, 4 * i); gl.push(d, Buffer.alloc(pad4(d.length) - d.length)); off += pad4(d.length);
+  });
+  lo.writeUInt32BE(off, 4 * n);
+  while (last > 0 && aw(order[last - 1]) === aw(order[last])) last--;
+  const hm = Buffer.alloc(4 * (last + 1) + 2 * (n - last - 1));
+  order.forEach((g, i) => { if (i <= last) { hm.writeUInt16BE(aw(g), 4 * i); hm.writeInt16BE(lsb(g), 4 * i + 2); } else hm.writeInt16BE(lsb(g), 4 * (last + 1) + 2 * (i - last - 1)); });
+  T.head.writeInt16BE(1, 50); T.hhea.writeUInt16BE(last + 1, 34); T.maxp.writeUInt16BE(n, 4);
+  const post = Buffer.from(T.post.subarray(0, 32)); post.writeUInt32BE(0x00030000, 0);
+  const os2 = T['OS/2']; os2.writeUInt16BE(Math.min(0xffff, pairs[0][0]), 64); os2.writeUInt16BE(Math.min(0xffff, pairs[pairs.length - 1][0]), 66);
+  const out = { glyf: Buffer.concat(gl), loca: lo, hmtx: hm, cmap: cmapWrite(pairs.map(([c, g]) => [c, idx.get(g)])), post, name: nameWrite(f) };
+  const keep = tabs.filter((t) => ['OS/2', 'head', 'hhea', 'maxp'].includes(t.tag)).concat(Object.keys(out).map((tag) => ({ tag, data: out[tag] }))).sort((a, b) => (a.tag < b.tag ? -1 : 1));
+  return { ttf: sfntWrite(flavor, keep), cps: pairs.map(([c]) => c) };
+}
+// CSS unicode-range for sorted codepoints: runs with gaps under 256 merge (a char in range but not in the font falls through to the next family).
+function uniRange(cps) {
+  const r = [], h = (c) => c.toString(16).toUpperCase();
+  for (let i = 0; i < cps.length; i++) { let j = i; while (j + 1 < cps.length && cps[j + 1] - cps[j] < 256) j++; r.push('U+' + h(cps[i]) + (j > i ? '-' + h(cps[j]) : '')); i = j; }
+  return r.join(', ');
+}
 function buildFonts() {
   const nl = '\n', rows = [];
-  let css = '/* Generated by tools/art.js from art-src/fonts/ - do not edit. 1 em = 16 font px for every family: crisp at font-size = 16n device px.' + nl;
+  let css = '/* Generated by tools/art.js from art-src/fonts/ (+ src/i18n/*.js chars for subsets) - do not edit. 1 em = 16 font px for every family: crisp at font-size = 16n device px.' + nl;
   for (const l of FONT_NOTICE) css += '   ' + l + nl;
   css += '*/' + nl;
   for (const f of FONTS) {
-    const ttf = fs.readFileSync(path.join(SRC, 'fonts', f.file)), out = regridFont(ttf, f.px);
-    css += '@font-face { font-family: "' + f.family + '"; src: url(data:font/woff;base64,' + out.woff.toString('base64') + ') format("woff"); font-weight: ' + f.weight + (f.range ? '; unicode-range: ' + f.range : '') + '; font-style: normal; font-display: block; }' + nl;
-    rows.push({ file: f.file, ttf: ttf.length, woff: out.woff.length, asc: out.asc, desc: out.desc });
+    let ttf = fs.readFileSync(path.join(SRC, 'fonts', f.file)), range = f.range, src = ttf.length, miss = [];
+    if (f.subset) {
+      const want = koChars(), sub = subsetFont(ttf, want.all, f), got = new Set(sub.cps);
+      ttf = sub.ttf; range = uniRange(sub.cps);
+      const base = cmapRead(sfntRead(fs.readFileSync(path.join(SRC, 'fonts', FONTS[0].file))).tabs.find((t) => t.tag === 'cmap').data);
+      for (const c of want.i18n) if (!got.has(c) && !base.has(c)) miss.push(String.fromCodePoint(c));
+    }
+    const out = regridFont(ttf, f.px);
+    css += '@font-face { font-family: "' + f.family + '"; src: url(data:font/woff;base64,' + out.woff.toString('base64') + ') format("woff"); font-weight: ' + f.weight + (range ? '; unicode-range: ' + range : '') + '; font-style: normal; font-display: block; }' + nl;
+    rows.push({ file: f.file, ttf: src, woff: out.woff.length, asc: out.asc, desc: out.desc, miss });
   }
   return { css, rows };
 }
@@ -535,6 +637,7 @@ function main() {
   console.log('meta.js'.padEnd(11), ''.padEnd(12), ''.padStart(6), ''.padStart(8), metaKB.toFixed(1).padStart(7));
   for (const f of fonts.rows) console.log('font ' + f.file.padEnd(52) + ' ttf ' + (f.ttf / 1024).toFixed(1).padStart(6) + ' KB  woff ' + (f.woff / 1024).toFixed(1).padStart(6) + ' KB  asc ' + f.asc + ' desc ' + f.desc + ' font px');
   console.log('fonts.css ' + (Buffer.byteLength(fonts.css) / 1024).toFixed(1) + ' KB');
+  for (const f of fonts.rows) if (f.miss.length) console.warn('font ' + f.file + ': no glyph in it or ' + FONTS[0].family + ' for ' + JSON.stringify(f.miss.join('')));
   console.log('total data URIs + meta: ' + (total / 1024).toFixed(1) + ' KB; anims ' + Object.keys(res.meta.anims).length + ', frames ' + Object.keys(res.meta.frames).length + ' (' + (Date.now() - t0) + ' ms)');
 }
 

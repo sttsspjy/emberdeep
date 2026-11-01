@@ -156,6 +156,7 @@
 
   A.boot = () => {
     A.settings = S.loadSettings();
+    ED.I18N.init(A.settings);
     if (A.settings.sel) { A.sel.cls = ED.HEROES[A.settings.sel.cls] ? A.settings.sel.cls : 'knight'; A.sel.stage = A.settings.sel.stage | 0; }
     const p = S.load();
     A.profile = p || S.defaultProfile(); A.hasProfile = !!p; ED.Meta.use(A.profile);
