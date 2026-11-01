@@ -58,24 +58,51 @@ input, textarea { font: inherit; font-size: var(--u); color: var(--ink); backgro
 input:focus, textarea:focus { outline: none; border-color: var(--gold); }
 
 /* ---------- title ---------- */
-.title-wrap { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.7); }
-h1.logo {
-  font-size: calc(var(--u) * 5.2); margin: 0; color: var(--ember); letter-spacing: 0.03em; font-weight: normal; line-height: 1;
-  text-shadow: 0 0.06em 0 #7a2a0a, 0 0.12em 0 #3a1a0a, 0 0 0.5em rgba(255, 120, 40, 0.55); animation: flicker 3.2s infinite;
+/* Backdrop and wordmark are art-px canvases scaled by whole device px (src/client/title.js sets their CSS size). */
+#scr-title { background: #0b0908; }
+#scr-title::before { display: none; }
+.title-bg { position: fixed; inset: 0; overflow: hidden; pointer-events: none; }
+.title-bg canvas { position: absolute; left: 0; top: 0; image-rendering: pixelated; }
+.title-wrap { display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 0.55); }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+h1.logo { margin: 0; line-height: 0; position: relative; }
+h1.logo::before { /* warm glow behind the wordmark */
+  content: ''; position: absolute; left: 4%; right: 4%; top: 18%; bottom: 22%; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 55%, rgba(255, 140, 50, 0.3), rgba(255, 110, 30, 0.1) 45%, transparent 70%); animation: glow 4.6s ease-in-out infinite;
 }
-@keyframes flicker { 0%, 100% { opacity: 1; } 46% { opacity: 1; } 48% { opacity: 0.86; } 50% { opacity: 1; } 72% { opacity: 0.94; } }
-.kicker { font-size: calc(var(--u) * 1.2); color: var(--mut); margin: 0 0 calc(var(--u) * 0.6); }
-.title-heroes { display: flex; gap: calc(var(--u) * 0.4); align-items: flex-end; margin: calc(var(--u) * -0.2) 0 calc(var(--u) * 0.3); }
-.title-heroes canvas { width: calc(var(--u) * 3.2); height: calc(var(--u) * 3.2); }
-.title-heroes canvas.locked { filter: brightness(0) opacity(0.45); }
-.menu { display: flex; flex-direction: column; gap: calc(var(--u) * 0.6); width: min(20em, 88vw); }
+h1.logo::after { /* wick flame halo; --fx / --fy set by title.js */
+  content: ''; position: absolute; left: var(--fx, 20%); top: var(--fy, 20%); width: 16%; aspect-ratio: 1; transform: translate(-50%, -50%); pointer-events: none;
+  background: radial-gradient(circle, rgba(255, 190, 90, 0.38), rgba(255, 120, 40, 0.12) 40%, transparent 68%); animation: halo 1.9s steps(6) infinite;
+}
+@keyframes halo { 0%, 100% { opacity: 0.85; } 30% { opacity: 1; } 55% { opacity: 0.7; } 80% { opacity: 0.95; } }
+#title-logo { display: block; position: relative; image-rendering: pixelated; }
+@keyframes glow { 0%, 100% { opacity: 0.75; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+.kicker { font-size: var(--u); color: var(--mut); margin: 0 0 calc(var(--u) * 0.25); display: flex; align-items: center; gap: 0.8em; text-shadow: 0 2px 0 #000; position: relative; }
+.kicker::before, .kicker::after { content: ''; width: calc(var(--u) * 2.2); height: 3px; background: linear-gradient(90deg, transparent, var(--ember2)); box-shadow: 0 2px 0 #000; }
+.kicker::after { transform: scaleX(-1); }
+.title-panel {
+  position: relative; display: flex; flex-direction: column; gap: calc(var(--u) * 0.55); width: min(21em, 92vw); padding: calc(var(--u) * 0.85) calc(var(--u) * 0.9) calc(var(--u) * 0.6);
+  background: linear-gradient(180deg, rgba(40, 26, 16, 0.94), rgba(16, 11, 8, 0.94)); border: 3px solid var(--edge);
+  box-shadow: 0 0 0 3px #000, inset 0 0 0 2px rgba(0, 0, 0, 0.5), inset 0 3px 0 rgba(255, 210, 140, 0.12), 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+.title-panel::before, .title-panel::after { /* ember studs on the top corners */
+  content: ''; position: absolute; top: -9px; width: 9px; height: 9px; background: var(--ember); border: 3px solid #000; transform: rotate(45deg); box-shadow: 0 0 10px rgba(255, 138, 61, 0.7);
+}
+.title-panel::before { left: -9px; } .title-panel::after { right: -9px; }
+.menu { display: flex; flex-direction: column; gap: calc(var(--u) * 0.5); }
 .menu .btn { width: 100%; }
-.menu-pair { display: flex; gap: calc(var(--u) * 0.6); }
-.menu-pair .btn { flex: 1; padding-left: 0.3em; padding-right: 0.3em; }
-.name-row { display: flex; flex-direction: column; gap: 6px; align-items: center; }
-.name-row input { text-align: center; width: 12em; }
-.profile-line { color: var(--mut); font-size: var(--u); display: flex; gap: 1.2em; flex-wrap: wrap; justify-content: center; }
+.menu .btn:not(.btn-big) { font-size: calc(var(--u) * 1.08); padding-top: 0.28em; padding-bottom: 0.32em; }
+.menu-pair { display: flex; gap: calc(var(--u) * 0.5); }
+.menu-pair .btn { flex: 1 1 0; min-width: 0; padding-left: 0.3em; padding-right: 0.3em; }
+.name-row { display: flex; gap: 0.6em; align-items: center; padding-bottom: calc(var(--u) * 0.5); border-bottom: 2px solid #3a2c22; }
+.name-row label { color: var(--mut); white-space: nowrap; }
+.name-row input { flex: 1; min-width: 0; text-align: center; }
+.title-panel .msg:empty { min-height: 0; margin-top: calc(var(--u) * -0.55); }
+.profile-line { color: var(--mut); font-size: var(--u); display: flex; gap: 0.35em 1em; flex-wrap: wrap; justify-content: center; border-top: 2px solid #3a2c22; padding-top: calc(var(--u) * 0.45); }
+.profile-line:empty { display: none; }
 .profile-line b { color: var(--gold); font-weight: normal; }
+.profile-line > span:first-child { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { h1.logo::before, h1.logo::after { animation: none; } }
 
 /* ---------- hero select ---------- */
 /* --hc: the hero's accent colour (hero col), set per tile and on the detail plate. */
