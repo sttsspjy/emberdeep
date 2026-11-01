@@ -46,7 +46,7 @@ docs/                    GAME-DESIGN.md · ARCHITECTURE.md · MASTERPLAN.md · M
 5. **Plug in through registries** (`ED.WEAPONS`/`ED.WIMPL`, `ED.HEROES`, `ED.CAST`, `ED.AI`, `ED.Bosses`, `ED.HOOK`, client `ED.WeaponFx`/`ED.SkillFx`/`ED.BossFx`), not by editing core files.
 6. **No per-tick allocation in hot paths** — foes, projectiles, gems, hit sources are pooled; arrays compact in place.
 7. **All hotkeys use `e.code`** — `e.key` breaks on non-Latin layouts.
-8. **Save code is positional** (HERO_IDS, SHOP order): append only; reordering or removing bumps the code version.
+8. **Save code is positional** (HERO_IDS, SHOP order): append only (a new SHOP row also appends its max to `SHOP_FULL` in save.js); reordering or removing needs a new prefix (WK3).
 9. **Minimized testing** — run only the checks and bot runs a change needs; balance numbers come from GAME-DESIGN.md, the user's playtests and `tools/bench.js` bot runs.
 10. **Low quality must stay fast** — WebGL is optional; the Canvas2D fallback must stay playable.
 11. **Rules and numbers follow [docs/GAME-DESIGN.md](docs/GAME-DESIGN.md)** — change the doc and the code together.
