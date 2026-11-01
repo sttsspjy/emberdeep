@@ -1,6 +1,6 @@
 // In-run HUD on the screen canvas (device px). Sizes are CSS px at 1280x720 scaled by k = dpr x clamp(viewport / 1280x720, 1, 2), so text never drops below its CSS size (numbers >= 16 px).
 // Draws: XP bar across the top with the level, timer, kills / gold, 3 weapon slots (hero weapon + 2 supports, empty ones dim; level; Form = gold frame) + 6 passive slots with levels,
-// HP bar, Q cooldown dial and the dash dial with charge pips, boss bar, teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
+// HP bar, Q cooldown dial and the dash dial with charge pips, boss bar, Last Light (view.lap: a VICTORY banner during the calm; the lap countdown and lap gold in place of the timer), the Sanctum's VICTORY banner (view.sanctum st 2), teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
 // low-HP edge glow, banners and the bot-watch tag (view.botTag / view.botPick, bottom-left). No per-frame allocation: strings are cached by value. Font 'Pixel Operator'.
 (function (ED) {
   'use strict';
@@ -28,19 +28,23 @@
     frame(x, y, w, h, '#000', Math.max(2, Math.round(2 * k)));
   };
   // Atlas icon `id` (frame i) fitted into a size x size box at (x, y).
-  const icon = (id, x, y, size, i) => {
+  const IO = { variant: '' };
+  // vk: Atlas variant key (hero skins).
+  const icon = (id, x, y, size, i, vk) => {
     const A = ED.Atlas, r = A && A.ok && A.anim(id); if (!r) return;
     const f = r.f[0], s = Math.max(1, Math.floor(size / Math.max(f.w, f.h)));
     c.save(); c.translate(Math.round(x + size / 2 - (f.ox + f.w / 2 - r.ax) * s), Math.round(y + size / 2 - (f.oy + f.h / 2 - r.ay) * s)); c.scale(s, s);
-    A.draw(c, id, i | 0, 0, 0); c.restore();
+    IO.variant = vk || ''; A.draw(c, id, i | 0, 0, 0, IO); c.restore();
   };
+  // Skin variant of hero p's anim id ('' = the default look).
+  const skinOf = (id, p) => (ED.Cos ? ED.Cos.skinVar(id, ED.Cos.of(p.pid).skin) : '');
   H.icon = (ctx, id, x, y, size) => { const oc = c; c = ctx; icon(id, x, y, size); c = oc; };
   H.show = (text, col, secs) => { H.banner = { text, col: col || '#ffd27a', t: secs || 2.5, max: secs || 2.5 }; };
 
   // value -> string caches (one slot per call site)
   const cache = {};
   const cs = (key, v, fmt) => { let e = cache[key]; if (!e) e = cache[key] = { v: NaN, s: '' }; if (e.v !== v) { e.v = v; e.s = fmt(v); } return e.s; };
-  const fmtLv = (v) => 'LV ' + v, fmtKills = (v) => U.fmtNum(v), fmtHp = (v) => (v >> 12) + ' / ' + (v & 4095), fmtSec = (v) => String(v), fmtBleed = (v) => 'DOWN  ' + v, fmtT = (v) => U.fmtTime(v);
+  const fmtLv = (v) => 'LV ' + v, fmtKills = (v) => U.fmtNum(v), fmtHp = (v) => (v >> 12) + ' / ' + (v & 4095), fmtSec = (v) => String(v), fmtBleed = (v) => 'DOWN  ' + v, fmtT = (v) => U.fmtTime(v), fmtLapG = (v) => '+' + U.fmtNum(v);
   const heroIcon = (cls) => (ED.HEROES[cls] && ED.HEROES[cls].icon) || '';
   const RUN = {}; const runIcon = (cls) => RUN[cls] || (RUN[cls] = ED.Atlas && ED.Atlas.has('hero.' + cls + '.run') ? 'hero.' + cls + '.run' : 'fx.smoke');
   const bossName = (v) => { const def = ED.FOES[ED.FOE_IDS[v >> 1]]; return (def ? def.name : 'Boss') + (v & 1 ? '  ENRAGED' : ''); };
@@ -54,9 +58,9 @@
   // ---------------- pieces ----------------
   const ready = [0, 0, 0], readyT = [0, 0, 0];
   // Cooldown dial: icon, dark pie for the remaining fraction, seconds, key badge; flashes when it comes back.
-  function dial(i, x, y, s, id, cd, cdMax, key, col) {
+  function dial(i, x, y, s, id, cd, cdMax, key, col, vk) {
     c.fillStyle = 'rgba(10,7,6,0.82)'; c.fillRect(x, y, s, s);
-    icon(id, x + R(5), y + R(5), s - R(10));
+    icon(id, x + R(5), y + R(5), s - R(10), 0, vk);
     const f = cdMax > 0 ? U.clamp(cd / cdMax, 0, 1) : 0, up = cd <= 0;
     if (!up) {
       c.save(); c.beginPath(); c.rect(x, y, s, s); c.clip();
@@ -100,7 +104,7 @@
       const yy = y + n * R(34), col = SLOT_COL[p.slot & 3];
       c.fillStyle = 'rgba(10,7,6,0.6)'; c.fillRect(x, yy, R(196), R(30));
       c.fillStyle = col; c.fillRect(x, yy, R(4), R(30));
-      icon(heroIcon(p.cls), x + R(6), yy + R(1), R(28));
+      icon(heroIcon(p.cls), x + R(6), yy + R(1), R(28), 0, skinOf(heroIcon(p.cls), p));
       txt(p.name, x + R(38), yy + R(1), p.dead ? '#7d6c58' : '#fff1d6', 16);
       if (p.dead) txt('dead', x + R(190), yy + R(1), '#7d6c58', 16, 'right');
       else if (p.downed) {
@@ -126,7 +130,7 @@
       c.restore();
       c.fillStyle = 'rgba(10,7,6,0.75)'; c.beginPath(); c.arc(ax, ay, R(17), 0, TAU); c.fill();
       c.strokeStyle = col; c.lineWidth = R(2); c.stroke();
-      icon(heroIcon(p.cls), ax - R(14), ay - R(14), R(28));
+      icon(heroIcon(p.cls), ax - R(14), ay - R(14), R(28), 0, skinOf(heroIcon(p.cls), p));
       if (p.downed) txt('!', ax, ay - R(34), col, 22, 'center');
     }
   }
@@ -152,8 +156,14 @@
     const xh = R(20);
     bar(0, 0, W, xh, view.xpNext ? view.xp / view.xpNext : 0, '#3aa8e8', '#9fe6ff', 'rgba(10,7,6,0.85)');
     txt(cs('lv', view.level, fmtLv), W - R(10), R(2), '#ffffff', 16, 'right');
-    // timer, kills, gold
-    txt(cs('time', Math.floor(view.time), fmtT), W / 2, xh + R(6), '#fff1d6', 36, 'center');
+    // timer (Last Light lap: its countdown and the lap's coin gold instead), kills, gold
+    const lp = view.lap;
+    if (lp && lp.ph === 2) {
+      txt('LAST LIGHT', W / 2, xh + R(4), '#ffd27a', 20, 'center');
+      txt(cs('lap', Math.ceil(lp.rem), fmtT), W / 2, xh + R(26), lp.rem <= 10 && (now * 4 | 0) % 2 ? '#ff8a6a' : '#fff1d6', 36, 'center');
+      icon('pickup.coin', W / 2 - R(46), xh + R(68), R(22));
+      txt(cs('lapg', lp.gold, fmtLapG), W / 2 - R(20), xh + R(68), '#ffd24a', 22, 'left');
+    } else txt(cs('time', Math.floor(view.time), fmtT), W / 2, xh + R(6), '#fff1d6', 36, 'center');
     icon('fx.sigil.skull', W - R(40), xh + R(8), R(24));
     txt(cs('kills', view.kills, fmtKills), W - R(46), xh + R(8), '#f0e0c8', 22, 'right');
     icon('pickup.coin', W - R(40), xh + R(36), R(24));
@@ -164,10 +174,14 @@
       const bw = Math.round(Math.min(W * 0.5, R(620))), bx = Math.round(W / 2 - bw / 2), by = xh + R(52);
       const on = !!(bb && bb.on), en = on ? !!bb.enraged : !!b.enraged, q = on ? bb.q : b.hpQ, col = en ? ((now * 6 | 0) % 2 ? '#ff2a2a' : '#ff8a3a') : '#c03ad0';
       bar(bx, by, bw, R(18), q / 255, col, en ? '#ffb0a0' : '#f0a0ff');
-      if (on && bb.rev >= 0) bar(bx, by + R(19), Math.round(bw * bb.rev), R(4), 1, '#7fe39a', '#7fe39a');
+      if (on && bb.rev >= 0) { const wk = bb.id === 'wickmother' && bb.phase === 3, rc = wk ? (bb.rev < 0.15 && (now * 6 | 0) % 2 ? '#ff2a2a' : '#ff9a3a') : '#7fe39a'; bar(bx, by + R(19), Math.round(bw * bb.rev), R(4), 1, rc, rc); } // Wickmother P3: the wick clock
       const k = on ? Math.max(0, ED.FOE_IDS.indexOf(bb.id)) : b.k;
       txt(cs('boss', (k << 1) | (en ? 1 : 0), bossName), W / 2, by + R(21) + (on && bb.rev >= 0 ? R(4) : 0), en ? '#ff8a7a' : '#ffd27a', 20, 'center');
     }
+    const sc = view.sanctum;
+    if (sc && sc.st === 2) { if (winT < 0 || view.time < winT) winT = view.time; } else winT = -1;
+    if (lp && lp.ph === 1) victory(lp.rem, ED.CONST.LAP.calm, 'THE LAST LIGHT IS COMING');
+    else if (winT >= 0) victory(Math.max(0, ED.CONST.SANCTUM.end - (view.time - winT)), ED.CONST.SANCTUM.end, 'THE WICKDEEP IS SNUFFED OUT');
     if (!me) { banner(dt); return; }
     // weapon and passive slots (top-left)
     const x0 = R(10), ws = R(42), ps = R(32);
@@ -187,7 +201,7 @@
     // Q charge pips (multi-charge skills: chN slots, ch lit), left of the dial
     if (q && q.chN > 1) { const pw = R(10); for (let i = 0; i < q.chN; i++) { const px = kx - pw - R(6), py = ky + ds - (i + 1) * (pw + R(3)); c.fillStyle = '#000'; c.fillRect(px, py, pw, pw); c.fillStyle = i < q.ch ? '#ffd27a' : '#48382a'; c.fillRect(px + R(2), py + R(2), pw - R(4), pw - R(4)); } }
     const dx = kx + ds + gap, dy = ky + ds - dd;
-    dial(2, dx, dy, dd, runIcon(me.cls), me.dashCd, C.cd, keyLbl.dash, '#6ad7ff');
+    dial(2, dx, dy, dd, runIcon(me.cls), me.dashCd, C.cd, keyLbl.dash, '#6ad7ff', skinOf(runIcon(me.cls), me));
     // dash charge pips (one per charge; C.charges when the sim grows more)
     const nch = C.charges || 1, pw = R(10);
     for (let i = 0; i < nch; i++) { const px = dx + dd + R(6), py = dy + dd - (i + 1) * (pw + R(3)); c.fillStyle = '#000'; c.fillRect(px, py, pw, pw); c.fillStyle = me.dashCd <= 0 ? '#6ad7ff' : '#2a3a48'; c.fillRect(px + R(2), py + R(2), pw - R(4), pw - R(4)); }
@@ -206,6 +220,15 @@
     }
     banner(dt);
   };
+  // VICTORY banner of the Last Light calm or the Sanctum's end (rem: s left of its dur s, sub: the line under it): pops in, pulses, fades out over the last 0.3 s.
+  let winT = -1; // view time the Sanctum fight was won (view.sanctum.st 2), -1 none
+  function victory(rem, dur, sub) {
+    const age = Math.max(0, dur - rem), s = 1 + Math.max(0, 0.3 - age) * 1.5 + 0.04 * Math.sin(now * 6), a = Math.min(1, age / 0.12, rem / 0.3 + 0.15), y = Math.round(Hh * 0.22);
+    c.globalAlpha = a;
+    txt('VICTORY', W / 2, y, '#ffd27a', 72 * s, 'center', 'middle');
+    txt(sub, W / 2, y + R(58), '#fff1d6', 24, 'center', 'middle');
+    c.globalAlpha = 1;
+  }
   function banner(dt) {
     const bn = H.banner; if (!bn) return;
     bn.t -= dt;

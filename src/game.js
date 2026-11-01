@@ -5,6 +5,7 @@
 // tick and reconciled on every snapshot (server state at the acked input, then the newer inputs replayed; the visible jump blends out); everything else is interpolated
 // INTERP behind the newest snapshot, and snapshot events are released at that render time.
 // Bot watch (solo, set by main.js): ED.Game.bot.think(w, hero) is the local hero's input frame once per sim tick; sfxLite: only SFX_KEEP events reach the audio.
+// ED.Game.cos { pid: worn cosmetics bundle } from the run config (players[].cos / roster[].cos, cleaned by ED.Save.cosClean); the World never sees it.
 (function (ED) {
   'use strict';
   const C = ED.CONST, U = ED.U, STEP = C.TICK, MAX_STEPS = 8;
@@ -19,22 +20,24 @@
   const BLEND = 12;     // client: correction offset decay (1/s)
   const NET_EV_CAP = 5000;
 
-  const blankView = () => ({ me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: null, stage: 0, seed: 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, bossBar: null, events: [], botTag: '', botPick: '' });
+  const blankView = () => ({ me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: null, stage: 0, seed: 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, bossBar: null, lap: null, sanctum: null, events: [], botTag: '', botPick: '' });
   const SFX_KEEP = { boss: 1, warn: 1, evolve: 1, level: 1, down: 1, dead: 1, revive: 1, end: 1 }; // events still sounded with sfxLite
 
   function Session() { this.onEnd = null; this.onEvent = null; this.clear(); }
   const S = Session.prototype;
   S.clear = function () {
     this.w = null; this.bot = null; this.sfxLite = false; this.mode = 'off'; this.myPid = 'p1'; this.view = null; this.paused = false; this.acc = 0; this.ended = false;
-    this.net = null; this.mir = null; this.rem = null; this.netEv = []; this.pidIdx = {}; this.snapTick = 0;
+    this.net = null; this.mir = null; this.rem = null; this.netEv = []; this.pidIdx = {}; this.snapTick = 0; this.cos = {};
+    this.lapV = { ph: 0, rem: 0, gold: 0, kills: 0 }; // view.lap on solo / host (World.lapView)
     if (this.bg) { clearInterval(this.bg); this.bg = 0; }
   };
   S.active = function () { return !!this.view; };
   S.coop = function () { return this.mode === 'host' || this.mode === 'client'; };
 
-  // cfg: { mode: 'solo' | 'host', seed, stage, players: [{ pid, name, slot, cls, meta }], myPid, cheats, net (host: { send(pid, d), busy(pid), ended() }) }
+  // cfg: { mode: 'solo' | 'host', seed, stage, players: [{ pid, name, slot, cls, meta, cos }], myPid, cheats, net (host: { send(pid, d), busy(pid), ended() }) }
   S.start = function (cfg) {
     this.clear();
+    this.setCos(cfg.players);
     this.mode = cfg.mode || 'solo'; this.myPid = cfg.myPid || cfg.players[0].pid;
     const w = this.w = new ED.World({ seed: cfg.seed, stage: cfg.stage, players: cfg.players, cheats: cfg.cheats });
     const v = this.view = blankView();
@@ -45,12 +48,14 @@
     this.syncView();
     return w;
   };
-  // A co-op run from the party (ED.Net.Party): cfg.mode 'host' (as start) or 'client' ({ seed, stage, myPid, roster: [{ pid, slot, name, cls }], net: { send(d), leave() } }).
+  // Worn cosmetics of list [{ pid, cls, cos }] into this.cos.
+  S.setCos = function (list) { this.cos = {}; for (const r of list || []) if (r && r.pid) this.cos[r.pid] = ED.Save.cosClean(r.cos, r.cls); };
+  // A co-op run from the party (ED.Net.Party): cfg.mode 'host' (as start) or 'client' ({ seed, stage, myPid, roster: [{ pid, slot, name, cls, cos }], net: { send(d), leave() } }).
   S.startNet = function (cfg) { return cfg.mode === 'client' ? this.startClient(cfg) : this.start(cfg); };
   S.stop = function () { this.clear(); };
   S.syncView = function () {
     const w = this.w, v = this.view; if (!w || !v) return;
-    v.time = w.time; v.xp = w.xp; v.xpNext = w.xpNext; v.level = w.level; v.kills = w.kills; v.gold = w.gold; v.boss = w.boss; v.bossBar = w.bossBar; v.me = w.hero(this.myPid);
+    v.time = w.time; v.xp = w.xp; v.xpNext = w.xpNext; v.level = w.level; v.kills = w.kills; v.gold = w.gold; v.boss = w.boss; v.bossBar = w.bossBar; v.lap = w.lapView(this.lapV); v.sanctum = w.sanctum; v.me = w.hero(this.myPid);
   };
 
   // Local input -> World / client latch (once per frame; edge flags latch until the next tick consumes them).
@@ -204,7 +209,7 @@
     const w = this.w; if (!w || !this.rem) return;
     this.rem.delete(pid);
     const p = w.hero(pid);
-    if (p && !p.dead && w.state === 'play') { p.dead = true; p.downed = false; p.offer = null; p.pend = 0; p.pendForm = 0; p.hp = 0; w.emit({ t: 'dead', pid, left: true }); }
+    if (p && !p.dead && w.state === 'play') { p.dead = true; p.downed = false; p.offer = null; p.pend = 0; p.pendPath = 0; p.pendForm = 0; p.hp = 0; w.emit({ t: 'dead', pid, left: true }); }
     w.partyN = Math.max(1, 1 + this.rem.size);
   };
 
@@ -212,6 +217,7 @@
   S.startClient = function (cfg) {
     this.clear();
     this.mode = 'client'; this.myPid = cfg.myPid; this.net = cfg.net || null;
+    this.setCos(cfg.roster);
     const M = this.mir = new ED.Net.Mirror({ stage: cfg.stage, seed: cfg.seed, roster: cfg.roster, myPid: cfg.myPid });
     this.view = M.view;
     this.P = { x: 0, y: 0, dashT: 0, dashCd: 0, dashDx: 1, dashDy: 0, mdir: 0, mvx: 0, mvy: 0, moving: false };
@@ -244,10 +250,10 @@
     if (!me || !me.offer || !me.offer[n - 1]) return;
     this.L.pick = n; this.offerKeep = me.offer; me.offer = null; this.offerHold = 1;
   };
-  // Banish card n (1..4): sent with the next tick; the strip hides until the host's new offer arrives. A Form offer (every card kind 'form') cannot be banished.
+  // Banish card n (1..4): sent with the next tick; the strip hides until the host's new offer arrives. Unbanishable cards and chest offers (W.canBanish) are refused here too.
   S.clientBanish = function (n) {
     const me = this.view && this.view.me;
-    if (!me || !me.offer || !me.offer[n - 1] || !(me.banishes > 0) || me.offer[0].kind === 'form') return;
+    if (!me || !me.offer || !me.offer[n - 1] || !(me.banishes > 0) || !ED.World.prototype.canBanish(me.offer, me.offer[n - 1])) return;
     this.L.banish = n; this.offerKeep = me.offer; me.offer = null; this.offerHold = 1;
   };
   // Host message for this client: ArrayBuffer snapshot, { t: 'offer', cards }, { t: 'end', summary }.
@@ -291,12 +297,12 @@
     }
     if (P.dashT > 0) {
       const st = Math.min(dt, P.dashT), v = D.dist / D.t;
-      ED.Arena.move(A, P, P.dashDx * v * st, P.dashDy * v * st, C.HERO_R);
+      ED.Arena.move(A, P, P.dashDx * v * st, P.dashDy * v * st, C.HERO_BODY);
       P.dashT -= dt; P.moving = true;
     } else {
       const sp = this.spd;
       P.moving = Math.abs(f.mx) + Math.abs(f.my) > 0.05;
-      if (P.moving) { ED.Arena.move(A, P, f.mx * sp * dt, f.my * sp * dt, C.HERO_R); P.mdir = Math.atan2(f.my, f.mx); P.mvx = f.mx; P.mvy = f.my; }
+      if (P.moving) { ED.Arena.move(A, P, f.mx * sp * dt, f.my * sp * dt, C.HERO_BODY); P.mdir = Math.atan2(f.my, f.mx); P.mvx = f.mx; P.mvy = f.my; }
     }
   };
   // One local tick: the latched input becomes frame seq (quantized exactly as the host will read it) and moves the predicted hero.
@@ -351,14 +357,14 @@
     this.ended = true;
     if (this.onEnd) this.onEnd(sum);
   };
-  // The host is gone (or this client left): the run ends with the last known numbers; sum.note says why.
+  // The host is gone (or this client left): the run ends with the last known numbers (a banked Last Light win stays a win); sum.note says why.
   S.netLost = function (msg) {
     if (this.mode !== 'client' || this.ended) return;
     const v = this.view, M = this.mir;
     this.finish({
-      won: M ? M.state === 'won' : false, time: v.time, kills: v.kills, level: v.level, gold: v.gold, stage: v.stage, note: msg || '',
+      won: M ? M.state === 'won' || !!(v.lap && v.lap.ph) || !!(v.sanctum && v.sanctum.st === 2) : false, time: v.time, kills: v.kills, level: v.level, gold: v.gold, stage: v.stage, note: msg || '',
       perHero: (M ? M.heroes : []).map(h => ({ pid: h.pid, cls: h.cls, name: h.name, kills: h.kills | 0, dealt: {}, weapons: h.weapons.map(ws => ws.id),
-        build: h.weapons.map(ws => ({ id: ws.id, pr: (ws.pr || [0, 0, 0]).slice(), fl: ws.fl | 0 })) })),
+        build: h.weapons.map(ws => ({ id: ws.id, tune: ws.tune | 0, path: ws.path === undefined ? -1 : ws.path, pr: (ws.pr || [0, 0, 0]).slice(), fl: ws.fl | 0 })) })),
     });
   };
   // Net numbers for a HUD or checks: { mode, rtt (client: s, input sent -> acked state shown), snapBytes, ... }.

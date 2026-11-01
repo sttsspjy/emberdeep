@@ -1,12 +1,12 @@
 // Co-op net check (exit 1 on failure). Host and client game sessions (ED.Game.Session) and parties (ED.Net.Party) run in one process over a fake transport
 // (one-way latency 40 ms + 0-25 ms jitter, ordered; control messages go through JSON, binary messages are copied). Usage: node tools/check-net.js
-// 1. Lobby: host, join, hero change, ready, stage; start builds the run on both peers.
+// 1. Lobby: host, join, hero change, ready, stage; start builds the run on both peers; worn cosmetics (profile bundles) reach every lobby and both run sessions.
 // 2. 60 s co-op run (god cheat), scripted inputs on both heroes (walk, dash, Q, card picks by key): client foes match the host's within tolerance at render time,
 //    nearly every host foe inside the client's view is shown, own-hero prediction corrections stay small, vitals / weapon (id, path ranks, refine) / one skill / level match, offers resolve.
 // 3. Downed / revive reach the client. 4. A late join is refused. 5. The host leaving ends the client's run with a note; a client quitting drops its hero on the host.
 // 6. Snapshot bytes at 300 / 900 foes (+600 projectiles, 400 gems, a busy event window): reported; gate <= 12 KB at 900 (ARCHITECTURE §11); decode round trip exact to 0.25 px;
-//    all 3 weapon slots (hero weapon + 2 supports, Forms refined) decode.
-// 7. Late-game zones: 4 zone-heavy heroes (cleric, pyro, necro, bell) with their Form maxed (all paths rank 3, refine 2), max passives, 900 foes, 3 clients: every snapshot <= 12 KB;
+//    all 3 weapon slots (hero weapon + 2 supports, Forms refined) decode; braziers and the Last Light lap state decode.
+// 7. Late-game zones: 4 zone-heavy heroes (cleric, pyro, necro, bell) with their Form maxed (its path at rank 5, refine 2), max passives, 900 foes, 3 clients: every snapshot <= 12 KB;
 //    client 1's mirrored zones equal the host's in-rect zones at every snapshot. 8. A client's banish reaches it as a new offer.
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
@@ -16,8 +16,8 @@ const ED = load(), U = ED.U, C = ED.CONST;
 let SUPS = ED.WEAPON_IDS.filter(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved);
 if (SUPS.length < 2) {
   for (const id of ['tna', 'tnb']) {
-    ED.addWeapon({ id, name: 'T ' + id, icon: 'icon.w.cleave', support: true, role: 'horde', mode: 'around', txt: 'Test', base: { dmg: 1, cd: 1 }, hybrids: [],
-      paths: [0, 1, 2].map(i => ({ id: id + i, name: 'P' + i, form: id + 'f', ranks: [0, 1, 2].map(() => ({ mods: { dmg: 0.1 }, txt: 'R' })) })) }, { fire: () => true });
+    ED.addWeapon({ id, name: 'T ' + id, icon: 'icon.w.cleave', support: true, role: 'horde', mode: 'around', txt: 'Test', base: { dmg: 1, cd: 1 },
+      paths: [0, 1, 2].map(i => ({ id: id + i, name: 'P' + i, forms: [id + 'f'], ranks: [0, 1, 2].map(() => ({ mods: { dmg: 0.1 }, txt: 'R' })) })) }, { fire: () => true });
     ED.addWeapon({ id: id + 'f', name: 'T ' + id + ' Form', icon: 'icon.w.cleave', support: true, evolved: true, form: true, from: id, txt: 'Test', base: { dmg: 2, cd: 1 },
       refine: [{ mods: { dmg: 0.1 }, txt: 'R' }, { mods: { dmg: 0.1 }, txt: 'R' }] }, { fire: () => true });
   }
@@ -30,7 +30,7 @@ const N = ED.Net;
 { const r = U.RNG(4242); Math.random = r.next; } // party codes and pids: same every run
 const GATE = 12 * 1024;
 let fails = 0;
-const okV = N.VERSION === 8 && ED.NET_VERSION === 8;
+const okV = N.VERSION === 14 && ED.NET_VERSION === 14;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
 const t0 = Date.now();
 
@@ -77,7 +77,12 @@ cbH.onError = (m) => cbH.errors.push(m); cbC.onError = (m) => cbC.errors.push(m)
 const pH = new N.Party(gH, cbH), pC = new N.Party(gC, cbC);
 let endH = null, endC = null;
 gH.onEnd = (s) => { endH = s; }; gC.onEnd = (s) => { endC = s; };
+// worn cosmetics come from ED.App.profile at host / join / hero change: the host wears a knight skin and a title, the guest a pyro skin, a tint and a name colour
+const cosProf = (ids) => { const p = ED.Save.defaultProfile(); p.gold = 1e5; for (const id of ids) { ED.Save.buyCos(p, id); ED.Save.wear(p, id); } return p; };
+const profH = cosProf(['skin.knight.obsidian', 'title.lamplighter', 'lvl.pillar']), profC = cosProf(['skin.pyro.ashen', 'skin.ranger.autumn', 'tint.crimson', 'ncol.ember', 'kill.embers']);
+ED.App = { profile: profH, sel: { cls: 'knight' } };
 const code = pH.host('Hosty', 'knight');
+ED.App.profile = profC;
 pumpFor(100);
 ok(pH.lobby.status === 'open' && pH.lobby.code === code && pH.lobby.members.length === 1, 'host lobby open (' + code + ')');
 pC.join(code, 'Guesty', 'ranger');
@@ -85,6 +90,11 @@ pumpFor(300);
 ok(pC.lobby.status === 'open' && pC.lobby.me && pH.lobby.members.length === 2 && pC.lobby.members.length === 2, 'client joined: both lobbies list 2 members');
 pC.setHero('pyro'); pumpFor(200);
 ok(pH.lobby.members[1].cls === 'pyro' && pC.lobby.members[1].cls === 'pyro', 'hero change reaches both lobbies');
+{
+  const cH = pC.lobby.members[0].cos || {}, cC = pH.lobby.members[1].cos || {};
+  ok(cH.skin === 'skin.knight.obsidian' && cH.title === 'title.lamplighter' && cH.lvl === 'lvl.pillar' && cC.skin === 'skin.pyro.ashen' && cC.tint === 'tint.crimson' && cC.ncol === 'ncol.ember' && cC.kill === 'kill.embers',
+    'worn cosmetics reach the other lobby; the guest skin follows its hero change (ranger -> pyro)');
+}
 ok(!pH.lobby.canStart && !pH.start(), 'start refused while the guest is not ready');
 pC.setReady(true); pH.setStage(1); pumpFor(200);
 ok(pH.lobby.canStart && pC.lobby.stage === 1 && pC.lobby.members[1].ready, 'ready + stage reach both lobbies; host can start');
@@ -94,6 +104,9 @@ pumpFor(200, () => { gH.update(1 / 60); gC.update(1 / 60); });
 ok(gH.mode === 'host' && gC.mode === 'client' && pC.lobby.inRun && gC.view && gC.mir.ready, 'both peers run (client mirror has snapshots)');
 const w = gH.w, hostHero = w.hero('host'), cliPid = pC.lobby.me, cliHero = w.hero(cliPid);
 ok(!!cliHero && cliHero.cls === 'pyro' && gC.view.props.obstacles.length === w.arena.obstacles.length, 'client hero exists on the host; arena rebuilt from the seed');
+ok([gH, gC].every(g => g.cos.host && g.cos.host.skin === 'skin.knight.obsidian' && g.cos.host.title === 'title.lamplighter' && g.cos[cliPid] && g.cos[cliPid].skin === 'skin.pyro.ashen' && g.cos[cliPid].tint === 'tint.crimson' && g.cos[cliPid].ncol === 'ncol.ember'),
+  'both run sessions know every hero’s worn cosmetics (from the start roster, not snapshots)');
+delete ED.App;
 
 // ---------------- 2. 60 s run ----------------
 w.cheats.xp = 8; // enough level-ups in 60 s under the run XP curve
@@ -184,9 +197,9 @@ ok(Math.hypot(me.x - cliHero.x, me.y - cliHero.y) < 0.01, `idle client hero sits
 ok(cliDash >= 10, `client dashes predicted locally (${cliDash})`);
 const atSnap = ring[Math.round(gC.mir.T / C.TICK) % RING];
 ok(atSnap && atSnap.tick === Math.round(gC.mir.T / C.TICK) && Math.abs(me.hp - atSnap.hp) < 0.01 && me.maxHp === cliHero.maxHp && gC.view.level === atSnap.level && gC.view.kills === atSnap.kills && gC.view.gold === atSnap.gold, `vitals / level / kills / gold match the host at the snapshot tick (lv ${w.level}, kills ${w.kills})`);
-const sig = (p) => p.weapons.map(x => x.id + x.lvl + ':' + x.pr.join('') + x.fl + (x.evo ? 'F' : '')).join(',') + '|' + p.passives.map(x => x.id + x.lvl).join(',') + '|' + p.skills.map(x => x.id + x.lvl).join(',');
-ok(sig(me) === sig(cliHero) && me.skills.length === 1 && me.weapons.length >= 1 && me.weapons[0].root === ED.HEROES[me.cls].sig && me.weapons[0].pr.some(r => r > 0), 'client hero weapon (path ranks, refine) / passives / one skill match the host: ' + sig(me));
-ok(okV, 'NET_VERSION 8');
+const sig = (p) => p.weapons.map(x => x.id + x.lvl + ':' + x.tune + '/' + x.path + '/' + x.pr.join('') + x.fl + (x.evo ? 'F' : '')).join(',') + '|' + p.passives.map(x => x.id + x.lvl).join(',') + '|' + p.skills.map(x => x.id + x.lvl).join(',');
+ok(sig(me) === sig(cliHero) && me.skills.length === 1 && me.weapons.length >= 1 && me.weapons[0].root === ED.HEROES[me.cls].sig && me.weapons[0].lvl > 1, 'client hero weapon (tune, path ranks, refine) / passives / one skill match the host: ' + sig(me));
+ok(okV, 'NET_VERSION 14');
 const cq = me.skills[0], hq = cliHero.skills[0];
 ok(cq && hq.chN === 2 && cq.chN === hq.chN && cq.ch === hq.ch && hq.ch === 2, `Q charges on the wire (host ${hq.ch}/${hq.chN}, client ${cq && cq.ch}/${cq && cq.chN})`);
 ok(cliPicks >= 5 && hostPicks >= 5 && !pendLive, `co-op level-ups resolve without pause (client picks ${cliPicks}, host picks ${hostPicks}, client pending ${pendLive} while picking)`);
@@ -232,6 +245,9 @@ ok(pC.lobby.status === 'closed' && !pC.lobby.inRun, 'client party closed');
   const step = (sec) => { const end = simMs + sec * 1000; while (simMs < end) { simMs += 1000 / 60; gH3.update(1 / 60); gC3.update(1 / 60); pump(); } };
   step(3); gH3.quit(); step(0.5);
   ok(e3 && !e3.note && e3.perHero.length === 2 && !pH3.lobby.inRun && !pC3.lobby.inRun && pC3.lobby.status === 'open' && !pH3.lobby.members[1].ready, 'host quits: client gets the host summary, both lobbies back (guest not ready)');
+  const sb = JSON.stringify(e3 || {}).length;
+  ok(e3 && Array.isArray(e3.tl) && Array.isArray(e3.bosses) && e3.lap === null && e3.perHero.every(h => h.kw && h.top && typeof h.taken === 'number' && typeof h.revs === 'number' && Array.isArray(h.pas) && h.build.every(b => b.t0 >= 0)) && sb < 4096,
+    'client summary carries the run stats (' + sb + ' B of JSON)');
   pH3.leave(); step(0.3);
 }
 
@@ -261,10 +277,10 @@ ok(pC.lobby.status === 'closed' && !pC.lobby.inRun, 'client party closed');
 function scene(n, spread) {
   const W2 = new ED.World({ seed: 42, stage: 0, players: [{ pid: 'host', name: 'H', slot: 0, cls: 'ranger', meta: { shop: {}, sigs: [] } }, { pid: 'c', name: 'C', slot: 1, cls: 'knight', meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
   for (const row of W2.sdef.timeline) row.rate = 0;
-  W2.sp.swarmT = W2.sp.eliteT = Infinity; W2.sdef = Object.assign({}, W2.sdef, { bosses: [] });
+  W2.sp.swarmT = W2.sp.eliteT = W2.sp.flockT = Infinity; W2.sdef = Object.assign({}, W2.sdef, { bosses: [] });
   const p = W2.heroes[0], c = W2.heroes[1], rng = U.RNG(9), ids = ['bat', 'skeleton', 'slime', 'skelknight', 'bonearcher'];
-  W2.setRanks(p, p.weapons[0], 9, true);
-  for (const id of SUPS.slice(0, 2)) W2.setRanks(p, W2.addWeapon(p, id), 9, true); // all 3 slots: hero weapon + 2 supports, Forms refined
+  W2.setForm(p, p.weapons[0], 'hail', 2);
+  for (const id of SUPS.slice(0, 2)) W2.setRanks(p, W2.addWeapon(p, id), ED.TUNE_MAX, 0, ED.PATH_MAX, 0, 2); // all 3 slots: hero weapon + 2 supports, Forms refined
   const top = () => {
     while (W2.foes.length < n) { const x = c.x + spread(rng, 'x'), y = c.y + spread(rng, 'y'); if (!ED.Arena.blocked(W2.arena, x, y, 8)) W2.spawnFoe(ids[rng.int(0, ids.length - 1)], x, y, { hpMul: 400 }); }
     while (W2.projs.length < 600) { const a = rng.next() * U.TAU; W2.shoot(p, 'longbow', p.x + Math.cos(a) * rng.range(0, 300), p.y + Math.sin(a) * rng.range(0, 300), rng.next() * U.TAU, null, { look: 'arrow', dmg: 5, speed: 120, pierce: 9999, rehit: 0.5, life: 4 }); }
@@ -299,8 +315,8 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
     ok(bad === 0 && M.view.foes.length >= inR && M.view.projs.length > 0 && M.view.pickups.length > 0, `decode round trip: ${M.view.foes.length} foes (${inR} in view), ${M.view.projs.length} projectiles, ${M.view.pickups.length} pickups, mismatches ${bad}`);
     const h = M.view.heroes.find(x => x.pid === 'host');
     const hw = h && h.weapons[0], HP = r.W2.heroes[0];
-    ok(h && hw.id === 'hail' && hw.evo && hw.pr.join('') === '333' && hw.fl === 2 && hw.lvl === 13 && hw.root === 'longbow', 'hero weapon decodes: Form, path ranks, refine');
-    ok(h && h.weapons.length === 3 && HP.weapons.every((ws, i) => { const s = h.weapons[i]; return s.id === ws.id && s.root === ws.root && s.lvl === ws.lvl && s.evo === ws.evo && s.pr.join() === ws.pr.join() && s.fl === ws.fl; }),
+    ok(h && hw.id === 'hail' && hw.evo && hw.tune === 5 && hw.tk.join('') === '221' && hw.path === 0 && hw.pr.join('') === '500' && hw.fl === 2 && hw.lvl === 14 && hw.root === 'longbow', 'hero weapon decodes: Form, tune kinds, path, rank, refine');
+    ok(h && h.weapons.length === 3 && HP.weapons.every((ws, i) => { const s = h.weapons[i]; return s.id === ws.id && s.root === ws.root && s.lvl === ws.lvl && s.evo === ws.evo && s.tune === ws.tune && s.tk.join() === ws.tk.join() && s.path === ws.path && s.pr.join() === ws.pr.join() && s.fl === ws.fl; }),
       'all 3 slots decode: ' + (h ? h.weapons.map(s => s.id + ':' + s.pr.join('') + s.fl).join(' ') : ''));
     // braziers: broken and relit states both reach the client (bitmask)
     const HB = r.W2.arena.braziers, MB = M.view.props.braziers, same = () => HB.every((b, i) => MB[i].broken === b.broken && MB[i].hp === (b.broken ? 0 : 1));
@@ -309,6 +325,11 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
     const brokeOk = same() && MB.some(b => b.broken);
     HB.forEach(b => { b.broken = false; b.hp = 1; }); snap();
     ok(brokeOk && same() && MB.every(b => !b.broken), `braziers: ${HB.length} decode broken, then relit`);
+    // Last Light: none, then the lap (phase, s left, lap gold, lap kills) reach view.lap
+    const lap0 = M.view.lap && M.view.lap.ph === 0;
+    r.W2.lap = { t0: r.W2.time - 3, dur: 60, kills: 1234, gold: 157, ph: 1 }; snap();
+    const L = M.view.lap; r.W2.lap = null;
+    ok(lap0 && L && L.ph === 2 && Math.abs(L.rem - 57) < 0.011 && L.gold === 157 && L.kills === 1234, `Last Light lap state decodes (${JSON.stringify(L)})`);
   }
 }
 
@@ -319,14 +340,13 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
   const FORM = { cleric: 'consecration', pyro: 'napalm', necro: 'plaguefield', bell: 'windchime' }; // the zone-heaviest Form per hero
   W3.heroes.forEach((p) => {
     for (const id of ['might', 'reach', 'duration', 'multishot', 'haste', 'velocity']) p.passives.push({ id, lvl: ED.PASSIVES[id].max });
-    const ws = W3.setRanks(p, p.weapons[0], 9, false);
-    W3.takeForm(p, ws, FORM[p.cls]); while (W3.refineForm(p, ws));
+    W3.setForm(p, p.weapons[0], FORM[p.cls], 2);
     W3.recalc(p, true);
   });
   for (const row of W3.sdef.timeline) row.rate = 0;
-  W3.sp.swarmT = W3.sp.eliteT = Infinity; W3.sdef = Object.assign({}, W3.sdef, { bosses: [] });
+  W3.sp.swarmT = W3.sp.eliteT = W3.sp.flockT = Infinity; W3.sdef = Object.assign({}, W3.sdef, { bosses: [] });
   const rng = U.RNG(3), ids = W3.sdef.timeline[W3.sdef.timeline.length - 1].roster.map(r => r[0]).filter(id => ED.FOES[id] && !ED.FOES[id].boss);
-  const top = () => { let k = 0; while (W3.foes.length < 900 && k++ < 400) { const p = W3.heroes[rng.int(0, 3)], a = rng.next() * U.TAU, d = 60 + Math.sqrt(rng.next()) * 380, x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d; if (!ED.Arena.blocked(W3.arena, x, y, 8)) W3.spawnFoe(ids[rng.int(0, ids.length - 1)], x, y, { hpMul: 1 }); } };
+  const top = () => { let k = 0; while (W3.foes.length < 900 && k++ < 400) { const p = W3.heroes[rng.int(0, 3)], a = rng.next() * U.TAU, d = 60 + Math.sqrt(rng.next()) * 380, x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d; if (!ED.Arena.blocked(W3.arena, x, y, 8)) W3.spawnFoe(ids[rng.int(0, ids.length - 1)], x, y, { hpMul: 0.625 }); } }; // hpMul 0.625 cancels the x1.6 foe HP: kill-made zones keep the scene zone-heavy
   const pidIdx = {}; W3.heroes.forEach((p, i) => { pidIdx[p.pid] = i; });
   const ccs = [1, 2, 3].map(i => ({ idx: i, vw: 641, vh: 361, ack: 0, seq: 0, pidIdx, evs: null, carry: [] }));
   const M = new N.Mirror({ stage: 0, seed: 11, roster: cls.map((c, i) => ({ pid: 'p' + i, slot: i, name: 'P' + i, cls: c })), myPid: 'p1' });

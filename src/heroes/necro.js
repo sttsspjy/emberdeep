@@ -1,5 +1,5 @@
-// Necro (summoner): hero data, signature Bone Shard (3 paths x 3 ranks: Legion / Shards / Plague), Forms Bone Lord / Bone Storm / Plague Field + hybrids Lich (Legion + Plague)
-// and Ossuary (Legion + Shards), Q Bone Wall (3 skill levels).
+// Necro (summoner): hero data, signature Bone Shard (3 paths x 3 ranks: Legion / Shards / Plague), Forms Bone Lord + Ossuary (Legion), Bone Storm (Shards),
+// Plague Field + Lich (Plague), Q Bone Wall (4 skill levels).
 // Army: every volley raises S.raise minions while fewer than S.cap live (at the freshest corpse in view, else beside the holder); kill-rise (S.rise) adds short-lived extras up to
 // cap + S.over. Minions are zones (look by kind: 'minion' skeleton, 'boneknight', 'bonearcher', 'ghoul'; z.a facing, z.w swing flash 1..0, wid = credited weapon or skill) driven by
 // minTick (targets only inside the owner's view: w.vclamp is the zone's hero). Hit damage = S.dmg x S.mk at raise time. Owner lists p.minions / p.minIds (refs checked by id).
@@ -13,7 +13,7 @@
   const KLOOK = ['minion', 'boneknight', 'bonearcher', 'ghoul'];
 
   ED.regLook('minion', 'boneknight', 'corpse', 'bonewall', 'blight', 'plague', 'bonearcher', 'ghoul', 'glob', 'boneslam');
-  ED.addHero({ id: 'necro', name: 'Necro', hp: 95, speed: 70, crit: 0.05, sig: 'boneshard', skills: ['bonewall'], icon: 'hero.necro.idle', col: '#b7a6e0', txt: 'Raises an army. The dead are fuel.' });
+  ED.addHero({ id: 'necro', name: 'Necro', hp: 105, speed: 78, crit: 0.05, sig: 'boneshard', skills: ['bonewall'], icon: 'hero.necro.idle', col: '#b7a6e0', txt: 'Raises an army. The dead are fuel.' });
 
   // ---------------- corpses ----------------
   const corpses = (p) => { if (!p.corpse) { p.corpse = new Float64Array(CORPSES * 3).fill(-1); p.corpI = 0; } return p.corpse; };
@@ -48,7 +48,8 @@
   const sigSlot = (p) => { for (let i = 0; i < p.weapons.length; i++) if (ROOTS[p.weapons[i].id]) return i; return -1; };
   const MHIT = { knock: 70, noEv: true, kind: 'minion' }, KHIT = { knock: 200, noEv: true, kind: 'minion', stun: 0.3 };
   const SLAM = { knock: 260, noEv: true, kind: 'minion', stun: 0.4 }, GBOOM = { knock: 180, kind: 'minion', look: 'ghoul' };
-  const ASHOT = { look: 'bone', speed: 300, dmg: 0, pierce: 2, r: 6, life: 0.75, homing: 2.5, knock: 30 };
+  const smallFoe = (f) => !(f.elite || f.boss); // archers and their shards prefer elites and bosses
+  const ASHOT = { look: 'bone', speed: 300, dmg: 0, pierce: 2, r: 6, life: 0.75, homing: 2.5, hskip: smallFoe, knock: 30 };
   const VZ = { team: 0, p: null, wid: '', x: 0, y: 0, r: 0, dur: 0.3, look: 'boneslam' };
   // Visual-only zone (no damage): look at (x, y), radius r, dur s.
   const vfx = (w, p, wid, look, x, y, r, dur) => { VZ.p = p; VZ.wid = wid; VZ.look = look; VZ.x = x; VZ.y = y; VZ.r = r; VZ.dur = dur; w.zone(VZ); };
@@ -67,14 +68,14 @@
     const far = p.dead || U.dist2(z.x, z.y, p.x, p.y) > LEASH * LEASH;
     let e = s.tgt;
     if (far) e = null;
-    else if (!e || e.dead || e.id !== s.tid || s.rt <= 0) { e = w.nearestFoe(z.x, z.y, K === 2 ? 170 : 150); s.rt = 0.3; }
+    else if (!e || e.dead || e.id !== s.tid || s.rt <= 0) { e = (K === 2 && w.nearestFoe(z.x, z.y, 170, smallFoe)) || w.nearestFoe(z.x, z.y, K === 2 ? 170 : 150); s.rt = 0.3; }
     s.tgt = e; s.tid = e ? e.id : 0;
     let tx, ty, sp = s.spd;
     if (e) { tx = e.x; ty = e.y; }
     else { const a = s.slot * 2.4 + w.time * 0.6; tx = p.x + Math.cos(a) * 34; ty = p.y + Math.sin(a) * 24; if (far) sp *= 1.7; }
     const dx = tx - z.x, dy = ty - z.y, d = Math.hypot(dx, dy);
     if (d > 0.5) z.a = Math.atan2(dy, dx);
-    if (K === 2) { // archer: holds 60-110 px from its target, looses shards
+    if (K === 2) { // archer: targets the nearest elite / boss within 170 px first; holds 60-110 px from its target, looses shards
       let mv = 0;
       if (!e) mv = d > 6 ? 1 : 0; else if (d > 110) mv = 1; else if (d < 60) mv = -0.7;
       if (mv && d > 0.5) { const st = Math.min(Math.abs(d - 85) + 1, sp * TICK) * mv; ED.Arena.move(w.arena, z, dx / d * st, dy / d * st, z.r); }
@@ -192,22 +193,21 @@
   const SHOT = { fire(w, p, ws, S) { shards(w, p, ws, S); army(w, p, ws, S); return true; }, kill: onKill };
   ED.addWeapon({
     id: 'boneshard', name: 'Bone Shard', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', txt: 'Shards pierce; the dead rise to serve',
-    base: base({ dmg: 12, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220 }),
+    base: base({ dmg: 15, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220 }),
     paths: [
-      { id: 'legion', name: 'Legion', form: 'bonelord', ranks: [
+      { id: 'legion', name: 'Legion', forms: ['bonelord', 'ossuary'], ranks: [
         { mods: { cap: 2, raise: 1 }, txt: '+2 skeletons, raised two at a time' },
         { mods: { rise: 0.15, over: 4 }, txt: 'The slain rise as extra skeletons' },
         { mods: { marc: 1.2, dmg: 0.25 }, txt: 'Skeletons cleave wider, +25% damage' }] },
-      { id: 'shards', name: 'Shards', form: 'bonestorm', ranks: [
+      { id: 'shards', name: 'Shards', forms: ['bonestorm'], ranks: [
         { mods: { n: 2 }, txt: '+2 bone shards' },
         { mods: { split: 3 }, txt: 'Shards burst into 3 splinters' },
         { mods: { n: 1, homing: 3, dmg: 0.25 }, txt: '+1 shard, shards seek foes, +25% dmg' }] },
-      { id: 'plague', name: 'Plague', form: 'plaguefield', ranks: [
+      { id: 'plague', name: 'Plague', forms: ['plaguefield', 'lich'], ranks: [
         { mods: { pools: 1 }, txt: 'The dead rot into blight pools' },
         { mods: { pools: 1, parea: 0.25 }, txt: '+1 pool, pools spread wider' },
         { mods: { pburst: 1, dmg: 0.25 }, txt: 'Pools burst as they dry, +25% dmg' }] },
-    ],
-    hybrids: [{ need: [0, 2], form: 'lich' }, { need: [0, 1], form: 'ossuary' }],
+    ],
   }, SHOT);
   // Bone Storm: S.n shards orbit the hero (radius 30, S.orbit s, re-hitting foes they touch at ORB_K x damage), then launch along the cursor dir (full damage, homing after); they split as Bone Shard.
   const ORB_K = 0.3;
@@ -228,7 +228,7 @@
   const STORM = { look: 'bone', pierce: 999, rehit: 0.25, life: 1, tick: orbitTick, onEnd: stormEnd, st: null };
   ED.addWeapon({
     id: 'bonestorm', name: 'Bone Storm', icon: 'weapon.soulscythe', look: 'bone', sig: 'necro', mode: 'around', evolved: true, form: true, from: 'boneshard', txt: 'Shards orbit, then launch',
-    base: base({ dmg: 7, cd: 0.9, n: 6, pierce: 4, area: 1.2, speed: 320, dur: 0, knock: 80, range: 230, orbit: 1.0 }),
+    base: base({ dmg: 4.9, cd: 0.9, n: 6, pierce: 4, area: 1.2, speed: 320, dur: 0, knock: 80, range: 230, orbit: 1.0 }),
     refine: [
       { mods: { n: 2 }, txt: '+2 orbiting shards' },
       { mods: { dmg: 0.25, pierce: 2 }, txt: '+25% damage, pierce 2 more' },
@@ -250,7 +250,7 @@
   // Bone Lord: the army rises as Bone Knights (wide stunning cleave, a ground slam every S.slam-th swing); shards as Bone Shard.
   ED.addWeapon({
     id: 'bonelord', name: 'Bone Lord', icon: 'weapon.alt.waraxe', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'Your dead rise as Bone Knights',
-    base: base({ dmg: 16, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 1, kind: 1, life: 12, mk: 0.6, marc: 3.0, slam: 3 }),
+    base: base({ dmg: 11.2, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 1, kind: 1, life: 12, mk: 0.6, marc: 3.0, slam: 3 }),
     refine: [
       { mods: { cap: 2 }, txt: '+2 Bone Knights' },
       { mods: { slam: -1, dmg: 0.25 }, txt: 'Knights slam more often, +25% damage' },
@@ -261,7 +261,7 @@
   const GLOB = { look: 'glob', speed: 0, dmg: 0, pierce: 999, r: 3, life: 1, knock: 0, onEnd: globEnd };
   ED.addWeapon({
     id: 'plaguefield', name: 'Plague Field', icon: 'weapon.plaguestaff', look: 'glob', sig: 'necro', mode: 'densest', evolved: true, form: true, from: 'boneshard', txt: 'Blight leaps from foe to foe',
-    base: base({ dmg: 16, cd: 1.0, n: 2, pierce: 0, area: 1, speed: 220, dur: 0, knock: 0, range: 220, pk: 1.35, parea: 0.2, pdur: 3.5, spread: 1 }),
+    base: base({ dmg: 11.2, cd: 1.0, n: 2, pierce: 0, area: 1, speed: 220, dur: 0, knock: 0, range: 220, pk: 1.35, parea: 0.2, pdur: 3.5, spread: 1 }),
     refine: [
       { mods: { n: 1, parea: 0.3 }, txt: '+1 glob, pools grow larger' },
       { mods: { dmg: 0.25, pdur: 1.5 }, txt: '+25% damage, pools last longer' },
@@ -285,16 +285,16 @@
   // Lich: the army rises as plague ghouls that rush foes and burst (blast S.gr, damage S.dmg x S.mk), leaving a blight pool; shards as Bone Shard.
   ED.addWeapon({
     id: 'lich', name: 'Lich', icon: 'weapon.soulscythe', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'The dead rise as bursting ghouls',
-    base: base({ dmg: 16, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 5, raise: 2, kind: 3, life: 5, mk: 1.15, gr: 34 }),
+    base: base({ dmg: 14, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 5, raise: 2, kind: 3, life: 5, mk: 1.15, gr: 34 }),
     refine: [
       { mods: { cap: 2, raise: 1 }, txt: '+2 ghouls, raised faster' },
       { mods: { dmg: 0.25, gr: 10 }, txt: '+25% damage, bigger bursts' },
     ],
   }, SHOT);
-  // Ossuary: the army rises as skeleton archers (keep 60-110 px off, loose S.avol homing shards every S.acd s that split as Bone Shard); shards as Bone Shard.
+  // Ossuary: the army rises as skeleton archers (keep 60-110 px off, loose S.avol homing shards every S.acd s; archers and shards go for elites and bosses first); shards as Bone Shard.
   ED.addWeapon({
-    id: 'ossuary', name: 'Ossuary', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'Your army takes up bows of bone',
-    base: base({ dmg: 14, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 2, kind: 2, life: 12, mk: 0.55, acd: 0.6, avol: 1, apierce: 9 }),
+    id: 'ossuary', name: 'Ossuary', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'Bone archers hunt the biggest foes',
+    base: base({ dmg: 9.8, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 2, kind: 2, life: 12, mk: 0.65, acd: 0.6, avol: 1, apierce: 9 }),
     refine: [
       { mods: { cap: 2 }, txt: '+2 skeleton archers' },
       { mods: { avol: 1, dmg: 0.25 }, txt: 'Archers loose 2 shards, +25% damage' },
@@ -304,18 +304,20 @@
   // ---------------- Q: Bone Wall ----------------
   // Zero damage. A curved bone wall at the cursor for N.dur s that non-boss foes cannot cross (W.blockZone): an arc N.len px long on a circle of radius ARC_R centred ARC_R px from the
   // cursor toward the hero (its middle sits on the cursor, square to the hero-cursor line, ends curving toward the hero). ring (L3): a full ring of radius N.ring around the cursor instead.
-  // taunt (L4): non-boss foes within N.taunt px of the wall walk to it and hold there (st.lure). Zone 'bonewall' (circle x, y, r; arc 0 = full ring, else span around a; w = thickness).
+  // taunt (L4): non-boss foes within N.taunt px of the wall walk to it and hold there (st.lure).
+  // mire (L5): walls last twice as long (dur +100%) and slow foes touching them N.mire (st.slow). Zone 'bonewall' (circle x, y, r; arc 0 = full ring, else span around a; w = thickness).
   const ARC_R = 120, WALL_W = 16;
   ED.addSkill({
     id: 'bonewall', name: 'Bone Wall', icon: 'prop.bonepile', cd: 12, txt: 'A bone wall the horde cannot cross',
-    base: { len: 140, dur: 5, ring: 0, taunt: 0 },
+    base: { len: 140, dur: 5, ring: 0, taunt: 0, mire: 0 },
     levels: [
       { mods: { len: 60 }, txt: 'A longer wall' },
       { mods: { ring: 80 }, txt: 'The wall closes into a ring' },
       { mods: { taunt: 160 }, txt: 'Nearby foes target the wall' },
+      { mods: { dur: 1, mire: 0.5 }, txt: 'Walls last 2x as long, slow 50%' },
     ],
   }, (w, p, x, y, N) => {
-    const a = Math.hypot(x - p.x, y - p.y) < 1 ? p.mdir : Math.atan2(y - p.y, x - p.x), st = { out: false, lure: N.taunt || 0, lt: 0 };
+    const a = Math.hypot(x - p.x, y - p.y) < 1 ? p.mdir : Math.atan2(y - p.y, x - p.x), st = { out: false, lure: N.taunt || 0, lt: 0, slow: N.mire || 0 };
     if (N.ring > 0) w.zone({ team: 0, p, wid: 'bonewall', x, y, r: N.ring, w: WALL_W, arc: 0, a, dur: N.dur, look: 'bonewall', st, onTick: ED.blockTick });
     else w.zone({ team: 0, p, wid: 'bonewall', x: x - Math.cos(a) * ARC_R, y: y - Math.sin(a) * ARC_R, r: ARC_R, w: WALL_W, arc: N.len / ARC_R, a, dur: N.dur, look: 'bonewall', st, onTick: ED.blockTick });
     return { shake: 5, stop: 0.05 };

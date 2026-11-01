@@ -15,9 +15,9 @@ let fails = 0;
 function setup(n) {
   const w = new ED.World({ seed: 42, stage: 0, players: [{ pid: 'p1', name: 'P', slot: 0, cls: 'ranger', meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
   for (const row of w.sdef.timeline) { row.rate = 0; }
-  w.sp.swarmT = w.sp.eliteT = Infinity; w.sdef = Object.assign({}, w.sdef, { bosses: [] });
+  w.sp.swarmT = w.sp.eliteT = w.sp.flockT = Infinity; w.sdef = Object.assign({}, w.sdef, { bosses: [] });
   const p = w.heroes[0], rng = U.RNG(9), ids = ['bat', 'skeleton', 'slime', 'skelknight', 'bonearcher', 'bulwark', 'bonecaller', 'stalker', 'mirecrab', 'colossus'].filter(id => ED.FOES[id]);
-  for (const ws of p.weapons) w.setRanks(p, ws, 9, true);
+  for (const ws of p.weapons) w.setForm(p, ws, ED.WEAPONS[ws.root].paths[0].forms[0], 2);
   w.recalc(p, true);
   const top = () => {
     while (w.foes.length < n) { const a = rng.next() * U.TAU, d = 30 + Math.sqrt(rng.next()) * 520, x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d; if (!ED.Arena.blocked(w.arena, x, y, 8)) w.spawnFoe(ids[rng.int(0, ids.length - 1)], x, y, { hpMul: 400 }); }

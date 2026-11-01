@@ -2,7 +2,7 @@
 // Everything is pooled and capped: particles, fx sprites, rings, flashes, slashes, chains, death pops, damage numbers, delayed bursts. Per-frame budgets scale bursts down when many foes die at once
 // and with the on-screen crowd. Damage numbers merge per foe per 150 ms, at most 60 alive (oldest dropped), crits big and yellow, off when FX.numbers is false.
 // Hit-stop (FX.hold, solo only; main.js skips sim steps while it runs) and screen shake (scaled down with the crowd, off when FX.shakeOn is false) only on skills, elite deaths and boss hits.
-// Overlays: boss intro banner + letterbox, swarm / elite / phase / evolution banners, offscreen arrows to elites and bosses, level-up text, screen flashes, low-HP and hurt vignette.
+// Overlays: Last Light ('victory' shockwave + flash, 'lap' banner and final flash), Sanctum ('sanctum' entry banner, landing flash), boss intro banner + letterbox, swarm / elite / phase / evolution banners, offscreen arrows to elites and bosses, level-up text, screen flashes, low-HP and hurt vignette.
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU, PI = Math.PI;
@@ -56,11 +56,14 @@
     for (let i = 0; i < n; i++) { const a = rnd() * TAU, s = (sp || 40) * (0.6 + rnd() * 0.8); F.part(x, y, Math.cos(a) * s, Math.sin(a) * s - (up || 10), (life || 0.4) * (0.7 + rnd() * 0.6), col, size || 2); }
   };
   F.puff = (x, y, n, col, sp) => F.burst(x, y, n, col & 0xffffff00, sp, 0.45, 2, 10);
-  // Atlas fx sprite played once at (x, y): scale sc, rotation rot, tint 0xRRGGBB, alpha.
-  F.sprite = (id, x, y, sc, rot, tint, alpha, flip) => {
+  // Atlas fx sprite played once at (x, y): scale sc, rotation rot, tint 0xRRGGBB, alpha; ramp: recolour through ED.Pix ramp `ramp` (name) instead of the tint.
+  F.sprite = (id, x, y, sc, rot, tint, alpha, flip, ramp) => {
     const A = ED.Atlas, r = A.anim(id); if (!r) return;
     const s = sprs.get(); s.id = id; s.x = x; s.y = y; s.sc = sc || 1; s.rot = rot || 0; s.tint = tint || 0; s.al = alpha === undefined ? 1 : alpha; s.flip = !!flip; s.fps = r.fps || 12; s.n = r.n; s.life = s.max = r.n / s.fps;
+    s.ramp = ramp || '';
   };
+  // Colour of a pooled effect at creation (0xRRGGBBAA); ED.Cos swaps it while a tinted weapon event is handled.
+  F.col = (c) => c;
   // Expanding ring r0 -> r1 (ease-out) of width lw.
   F.ring = (x, y, r, col, life, r0, lw) => { const o = rings.get(); o.x = x; o.y = y; o.r1 = r; o.r0 = r0 === undefined ? r * 0.55 : r0; o.col = col; o.life = o.max = life || 0.3; o.lw = lw || 2; };
   // Filled flash disc fading out (a bloom stand-in that also works on Canvas2D).
@@ -87,6 +90,7 @@
   const ban = { text: '', sub: '', col: 0xffd27a, subCol: 0xfff1d6, life: 0, max: 1, k: 2, band: false };
   const ban2 = { text: '', sub: '', col: 0xffd27a, subCol: 0xfff1d6, life: 0, max: 1, k: 2, band: false };
   // Banner: big = the centre slot (boss intro, evolution), else the side slot (warnings, phases). k = font scale, band = dark band behind.
+  const C_SANCTUM_FADE = ED.CONST.SANCTUM.fade;
   F.banner = (text, col, secs, opt) => {
     const b = opt && opt.big ? ban : ban2;
     b.text = text; b.col = col; b.life = b.max = secs || 2; b.sub = (opt && opt.sub) || ''; b.subCol = (opt && opt.subCol) || 0xfff1d6; b.k = (opt && opt.k) || 2; b.band = !!(opt && opt.band);
@@ -123,7 +127,7 @@
     const def = ED.FOES[ED.FOE_IDS[ev.k]], Ac = ED.Actors, pose = Ac && Ac.pose ? Ac.pose(ev.id) : null;
     const fi = def && Ac ? (def.boss ? Ac.bossInfo(def) : Ac.foeInfo(def)) : null, col = fi ? fi.col : 0xd8c8b000;
     if (!ev.boss && !seen(ev.x, ev.y, 48)) return;
-    const crowdK = ctx.crowd > 400 ? 0.5 : ctx.crowd > 200 ? 0.75 : 1, h = pose ? pose.h : 12, cy = ev.y - h * 0.45;
+    const crowdK = ctx.crowd > 400 ? 0.5 : ctx.crowd > 200 ? 0.75 : 1, h = pose ? pose.h : 12, cy = ev.y - h * 0.45, ks = ED.Cos ? ED.Cos.killStyle() : ''; // ks: the viewer's kill effect
     if (ev.boss) {
       const d = pops.get(); setPop(d, pose, ev, fi && fi.death, 1.6);
       F.flash(ev.x, cy, 80, 0xffffff00, 0.25, 0.9); F.ring(ev.x, cy, 140, 0xffd27aff, 0.6, 10, 4); F.ring(ev.x, cy, 90, 0xffffffff, 0.4, 6, 3);
@@ -136,14 +140,18 @@
       if (pose) { const d = pops.get(); setPop(d, pose, ev, null, 0.22); }
       F.sprite('fx.explosion', ev.x, cy, 1.6, 0, 0xffd27a); F.flash(ev.x, cy, 26, 0xffffff00, 0.12, 0.8);
       F.ring(ev.x, cy, 48, 0xffc94aff, 0.4, 8, 3); F.burst(ev.x, cy, Math.round(28 * crowdK), 0xffd27a00, 120, 0.6, 2, 30); F.burst(ev.x, cy, Math.round(16 * crowdK), col, 90, 0.5, 2, 20);
+      if (ks) ED.Cos.killFx(ks, ev.x, cy, col, crowdK, true);
       F.addShake(3.5, ctx.crowd); F.hitStop(0.05);
       return;
     }
     if (dieFull < BUD.dieFull) {
       dieFull++;
       if (pose) { const d = pops.get(); setPop(d, pose, ev, fi && fi.death, 0.14); }
-      F.burst(ev.x, cy, Math.max(2, Math.round(7 * crowdK)), col, 55, 0.4, 2, 18);
-      if (rnd() < 0.5 * crowdK) F.part(ev.x, cy, (rnd() - 0.5) * 30, -40, 0.35, 0xffffff00, 2, 120);
+      if (ks) ED.Cos.killFx(ks, ev.x, cy, col, crowdK, false);
+      else {
+        F.burst(ev.x, cy, Math.max(2, Math.round(7 * crowdK)), col, 55, 0.4, 2, 18);
+        if (rnd() < 0.5 * crowdK) F.part(ev.x, cy, (rnd() - 0.5) * 30, -40, 0.35, 0xffffff00, 2, 120);
+      }
     } else if (diePop < BUD.diePop) {
       diePop++;
       if (pose) { const d = pops.get(); setPop(d, pose, ev, null, 0.1); }
@@ -177,7 +185,7 @@
       case 'die': death(ev, ctx); break;
       case 'swing': {
         if (Ac) Ac.event(ev);
-        const s = slashes.get(); s.x = ev.x; s.y = ev.y; s.a = ev.a; s.r = ev.r; s.arc = ev.arc; s.life = s.max = 0.16; s.col = LOOK_COL[ev.look] || 0xfff1d600;
+        const s = slashes.get(); s.x = ev.x; s.y = ev.y; s.a = ev.a; s.r = ev.r; s.arc = ev.arc; s.life = s.max = 0.16; s.col = F.col(LOOK_COL[ev.look] || 0xfff1d600);
         break;
       }
       case 'shoot': if (Ac) Ac.event(ev); break;
@@ -191,7 +199,7 @@
         else if (ev.team && r >= 40) F.addShake(1.5, ctx.crowd);
         break;
       }
-      case 'chain': { const c = chains.get(); c.pts = ev.pts; c.life = c.max = 0.2; c.col = LOOK_COL[ev.look] || 0xbfe4ff00; c.seed = rnd() * 100; break; }
+      case 'chain': { const c = chains.get(); c.pts = ev.pts; c.life = c.max = 0.2; c.col = F.col(LOOK_COL[ev.look] || 0xbfe4ff00); c.seed = rnd() * 100; break; }
       case 'eshoot': F.flash(ev.x, ev.y, 5, LOOK_COL[ev.look] || 0xff5a4a00, 0.1, 0.8); break;
       case 'skill': {
         const p = heroOf(ev.pid), col = p ? heroCol(p.cls) : 0xfff1d600;
@@ -224,8 +232,12 @@
         const v = view();
         if (v) for (const p of v.heroes) {
           if (p.dead || p.downed) continue;
-          F.ring(p.x, p.y - 10, 60, 0x6ad7ffff, 0.5, 4, 3); F.sprite('fx.circle.spark', p.x, p.y - 10, 2.5, 0, 0x8ae8ff);
-          for (let i = 0; i < 20; i++) { const a = i / 20 * TAU; F.part(p.x + Math.cos(a) * 6, p.y - 10 + Math.sin(a) * 4, Math.cos(a) * 70, Math.sin(a) * 40 - 30, 0.7, i % 3 ? 0x6ad7ff00 : 0xffffff00, 2, -20, 0.92); }
+          const ls = ED.Cos ? ED.Cos.lvlStyle(p.pid) : ''; // the hero's own level-up effect
+          if (ls) ED.Cos.lvlFx(ls, p, p.pid === ctx.me);
+          else {
+            F.ring(p.x, p.y - 10, 60, 0x6ad7ffff, 0.5, 4, 3); F.sprite('fx.circle.spark', p.x, p.y - 10, 2.5, 0, 0x8ae8ff);
+            for (let i = 0; i < 20; i++) { const a = i / 20 * TAU; F.part(p.x + Math.cos(a) * 6, p.y - 10 + Math.sin(a) * 4, Math.cos(a) * 70, Math.sin(a) * 40 - 30, 0.7, i % 3 ? 0x6ad7ff00 : 0xffffff00, 2, -20, 0.92); }
+          }
           if (p.pid === ctx.me) { lvlT = 1.1; lvlN = ev.level; }
         }
         break;
@@ -243,7 +255,7 @@
         for (const r of ev.results || []) {
           if (r.kind === 'evo') continue;
           const d = r.kind === 'skill' ? ED.SKILLS[r.id] : r.kind === 'plvl' ? ED.PASSIVES[r.id] : null;
-          const txt = r.kind === 'gold' ? '+' + (r.val | 0) + ' GOLD' : r.kind === 'offer' ? 'EXTRA PICK' : up(d ? d.name : r.id) + ' UP';
+          const txt = r.kind === 'gold' ? '+' + (r.val | 0) + ' GOLD' : r.kind === 'offer' ? 'EXTRA PICK' : r.kind === 'pathpick' ? 'NEW PATH' : r.kind === 'form' ? 'NEW FORM' : up(d ? d.name : r.id) + ' UP';
           floatText(txt, p.x, p.y - 34 - i * 11, r.kind === 'gold' ? 0xffd24a : 0xbfefff, 1.6 + i * 0.25);
           i++;
         }
@@ -262,8 +274,26 @@
           letterT = 2.6; F.addShake(6, 0); F.hitStop(0.08); F.screen(0xff302000, 0.35, 0.5);
           if (ev.fid) track(ev.fid, 9999, 0xff5a4aff);
         } else if (ev.phase === 'enrage') { F.banner('ENRAGED!', 0xff3a2a, 2.2, { k: 3 }); F.screen(0xff302000, 0.5, 0.6); F.addShake(6, 0); }
-        else if (ev.phase === -1) { F.banner(up(foeName(ev.id)) + ' FALLS', 0xffd27a, 2.2, { big: true, k: 3, band: true }); for (const q of tracks) if (q.id === ev.fid) q.t = 0; }
+        else if (ev.phase === -1) { if (!ev.final) F.banner(up(foeName(ev.id)) + ' FALLS', 0xffd27a, 2.2, { big: true, k: 3, band: true }); for (const q of tracks) if (q.id === ev.fid) q.t = 0; } // a final boss: the HUD's VICTORY banner
         else if (ev.phase > 0) { F.banner('PHASE ' + ev.phase, 0xff7a6a, 1.6, { k: 2 }); F.addShake(5, 0); F.hitStop(0.06); const v = view(), b = v && v.boss; if (b) { F.ring(b.x, b.y - 20, 120, 0xff5a4aff, 0.5, 10, 4); F.flash(b.x, b.y - 20, 50, 0xffffff00, 0.15, 0.7); } }
+        break;
+      }
+      case 'victory': { // Last Light: the final boss died at (x, y): light shockwave rings, flash, shake (no hit-stop: the sim never slows)
+        F.ring(ev.x, ev.y - 20, 900, 0xfff1d6ff, 1.6, 20, 8); F.ring(ev.x, ev.y - 20, 520, 0xffd27aff, 1.1, 12, 5); F.ring(ev.x, ev.y - 20, 260, 0xffffffff, 0.7, 6, 3);
+        F.flash(ev.x, ev.y - 20, 160, 0xffffff00, 0.6, 1); F.burst(ev.x, ev.y - 20, 70, 0xffd27a00, 260, 1.2, 3, 10); F.burst(ev.x, ev.y - 20, 40, 0xffffff00, 180, 0.9, 2, 0);
+        F.screen(0xfff6dc00, 0.9, 0.9); F.addShake(10, 0); letterT = 0;
+        for (const q of tracks) q.t = 0;
+        break;
+      }
+      case 'sanctum': { // the Sanctum: ph 0 the fade starts (banner), ph 1 the party lands in the room (white flash out of the black)
+        if (ev.ph === 0) { F.banner('THE SANCTUM', 0xff8a4a, C_SANCTUM_FADE + 0.6, { big: true, sub: 'THE WICKDEEP DRAGS YOU DOWN', subCol: 0xffd0a0, k: 3, band: true }); F.screen(0xff302000, 0.4, 1.2); F.addShake(6, 0); letterT = 0; for (const q of tracks) q.t = 0; }
+        else if (ev.ph === 1) { F.screen(0xfff1d600, 0.9, 0.8); F.addShake(8, 0); }
+        break;
+      }
+      case 'lap': { // Last Light: ph 1 the lap starts, ph 2 its timer ran out (every foe vanishes)
+        const me = heroOf(ctx.me);
+        if (ev.ph === 1) { F.banner('LAST LIGHT', 0xffd27a, 2.8, { big: true, sub: 'EVERY ' + ED.CONST.LAP.coin + ' KILLS DROP GOLD', subCol: 0xfff1d6, k: 3, band: true }); F.screen(0xffd27a00, 0.35, 0.6); F.addShake(5, 0); if (me) F.ring(me.x, me.y - 10, 300, 0xffd27aff, 0.8, 20, 4); }
+        else if (ev.ph === 2) { F.screen(0xffffff00, 1, 1.2); if (me) { F.ring(me.x, me.y - 10, 700, 0xfff1d6ff, 1.2, 20, 8); F.flash(me.x, me.y - 10, 200, 0xffffff00, 0.8, 1); } }
         break;
       }
       case 'down': { const p = heroOf(ev.pid); if (p) { F.ring(p.x, p.y - 8, 50, 0xff3a2aff, 0.5, 6, 3); F.burst(p.x, p.y - 8, 16, 0xff4a4a00, 90, 0.6, 2, 20); } if (mine) { F.screen(0xff202000, 0.5, 0.5); F.addShake(5, 0); hurtV = 1; } break; }
@@ -333,7 +363,7 @@
   };
 
   // ---------------- world layer ----------------
-  const SO = { flip: false, flash: 0, alpha: 1, rot: 0, sx: 1, sy: 1, tint: 0, add: false };
+  const SO = { flip: false, flash: 0, alpha: 1, rot: 0, sx: 1, sy: 1, tint: 0, add: false, variant: '' };
   F.draw = (B) => {
     const A = ED.Atlas;
     for (const o of flashes.a) { const k = o.life / o.max; B.circ(o.x, o.y, Math.max(1, o.r * (1.15 - 0.35 * k)), rgbaK(o.col, o.a * k), 0); }
@@ -367,8 +397,10 @@
     }
     for (const s of sprs.a) {
       const fi = Math.min(s.n - 1, Math.floor((s.max - s.life) * s.fps));
-      SO.flip = s.flip; SO.flash = 0; SO.sx = SO.sy = s.sc; SO.rot = s.rot; SO.tint = s.tint; SO.alpha = s.al; SO.add = false;
+      SO.flip = s.flip; SO.flash = 0; SO.sx = SO.sy = s.sc; SO.rot = s.rot; SO.tint = s.tint; SO.alpha = s.al; SO.add = false; SO.variant = s.ramp ? ED.Pix.variant(s.id, s.ramp) : '';
+      if (SO.variant) SO.tint = 0;
       B.spr(s.id, fi, s.x, s.y, SO);
+      SO.variant = '';
     }
     const np = parts.a.length, qk = B.mode === '2d' && np > P2D ? Math.max(2, Math.floor(8 * P2D / np)) : 8;
     for (const p of parts.a) { if (p.q >= qk) continue; const k = p.life / p.max, sz = k < 0.35 && p.size > 1 ? p.size - 1 : p.size; B.rect(Math.round(p.x - sz / 2), Math.round(p.y - sz / 2), sz, sz, rgbaK(p.col, Math.min(1, k * 1.6))); }

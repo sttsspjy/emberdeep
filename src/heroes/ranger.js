@@ -1,17 +1,19 @@
-// Ranger (marksman): hero data, signature Longbow (paths Spread / Piercer / Ricochet) and its Forms Hail of Arrows (Spread), Ballista (Piercer), Seeker (Ricochet),
-// hybrids Gale Barrage (Piercer + Spread) and Rebound (Piercer + Ricochet); Q Vault (leap toward the cursor, 3 skill levels).
+// Ranger (marksman): hero data, signature Longbow (paths Spread / Piercer / Ricochet) and its Forms Hail of Arrows + Gale Barrage (Spread), Ballista (Piercer),
+// Seeker + Rebound (Ricochet); Q Vault (leap toward the cursor, 4 skill levels).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU;
 
   ED.regLook('vault', 'vland', 'caltrops', 'shock');
-  ED.addHero({ id: 'ranger', name: 'Ranger', hp: 90, speed: 80, crit: 0.08, sig: 'longbow', skills: ['vault'], icon: 'hero.ranger.idle', col: '#9fd38a', txt: 'Piercing arrows down long lines.' });
+  ED.addHero({ id: 'ranger', name: 'Ranger', hp: 90, speed: 84, crit: 0.08, sig: 'longbow', skills: ['vault'], icon: 'hero.ranger.idle', col: '#9fd38a', txt: 'Piercing arrows down long lines.' });
 
   // ---------------- shared arrow mechanics ----------------
-  // Projectile fields used here: pr.st = bounces left (number), pr.rk = per-arrow counter (Seeker kill refreshes, Rebound segment pierce); pr.dmg drops from x FIRST to x1 after the first hit.
+  // Projectile fields used here: pr.st = bounces left (number), pr.rk = per-arrow counter (Seeker kill refreshes, Rebound segment pierce); pr.dmg drops from x FIRST to x1 after the first hit
+  // (Gale Barrage arrows: x GALE_FIRST, bounceK).
   const PROJ_SOFT_CAP = 600;  // spawn-on-hit / on-kill arrows stop above this many live projectiles
   const FIRST = 1.5;          // an arrow's first hit deals x1.5
   const HOP = 170;            // bounce / kill-shot search radius (px)
+  const SEEK_VIEW = 2 * Math.hypot(ED.CONST.VIEW_W / 2, ED.CONST.VIEW_H / 2); // reaches every foe in the hero's view
   const FAN = 0.18;           // rad between fan arrows
   const FANK = 0.25;          // a fan of n arrows deals (1 + FANK (n - 1)) x one arrow in total
   const KSN = 2;              // kill shots per volley (S.kshot)
@@ -25,21 +27,34 @@
   const skipHit = (f) => skipHits.indexOf(f.id) >= 0;
   // Nearest foe within HOP of (x, y) that projectile pr has not hit (view-clamped by w.vclamp), or null.
   const nextFoe = (w, pr, x, y) => { skipHits = pr.hits; const e = w.nearestFoe(x, y, HOP, skipHit); skipHits = null; return e; };
+  // Seeker preference: bosses and elites are passed over while another foe is in the hero's view.
+  const bigFoe = (f) => f.boss || f.elite;
+  const skipHitBig = (f) => f.boss || f.elite || skipHits.indexOf(f.id) >= 0;
+  // nextFoe for Seeker: the nearest unhit non-boss non-elite foe within HOP; a boss / elite only while no unhit other foe is in view (w.vclamp); else null.
+  const seekNext = (w, pr, x, y) => {
+    skipHits = pr.hits;
+    let e = w.nearestFoe(x, y, SEEK_VIEW, skipHitBig);
+    if (e && U.dist2(x, y, e.x, e.y) > HOP * HOP) e = null;
+    else if (!e) e = w.nearestFoe(x, y, HOP, skipHit);
+    skipHits = null;
+    return e;
+  };
   const steer = (pr, a) => { pr.vx = Math.cos(a) * pr.sp; pr.vy = Math.sin(a) * pr.sp; pr.a = a; };
-  // Shared onHit: the first-hit bonus ends; on the last pierce with bounces left (pr.st) the arrow turns to the nearest unhit foe within HOP and flies on.
-  const bounce = (w, pr, e) => {
-    if (pr.hits.length === 1) pr.dmg /= FIRST;
+  // Shared onHit: the first-hit bonus ends; on the last pierce with bounces left (pr.st) the arrow turns to the nearest unhit foe within HOP and flies on (homing arrows: it becomes their target).
+  const bounceK = (K) => (w, pr, e) => {
+    if (pr.hits.length === 1) pr.dmg /= K;
     if (pr.pierce > 0 || !(pr.st > 0)) return;
-    const t = nextFoe(w, pr, e.x, e.y);
+    const t = pr.hskip !== null ? seekNext(w, pr, e.x, e.y) : nextFoe(w, pr, e.x, e.y);
     if (!t) return;
     pr.st--; pr.pierce = 1;
-    steer(pr, Math.atan2(t.y - e.y, t.x - e.x));
+    steer(pr, Math.atan2(t.y - e.y, t.x - e.x)); pr.tgt = t; pr.tgtId = t.id;
     pr.life = Math.max(pr.life, HOP / pr.sp + 0.1);
   };
-  // Arrow from hero p along a with damage x k (x FIRST until its first hit); heavy: see HEAVY. Sets pr.st = S.bounce x opt.bk (default 1).
+  const bounce = bounceK(FIRST);
+  // Arrow from hero p along a with damage x k (x opt.first, default FIRST, until its first hit); heavy: see HEAVY. Sets pr.st = S.bounce x opt.bk (default 1).
   const loose = (w, p, wid, a, S, opt, k, heavy) => {
     const pr = w.shoot(p, wid, p.x, p.y - 6, a, S, opt);
-    pr.dmg *= FIRST * k * (heavy ? HEAVY : 1); pr.st = (S.bounce * (opt.bk !== undefined ? opt.bk : 1)) | 0; pr.rk = 0;
+    pr.dmg *= (opt.first || FIRST) * k * (heavy ? HEAVY : 1); pr.st = (S.bounce * (opt.bk !== undefined ? opt.bk : 1)) | 0; pr.rk = 0;
     if (heavy) { pr.r *= 2; pr.critC = 1; pr.pierce += 4; }
     return pr;
   };
@@ -79,22 +94,21 @@
   const ARROW = { look: 'arrow', onHit: bounce };
   ED.addWeapon({
     id: 'longbow', name: 'Longbow', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', txt: 'Piercing arrows toward your cursor',
-    base: { dmg: 20, cd: 0.55, n: 1, pierce: 8, area: 1, speed: 420, dur: 0, knock: 25, range: 300, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 22, cd: 0.7, n: 1, pierce: 8, area: 1, speed: 420, dur: 0, knock: 25, range: 260, heavy: 0, two: false, bounce: 0, kshot: 0 },
     paths: [
-      { id: 'spread', name: 'Spread', form: 'hail', ranks: [
+      { id: 'spread', name: 'Spread', forms: ['hail', 'galeshot'], ranks: [
         { mods: { n: 2 }, txt: '+2 arrows in a fan' },
         { mods: { two: true }, txt: 'The fan splits over two targets' },
         { mods: { dmg: 0.25, n: 2 }, txt: '+25% damage, +2 arrows' }] },
-      { id: 'pierce', name: 'Piercer', form: 'ballista', ranks: [
+      { id: 'pierce', name: 'Piercer', forms: ['ballista'], ranks: [
         { mods: { pierce: 4, range: 0.2 }, txt: 'Arrows pierce 4 more, fly farther' },
         { mods: { heavy: 3 }, txt: 'Every 3rd shot: a heavy bolt' },
         { mods: { dmg: 0.25, heavy: -1 }, txt: '+25% damage, every 2nd shot heavy' }] },
-      { id: 'ricochet', name: 'Ricochet', form: 'seeker', ranks: [
+      { id: 'ricochet', name: 'Ricochet', forms: ['seeker', 'rebound'], ranks: [
         { mods: { bounce: 2 }, txt: 'Arrows bounce to 2 more foes' },
         { mods: { kshot: 1 }, txt: 'Kills loose an arrow at the next foe' },
         { mods: { dmg: 0.25, bounce: 2 }, txt: '+25% damage, +2 bounces' }] },
     ],
-    hybrids: [{ need: [0, 1], form: 'galeshot' }, { need: [1, 2], form: 'rebound' }],
   }, {
     fire: (w, p, ws, S) => { volley(w, p, ws, S, ARROW, FAN, FANK); return true; },
     kill: killShot,
@@ -115,7 +129,7 @@
   const HAIL = { look: 'arrow', pierce: 0, bk: 0.5, onHit: split };
   ED.addWeapon({
     id: 'hail', name: 'Hail of Arrows', icon: 'weapon.twinbows', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'Arrows split on hit',
-    base: { dmg: 22, cd: 0.7, n: 3, pierce: 1, area: 1, speed: 440, dur: 0, knock: 30, range: 320, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 14.8, cd: 1.05, n: 3, pierce: 1, area: 1, speed: 440, dur: 0, knock: 30, range: 320, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows' },
       { mods: { dmg: 0.25, pierce: 2 }, txt: '+25% damage, pierce 2 more' },
@@ -148,7 +162,7 @@
   };
   ED.addWeapon({
     id: 'ballista', name: 'Ballista', icon: 'weapon.crossbow', look: 'bolt', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'A giant bolt through the whole line',
-    base: { dmg: 44, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 240, dur: 0, knock: 70, range: 330, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 30.8, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 240, dur: 0, knock: 70, range: 330, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+1 bolt' },
       { mods: { dmg: 0.25, area: 0.5 }, txt: '+25% damage, bolts 50% bigger' },
@@ -156,29 +170,29 @@
   }, { fire: (w, p, ws, S) => { ballista(w, p, ws, S); return true; }, kill: killShot });
 
   // Seeker (Ricochet): S.n homing arrows (pierce S.pierce / 4, fan factor 0.35) launched in a wide fan along the cursor; a kill does not spend pierce and keeps the arrow flying
-  // (life >= 0.9 s, up to SEEK_K kills) to the next foe.
+  // (life >= 0.9 s, up to SEEK_K kills) to the next foe. Homing and bounces pass over bosses and elites while another foe is in the hero's view (hskip, seekNext).
   const SEEK_K = 2;
   const seekHit = (w, pr, e) => {
     if (e.dead && pr.rk < SEEK_K) { pr.rk++; pr.pierce++; pr.life = Math.max(pr.life, 0.9); pr.tgt = null; }
     bounce(w, pr, e);
   };
-  const SEEK = { look: 'arrow', homing: 10, pierce: 0, onHit: seekHit };
+  const SEEK = { look: 'arrow', homing: 10, hskip: bigFoe, pierce: 0, onHit: seekHit };
   ED.addWeapon({
     id: 'seeker', name: 'Seeker', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'Homing arrows hunt kill to kill',
-    base: { dmg: 44, cd: 0.68, n: 5, pierce: 0, area: 1, speed: 360, dur: 0, knock: 20, range: 360, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 30.8, cd: 0.9, n: 5, pierce: 0, area: 1, speed: 360, dur: 0, knock: 20, range: 360, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows' },
       { mods: { dmg: 0.25, bounce: 2 }, txt: '+25% damage, +2 bounces' },
     ],
   }, { fire: (w, p, ws, S) => { SEEK.pierce = S.pierce >> 2; volley(w, p, ws, S, SEEK, 0.2, 0.35); return true; }, kill: killShot });
 
-  // Gale Barrage (Piercer + Spread): each cooldown starts a stream of GALE_N + S.n arrows, one every 0.05 s, each re-aimed along the cursor with +-0.04 rad jitter (w.rng);
-  // two: every 2nd arrow goes along twoAim instead; every (2 x S.heavy)-th arrow is heavy.
-  const GALE_N = 1;
-  const GALE = { look: 'arrow', onHit: bounce };
+  // Gale Barrage (Spread): each cooldown starts a stream of GALE_N + S.n arrows, one every 0.05 s, each re-aimed along the cursor with +-0.04 rad jitter (w.rng);
+  // two: every 2nd arrow goes along twoAim instead; every (2 x S.heavy)-th arrow is heavy. First-hit bonus GALE_FIRST (the stream piles every first hit onto one target).
+  const GALE_N = 1, GALE_FIRST = 1.25;
+  const GALE = { look: 'arrow', onHit: bounceK(GALE_FIRST), first: GALE_FIRST };
   ED.addWeapon({
     id: 'galeshot', name: 'Gale Barrage', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'A rapid stream of arrows',
-    base: { dmg: 26, cd: 1.2, n: 1, pierce: 16, area: 1, speed: 520, dur: 0, knock: 15, range: 330, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 18.2, cd: 0.95, n: 1, pierce: 16, area: 1, speed: 520, dur: 0, knock: 15, range: 330, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows per stream' },
       { mods: { dmg: 0.25, pierce: 2 }, txt: '+25% damage, pierce 2 more' },
@@ -198,7 +212,7 @@
     kill: killShot,
   });
 
-  // Rebound (Piercer + Ricochet): S.n arrows in a fan along the cursor; an arrow reaching its owner's view edge turns toward the foe nearest the owner (else mirrors), clears its hit list and
+  // Rebound (Ricochet): S.n arrows in a fan along the cursor; an arrow reaching its owner's view edge turns toward the foe nearest the owner (else mirrors), clears its hit list and
   // regains its pierce, up to 2 + S.bounce times; life 3 s; no first-hit bonus.
   const rbTick = (w, pr, dt) => {
     const p = pr.p;
@@ -227,7 +241,7 @@
   };
   ED.addWeapon({
     id: 'rebound', name: 'Rebound', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'Arrows rebound off the screen edge',
-    base: { dmg: 42, cd: 0.9, n: 1, pierce: 8, area: 1, speed: 460, dur: 0, knock: 20, range: 300, heavy: 0, two: false, bounce: 0, kshot: 0 },
+    base: { dmg: 29.4, cd: 0.9, n: 1, pierce: 8, area: 1, speed: 460, dur: 0, knock: 20, range: 300, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows' },
       { mods: { dmg: 0.25, bounce: 1 }, txt: '+25% damage, 1 more rebound' },
@@ -237,7 +251,8 @@
   // ---------------- Q: Vault ----------------
   // Zero damage. Leaps N.dist px toward the cursor over N.t s, over foes and obstacles, untouchable (the landing steps back along the line to the first free spot); on landing every
   // xp gem within N.gem px flies to the hero. charges (L3): 2 casts stored. caltrops (L4): a caltrop field (CALT_R px, CALT_T s) at the takeoff slows foes inside 50% for 2 s.
-  // State p.vault { t, T, end (sim time), x0, y0, x1, y1, gem } (HOOK.ranger moves the hero). Zones: 'vault' (follows the hero during the leap, a = heading), 'vland' (landing dust), 'caltrops'.
+  // gemAll (L5): every landing pulls every xp gem inside the hero's view.
+  // State p.vault { t, T, end (sim time), x0, y0, x1, y1, gem (px; -1 the whole view) } (HOOK.ranger moves the hero). Zones: 'vault' (follows the hero during the leap, a = heading), 'vland' (landing dust), 'caltrops'.
   const CALT_R = 56, CALT_T = 3;
   let CW = null;
   const caltFoe = (e) => CW.slow(e, 0.5, 2);
@@ -249,14 +264,15 @@
       { mods: { dist: 60 }, txt: 'Leap 60 px farther' },
       { mods: { charges: 1 }, txt: '2 charges' },
       { mods: { caltrops: 1 }, txt: 'Caltrops at takeoff slow pursuers' },
+      { mods: { gemAll: true }, txt: 'Each vault pulls every gem on screen' },
     ],
   }, (w, p, x, y, N) => {
     const a = Math.hypot(x - p.x, y - p.y) < 1 ? p.mdir : Math.atan2(y - p.y, x - p.x), c = Math.cos(a), s = Math.sin(a);
     let d = N.dist;
-    while (d > 0 && ED.Arena.blocked(w.arena, p.x + c * d, p.y + s * d, p.r)) d -= 8;
+    while (d > 0 && ED.Arena.blocked(w.arena, p.x + c * d, p.y + s * d, ED.CONST.HERO_BODY)) d -= 8;
     d = Math.max(0, d);
     const v = p.vault || (p.vault = { t: 0, T: 0, end: 0, x0: 0, y0: 0, x1: 0, y1: 0, gem: 0 });
-    v.T = v.t = N.t; v.end = w.time + N.t; v.x0 = p.x; v.y0 = p.y; v.x1 = p.x + c * d; v.y1 = p.y + s * d; v.gem = N.gem;
+    v.T = v.t = N.t; v.end = w.time + N.t; v.x0 = p.x; v.y0 = p.y; v.x1 = p.x + c * d; v.y1 = p.y + s * d; v.gem = N.gemAll ? -1 : N.gem;
     p.invuln = Math.max(p.invuln, N.t + 0.15); p.mdir = a;
     w.zone({ team: 0, p, wid: 'vault', x: p.x, y: p.y, r: 14, a, dur: N.t, follow: p.pid, look: 'vault' });
     if (N.caltrops > 0) w.zone({ team: 0, p, wid: 'vault', x: p.x, y: p.y, r: CALT_R, dur: CALT_T, look: 'caltrops', st: { nt: 0 }, onTick: caltTick });
@@ -272,7 +288,7 @@
       const k = U.clamp(1 - v.t / v.T, 0, 1);
       p.x = v.x0 + (v.x1 - v.x0) * k; p.y = v.y0 + (v.y1 - v.y0) * k; p.moving = true;
       if (v.t > 0) return;
-      ED.Arena.collide(w.arena, p, p.r);
+      ED.Arena.collide(w.arena, p, ED.CONST.HERO_BODY);
       w.pullGems(p, p.x, p.y, v.gem);
       w.zone({ team: 0, p, wid: 'vault', x: p.x, y: p.y, r: 40, dur: 0.4, look: 'vland' });
     },

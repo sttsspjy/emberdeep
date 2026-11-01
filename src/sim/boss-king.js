@@ -1,4 +1,4 @@
-// Boss 'king' (Drowned King, stage 2 mid-boss) and ED.Bosses.libB, the hazard helpers shared by boss-hollow.js, boss-cyclops.js and boss-samurai.js (they load after this file).
+// Boss 'king' (Drowned King, Glowmire final boss) and ED.Bosses.libB, the hazard helpers shared by boss-hollow.js, boss-cyclops.js and boss-samurai.js (they load after this file).
 // P1: Tidal Beam (one beam sweeps the aim arc; obstacles cut it), trident fan, leap slam, telegraphed adds. P2 (66%): two opposite beams, 5 tridents, the whirlpool (pull + core).
 // P3 (33%): a standing whirlpool follows the King for the rest of the fight, beams turn a half circle each (a full spin between the two), more adds.
 (function (ED) {
@@ -17,7 +17,7 @@
     if (st.upd) st.upd(w, z, e, st);
     if (z.dead || z.t < st.arm || !(st.mul > 0)) return;
     const L = w.living, dmg = e.dmg * st.mul;
-    for (let i = 0; i < L.length; i++) { const p = L[i]; if (st.test ? st.test(w, z, p) : w.zoneHas(z, p.x, p.y, p.r * 0.7)) w.hurtHero(p, dmg, z); }
+    for (let i = 0; i < L.length; i++) { const p = L[i]; if (st.test ? st.test(w, z, p) : w.zoneHas(z, p.x, p.y, p.r)) w.hurtHero(p, dmg, z); }
   };
   // Live hostile hazard (not a telegraph): zone fields o ({ look, x, y, r, a, len, w, arc, dur }); look doubles as wid so ED.SkillFx[look] draws it. st: { mul, arm, upd, test, ...state }.
   const hz = (w, e, o, st) => {
@@ -42,16 +42,16 @@
     return null;
   };
   // Telegraphed adds: a 'summon' circle per add on a ring of radius rad around e, the foe appears when it resolves (none if the boss died first). One extra add per hero beyond the first (max 3).
-  const spawnAdd = (w, z) => { if (ED.FOES[z.st] && !ED.Arena.blocked(w.arena, z.x, z.y, 8)) w.spawnFoe(z.st, z.x, z.y); };
+  // Each id goes through W.addKin (the host stage's kin; none when its brain is at the cap), rechecked against the cap when the circle resolves. Returns the circles placed.
+  const spawnAdd = (w, z) => { const d = ED.FOES[z.st]; if (d && !w.foeAtCap(d) && !ED.Arena.blocked(w.arena, z.x, z.y, 8)) w.spawnFoe(z.st, z.x, z.y); };
   const adds = (w, e, ids, rad, dur) => {
-    ids = ids.filter(id => ED.FOES[id]);
     if (!ids.length) return 0;
     const n = ids.length + Math.min(3, w.partyN - 1), a0 = w.rng.next() * TAU;
     let k = 0;
     for (let i = 0; i < n; i++) {
-      const a = a0 + i / n * TAU, x = e.x + Math.cos(a) * rad, y = e.y + Math.sin(a) * rad;
-      if (ED.Arena.blocked(w.arena, x, y, 8)) continue;
-      tele(w, e, x, y, 12, T(e, dur), 0, { look: 'summon', wid: 'summon', st: ids[i % ids.length], onEnd: spawnAdd }); k++;
+      const a = a0 + i / n * TAU, x = e.x + Math.cos(a) * rad, y = e.y + Math.sin(a) * rad, id = w.addKin(ids[i % ids.length]);
+      if (!id || ED.Arena.blocked(w.arena, x, y, 8)) continue;
+      tele(w, e, x, y, 12, T(e, dur), 0, { look: 'summon', wid: 'summon', st: id, onEnd: spawnAdd }); k++;
     }
     return k;
   };
@@ -63,7 +63,7 @@
       const dx = x - p.x, dy = y - p.y, d = Math.hypot(dx, dy);
       if (d > r || d < 3) continue;
       const k = str * dt * (1 - 0.5 * d / r) / d;
-      ED.Arena.move(w.arena, p, dx * k, dy * k, p.r);
+      ED.Arena.move(w.arena, p, dx * k, dy * k, C.HERO_BODY);
     }
   };
   // Foe shot tagged with its look as wid (ED.WeaponFx[look] draws it). o: { life, fly (passes obstacles), tick(w, pr, dt), st }.
@@ -102,7 +102,7 @@
     e.face = Math.cos(z.a) >= 0 ? 1 : -1;
   };
   const poolUpd = (w, z, e, st) => { z.x = e.x; z.y = e.y; if (z.t >= st.arm) pull(w, z.x, z.y, z.r, st.str, DT); };
-  const coreTest = (w, z, p) => U.dist2(z.x, z.y, p.x, p.y) <= (POOL.core + p.r * 0.7) ** 2;
+  const coreTest = (w, z, p) => U.dist2(z.x, z.y, p.x, p.y) <= (POOL.core + p.r) ** 2;
   const standingPool = (w, e) => hz(w, e, { look: 'whirlpool', r: POOL.r3, dur: 1e6 }, { mul: POOL.mul, arm: 1.0, upd: poolUpd, test: coreTest, str: POOL.str3 });
 
   const chase = approach(140);

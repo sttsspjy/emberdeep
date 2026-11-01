@@ -8,7 +8,7 @@
   const N = ED.Net = {};
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const PREFIX = 'wickdeep-sv-';
-  N.VERSION = ED.NET_VERSION = 8; // bump on any wire change: mixed versions would desync
+  N.VERSION = ED.NET_VERSION = 14; // bump on any wire change: mixed versions would desync
   // Heartbeat: PeerJS 'close' does not fire when a tab crashes or a network drops, so both ends ping and
   // treat a few seconds of silence as a disconnect (longer in the lobby, where little else is sent).
   const PING_MS = 2000, TIMEOUT_RUN = 6000, TIMEOUT_LOBBY = 10000;
@@ -126,13 +126,13 @@
     return 'Connection failed' + (t ? ' (' + t + ')' : '') + '.';
   };
 
-  // A guest's hero choice, made safe for the host's simulation: { cls, meta: { shop, sigs } } with unknown ids dropped and ranks clamped.
+  // A guest's hero choice, made safe for the host's simulation: { cls, meta: { shop, sigs }, cos (worn cosmetics, ED.Save.cosClean) } with unknown ids dropped and ranks clamped.
   const cleanPick = (d) => {
     const cls = ED.HERO_IDS.indexOf(d.cls) >= 0 ? d.cls : ED.HERO_IDS[0];
     const m = d.meta && typeof d.meta === 'object' ? d.meta : {}, shop = {};
     for (const s of ED.SHOP) { const r = m.shop ? Math.floor(+m.shop[s.id] || 0) : 0; if (r > 0) shop[s.id] = U.clamp(r, 0, s.max); }
     const sigs = Array.isArray(m.sigs) ? m.sigs.filter((c, i, a) => ED.HERO_IDS.indexOf(c) >= 0 && a.indexOf(c) === i) : [];
-    return { cls, meta: { shop, sigs } };
+    return { cls, meta: { shop, sigs }, cos: ED.Save.cosClean(d.cos, cls) };
   };
   N.cleanPick = cleanPick;
 
@@ -178,7 +178,7 @@
         c.pid = pid;
         this.conns.set(pid, c);
         const pk = cleanPick(d);
-        this.members.push({ pid, slot, name: ED.Save.sanitizeName(d.name), cls: pk.cls, meta: pk.meta, ready: false, isHost: false });
+        this.members.push({ pid, slot, name: ED.Save.sanitizeName(d.name), cls: pk.cls, meta: pk.meta, cos: pk.cos, ready: false, isHost: false });
         c.send({ t: 'welcome', pid, slot, code: this.code });
         this.broadcastLobby();
         this.handlers.joined && this.handlers.joined(pid);
@@ -216,7 +216,7 @@
   };
   N.Host.prototype.setMe = function (patch) { Object.assign(this.members[0], patch); this.broadcastLobby(); };
   N.Host.prototype.setStage = function (i) { this.stage = U.clamp(i | 0, 0, ED.STAGES.length - 1); this.broadcastLobby(); };
-  N.Host.prototype.lobbyState = function () { return { t: 'lobby', code: this.code, stage: this.stage, started: this.started, members: this.members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls, ready: m.ready, isHost: m.isHost })) }; };
+  N.Host.prototype.lobbyState = function () { return { t: 'lobby', code: this.code, stage: this.stage, started: this.started, members: this.members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls, cos: m.cos, ready: m.ready, isHost: m.isHost })) }; };
   N.Host.prototype.broadcastLobby = function () { const s = this.lobbyState(); this.broadcast(s); this.handlers.lobby && this.handlers.lobby(s); };
   N.Host.prototype.broadcast = function (o) { for (const c of this.conns.values()) c.send(o); };
   N.Host.prototype.sendTo = function (pid, o) { const c = this.conns.get(pid); if (c) c.send(o); };
@@ -329,11 +329,12 @@
 
   // ---------------- snapshot encode (host) ----------------
   // Layout: u8 SNAP, u32 seq, u32 tick, u32 ack (last input seq applied for this client), f32 xp, f32 xpNext, u16 level, u32 kills, u32 gold, u8 state (0 play, 1 won, 2 lost),
-  // i16 ox, oy (cull rect origin), boss (varint id + 1 or 0; varint k, u8 hpQ, u8 flags), boss bar (u8 flags 1 on 2 final 4 enraged; if on: varint foe index, u8 q, u8 phase, u8 n, u8 rev (255 none)), braziers (u8 n + broken bitmask), u8 heroes + records,
+  // i16 ox, oy (cull rect origin), boss (varint id + 1 or 0; varint k, u8 hpQ, u8 flags), boss bar (u8 flags 1 on 2 final 4 enraged; if on: varint foe index, u8 q, u8 phase, u8 n, u8 rev (255 none)), Last Light (u8 phase 0 none / 1 calm / 2 lap; if set: u16 s left x 100, varint lap gold, varint lap kills), Sanctum (u8 st + 1, 0 none; if set: f32 t0; the room is the arena centre and C.SANCTUM), braziers (u8 n + broken bitmask), u8 heroes + records,
   // then u16-counted sections: zones (+ u16-counted ids of zones gone), foes, projectiles, pickups, hits, deaths, misc binary events, JSON events.
   // Foes / projectiles / pickups / positional events are kept only inside the client's view + MARGIN; their positions are 3 bytes (12 + 12 bits at 0.5 px from the rect origin).
   // Ids: arrays are in spawn order, so ids ascend: each id is written as delta from the previous (with 2 flag bits); a delta of 0 escapes to an absolute id.
   const MARGIN = 160;
+  const LV = { ph: 0, rem: 0, gold: 0, kills: 0 }; // encode scratch (World.lapView)
   const HIT_CAP = 100, DIE_CAP = 120, MISC_CAP = 80, PICK_CAP = 24, JSON_CAP = 48, CARRY_CAP = 64;
   N.MARGIN = MARGIN;
   let ox = 0, oy = 0, RW = 0, RH = 0;
@@ -369,6 +370,9 @@
     if (b && !b.dead) { wv(b.id + 1); wv(b.k); w8(b.hpQ); w8((b.enraged ? 1 : 0) | (b.final ? 2 : 0)); } else wv(0);
     const bb = w.bossBar;
     if (bb && bb.on) { w8(1 | (bb.final ? 2 : 0) | (bb.enraged ? 4 : 0)); wv(Math.max(0, ED.FOE_IDS.indexOf(bb.id))); w8(U.clamp(Math.round(bb.q), 0, 255)); w8(bb.phase | 0); w8(bb.n | 0); w8(bb.rev < 0 ? 255 : U.clamp(Math.round(bb.rev * 254), 0, 254)); } else w8(0);
+    const lv = w.lapView(LV);
+    w8(lv.ph); if (lv.ph) { w16(U.clamp(Math.round(lv.rem * 100), 0, 65535)); wv(lv.gold); wv(lv.kills); }
+    const sc = w.sanctum; if (sc) { w8(sc.st + 1); wf32(sc.t0); } else w8(0);
     const BR = w.arena.braziers, nb = Math.min(BR.length, 255);
     w8(nb); for (let i = 0; i < nb; i += 8) { let m = 0; for (let k = 0; k < 8 && i + k < nb; k++) if (BR[i + k].broken) m |= 1 << k; w8(m); }
     // heroes (all, full)
@@ -383,7 +387,7 @@
       if (dashing) { w16(ms16(p.dashT)); wf32(p.dashDx); wf32(p.dashDy); }
       w8(p.rerolls | 0); w8(p.skips | 0); w8(p.banishes | 0); wv(p.kills | 0);
       w8(p.skills.length); for (const sk of p.skills) { wstr(T.Sm, sk.id); w8(sk.lvl); w16(ms16(sk.cd)); w16(ms16(sk.cdMax)); w8(sk.chN > 1 ? (Math.min(15, sk.chN) << 4) | U.clamp(sk.ch | 0, 0, 15) : 0); }
-      w8(p.weapons.length); for (const ws of p.weapons) { wstr(T.Wm, ws.id); w8((ws.lvl & 127) | (ws.evo ? 128 : 0)); const R = ws.pr || NOPR; w8((R[0] & 3) | (R[1] & 3) << 2 | (R[2] & 3) << 4 | (ws.fl & 3) << 6); }
+      w8(p.weapons.length); for (const ws of p.weapons) { wstr(T.Wm, ws.id); w8((ws.lvl & 127) | (ws.evo ? 128 : 0)); const K = ws.tk || NOPR, pa = ws.path >= 0 ? ws.path : -1; w16((K[0] & 3) | (K[1] & 3) << 2 | (K[2] & 3) << 4 | (pa + 1) << 6 | (pa >= 0 ? ws.pr[pa] & 7 : 0) << 8 | (ws.fl & 3) << 11); }
       w8(p.passives.length); for (const ps of p.passives) { wstr(T.Pm, ps.id); w8(ps.lvl); }
       if (hasFx(p)) { w16(p.fxf | 0); wf32(p.fxv || 0); }
     }
@@ -591,13 +595,15 @@
   // cfg: { stage, seed, roster: [{ pid, slot, name, cls }] (World hero order), myPid }. view: the ARCHITECTURE §10 view model, arrays rebuilt by frame(rt).
   N.Mirror = function (cfg) {
     this.roster = cfg.roster; this.myPid = cfg.myPid; this.seq = 0; this.T = 0; this.ack = 0; this.ready = false; this.state = 'play';
-    this.view = { me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: ED.Arena.generate(cfg.stage | 0, cfg.seed >>> 0), stage: cfg.stage | 0, seed: cfg.seed >>> 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, events: [] };
+    this.view = { me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: ED.Arena.generate(cfg.stage | 0, cfg.seed >>> 0), stage: cfg.stage | 0, seed: cfg.seed >>> 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, lap: null, sanctum: null, events: [] };
     this.heroes = cfg.roster.map((r, i) => { const h = mkTrack(heroFields()); h.pid = r.pid; h.slot = r.slot | 0; h.cls = r.cls; h.name = r.name || 'Hero'; h.idx = i; return h; });
     this.myIdx = this.heroes.findIndex(h => h.pid === cfg.myPid);
     this.me = this.heroes[this.myIdx] || null; // view.me from the first snapshot on
     this.srv = { x: 0, y: 0, dashT: 0, dashCd: 0, dashDx: 1, dashDy: 0, mdir: 0, mvx: 0, mvy: 0, moving: false, spd: 0, live: false };
     this.boss = { id: 0, k: 0, x: 0, y: 0, hpQ: 255, enraged: false, final: false, dead: false };
     this.bossBar = { on: false, id: '', name: '', q: 0, phase: 0, final: false, enraged: false, n: 0, rev: -1 };
+    this.lapV = { ph: 0, rem: 0, gold: 0, kills: 0 };
+    const c = this.view.props.size / 2; this.sanV = { st: 0, t0: 0, x: c, y: c, w: C.SANCTUM.w, h: C.SANCTUM.h }; // view.sanctum (null outside the Sanctum)
     this.foes = new Tracks(() => ({ id: 0, k: 0, def: null, x: 0, y: 0, r: 7, hpQ: 255, face: 1, flash: 0, st: 0, stT: 0, st0: 0, elite: false, boss: false, scale: 1, enraged: false, freezeT: 0, stunT: 0, burnT: 0, slowT: 0 }), foeApply);
     this.projs = new Tracks(() => ({ id: 0, k: '', wid: '', team: 0, x: 0, y: 0, a: 0, r: 4, t: 0 }), projApply);
     this.picks = new Tracks(() => ({ id: 0, k: 'xp1', x: 0, y: 0 }), null);
@@ -625,6 +631,11 @@
     const bf = r8(), BB = this.bossBar;
     if (bf & 1) { const d = ED.FOES[ED.FOE_IDS[rv()]]; BB.on = true; BB.final = !!(bf & 2); BB.enraged = !!(bf & 4); BB.id = d ? d.id : ''; BB.name = d ? d.name : 'Boss'; BB.q = r8(); BB.phase = r8(); BB.n = r8(); const rv8b = r8(); BB.rev = rv8b === 255 ? -1 : rv8b / 254; } else BB.on = false;
     v.bossBar = BB;
+    const LP = this.lapV; LP.ph = r8();
+    if (LP.ph) { LP.rem = r16() / 100; LP.gold = rv(); LP.kills = rv(); } else LP.rem = LP.gold = LP.kills = 0;
+    v.lap = LP;
+    const sst = r8(), A = v.props;
+    if (sst) { const SV = this.sanV; SV.st = sst - 1; SV.t0 = rf32(); v.sanctum = SV; if (SV.st >= 1 && !A.room) A.room = ED.sanctumRoom(SV, {}); } else { v.sanctum = null; A.room = null; }
     const nb = r8(), BR = v.props.braziers;
     for (let i = 0; i < nb; i += 8) { const m = r8(); for (let k = 0; k < 8 && i + k < nb; k++) if (BR[i + k]) { const br = !!(m & (1 << k)); BR[i + k].broken = br; BR[i + k].hp = br ? 0 : 1; } }
     // heroes
@@ -639,7 +650,7 @@
       h.rerolls = r8(); h.skips = r8(); h.banishes = r8(); h.kills = rv();
       h.downed = !!(fl & 2); h.dead = !!(fl & 4);
       let n = r8(); const S = h.skills; for (let i = 0; i < n; i++) { const s = S[i] || (S[i] = { id: '', lvl: 1, cd: 0, cdMax: 1, ch: 0, chN: 0 }); s.id = rstr(TBL.S); s.lvl = r8(); s.cd = r16() / 1000; s.cdMax = r16() / 1000; const c = r8(); s.chN = c >> 4; s.ch = c & 15; } S.length = n;
-      n = r8(); const Wp = h.weapons; for (let i = 0; i < n; i++) { const s = Wp[i] || (Wp[i] = { id: '', root: '', lvl: 1, evo: false, pr: [0, 0, 0], fl: 0 }); s.id = rstr(TBL.W); s.root = ED.weaponRoot(s.id); const l = r8(); s.lvl = l & 127; s.evo = !!(l & 128); const r = r8(); s.pr[0] = r & 3; s.pr[1] = r >> 2 & 3; s.pr[2] = r >> 4 & 3; s.fl = r >> 6 & 3; } Wp.length = n;
+      n = r8(); const Wp = h.weapons; for (let i = 0; i < n; i++) { const s = Wp[i] || (Wp[i] = { id: '', root: '', lvl: 1, evo: false, tune: 0, tk: [0, 0, 0], path: -1, pr: [0, 0, 0], fl: 0 }); s.id = rstr(TBL.W); s.root = ED.weaponRoot(s.id); const l = r8(); s.lvl = l & 127; s.evo = !!(l & 128); const r = r16(); s.tk[0] = r & 3; s.tk[1] = r >> 2 & 3; s.tk[2] = r >> 4 & 3; s.tune = s.tk[0] + s.tk[1] + s.tk[2]; s.path = (r >> 6 & 3) - 1; s.pr[0] = s.pr[1] = s.pr[2] = 0; if (s.path >= 0) s.pr[s.path] = r >> 8 & 7; s.fl = r >> 11 & 3; } Wp.length = n;
       n = r8(); const Ps = h.passives; for (let i = 0; i < n; i++) { const s = Ps[i] || (Ps[i] = { id: '', lvl: 1 }); s.id = rstr(TBL.P); s.lvl = r8(); } Ps.length = n;
       if (fl & 16) { h.fxf = r16(); h.fxv = rf32(); } else { h.fxf = 0; h.fxv = 0; }
       if (mine) { const s = this.srv; s.x = x; s.y = y; s.mdir = mdir; s.mvx = mvx; s.mvy = mvy; s.moving = !!(fl & 1); s.dashT = dashT; s.dashCd = dashCd; s.dashDx = ddx; s.dashDy = ddy; s.spd = h.spd; s.live = !h.downed && !h.dead; }
@@ -792,7 +803,7 @@
 
   // ---------------- party (lobby flow API) ----------------
   // N.Party(game): one lobby session bound to a game session (ED.Game by default). ED.Net.host / join / setHero / setReady / setStage / start / leave and ED.Net.lobby use the default party.
-  // lobby: { role: '' | 'host' | 'client', code, me (own pid), status: 'idle' | 'connecting' | 'open' | 'closed' | 'error', error, stage, members: [{ pid, slot, name, cls, ready, isHost }], inRun, canStart }.
+  // lobby: { role: '' | 'host' | 'client', code, me (own pid), status: 'idle' | 'connecting' | 'open' | 'closed' | 'error', error, stage, members: [{ pid, slot, name, cls, cos, ready, isHost }], inRun, canStart }.
   // Callbacks (UI): N.onChange(lobby) on any lobby change, N.onError(msg) when hosting / joining fails or the host refuses, N.onClosed(msg) when the party ends outside a run
   // (a host leaving mid-run ends the run with sum.note instead). A run starts on every peer through ED.App.enterRun(stage) after the session is built.
   N.Party = function (game, cb) {
@@ -807,11 +818,11 @@
     if (this.cb.onChange) this.cb.onChange(L);
   };
   PP.fail = function (msg) { this.lobby.error = msg; if (this.cb.onError) this.cb.onError(msg); this.changed(); };
-  // Own lobby pick: hero cls (default: the hero selected in the menus) and permanent ranks from the profile.
+  // Own lobby pick: hero cls (default: the hero selected in the menus), permanent ranks and worn cosmetics from the profile.
   PP.pick = function (cls) {
     const A = ED.App, prof = A && A.profile;
     cls = cls || (A && A.sel && A.sel.cls) || ED.HERO_IDS[0];
-    return cleanPick({ cls, meta: prof && ED.Save.metaBundle ? ED.Save.metaBundle(prof) : { shop: {}, sigs: [] } });
+    return cleanPick({ cls, meta: prof && ED.Save.metaBundle ? ED.Save.metaBundle(prof) : { shop: {}, sigs: [] }, cos: prof && prof.wear ? ED.Save.cosBundle(prof, cls) : null });
   };
   PP.setLobby = function (st) {
     const L = this.lobby;
@@ -823,7 +834,7 @@
     this.leave();
     const pk = this.pick(cls), L = this.lobby, tok = this.tok = {}, live = () => this.tok === tok;
     L.role = 'host'; L.me = 'host'; L.status = 'connecting'; L.error = ''; L.inRun = false; L.stage = 0;
-    const s = this.sess = new N.Host({ name: ED.Save.sanitizeName(name), cls: pk.cls, meta: pk.meta }, {
+    const s = this.sess = new N.Host({ name: ED.Save.sanitizeName(name), cls: pk.cls, meta: pk.meta, cos: pk.cos }, {
       status: (st, msg) => { if (!live()) return; if (st === 'open') { L.status = 'open'; this.changed(); } else { L.status = 'error'; this.fail(msg); } },
       code: (c) => { if (live()) { L.code = c; this.changed(); } },
       lobby: (st) => { if (live()) this.setLobby(st); },
@@ -838,7 +849,7 @@
     this.leave();
     const pk = this.pick(cls), L = this.lobby, tok = this.tok = {}, live = () => this.tok === tok;
     L.role = 'client'; L.status = 'connecting'; L.error = ''; L.code = N.cleanCode(code); L.inRun = false;
-    const s = this.sess = new N.Client(L.code, { name: ED.Save.sanitizeName(name), cls: pk.cls, meta: pk.meta }, {
+    const s = this.sess = new N.Client(L.code, { name: ED.Save.sanitizeName(name), cls: pk.cls, meta: pk.meta, cos: pk.cos }, {
       welcome: (d) => { if (!live()) return; L.me = d.pid; L.status = 'open'; this.changed(); },
       error: (msg) => { if (!live()) return; L.status = 'error'; this.tok = null; this.sess = null; s.close(); this.fail(msg); },
       lobby: (st) => { if (live()) this.setLobby(st); },
@@ -862,7 +873,7 @@
   PP.setHero = function (cls) {
     const s = this.sess; if (!s || this.lobby.inRun) return;
     const pk = this.pick(cls);
-    if (this.lobby.role === 'host') s.setMe({ cls: pk.cls, meta: pk.meta }); else s.send({ t: 'pick', cls: pk.cls, meta: pk.meta });
+    if (this.lobby.role === 'host') s.setMe({ cls: pk.cls, meta: pk.meta, cos: pk.cos }); else s.send({ t: 'pick', cls: pk.cls, meta: pk.meta, cos: pk.cos });
   };
   PP.setReady = function (v) { const s = this.sess; if (s && this.lobby.role === 'client' && !this.lobby.inRun) s.send({ t: 'ready', v: !!v }); };
   PP.setStage = function (i) { const s = this.sess; if (s && this.lobby.role === 'host' && !this.lobby.inRun) s.setStage(i); };
@@ -872,12 +883,12 @@
     if (!s || L.role !== 'host' || L.inRun || !s.allReady()) return false;
     seed = seed ? seed >>> 0 : ((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0) || 1;
     const members = s.members.slice().sort((a, b) => a.slot - b.slot);
-    const roster = members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls }));
+    const roster = members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls, cos: m.cos }));
     s.started = true;
     s.broadcast({ t: 'start', seed, stage: s.stage, roster, ver: N.VERSION });
     L.inRun = true;
     const G = this.G();
-    G.startNet({ mode: 'host', seed, stage: s.stage, myPid: 'host', players: members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls, meta: m.meta })), cheats, net: this.hostNet(s) });
+    G.startNet({ mode: 'host', seed, stage: s.stage, myPid: 'host', players: members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls, meta: m.meta, cos: m.cos })), cheats, net: this.hostNet(s) });
     this.enter(s.stage);
     this.changed();
     return true;

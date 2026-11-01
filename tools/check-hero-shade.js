@@ -1,6 +1,7 @@
 // Headless check of the Shade tree (exit 1 on failure). Usage: node tools/check-hero-shade.js
-// 1. Tree shape: 3 paths x 3 ranks, card lines <= 40 chars naming no Form; every rank changes the effective numbers; 3 pure Forms + 2 hybrids, each with 2 refines.
-// 2. Form rules: each Form is ready only with its path(s) at rank 3, one Form per run; every Form fires and deals damage (10 s ring).
+// 1. Tree shape: 3 paths x 3 shape ranks, card lines <= 40 chars naming no Form; every path rank 1-5 changes the effective numbers; 5 Forms (Flurry: Thousand Cuts;
+// Lethality: Assassinate, Death Lotus; Return: Shadow Fan, Reaper's Return), each with 2 refines.
+// 2. Form rules: each Form is ready only with its own path at rank 5, one Form per run; every Form fires and deals damage (10 s ring).
 // 3. Mechanics: stab reach (a foe at 40 px is hit, one at 140 px is not), crit all-or-none per stab, execute, mark on the elite + shadow cuts, bloom blades, returning and fan daggers, pins.
 // 4. View clamp: a foe outside the hero's view takes no weapon or skill damage. 5. Shadow Step at levels 1..4: zero damage blink, decoy lure, charges. 6. Determinism digest (60 s run, twice).
 'use strict';
@@ -9,7 +10,7 @@ const ED = load(), U = ED.U, C = ED.CONST;
 let fails = 0;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
 const t0 = Date.now();
-const ROOT = 'daggers', FORMS = ['thousand', 'assassinate', 'shadowfan'], HYB = [['lotus', [0, 1]], ['reaper', [1, 2]]];
+const ROOT = 'daggers', FORMS = ['thousand', 'assassinate', 'shadowfan'], HYB = [['lotus', 1], ['reaper', 2]];
 
 // World with the spawner and XP silenced; god cheat. Hero at rest aiming east (mdir 0, cursor 100 px east).
 function world(seed) {
@@ -19,43 +20,42 @@ function world(seed) {
   return w;
 }
 const step = (w, s, fn) => { for (let i = 0; i < Math.round(s * 60); i++) { if (fn) fn(i); w.update(C.TICK); w.events.length = 0; } };
-const build = (w, p, ranks, form) => { const ws = p.weapons[0]; for (let i = 0; i < 3; i++) for (let r = 0; r < ranks[i]; r++) w.rankPath(p, ws, i); if (form) { w.takeForm(p, ws, form); while (w.refineForm(p, ws)); } w.recalc(p, false); return ws; };
+// Tune full and shape ranks [a, b, c] (first nonzero path at shape rank r -> path rank 2r - 1; all zero: tune only), path ranks when pr; form: that Form refined fully (ranks ignored).
+const build = (w, p, ranks, form, pr) => { const ws = p.weapons[0], i = ranks.findIndex(x => x > 0); if (form) return w.setForm(p, ws, form, 2); return w.setRanks(p, ws, ED.TUNE_MAX, i, i < 0 ? 0 : pr ? ranks[i] : 2 * ranks[i] - 1); };
 const HP = { hpMul: 1 };
 function ring(w, x, y, n, r, k, hpMul) { HP.hpMul = hpMul || 1; for (let i = 0; i < n; i++) { const a = i / n * U.TAU; w.spawnFoe(k || 'skeleton', x + Math.cos(a) * r, y + Math.sin(a) * r, HP); } }
 const sKey = (S) => JSON.stringify(Object.keys(S).sort().map(k => [k, typeof S[k] === 'number' ? +S[k].toFixed(4) : S[k]]));
 
 // 1. tree shape
 const root = ED.WEAPONS[ROOT], names = FORMS.concat(HYB.map(h => h[0])).map(id => ED.WEAPONS[id] && ED.WEAPONS[id].name.toLowerCase());
-ok(root.paths.length === 3 && root.paths.every(pa => pa.ranks.length === 3), 'Twin Daggers: 3 paths x 3 ranks');
+ok(root.paths.length === 3 && root.paths.every(pa => pa.ranks.length === 3), 'Twin Daggers: 3 paths x 3 shape ranks');
 const lines = [];
 root.paths.forEach(pa => pa.ranks.forEach(r => lines.push(r.txt)));
 for (const id of FORMS.concat(HYB.map(h => h[0]))) { const d = ED.WEAPONS[id]; lines.push(d.txt); d.refine.forEach(r => lines.push(r.txt)); }
 ok(lines.every(l => l.length <= 40), 'every card line <= 40 chars');
 ok(root.paths.every(pa => pa.ranks.every(r => !names.some(n => r.txt.toLowerCase().indexOf(n) >= 0))), 'no path rank line names a Form');
-ok(root.paths.map(pa => pa.form).join() === FORMS.join(), 'pure Forms: ' + FORMS.join(', '));
-ok(root.hybrids.length === 2 && HYB.every(([id, need], j) => root.hybrids[j].form === id && root.hybrids[j].need.join() === need.join()), 'hybrids: lotus (0+1), reaper (1+2)');
+ok(root.paths.map(pa => pa.forms[0]).join() === FORMS.join(), 'first Forms: ' + FORMS.join(', '));
+ok(HYB.every(([id, i]) => root.paths[i].forms[1] === id) && !root.paths[0].forms[1], 'second Forms: lotus (Lethality), reaper (Return)');
 for (const id of FORMS.concat(HYB.map(h => h[0]))) { const d = ED.WEAPONS[id]; ok(d.form && d.evolved && d.from === ROOT && d.refine.length === 2, `${id}: Form of ${ROOT} with 2 refines`); }
 for (let i = 0; i < 3; i++) {
-  const w = world(), p = w.heroes[0], ws = p.weapons[0];
+  const w = world(), p = w.heroes[0], ws = build(w, p, [0, 0, 0], null);
   let prev = sKey(w.weaponS(p, 0));
-  for (let r = 0; r < 3; r++) { w.rankPath(p, ws, i); w.recalc(p, false); const k = sKey(w.weaponS(p, 0)); ok(k !== prev, `${root.paths[i].name} rank ${r + 1} changes the numbers ("${root.paths[i].ranks[r].txt}")`); prev = k; }
+  for (let r = 1; r <= ED.PATH_MAX; r++) { if (r === 1) w.pickPath(p, ws, i); else w.rankPath(p, ws, i); w.recalc(p, false); const k = sKey(w.weaponS(p, 0)); ok(k !== prev, `${root.paths[i].name} rank ${r} changes the numbers ("${r & 1 ? root.paths[i].ranks[r >> 1].txt : 'generic step'}")`); prev = k; }
 }
 for (const id of FORMS.concat(HYB.map(h => h[0]))) {
-  const w = world(), p = w.heroes[0], ws = build(w, p, [3, 3, 3], null);
-  w.takeForm(p, ws, id); w.recalc(p, false);
+  const w = world(), p = w.heroes[0], ws = w.setForm(p, p.weapons[0], id, 0);
   let prev = sKey(w.weaponS(p, 0));
   for (let r = 0; r < 2; r++) { w.refineForm(p, ws); w.recalc(p, false); const k = sKey(w.weaponS(p, 0)); ok(k !== prev, `${id} refine ${r + 1} changes the numbers`); prev = k; }
 }
 
 // 2. Form rules + every Form fires
 {
-  const ready = (pr) => { const w = world(), p = w.heroes[0], ws = build(w, p, pr, null); return w.formsReady(p, ws).map(f => f.id).sort().join(); };
-  ok(ready([0, 0, 0]) === '' && ready([2, 2, 2]) === '', 'no Form below rank 3');
-  ok(ready([3, 0, 0]) === 'thousand' && ready([0, 3, 0]) === 'assassinate' && ready([0, 0, 3]) === 'shadowfan', 'one path at 3: its pure Form only');
-  ok(ready([3, 3, 0]) === 'assassinate,lotus,thousand', 'paths 0+1 at 3: + Death Lotus');
-  ok(ready([0, 3, 3]) === 'assassinate,reaper,shadowfan', 'paths 1+2 at 3: + Reaper\'s Return');
-  ok(ready([3, 0, 3]) === 'shadowfan,thousand', 'paths 0+2 at 3: no hybrid');
-  const w = world(), p = w.heroes[0], ws = build(w, p, [3, 3, 3], 'lotus');
+  const ready = (pr) => { const w = world(), p = w.heroes[0], ws = build(w, p, pr, null, true); return w.formsReady(p, ws).map(f => f.id).sort().join(); };
+  ok(ready([0, 0, 0]) === '' && ready([4, 0, 0]) === '' && ready([0, 4, 0]) === '' && ready([0, 0, 4]) === '', 'no Form below path rank 5');
+  ok(ready([5, 0, 0]) === 'thousand', 'Flurry 5: Thousand Cuts');
+  ok(ready([0, 5, 0]) === 'assassinate,lotus', 'Lethality 5: Assassinate, Death Lotus');
+  ok(ready([0, 0, 5]) === 'reaper,shadowfan', 'Return 5: Shadow Fan, Reaper\'s Return');
+  const w = world(), p = w.heroes[0], ws = build(w, p, [], 'lotus');
   ok(ws.id === 'lotus' && w.formsReady(p, ws).length === 0 && !w.takeForm(p, ws, 'thousand'), 'one Form per run: none ready once taken, a second take fails');
   for (const id of FORMS.concat(HYB.map(h => h[0]))) {
     const w2 = world(20), p2 = w2.heroes[0];
@@ -104,8 +104,8 @@ const sp = (w, p, k, dx, dy, o) => { const e = w.spawnFoe(k, p.x + dx, p.y + dy,
 }
 { // Assassinate: the elite is marked over trash; the shadow's X cuts hit it 150 px away, forced crits
   const w = world(), p = w.heroes[0]; build(w, p, [0, 3, 0], 'assassinate');
-  for (let i = 0; i < 6; i++) sp(w, p, 'skeleton', -60 - i * 12, 40);
-  const el = sp(w, p, 'skelknight', 150, 0); w.promoteElite(el); el.spd = 0;
+  for (let i = 0; i < 6; i++) sp(w, p, 'skeleton', -60 - i * 12, 40, { hpMul: 1 }); // plain trash: elite HP no longer scales with the spawned HP
+  const el = sp(w, p, 'skelknight', 150, 0); w.promoteElite(el); el.maxHp = el.hp = 1e6; el.spd = 0;
   let crits = 0;
   step(w, 3, () => { for (const ev of w.events) if (ev.t === 'hit' && ev.id === el.id && ev.crit) crits++; });
   const ws = p.weapons[0];
@@ -140,15 +140,16 @@ const sp = (w, p, k, dx, dy, o) => { const e = w.spawnFoe(k, p.x + dx, p.y + dy,
 // 4. view clamp: a foe outside the view takes nothing (weapon Forms + Q)
 for (const id of [null, 'thousand', 'assassinate', 'shadowfan', 'lotus', 'reaper']) {
   const w = world(9), p = w.heroes[0]; build(w, p, [3, 3, 3], id);
-  p.skills[0].lvl = 4;
+  p.skills[0].lvl = 5;
   const out = sp(w, p, 'skelknight', 0, ED.HERO_VIEW.hh + 40), inn = sp(w, p, 'skelknight', 40, -6);
   step(w, 4, (i) => { out.x = p.x; out.y = p.y + ED.HERO_VIEW.hh + 40; if (i % 60 === 0) w.input(p.pid, { q: true, ax: p.x + 30, ay: p.y }); });
   ok(out.hp === out.maxHp && inn.hp < inn.maxHp, `${id || 'daggers'}: no damage outside the view (in-view foe dealt ${Math.round(inn.maxHp - inn.hp)})`);
 }
 
-// 5. Shadow Step levels (zero damage): blink toward the cursor (L2 +60 px), the afterimage is a decoy that foes inside its view chase for 2 s (L3 3.5 s; bosses ignore it), L4 2 charges.
+// 5. Shadow Step levels (zero damage): blink toward the cursor (L2 +60 px), the afterimage is a decoy that foes inside its view chase for 2 s (L3 3.5 s; bosses ignore it), L4 2 charges,
+//    L5 foes outside the decoy's view chasing the Shade turn to it too.
 ok(ED.SKILLS.step.cd >= 7 && ED.SKILLS.step.cd <= 16 && ED.SKILLS.step.levels.every(l => l.txt.length <= 40) && ED.SKILLS.step.txt.length <= 40, `shadow step: cooldown ${ED.SKILLS.step.cd} s, card lines <= 40 chars`);
-for (let L = 1; L <= 4; L++) {
+for (let L = 1; L <= 5; L++) {
   const w = world(30 + L), p = w.heroes[0]; p.weapons.length = 0; p.skills[0].lvl = L;
   const N = w.skillN(p, 0), x0 = p.x, y0 = p.y;
   ring(w, p.x + 60, p.y, 6, 20, 'skeleton', 20);
@@ -158,13 +159,13 @@ for (let L = 1; L <= 4; L++) {
   const moved = p.x - x0, inv = p.invuln > 0.25, z = w.zones.find(q => !q.dead && q.k === 'afterimg');
   const d0 = lure.map(e => U.dist(x0, y0, e.x, e.y));
   step(w, 0.3, () => { p.x = x0 + moved; p.y = y0; });
-  const lured = lure.filter(e => e.ovK === 2).length, ign = far.ovT === 0 && boss.ovT === 0;
+  const lured = lure.filter(e => e.ovK === 2).length, ign = (L >= 5 ? far.ovK === 2 : far.ovT === 0) && boss.ovT === 0;
   step(w, 1.2, () => { p.x = x0 + moved; p.y = y0; });
   const closer = lure.filter((e, i) => U.dist(x0, y0, e.x, e.y) < d0[i] - 20).length;
   step(w, 1.0, () => { p.x = x0 + moved; p.y = y0; });
   const still = lure.filter(e => e.ovK === 2).length, hurt = w.foes.filter(e => e.hp < e.maxHp).length;
   ok(Math.abs(moved - N.dist) < 1 && inv && hurt === 0 && !(p.dealt.step > 0) && N.cd >= 7, `shadow step L${L}: blinks ${Math.round(moved)} of ${N.dist} px, invulnerable ${inv}, zero damage (hurt ${hurt})`);
-  ok(!!z && z.dur === N.dur && lured === 8 && closer === 8 && ign && boss.ovT === 0, `shadow step L${L}: decoy ${N.dur} s lures ${lured}/8 in view (${closer} closed in); foe outside its view and boss ignore it`);
+  ok(!!z && z.dur === N.dur && lured === 8 && closer === 8 && ign && boss.ovT === 0, `shadow step L${L}: decoy ${N.dur} s lures ${lured}/8 in view (${closer} closed in); foe outside its view ${L >= 5 ? 'lured (L5)' : 'ignores it'}, boss ignores it`);
   ok((N.dur > 2.5) === (still === 8) && (N.dur <= 2.5) === (still === 0), `shadow step L${L}: at 2.5 s ${still}/8 still chase the decoy`);
 }
 { // L4 charges: two blinks at once, a third only after the recharge; one charge back per cooldown

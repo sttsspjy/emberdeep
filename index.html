@@ -49,11 +49,13 @@
     <div class="row"><button class="btn" id="btn-stage-back" data-back>Back</button><button class="btn btn-primary btn-big" id="btn-start" data-focus>Start run</button></div>
   </section>
 
-  <section id="scr-camp" class="screen" hidden>
+  <section id="scr-camp" class="screen tall" hidden>
     <div class="camp-head"><h2>Camp shop</h2><div class="gold-pill"><canvas class="icon icon-sm" id="camp-coin" width="32" height="32"></canvas><b id="camp-gold">0</b></div></div>
-    <p class="hint">Permanent ranks for every run. Refund any time.</p>
+    <p class="hint" id="camp-hint">Permanent ranks for every run. Refund any time.</p>
+    <div class="msg" id="camp-msg" role="status"></div>
     <div class="shop" id="shop-list"></div>
     <div class="row">
+      <button class="btn" id="btn-wardrobe">Wardrobe</button>
       <button class="btn" id="btn-refund">Refund all</button>
       <button class="btn" id="btn-code-toggle" aria-expanded="false">Save code</button>
       <button class="btn btn-primary" id="btn-camp-back" data-back data-focus>Back</button>
@@ -64,6 +66,16 @@
       <div class="row"><button class="btn btn-sm" id="btn-code-copy">Show my code</button><button class="btn btn-sm" id="btn-code-load">Load code</button></div>
       <div class="msg" id="code-msg" role="status"></div>
     </div>
+  </section>
+
+  <section id="scr-wardrobe" class="screen tall" hidden>
+    <div class="camp-head"><h2>Wardrobe</h2><div class="gold-pill"><canvas class="icon icon-sm" id="wd-coin" width="32" height="32"></canvas><b id="wd-gold">0</b></div></div>
+    <p class="hint" id="wd-hint">Looks only: skins, weapon tints, kill and level-up effects, titles and name colours.</p>
+    <div class="cx-tabs" id="wd-tabs" role="tablist" aria-label="Wardrobe sections"></div>
+    <div class="pick-row" id="wd-heroes" role="radiogroup" aria-label="Hero"></div>
+    <div class="msg" id="wd-msg" role="status"></div>
+    <div class="wd-list" id="wd-list"></div>
+    <div class="row"><button class="btn btn-primary" id="btn-wd-back" data-back data-focus>Back</button></div>
   </section>
 
   <section id="scr-achieve" class="screen tall" hidden>
@@ -107,15 +119,35 @@
     <div class="row"><button class="btn" id="btn-lobby-leave" data-back>Leave</button><button class="btn btn-primary btn-big" id="btn-lobby-go" data-focus>Ready</button></div>
   </section>
 
-  <section id="scr-results" class="screen" hidden>
-    <h2 id="res-title" class="res-title">Victory</h2>
-    <p class="hint" id="res-sub"></p>
-    <p class="hint" id="res-build"></p>
-    <div class="res-stats" id="res-stats"></div>
-    <div class="res-chart plate" id="res-chart"></div>
-    <div class="res-party" id="res-party"></div>
-    <div class="res-unlocks" id="res-unlocks"></div>
-    <div class="row"><button class="btn" id="btn-res-back">Title</button><button class="btn btn-primary btn-big" id="btn-res-again" data-focus>Play again</button></div>
+  <section id="scr-results" class="screen res" hidden>
+    <div class="res-wrap">
+      <header class="res-head"><h2 id="res-title" class="res-title">Victory</h2><div class="res-sub" id="res-sub"></div></header>
+      <div class="res-tiles" id="res-tiles"></div>
+      <div class="res-main">
+        <section class="plate res-panel res-load" aria-label="Weapons and build">
+          <div class="res-cap"><span>Weapons</span><span class="mut" id="res-dmg-tot"></span></div>
+          <div class="res-wt" id="res-chart"></div>
+          <div class="res-hl" id="res-hl"></div>
+          <div class="res-pas" id="res-pas"></div>
+        </section>
+        <div class="res-side">
+          <section class="plate res-panel res-tl" aria-label="Timeline">
+            <div class="res-cap"><span>Timeline</span><span class="res-key"><i class="k-kill"></i>Kills / min <i class="k-lv"></i>Level <i class="k-boss"></i>Boss down <i class="k-lap" id="res-key-lap"></i><span id="res-key-lap-t">Last Light</span></span></div>
+            <div class="res-tl-box"><canvas id="res-tl" class="res-tl-cv"></canvas></div>
+            <div class="res-tl-info mut" id="res-tl-info"></div>
+          </section>
+          <section class="plate res-panel res-tabs">
+            <div class="res-tabbar" role="tablist" id="res-tabbar"><button class="tab" data-tab="party" role="tab">Party</button><button class="tab" data-tab="bosses" role="tab">Bosses</button></div>
+            <div class="res-pane" id="res-pane-party" role="tabpanel"></div>
+            <div class="res-pane" id="res-pane-bosses" role="tabpanel"></div>
+          </section>
+        </div>
+      </div>
+      <footer class="res-foot">
+        <div class="res-unlocks" id="res-unlocks"></div>
+        <div class="row res-btns"><button class="btn" id="btn-res-back">Title</button><button class="btn btn-primary btn-big" id="btn-res-again" data-focus>Play again</button></div>
+      </footer>
+    </div>
   </section>
 
   <div id="ov-offer" class="overlay offer" hidden>
@@ -171,6 +203,7 @@
 <script src="src/data/stages.js" defer></script>
 <script src="src/data/passives.js" defer></script>
 <script src="src/data/meta.js" defer></script>
+<script src="src/data/cosmetics.js" defer></script>
 <script src="src/save.js" defer></script>
 <script src="src/sim/stats.js" defer></script>
 <script src="src/sim/arena.js" defer></script>
@@ -184,6 +217,8 @@
 <script src="src/sim/skills.js" defer></script>
 <script src="src/sim/progress.js" defer></script>
 <script src="src/sim/bosses.js" defer></script>
+<script src="src/sim/lap.js" defer></script>
+<script src="src/sim/sanctum.js" defer></script>
 <script src="src/sim/boss-warden.js" defer></script>
 <script src="src/sim/boss-spore.js" defer></script>
 <script src="src/sim/boss-king.js" defer></script>
@@ -193,6 +228,7 @@
 <script src="src/sim/boss-samurai.js" defer></script>
 <script src="src/sim/boss-weaver.js" defer></script>
 <script src="src/sim/boss-wickeater.js" defer></script>
+<script src="src/sim/boss-wickmother.js" defer></script>
 <script src="src/heroes/knight.js" defer></script>
 <script src="src/heroes/ranger.js" defer></script>
 <script src="src/heroes/pyro.js" defer></script>
@@ -229,6 +265,8 @@
 <script src="src/client/bfx-a.js" defer></script>
 <script src="src/client/bfx-b.js" defer></script>
 <script src="src/client/bfx-c.js" defer></script>
+<script src="src/client/bfx-d.js" defer></script>
+<script src="src/client/cosfx.js" defer></script>
 <script src="src/client/audio.js" defer></script>
 <script src="src/client/music.js" defer></script>
 <script src="src/client/input.js" defer></script>
@@ -236,6 +274,7 @@
 <script src="src/client/hud.js" defer></script>
 <script src="src/client/ui.js" defer></script>
 <script src="src/client/codex.js" defer></script>
+<script src="src/client/wardrobe.js" defer></script>
 <script src="src/main.js" defer></script>
 </body>
 </html>

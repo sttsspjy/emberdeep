@@ -1,7 +1,7 @@
 // Cleric (support): signature Smite = holy pillars on random foes near the hero (team 0 warn zones that resolve after a short fall) plus two emitters the paths add:
-// a holy aura around the hero (Censer path: pulses, heals allies inside, swinging censers) and a sweeping holy beam (Lance path). Every Form keeps all three parts and reshapes one:
-// Wrath (pillars hop foe to foe), Halo (the aura becomes a ring wall that shoves foes out), Judgment Ray (beams rotate around the hero), hybrids Consecration (pillars leave
-// healing holy ground) and Verdict (the beam calls pillars along its sweep). Q Sanctuary: holy ground at the cursor that heals and revives allies, wards foes out, rains pillars.
+// a holy aura around the hero (Censer path: pulses, heals allies inside, swinging censers) and a sweeping holy beam (Lance path). Every Form keeps the parts its path adds and reshapes one:
+// Wrath (pillars hop foe to foe), Halo (the aura becomes a ring wall that shoves foes out), Judgment Ray (beams rotate around the hero), Consecration (Censer; pillars leave
+// healing holy ground), Verdict (Lance; the beam calls pillars along its sweep). Q Sanctuary: holy ground at the cursor that heals and revives allies, wards foes out, rains pillars.
 // Zone looks: smite / wrath (falling pillar), pglow (landed pillar, visual), hallow (Consecration ground), sanct, aura, halo (circle w = censer count),
 // beam (line, sweep), ray (line, rotating). Pillar riders ride on a pooled state object (PS free list): no allocation per pillar in steady state.
 (function (ED) {
@@ -9,7 +9,7 @@
   const U = ED.U, TAU = U.TAU;
   ED.regLook('smite', 'wrath', 'pglow', 'sanct', 'aura', 'halo', 'beam', 'ray', 'hallow');
 
-  ED.addHero({ id: 'cleric', name: 'Cleric', hp: 110, speed: 70, crit: 0.05, sig: 'smite', skills: ['sanctuary'], icon: 'hero.cleric.idle', col: '#ffe08a', txt: 'Holy pillars smite foes near you.' });
+  ED.addHero({ id: 'cleric', name: 'Cleric', hp: 110, speed: 78, crit: 0.05, sig: 'smite', skills: ['sanctuary'], icon: 'hero.cleric.idle', col: '#ffe08a', txt: 'Holy pillars smite foes near you.' });
 
   // ---------------- pillars ----------------
   const FALL = 0.2, LEAP_R = 110, LEAP_K = 0.4, LEAP_MAX = 4, HOP_R = 120, HOP_K = 0.85, HOP_FALL = 0.1;
@@ -227,28 +227,27 @@
   // Smite: S.n pillars on random foes near the hero; paths Storm (more pillars, leaps), Censer (aura, healing, censers), Lance (sweeping beam).
   ED.addWeapon({
     id: 'smite', name: 'Smite', icon: 'weapon.mace', sig: 'cleric', mode: 'random', txt: 'Holy pillars on random foes',
-    base: base({ dmg: 20, cd: 1.0, n: 1 }),
+    base: base({ dmg: 23, cd: 1.0, n: 1 }),
     paths: [
-      { id: 'storm', name: 'Storm', form: 'wrath', ranks: [
+      { id: 'storm', name: 'Storm', forms: ['wrath'], ranks: [
         { mods: { n: 1 }, txt: '+1 pillar' },
         { mods: { jump: 1 }, txt: 'Pillars leap to a nearby foe' },
         { mods: { jump: 1 }, txt: 'Leaps strike 2 foes' }] },
-      { id: 'censer', name: 'Censer', form: 'halo', ranks: [
+      { id: 'censer', name: 'Censer', forms: ['halo', 'consecration'], ranks: [
         { mods: { aura: 1 }, txt: 'A holy aura burns foes near you' },
         { mods: { aura: 1, heal: 0.6 }, txt: 'Aura grows and heals allies in it' },
         { mods: { swing: 2 }, txt: '2 censers swing around you' }] },
-      { id: 'lance', name: 'Lance', form: 'jray', ranks: [
+      { id: 'lance', name: 'Lance', forms: ['jray', 'verdict'], ranks: [
         { mods: { beam: 1 }, txt: 'A holy beam sweeps foes every 3 s' },
         { mods: { pass: 1 }, txt: 'The beam sweeps back again' },
         { mods: { beams: 1 }, txt: 'A second beam sweeps behind you' }] },
     ],
-    hybrids: [{ need: [0, 1], form: 'consecration' }, { need: [0, 2], form: 'verdict' }],
   }, impl(''));
 
   // Wrath: every pillar starts a chain that hops to the next foe outward (S.hop hops, 85% damage each).
   ED.addWeapon({
     id: 'wrath', name: 'Wrath', icon: 'weapon.dawnhammer', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Pillars hop from foe to foe',
-    base: base({ dmg: 30, cd: 1.0, n: 2, r: 28, hop: 5, knock: 90 }),
+    base: base({ dmg: 21, cd: 1.0, n: 2, r: 28, hop: 5, knock: 90 }),
     refine: [
       { mods: { hop: 2 }, txt: 'Chains hop 2 more times' },
       { mods: { n: 1, dmg: 0.2 }, txt: '+1 pillar, +20% damage' },
@@ -257,7 +256,7 @@
   // Halo: the aura becomes a ring wall that burns, slows and shoves out foes crossing it.
   ED.addWeapon({
     id: 'halo', name: 'Halo', icon: 'weapon.lantern', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'A ring of light walls foes out',
-    base: base({ dmg: 24, cd: 1.0, n: 2, hr: 0, bandK: 0.35, heal: 0.6, swing: 1, auraK: 0.8 }),
+    base: base({ dmg: 16.8, cd: 1.0, n: 2, hr: 0, bandK: 0.35, heal: 0.6, swing: 1, auraK: 0.8 }),
     refine: [
       { mods: { hr: 0.3 }, txt: 'The ring is 30% wider' },
       { mods: { swing: 2, dmg: 0.2 }, txt: '+2 censers, +20% damage' },
@@ -266,25 +265,25 @@
   // Judgment Ray: holy beams turn around the hero without pause.
   ED.addWeapon({
     id: 'jray', name: 'Judgment Ray', icon: 'weapon.glaive', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Holy beams turn around you',
-    base: base({ dmg: 23, cd: 1.0, n: 3, rays: 1, rayK: 0.35 }),
+    base: base({ dmg: 16.1, cd: 1.0, n: 3, rays: 1, rayK: 0.35 }),
     refine: [
       { mods: { blen: 0.3 }, txt: 'Beams reach 30% farther' },
       { mods: { rays: 1, dmg: 0.2 }, txt: '+1 beam, +20% damage' },
     ],
   }, impl('ray'));
-  // Consecration (Storm + Censer at rank 3): every volley pillar leaves holy ground that burns and slows foes and heals allies standing in it.
+  // Consecration (Censer): every volley pillar leaves holy ground that burns and slows foes and heals allies standing in it.
   ED.addWeapon({
     id: 'consecration', name: 'Consecration', icon: 'weapon.mace', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Pillars leave holy ground',
-    base: base({ dmg: 30, cd: 1.0, n: 2, groundK: 0.3, gheal: 1.2 }),
+    base: base({ dmg: 21, cd: 1.0, n: 2, groundK: 0.3, gheal: 1.2 }),
     refine: [
       { mods: { n: 1 }, txt: '+1 pillar' },
       { mods: { groundK: 0.1, dmg: 0.2 }, txt: '+20% damage, ground burns hotter' },
     ],
   }, impl('hallow'));
-  // Verdict (Storm + Lance at rank 3): the beam sweeps more often and calls pillars down along its path.
+  // Verdict (Lance): the beam sweeps more often and calls pillars down along its path.
   ED.addWeapon({
     id: 'verdict', name: 'Verdict', icon: 'weapon.warhammer', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Beams call pillars as they sweep',
-    base: base({ dmg: 30, cd: 1.0, n: 2, bcd: 1.6, vpK: 1.7 }),
+    base: base({ dmg: 33.6, cd: 1.0, n: 2, bcd: 1.6, vpK: 0.6 }),
     refine: [
       { mods: { blen: 0.3 }, txt: 'Beams reach 30% farther' },
       { mods: { n: 1, dmg: 0.2 }, txt: '+1 pillar, +20% damage' },
@@ -294,32 +293,38 @@
   // ---------------- Sanctuary ----------------
   // Zero damage. Holy ground at the cursor: a burst that knocks foes out (knock 320), then for N.dur s every ST s: foes inside slowed 45% (ward: shoved out from the centre), every living
   // hero inside healed N.heal HP/s, downed heroes inside gain REV_K revive progress per s (revive); rain: a holy pillar (look 'smite', 0.18 s fall) lands on a random point inside every
-  // RAIN_T s and stuns the foes it covers RAIN_STUN s.
+  // RAIN_T s and stuns the foes it covers RAIN_STUN s. shield (L5): every living hero inside takes N.shield less damage (h.dr, owned by the zone that set it: h.drZ = z.id; cleared
+  // when the hero is outside at a tick or the zone ends).
   const SANCT_SLOW = 0.45, WARD = 90, REV_K = 1.2, RAIN_T = 0.25, ST = 0.25, RAIN_R = 20, RAIN_STUN = 0.6;
   ED.addSkill({
     id: 'sanctuary', name: 'Sanctuary', icon: 'fx.shield.gold', cd: 14, txt: 'Holy ground heals allies',
-    base: { r: 80, dur: 4, heal: 5 },
+    base: { r: 80, dur: 4, heal: 5, shield: 0 },
     levels: [
       { mods: { r: 0.35, ward: true }, txt: '+35% area, wards foes out' },
       { mods: { dur: 0.5, revive: true }, txt: 'Lasts 50% longer, revives allies' },
       { mods: { rain: true }, txt: 'Holy pillars rain inside and stun' },
+      { mods: { shield: 0.4 }, txt: 'Allies inside take 40% less damage' },
     ],
   }, (w, p, x, y, N) => {
     w.blast(p, 'sanctuary', x, y, N.r, 0, { knock: 320, look: 'holy', kind: 'skill' });
     w.zone({ team: 0, p, wid: 'sanctuary', x, y, r: N.r, dur: N.dur, look: 'sanct',
-      st: { heal: N.heal, ward: !!N.ward, rev: !!N.revive, rain: !!N.rain, tt: -1, rainT: 0 }, onTick: sanctTick });
+      st: { heal: N.heal, ward: !!N.ward, rev: !!N.revive, rain: !!N.rain, shield: N.shield || 0, tt: -1, rainT: 0 }, onTick: sanctTick, onEnd: N.shield > 0 ? sanctEnd : null });
     return { shake: 4 };
   });
   let SW = null, SZ = null;
   const sanctFoe = (e) => { SW.slow(e, SANCT_SLOW, ST * 1.6); if (SZ.st.ward) SW.knock(e, e.x - SZ.x, e.y - SZ.y, WARD); };
   const rainFoe = (e) => SW.stun(e, RAIN_STUN);
   const rainEnd = (w, z) => { SW = w; w.zoneFoes(z, rainFoe); SW = null; w.zone({ team: 0, p: z.p, wid: z.wid, x: z.x, y: z.y, r: z.r, dur: 0.25, look: 'pglow' }); };
+  function sanctEnd(w, z) { for (const h of w.heroes) if (h.drZ === z.id) { h.dr = 0; h.drZ = 0; } }
   function sanctTick(w, z) {
     const st = z.st, r2 = z.r * z.r;
     if (st.tt >= 0 && z.t - st.tt < ST - 1e-6) return;
     st.tt = z.t;
     SW = w; SZ = z; w.zoneFoes(z, sanctFoe); SW = null; SZ = null;
     for (const h of w.living) if (U.dist2(h.x, h.y, z.x, z.y) <= r2) w.heal(h, st.heal * ST);
+    if (st.shield > 0) for (const h of w.heroes) {
+      if (w.alive(h) && U.dist2(h.x, h.y, z.x, z.y) <= r2) { h.dr = st.shield; h.drZ = z.id; } else if (h.drZ === z.id) { h.dr = 0; h.drZ = 0; }
+    }
     if (st.rev) for (const h of w.heroes) if (h.downed && !h.dead && U.dist2(h.x, h.y, z.x, z.y) <= r2) h.revive += REV_K * ST; // >= 1 revives at the next hero update
     if (!st.rain) return;
     for (st.rainT += ST; st.rainT >= RAIN_T; st.rainT -= RAIN_T) {

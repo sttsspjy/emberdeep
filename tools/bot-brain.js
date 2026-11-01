@@ -4,15 +4,17 @@
 // Pure reader: linear scans of w.foes / w.projs / w.zones / w.pickups (never the foe grid, whose lazy rebuild is sim state); own seeded RNG; ED read lazily from globalThis on each call.
 // Movement (re-plan every PLAN thinks, sooner on a new threat): 16 directions + stay, each scored over samples at H s ahead: contact danger (foes closing at their speed, dashers along
 // their dash), foe shots (closest approach on the predicted path), hostile zones (warned shapes at their resolve time; live hazards while inside, moved by their observed drift and
-// sub-stepped when they sweep), walls and edges; minus attraction (pickup target, boss at weapon reach, hysteresis, crowd, back toward the arena centre).
+// sub-stepped when they sweep; Wickmother: a slam's shock ring, tide walls up to 4 s ahead, her body as a wall), walls and edges; minus attraction (pickup target, boss at weapon reach, hysteresis, crowd, back toward the arena centre).
 // Stance: a short-reach weapon (REACH, by the slot's current id) while healthy keeps the nearest foe at 0.75 x its reach (narrower contact band, pull to the crowd edge), else
 // the bot keeps away from the crowd centroid; bosses are held inside that reach, or at 190 px when the weapon is ranged.
 // The Q skill fires by a per-skill rule; an escape skill (Charge, Shadow Step) also fires when the best plan still gets hit soon (i-frames modelled). E is never pressed.
 // skill < 1 (a casual player): slower re-plans, shots / zones seen only after a reaction delay,
 // a share of shots and telegraphs never seen (per-id seeded hash), later and unreliable dashes, wandering heading noise; below 0.5 also 8 directions and shot paths read short
 // (velocity x 2 skill: none at 0).
-// Cards: a Form always (a chest Form offer: the first card) > refine > hero path ranks (the path closest to rank 3 first: one path to 3, then a second) > new support > support path ranks
-// (same order) > passives by a fixed preference > skill; reroll / banish weak offers.
+// Cards: chest offers by per-seed choice (path pick: path (seed + weapon hash) mod 3, so any 3 consecutive seeds cover every path of every weapon; Form fork: Form index
+// (floor((seed - 1) / 3) + weapon hash) mod n, so the seeds sharing a path alternate its Forms) > refine > hero tune / path rank
+// > new support > a new passive while below the passive quota > support tune / path rank > passives by a fixed preference plus a per-seed offset > skill; reroll / banish weak offers.
+// Tune kinds follow a per-seed and weapon order (damage first in 4 of 6 orders). Passive quota: 1 + floor(time / P), P = 180-270 s per seed (4-6 passives by 15:00).
 (function (root) {
   'use strict';
   const NDIR = 16, NC = NDIR + 1, PLAN = 3;
@@ -22,9 +24,10 @@
   const FOE_R = 300, PROJ_R = 420, ZONE_PAD = 260;
   const PASSIVE_PREF = { might: 300, multishot: 290, haste: 285, reach: 265, plating: 250, vigor: 235, duration: 225, mending: 205, swiftness: 190, velocity: 180, magnet: 150, fortune: 110 };
   // Hit reach (px from the hero centre to the edge of a foe of radius r) of short-reach weapons from their live numbers (ED.World.weaponS); weapons absent here are ranged.
-  // Frost rings test the foe centre; auras, arcs, pools and orbiting bodies the foe's edge (orbits: outer edge of the body ring).
+  // Frost rings test the foe centre; auras, arcs, stabs, pools and orbiting bodies the foe's edge (orbits: outer edge of the body ring).
   const bell = (S) => S.orbit * Math.sqrt(S.area) + S.r * S.area * 0.5, arc = (S) => S.range * S.area;
-  const REACH = { toll: bell, cathedral: bell, cleave: arc, whirlwind: arc, colossus: arc, earthsplitter: arc, gale: arc, tempest: arc };
+  const stab = (S) => S.len * S.area;
+  const REACH = { daggers: stab, thousand: stab, assassinate: stab, lotus: stab, shadowfan: stab, reaper: stab, toll: bell, cathedral: bell, glaciertoll: bell, carillon: bell, undertow: bell, windchime: bell, cleave: arc, whirlwind: arc, colossus: arc, earthsplitter: arc, gale: arc, tempest: arc };
   const FOE_TYP = 10; // typical foe radius for the crowd stance
   // Contact band (danger() reads it): gaps below CG px are scored; CK weighs contact at the far horizons (H >= 0.55 s). Ranged stance 30 / 1; short-reach stance narrower.
   let CG = 30, CK = 1;
@@ -66,6 +69,9 @@
     this.skill = sk; this.planN = PLAN + Math.round(u * 12); this.react = u * 0.45; this.dashAt = 0.55 + u * 0.9;
     this.miss = u * 0.3; this.dashP = 0.35 + 0.65 * sk; this.noise = u * 0.6; this.dstep = sk < 0.5 ? 2 : 1; this.vk = Math.min(1, 2 * sk); // missed threat share, dash chance per re-plan, heading noise, direction step, shot velocity read
     this.jit = 0; this.jitT = 0; this.mix = Math.imul(this.seed, 0x9e3779b1) >>> 0;
+    // Per-seed passive preference offset in -120..120 (benches sample different passive sets).
+    this.pj = {}; for (const id in PASSIVE_PREF) this.pj[id] = (this.sh(id) % 241) - 120;
+    this.pq = 180 + this.sh('#pq') % 91; // passive quota period (s)
 
     this.rs = (this.seed ^ 0x5eed1234) >>> 0 || 1; // LCG state
     this.n = 0; this.plan = 0; this.dir = -1; this.mx = 0; this.my = 0;
@@ -73,10 +79,13 @@
     this.lastX = 0; this.lastY = 0; this.stuckN = 0; this.wander = -1; this.wanderT = 0; this.planT = 0;
     this.castGap = 0; this.zSeen = 0; this.pSeen = 0;
     this.f = { mx: 0, my: 0, ax: 0, ay: 0, dash: false, q: false, e: false, pick: 0, banish: 0, reroll: false, skip: false };
-    this.near = 0; this.crowd = 0; this.cx = 0; this.cy = 0; this.dx = 0; this.dy = 0; this.boss = null; this.zPrev = new Map(); // zone id -> [x, y, r, a, time, think n]
+    this.near = 0; this.crowd = 0; this.cx = 0; this.cy = 0; this.dx = 0; this.dy = 0; this.boss = null; this.goalOn = false; this.goalIn = false; this.goalX = 0; this.goalY = 0; this.goalS = null; this.wmCore = null; this.wmB = null; this.zPrev = new Map(); // zone id -> [x, y, r, a, time, think n]
     this.gmin = Infinity; this.gx = 0; this.gy = 0; // nearest contact foe: gap and position
     this.reach = 0; this.close = false; this.bossFn = null; this.bossS = null; this.bossOn = false; // stance(): main weapon reach to a typical foe's edge (0 = ranged), crowd / boss stance
   }
+  // Hash of string k (uint32): wh is the same for every bot, sh is seeded per bot.
+  const wh = (k) => { let h = 0x811c9dc5; for (let i = 0; i < k.length; i++) h = Math.imul(h ^ k.charCodeAt(i), 0x01000193) >>> 0; return hsh(h) * 4294967296 >>> 0; };
+  Brain.prototype.sh = function (k) { let h = this.mix; for (let i = 0; i < k.length; i++) h = Math.imul(h ^ k.charCodeAt(i), 0x01000193) >>> 0; return hsh(h) * 4294967296 >>> 0; };
   Brain.prototype.rnd = function () { this.rs = (Math.imul(this.rs, 1664525) + 1013904223) >>> 0; return this.rs / 4294967296; };
   Brain.prototype.onStart = function (w, p) { this.lastX = p.x; this.lastY = p.y; this.planT = w.time; };
 
@@ -123,8 +132,34 @@
     this.close = r > 0 && hpF > (this.close ? 0.55 : 0.65);
     this.bossOn = this.bossFn ? hpF > (this.bossOn ? 0.55 : 0.65) : hpF > 0.5;
   };
-  // Centre distance to hold from boss B: 0.75 x the boss stance weapon's reach to its edge, else 190 px.
-  Brain.prototype.bossHold = function (p, B) { return this.bossFn ? B.r + Math.max(p.r + 4, this.bossFn(this.bossS, B.r) * 0.75) : 190; };
+  // Centre distance to hold from boss B: a Wickmother body (core, hands: no contact damage) right beside it, else 0.75 x the boss stance weapon's reach to its edge; ranged 190 px.
+  Brain.prototype.bossHold = function (p, B) { return this.bossFn ? B.r + (B.def && (B.def.id === 'wickmother' || B.def.id === 'wmhand') ? p.r + 12 : Math.max(p.r + 4, this.bossFn(this.bossS, B.r) * 0.75)) : 190; };
+
+  // Wickmother (src/sim/boss-wickmother.js e.vars, read only): unwarded (kneel, P3) the core is the boss target (wmCore); warded, P1 engages the nearest hand and P2 walks to an unlit
+  // sconce (the current one while unlit, else the nearest) and stands in it until lit (goalOn / goalIn / goalX / goalY).
+  Brain.prototype.wmGoal = function (w, p) {
+    this.goalOn = false; this.goalIn = false; this.wmCore = null; this.wmB = null;
+    const BL = w.bossList;
+    let e = null;
+    for (let i = 0; i < BL.length; i++) if (!BL[i].dead && BL[i].def.id === 'wickmother') { e = BL[i]; break; }
+    const v = e && e.vars;
+    if (!v || !v.R) return;
+    this.wmB = e; // her body blocks movement (danger())
+    if (!v.ward) { this.boss = e; this.wmCore = e; return; }
+    if (v.phase === 2 && v.sc && v.sc.length) {
+      let best = this.goalS && !this.goalS.lit && v.sc.indexOf(this.goalS) >= 0 ? this.goalS : null, bd = Infinity;
+      if (!best) for (const sc of v.sc) { if (sc.lit) continue; const d = (sc.x - p.x) ** 2 + (sc.y - p.y) ** 2; if (d < bd) { bd = d; best = sc; } }
+      this.goalS = best;
+      if (best) {
+        const WM = root.ED.Bosses.WICKMOTHER, rr = WM.sconce.r + p.r - 4;
+        this.goalOn = true; this.goalX = best.x; this.goalY = best.y; this.goalIn = (best.x - p.x) ** 2 + (best.y - p.y) ** 2 <= rr * rr;
+      }
+      return;
+    }
+    let hand = null, hd = Infinity;
+    for (const H of v.H) { const f = H.e; if (!f || f.dead || f.id !== H.id) continue; const d = (f.x - p.x) ** 2 + (f.y - p.y) ** 2; if (d < hd) { hd = d; hand = f; } }
+    if (hand) this.boss = hand;
+  };
 
   // ---------- perception ----------
   Brain.prototype.gather = function (ED, w, p) {
@@ -151,6 +186,7 @@
       n++;
     }
     FN = n; this.near = near; this.crowd = crowd; this.boss = boss; this.gmin = gmin; this.gx = gx; this.gy = gy;
+    this.wmGoal(w, p);
     this.cx = cw > 0 ? cx / cw : p.x; this.cy = cw > 0 ? cy / cw : p.y;
     // foe shots
     const P = w.projs, hpK = 10 / Math.max(1, p.maxHp);
@@ -161,29 +197,34 @@
       if (dx * dx + dy * dy > PROJ_R * PROJ_R) continue;
       if (dx * q.vx + dy * q.vy > 0 && dx * dx + dy * dy > 40 * 40) continue; // moving away
       const o = PJ[PN] || (PJ[PN] = { x: 0, y: 0, vx: 0, vy: 0, rad: 0, cost: 0, life: 0 });
-      o.x = q.x; o.y = q.y; o.vx = q.vx * this.vk; o.vy = q.vy * this.vk; o.rad = q.r + p.r * 0.7 + 3; o.cost = Math.max(0.3, (q.dmg || 5) * hpK); o.life = q.life;
+      o.x = q.x; o.y = q.y; o.vx = q.vx * this.vk; o.vy = q.vy * this.vk; o.rad = q.r + p.r + 3; o.cost = Math.max(0.3, (q.dmg || 5) * hpK); o.life = q.life;
       PN++;
     }
     // hostile zones
     const Z = w.zones;
     ZN = 0;
     for (let i = 0; i < Z.length; i++) {
-      const z = Z[i]; if (z.dead || z.team !== 1 || z.t < this.react || (z.warn && this.miss > 0 && hsh(z.id ^ this.mix ^ 0x5a5a5a5a) < this.miss)) continue;
+      const z = Z[i]; if (z.dead || z.team !== 1 || (z.st && z.st.inert) || z.t < this.react || (z.warn && this.miss > 0 && hsh(z.id ^ this.mix ^ 0x5a5a5a5a) < this.miss)) continue;
       const ext = (z.len > 0 ? z.len : z.r) + ZONE_PAD;
       if ((z.x - p.x) * (z.x - p.x) + (z.y - p.y) * (z.y - p.y) > ext * ext) continue;
-      const o = ZL[ZN] || (ZL[ZN] = { z: null, rem: 0, cost: 0, kind: 0, test: null, soft: false, vx: 0, vy: 0, dr: 0, da: 0, mov: false });
+      const o = ZL[ZN] || (ZL[ZN] = { z: null, rem: 0, cost: 0, kind: 0, test: null, soft: false, vx: 0, vy: 0, dr: 0, da: 0, mov: false, ring: null, ringCost: 0 });
       const pv = this.zPrev.get(z.id), dt = pv ? w.time - pv[4] : 0;
       if (dt > 1e-6 && dt < 0.5) { o.vx = (z.x - pv[0]) / dt; o.vy = (z.y - pv[1]) / dt; o.dr = (z.r - pv[2]) / dt; o.da = ((z.a - pv[3] + 3 * Math.PI) % (2 * Math.PI) - Math.PI) / dt; } else { o.vx = o.vy = o.dr = o.da = 0; }
       o.mov = Math.abs(o.dr) > 25 || Math.abs(o.da) > 0.6 || o.vx * o.vx + o.vy * o.vy > 900;
       const nv = pv || []; nv[0] = z.x; nv[1] = z.y; nv[2] = z.r; nv[3] = z.a; nv[4] = w.time; nv[5] = this.n; if (!pv) this.zPrev.set(z.id, nv);
       const src = z.src && !z.src.dead && z.src.id === z.srcId ? z.src : null, sd = src ? src.dmg : w.contactDmg();
-      o.z = z; o.rem = z.dur - z.t; o.test = null; o.soft = false;
-      if (z.warn) { o.kind = z.dmg > 0 ? 1 : 2; o.cost = Math.max(0.5, (z.dmg > 0 ? z.dmg : sd * 1.3) * hpK); }
+      o.z = z; o.rem = z.dur - z.t; o.test = null; o.soft = false; o.ring = null;
+      if (z.warn) {
+        o.kind = z.dmg > 0 ? 1 : 2; o.cost = Math.max(0.5, (z.dmg > 0 ? z.dmg : sd * 1.3) * hpK);
+        if (z.k === 'wmslam') { const S = ED.Bosses.WICKMOTHER.slam; o.ring = S; o.ringCost = Math.max(1.5, 2 * sd * S.rmul * hpK); } // the shock ring that follows a Wickmother slam (weighed x2: worth leaving her hand for)
+      }
       else {
         o.kind = 3;
         const st = z.st;
         if (st && typeof st.test === 'function') { o.test = st.test; o.soft = true; }
         o.cost = Math.max(0.4, (st && st.mul > 0 ? sd * st.mul : sd * 0.6) * hpK);
+        if (z.k === 'wmshock') { o.cost = Math.max(1.5, o.cost * 2); o.dr = (st.r1 - st.r0) / z.dur; o.mov = true; } // known growth from its first tick
+        else if (z.k === 'wmtide') { o.vx = 0; o.vy = st.vy; o.mov = true; } // known roll speed from its first tick
       }
       ZN++;
     }
@@ -191,6 +232,8 @@
   };
 
   // ---------- scoring ----------
+  // True when (x, y) lies inside the Wickmother body e pushes heroes out of (the band above the lower edge of her body ellipse; boss-wickmother.js brain).
+  const wmIn = (e, x, y) => { const K = root.ED.Bosses.WICKMOTHER.core, dx = (x - e.x) / K.rx; return Math.abs(dx) < 1 && y < e.y - K.oy + K.ry * Math.sqrt(1 - dx * dx) + 2; };
   // Danger of candidate c (c = NDIR: stand still) for hero p; dash: the first DASH.t s at dash speed with i-frames. Writes NEAR[c] (danger in the next ~0.35 s). Returns total danger.
   Brain.prototype.danger = function (ED, w, p, c, dash) {
     const A = w.arena, Ar = ED.Arena, D = ED.CONST.DASH, still = c === NDIR;
@@ -198,12 +241,12 @@
     CD.spd = p.stats.speed * (p.slowT > 0 ? 1 - (p.slowK || 0) : 1); CD.dv = D.dist / D.t; CD.dt = D.t; CD.dd = D.dist;
     const ux = CD.ux, uy = CD.uy, spd = CD.spd, iv = Math.max(p.invuln, p.dashT);
     let tot = 0, near = 0, x = p.x, y = p.y, stuck = false, h0 = 0, x0 = p.x, y0 = p.y;
-    const size = A.size;
+    const size = A.size, RM = A.room;
     for (let k = 0; k < NH; k++) {
       const h = H[k];
       if (!stuck) {
         const s = travel(h), tx = p.x + ux * s, ty = p.y + uy * s;
-        if (Ar.blocked(A, tx, ty, p.r + 1)) { stuck = true; tot += k === 0 ? 1.2 : 0.5; }
+        if (Ar.blocked(A, tx, ty, p.r + 1) || (this.wmB && wmIn(this.wmB, tx, ty))) { stuck = true; tot += k === 0 ? 1.2 : 0.5; }
         else { x = tx; y = ty; }
       }
       // contact
@@ -220,9 +263,9 @@
       cs = Math.min(1.6, cs * ck);
       if (!safe) { const v = cs * HW[k]; tot += v; if (k < 2) near += v; }
       else tot += cs * HW[k] * 0.15;
-      // edges
-      const b = Math.min(x, y, size - x, size - y);
-      if (b < 160) tot += (1 - b / 160) * 0.8 * HW[k];
+      // edges (the Sanctum room: its walls, a shorter margin)
+      const b = RM ? Math.min(x - RM.x0, y - RM.y0, RM.x1 - x, RM.y1 - y) : Math.min(x, y, size - x, size - y), em = RM ? 70 : 160;
+      if (b < em) tot += (1 - b / em) * 0.8 * HW[k];
       // live hazards (harmless during i-frames); moving ones (rings, sweeping beams) are checked every 0.05 s since the last sample
       for (let j = 0; j < ZN; j++) {
         const o = ZL[j]; if (o.kind !== 3) continue;
@@ -233,7 +276,7 @@
           if (t < iv || (dash && t <= D.t)) continue;
           const sx = x0 + (x - x0) * f, sy = y0 + (y - y0) * f, zz = zAt(o, t);
           PROBE.x = sx; PROBE.y = sy; PROBE.r = p.r;
-          hit = o.test ? o.test(w, zz, PROBE) : w.zoneHas(zz, sx, sy, p.r * 0.7 + 4);
+          hit = o.test ? o.test(w, zz, PROBE) : w.zoneHas(zz, sx, sy, p.r + 4);
           if (!hit && o.soft && m === steps) soft = w.zoneHas(zz, sx, sy, p.r);
         }
         if (hit) { tot += o.cost * HW[k]; if (k < 2) near += o.cost * HW[k]; }
@@ -241,8 +284,14 @@
       }
       h0 = h; x0 = x; y0 = y;
     }
+    // Wickmother tide walls arriving after the horizon (up to 4 s): the end spot must stand in a gap column when the wall reaches its row
+    for (let j = 0; j < ZN; j++) {
+      const o = ZL[j], z = o.z; if (o.kind !== 3 || z.k !== 'wmtide' || !(o.vy > 0)) continue;
+      const tt = HMAX + (y - z.y - o.vy * HMAX) / o.vy;
+      if (tt > HMAX && tt < 4 && x > z.x - p.r - 4 && x < z.x + z.len + p.r + 4) tot += o.cost * 0.7;
+    }
     // warned zones: the hero's spot when they resolve (plus the act that follows a dmg-0 warning)
-    const wr = p.r * 0.7 + 5;
+    const wr = p.r + 5;
     for (let j = 0; j < ZN; j++) {
       const o = ZL[j]; if (o.kind === 3) continue;
       let t = o.rem, wt = 1;
@@ -250,6 +299,15 @@
       let hit = warnHit(w, o, Math.max(0, t), wr, stuck, x, y);
       if (!hit && o.kind === 2) hit = warnHit(w, o, Math.min(HMAX, t + 0.2), wr, stuck, x, y) || warnHit(w, o, Math.min(HMAX, t + 0.45), wr, stuck, x, y);
       if (hit) { const v = o.cost * wt; tot += v; if (o.rem < 0.4) near += v; }
+      if (o.ring) { // shock ring after the slam: r0 -> r1 over ringT s from the resolve, checked every ringT / 6 s
+        const S = o.ring;
+        for (let m = 0; m <= 6; m++) {
+          const tt = o.rem + S.ringT * m / 6; if (tt > HMAX + 0.4) break;
+          if (tt < iv || (dash && tt <= D.t)) continue;
+          const s = travel(tt), px = stuck ? x : CD.x + CD.ux * s, py = stuck ? y : CD.y + CD.uy * s, rr = S.ring[0] + (S.ring[1] - S.ring[0]) * m / 6;
+          if (Math.abs(Math.hypot(px - o.z.x, py - o.z.y) - rr) <= S.band + p.r + 8) { tot += o.ringCost; if (tt < 0.4) near += o.ringCost; break; }
+        }
+      }
     }
     // foe shots: closest approach on the predicted path (dash: no hit during the i-frames)
     if (PN) {
@@ -283,7 +341,7 @@
     CG = close ? Math.min(30, Math.max(6, gP * 0.35)) : 30; CK = close ? 0.5 : 1;
     // attraction inputs
     let tx = 0, ty = 0, tw = 0;
-    if (this.tgt) { const dx = this.tgt.x - p.x, dy = this.tgt.y - p.y, d = Math.hypot(dx, dy) || 1; tx = dx / d; ty = dy / d; tw = this.tgtK; }
+    if (this.tgt) { const dx = this.tgt.x - p.x, dy = this.tgt.y - p.y, d = Math.hypot(dx, dy) || 1; tx = dx / d; ty = dy / d; tw = this.tgtK * (this.goalOn ? 0.3 : 1); }
     // crowd: ranged keeps away from the centroid; short reach walks toward it (else the nearest foe) until the nearest gap is gP, backs off below gP / 2
     let ax = 0, ay = 0, away = 0;
     if (close) {
@@ -301,6 +359,7 @@
       const dx = B.x - p.x, dy = B.y - p.y, d = Math.hypot(dx, dy) || 1;
       if (d < 650) { bx = dx / d; by = dy / d; bw = 0.7 * Math.max(-1, Math.min(1, (d - this.bossHold(p, B)) / 90)); }
     }
+    if (this.goalOn) { const dx = this.goalX - p.x, dy = this.goalY - p.y, d = Math.hypot(dx, dy) || 1; bx = dx / d; by = dy / d; bw = 1.4 * Math.min(1, d / 12); } // a spot to stand on (Wickmother sconce): inside it, standing still scores +0.9
     const pd = this.dir;
     let best = -1, bs = -Infinity;
     if (this.noise > 0 && w.time >= this.jitT) { this.jit = Math.floor(this.rnd() * NDIR); this.jitT = w.time + 0.6 + this.rnd() * 0.8; }
@@ -315,7 +374,7 @@
         if (pd >= 0 && pd < NDIR) s += 0.35 * (ux * DX[pd] + uy * DY[pd]);
         if (this.wanderT > 0 && this.wander >= 0) s += 0.8 * (ux * DX[this.wander] + uy * DY[this.wander]);
         if (this.noise > 0) s += this.noise * (ux * DX[this.jit] + uy * DY[this.jit]);
-      } else s -= 0.25 + (pd === NDIR ? -0.1 : 0);
+      } else s -= (this.goalIn ? -0.9 : 0.25) + (pd === NDIR ? -0.1 : 0);
       if (s > bs) { bs = s; best = c; }
     }
     this.dir = best;
@@ -344,26 +403,29 @@
   };
 
   // Pickup target (re-chosen every 0.5 s or when it is gone): chests first, food when hurt, magnet / bomb, else the best gem cluster point. tgtK = pull weight.
+  // A magnet within 900 px is worth MAG_V0 + (loose gem XP on the map) / MAG_DIV, at most MAG_VMAX (below a chest).
+  const MAG_V0 = 35, MAG_DIV = 20, MAG_VMAX = 58;
   Brain.prototype.pickTarget = function (ED, w, p) {
     const t = this.tgt;
     if (t && (t.dead || t.id !== this.tgtId)) this.tgt = null;
     if (this.tgt && this.n < this.tgtT) return;
     this.tgtT = this.n + 30;
     const G = w.pickups, hpF = p.hp / Math.max(1, p.maxHp), danger = Math.min(1, this.crowd * 0.05);
-    let best = null, bs = 0, bk = 0;
+    let best = null, bs = 0, bk = 0, gems = 0, mag = null, md = 0;
     for (let i = 0; i < G.length; i++) {
       const g = G[i]; if (g.dead || g.pull) continue;
       const d = Math.hypot(g.x - p.x, g.y - p.y);
       let v = 0, k = 0;
       if (g.k === 'chest') { if (d > 1600) continue; v = 60; k = 1.1; }
       else if (g.k === 'food') { if (hpF > 0.8 || d > 900) continue; v = 30 * (1.2 - hpF); k = 0.6 + (1 - hpF); }
-      else if (g.k === 'magnet') { if (d > 900) continue; v = 12; k = 0.6; }
+      else if (g.k === 'magnet') { if (d <= 900) { mag = g; md = d; } continue; }
       else if (g.k === 'bomb') { if (d > 700) continue; v = 4 + this.crowd * 0.3; k = 0.5; }
       else if (g.k === 'gold') { if (d > 300) continue; v = 0.5 * g.val; k = 0.25; }
-      else { if (d > 500) continue; v = g.val; k = 0.3; }
+      else { gems += g.val; if (d > 500) continue; v = g.val; k = 0.3; }
       const s = v / (d + 80);
       if (s > bs) { bs = s; best = g; bk = k; }
     }
+    if (mag && Math.min(MAG_VMAX, MAG_V0 + gems / MAG_DIV) / (md + 80) > bs) { best = mag; bk = 0.8; }
     this.tgt = best; this.tgtId = best ? best.id : 0; this.tgtK = bk * (1 - 0.6 * danger);
   };
 
@@ -377,9 +439,10 @@
       const e = es[i]; if (e.dead || !ED.inView(p, e.x, e.y, e.r)) continue;
       const d = (e.x - p.x) * (e.x - p.x) + (e.y - p.y) * (e.y - p.y);
       if (d < bd && d <= r2) { bd = d; n = e; }
+      if (e.takeMul < 0.01) continue; // warded (Wickmother core): hits do nothing
       if ((e.elite || e.boss) && d < bb && d <= rb2) { bb = d; b = e; }
     }
-    const t = b || n;
+    const c = this.wmCore, t = c && !c.dead && (c.x - p.x) * (c.x - p.x) + (c.y - p.y) * (c.y - p.y) <= rb2 ? c : b || n; // an unwarded Wickmother core first
     if (t) { f.ax = t.x; f.ay = t.y; } else { f.ax = p.x + this.mx * 80; f.ay = p.y + this.my * 80; }
   };
 
@@ -419,7 +482,7 @@
   // Mobility skill used offensively: toward the densest cluster when nothing threatens soon.
   const dashInto = (range) => (b, w, p, ctx) => (ctx.near > 0.2 || ctx.hpF < 0.4 ? false : dense(b, p, range, 4));
   const SKILL = {
-    shove: (b, w, p, ctx) => (ctx.near > 0.3 || ctx.hpF < 0.5) && selfCrowd(120, 6)(b, w, p, ctx), // defensive: a shove clears the knight's own Cleave reach
+    shove: selfCrowd(90, 6), // Aegis Ward: raised when the crowd closes in (6+ foes within 90 px)
     vault: () => false, // escape only (escapeSkill)
     flashpoint: selfCrowd(140, 6),
     bonewall: atDense(220, 6),
@@ -448,20 +511,26 @@
   };
 
   // ---------- cards ----------
+  // Tune kind orders (index into ED.TUNE: 0 damage, 1 haste, 2 area); damage first in 4 of 6.
+  const TUNE_ORD = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [0, 1, 2], [2, 0, 1], [0, 2, 1]];
   Brain.prototype.cardScore = function (ED, w, p, c) {
     const hpF = p.hp / Math.max(1, p.maxHp);
-    if (c.kind === 'form') return 2000;
-    if (c.kind === 'refine') return 1200;
-    if (c.kind === 'path') {
-      // c.lvl - 1 = the path's current rank: the path closest to rank 3 goes first (one path to 3, then a second); ties to the path with a Form, then the lower index. Support paths below a new support.
-      const d = ED.WEAPONS[c.id] || {}, pa = (d.paths || [])[c.path] || {};
-      return (d.support ? 600 : 1000) + 30 * (c.lvl - 1) + (pa.form ? 5 : 0) - c.path;
+    if (c.kind === 'pathpick') { const n = ((ED.WEAPONS[c.id] || {}).paths || [0, 0, 0]).length, pref = (this.seed + wh('path:' + c.id)) % n; return 2000 - ((c.path - pref + n) % n); } // preferred path, then the next ones in order
+    if (c.kind === 'form') {
+      // Form index within its path's list (cards built without a path: its first listing path); the preferred index per seed and weapon, else the next.
+      const rid = ED.weaponRoot(c.id), f = (ED.weaponForms(rid) || []).find(x => x.id === c.id), i = c.path >= 0 ? c.path : f ? f.path : 0;
+      const L = ED.pathForms(rid, i), j = Math.max(0, L.indexOf(c.id)), n = Math.max(1, L.length), pref = (Math.floor((this.seed - 1) / 3) + wh('form:' + rid)) % n;
+      return 2000 - ((j - pref + n) % n);
     }
+    if (c.kind === 'refine') return 1200;
+    if (c.kind === 'tune') { const d = ED.WEAPONS[c.id] || {}, o = TUNE_ORD[this.sh('tune:' + c.id) % TUNE_ORD.length]; return (d.support ? 600 : 1000) - 10 * o.indexOf(c.tk | 0); }
+    if (c.kind === 'path') { const d = ED.WEAPONS[c.id] || {}; return (d.support ? 600 : 1000) + 30 * (c.lvl - 1); } // support paths below a new support
     if (c.kind === 'support') return 800;
     if (c.kind === 'passive' || c.kind === 'plvl') {
       const id = c.id, isNew = c.kind === 'passive';
-      let s = (PASSIVE_PREF[id] || 150) * (isNew ? 1 : 0.9);
+      let s = ((PASSIVE_PREF[id] || 150) + (this.pj[id] || 0)) * (isNew ? 1 : 0.9);
       if (hpF < 0.5 && (id === 'vigor' || id === 'plating' || id === 'mending')) s += 120;
+      if (isNew && p.passives.length < Math.min(ED.MAX_PASSIVES || 6, 1 + Math.floor(w.time / this.pq))) s = 700 + s / 10; // below the quota: above support tune / path ranks, below a new support
       return s;
     }
     if (c.kind === 'skill') return 270;
@@ -475,7 +544,7 @@
     for (let i = 0; i < O.length; i++) {
       const s = this.cardScore(ED, w, p, O[i]);
       if (s > bs) { bs = s; bi = i; }
-      if (O[i].kind !== 'gold' && O[i].kind !== 'heal' && s < ws) { ws = s; wi = i; }
+      if (ED.World.prototype.canBanish(O, O[i]) && s < ws) { ws = s; wi = i; }
     }
     if (bs < 200 && p.rerolls > 0) { this.f.reroll = true; return; }
     if (bs < 300 && wi >= 0 && ws < 160 && p.banishes > 0) { this.f.banish = wi + 1; return; }

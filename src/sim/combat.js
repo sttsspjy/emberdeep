@@ -20,7 +20,7 @@
     this.vclamp = null;                // hero whose view limits nearestFoe / densest (set around weapons, skills, hero projectiles and zones)
   };
 
-  // Hit source from the ring: { p (hero or null), wid, kind ('weapon'|'proj'|'zone'|'dot'|'skill'|'chain'|...), crit (forced), critC (crit chance override, -1 = hero stat), knock, kx, ky (push direction; 0,0 = away from x, y) }.
+  // Hit source from the ring: { p (hero or null), wid, kind ('weapon'|'proj'|'zone'|'dot'|'skill'|'chain'|...), crit (forced), critC (crit chance override, -1 = hero stat), knock, kx, ky (push direction; 0,0 = away from hero p, else from x, y) }.
   W.src = function (p, wid, kind, knock) {
     const s = this.srcRing[this.srcI = (this.srcI + 1) & 63];
     s.p = p || null; s.wid = wid || ''; s.kind = kind || 'weapon'; s.crit = false; s.critC = -1; s.knock = knock || 0; s.kx = 0; s.ky = 0; s.x = p ? p.x : 0; s.y = p ? p.y : 0;
@@ -28,7 +28,7 @@
   };
 
   // Deals dmg to foe e. Crit roll (hero crit or src.critC; src.crit forces one) x critMul, foe e.takeMul, rounded, min 1. Flash (not on dots), knockback (def.kb, elites x0.35, bosses none),
-  // hero dealt tracking per weapon id, hero hit hook, aggregated hit event, kill at 0 HP. Returns the damage dealt.
+  // hero dealt tracking per weapon id (plus party damage w.dmgAll and the hero's highest hit), hero hit hook, aggregated hit event, kill at 0 HP. Returns the damage dealt.
   W.hitFoe = function (e, dmg, src) {
     if (e.dead || !(dmg > 0) || e.invulnT > 0) return 0;
     const p = src && src.p;
@@ -44,13 +44,14 @@
     if (!src || src.kind !== 'dot') e.flash = FLASH;
     if (src && src.knock > 0 && e.def.kb > 0 && !e.boss) {
       let kx = src.kx, ky = src.ky;
-      if (!kx && !ky) { kx = e.x - src.x; ky = e.y - src.y; }
+      if (!kx && !ky) { kx = e.x - (p ? p.x : src.x); ky = e.y - (p ? p.y : src.y); } // invariant: hero hits push foes away from the hitting hero
       const l = Math.hypot(kx, ky) || 1, k = src.knock * e.def.kb * (e.elite ? 0.35 : 1);
       e.kbx += kx / l * k; e.kby += ky / l * k;
     }
     if (p) {
       const id = src.wid || 'other';
-      p.dealt[id] = (p.dealt[id] || 0) + dealt;
+      p.dealt[id] = (p.dealt[id] || 0) + dealt; this.dmgAll += dealt;
+      if (d > p.top) { p.top = d; p.topId = id; }
       const hk = ED.HOOK[p.cls]; if (hk && hk.hit) hk.hit(this, p, e, dealt, src);
     }
     this.addHit(e, d, crit);
@@ -102,7 +103,7 @@
   };
   // Blocker zone tick (zone onTick; zero damage): non-boss foes cannot cross the band of half width z.w / 2 on the circle (z.x, z.y, z.r): a full ring (z.arc 0) or an arc of z.arc rad
   // centred on angle z.a (foes pass around its ends). A foe touching the band is put back on its side (z.st.out: always the outside) and loses its knockback into the band.
-  // z.st.lure > 0: every 0.25 s every non-boss foe within st.lure px of the band is lured to the band's nearest point on its side (0.4 s, refreshed). z.st: { out, lure, lt }.
+  // z.st.lure > 0: every 0.25 s every non-boss foe within st.lure px of the band is lured to the band's nearest point on its side (0.4 s, refreshed). z.st.slow > 0: a foe touching the band (within 6 px, so foes lured to it count) is slowed that much for 0.5 s. z.st: { out, lure, lt, slow }.
   W.blockZone = function (z) {
     const s = z.st, R = z.r, h = z.w / 2, part = z.arc > 0 && z.arc < TAU - 1e-3, half = z.arc / 2, A = this.arena;
     const lure = s.lure > 0 && z.t >= s.lt, L = lure ? s.lure : 0;
@@ -112,6 +113,7 @@
       const e = q[k]; if (e.dead || e.boss) continue;
       const dx = e.x - z.x, dy = e.y - z.y, d = Math.hypot(dx, dy) || 1e-3, m = h + e.r, ux = dx / d, uy = dy / d;
       const off = part ? U.angDiff(z.a, Math.atan2(dy, dx)) : 0, inArc = !part || Math.abs(off) <= half + e.r / R;
+      if (s.slow > 0 && inArc && Math.abs(d - R) < m + 6) this.slow(e, s.slow, 0.5);
       if (inArc && Math.abs(d - R) < m) {
         const outS = s.out || d >= R, td = outS ? R + m : R - m, kr = e.kbx * ux + e.kby * uy;
         e.x = z.x + ux * td; e.y = z.y + uy * td;
@@ -160,7 +162,7 @@
     return n;
   };
 
-  // Circle hit at (x, y) of radius r. opt as arc (knock pushes away from the centre). Emits 'boom'. Returns the number of foes hit.
+  // Circle hit at (x, y) of radius r. opt as arc (knock pushes away from hero p, without one from the centre). Emits 'boom'. Returns the number of foes hit.
   W.blast = function (p, wid, x, y, r, dmg, opt) {
     opt = opt || NO;
     const q = this.foeScan(x, y, r);
@@ -169,7 +171,7 @@
       const e = q[k]; if (e.dead) continue;
       const rr = r + e.r; if (U.dist2(x, y, e.x, e.y) > rr * rr || !seen(p, e)) continue;
       const s = this.src(p, wid, opt.kind || 'weapon', opt.knock || 0); s.x = x; s.y = y; if (opt.crit) s.crit = true;
-      const dealt = dmg > 0 ? this.hitFoe(e, dmg, s) : (opt.knock ? (this.knock(e, e.x - x, e.y - y, opt.knock), 0) : 0); n++;
+      const dealt = dmg > 0 ? this.hitFoe(e, dmg, s) : (opt.knock ? (this.knock(e, e.x - (p ? p.x : x), e.y - (p ? p.y : y), opt.knock), 0) : 0); n++;
       if (!e.dead) applyOpt(this, e, opt, p);
       if (opt.onHit) opt.onHit(this, e, dealt);
     }
@@ -256,7 +258,7 @@
 
   // ---------------- projectiles ----------------
   // Hero projectile from weapon wid at (x, y) along a. S = effective numbers (speed, dmg, pierce, range, area, knock, crit). opt: { look, speed, dmg, pierce, r, life, homing (turn rad/s),
-  // ret (boomerang back to the hero), rehit (s: the same foe can be hit again after this), knock, solid (stops at obstacles), onHit(w, pr, e, dealt), onEnd(w, pr), tick(w, pr, dt), st (custom state) }.
+  // hskip (homing: foes for which hskip(e) is true are chased only while no other foe is inside the owner's view), ret (boomerang back to the hero), rehit (s: the same foe can be hit again after this), knock, solid (stops at obstacles), skip(w, pr, e) (true: no hit on e, called once per new touch), onHit(w, pr, e, dealt), onEnd(w, pr), tick(w, pr, dt), st (custom state) }.
   W.shoot = function (p, wid, x, y, a, S, opt) {
     opt = opt || NO; S = S || NO;
     const pr = this.projPool.pop() || { hits: [] }, sp = opt.speed !== undefined ? opt.speed : (S.speed || 200), def = ED.WEAPONS[wid];
@@ -266,10 +268,10 @@
     pr.dmg = opt.dmg !== undefined ? opt.dmg : S.dmg || 0; pr.pierce = opt.pierce !== undefined ? opt.pierce : S.pierce || 0;
     pr.life = opt.life !== undefined ? opt.life : (S.range > 0 ? S.range / sp : 1.5); pr.t = 0;
     pr.knock = opt.knock !== undefined ? opt.knock : S.knock || 0; pr.critC = S.crit !== undefined ? S.crit : -1;
-    pr.homing = opt.homing || 0; pr.tgt = null; pr.tgtId = 0;
+    pr.homing = opt.homing || 0; pr.hskip = opt.hskip || null; pr.tgt = null; pr.tgtId = 0;
     pr.ret = !!opt.ret; pr.out = pr.life / 2; pr.back = false;
     pr.rehit = opt.rehit || 0; pr.hitClr = 0; pr.hits.length = 0; pr.solid = !!opt.solid;
-    pr.onHit = opt.onHit || null; pr.onEnd = opt.onEnd || null; pr.tick = opt.tick || null; pr.st = opt.st || null; pr.dead = false;
+    pr.skip = opt.skip || null; pr.onHit = opt.onHit || null; pr.onEnd = opt.onEnd || null; pr.tick = opt.tick || null; pr.st = opt.st || null; pr.dead = false;
     this.projs.push(pr);
     return pr;
   };
@@ -293,6 +295,7 @@
     return this.brzG;
   };
   W.projBraziers = function (pr) {
+    if (this.arena.room) return;
     if (pr.r > BPAD) { this.hitBraziers(pr.x, pr.y, pr.r, pr.p); return; }
     if (pr.p && !ED.inView(pr.p, pr.x, pr.y, pr.r)) return;
     const G = this.brzGrid(), cx = Math.floor(pr.x / BCELL), cy = Math.floor(pr.y / BCELL);
@@ -308,15 +311,16 @@
     const pr = this.projPool.pop() || { hits: [] };
     pr.id = this.nextId(); pr.k = look || 'bolt'; pr.team = 1; pr.owner = e.id; pr.p = null; pr.e = e; pr.wid = '';
     pr.x = e.x; pr.y = e.y - e.r * 0.5; pr.vx = Math.cos(a) * speed; pr.vy = Math.sin(a) * speed; pr.a = a; pr.sp = speed;
-    pr.r = r || 4; pr.dmg = dmg; pr.pierce = 0; pr.life = 4; pr.t = 0; pr.knock = 0; pr.critC = -1; pr.homing = 0; pr.tgt = null; pr.tgtId = 0;
-    pr.ret = false; pr.out = 0; pr.back = false; pr.rehit = 0; pr.hitClr = 0; pr.hits.length = 0; pr.solid = true; pr.onHit = null; pr.onEnd = null; pr.tick = null; pr.st = null; pr.dead = false;
+    pr.r = r || 4; pr.dmg = dmg; pr.pierce = 0; pr.life = 4; pr.t = 0; pr.knock = 0; pr.critC = -1; pr.homing = 0; pr.hskip = null; pr.tgt = null; pr.tgtId = 0;
+    pr.ret = false; pr.out = 0; pr.back = false; pr.rehit = 0; pr.hitClr = 0; pr.hits.length = 0; pr.solid = true; pr.skip = null; pr.onHit = null; pr.onEnd = null; pr.tick = null; pr.st = null; pr.dead = false;
     this.projs.push(pr);
     this.emit({ t: 'eshoot', id: e.id, x: Math.round(pr.x), y: Math.round(pr.y), look: pr.k });
     return pr;
   };
 
+  const HOME_VIEW = 2 * Math.hypot(VW.hw, VW.hh); // reaches every foe in the owner's view from any point inside it
   W.updateProjs = function (dt) {
-    const A = this.arena, size = A.size, list = this.projs, n = list.length;
+    const A = this.arena, size = A.size, list = this.projs, n = list.length, RM = A.room;
     for (let i = 0; i < n; i++) {
       const pr = list[i];
       if (pr.dead) continue;
@@ -324,7 +328,11 @@
       pr.t += dt; pr.life -= dt;
       if (pr.tick) pr.tick(this, pr, dt);
       if (pr.homing > 0 && !pr.back) {
-        if ((!pr.tgt || pr.tgt.dead || pr.tgt.id !== pr.tgtId) && (this.tick + pr.id) % 6 === 0) { pr.tgt = this.nearestFoe(pr.x, pr.y, 260); pr.tgtId = pr.tgt ? pr.tgt.id : 0; }
+        // Retarget every 6th tick while the target is lost (with hskip: also while it is a passed-over foe): the nearest preferred foe in view, else the nearest within 260 px.
+        const hs = pr.hskip;
+        if ((!pr.tgt || pr.tgt.dead || pr.tgt.id !== pr.tgtId || (hs !== null && hs(pr.tgt))) && (this.tick + pr.id) % 6 === 0) {
+          pr.tgt = (hs !== null && this.nearestFoe(pr.x, pr.y, HOME_VIEW, hs)) || this.nearestFoe(pr.x, pr.y, 260); pr.tgtId = pr.tgt ? pr.tgt.id : 0;
+        }
         const t = pr.tgt;
         if (t && !t.dead && t.id === pr.tgtId) {
           const want = Math.atan2(t.y - pr.y, t.x - pr.x), a = Math.atan2(pr.vy, pr.vx), d = U.angDiff(a, want), step = pr.homing * dt;
@@ -342,6 +350,7 @@
       }
       pr.x += pr.vx * dt; pr.y += pr.vy * dt; pr.a = Math.atan2(pr.vy, pr.vx);
       if (pr.x < -40 || pr.y < -40 || pr.x > size + 40 || pr.y > size + 40) pr.dead = true;
+      else if (RM && pr.life < 60 && (pr.x < RM.x0 || pr.y < RM.y0 || pr.x > RM.x1 || pr.y > RM.y1)) pr.dead = true; // Sanctum walls (persistent bodies steered around their owner excepted)
       else if (pr.team === 0 && pr.p && !ED.inView(pr.p, pr.x, pr.y, pr.r)) pr.dead = true; // fully outside the owner's view
       if (!pr.dead && pr.solid && ED.Arena.blocked(A, pr.x, pr.y, 1)) pr.dead = true;
       if (!pr.dead) {
@@ -354,7 +363,8 @@
             const rr = pr.r + e.r; if (U.dist2(pr.x, pr.y, e.x, e.y) > rr * rr) continue;
             if (pr.hits.indexOf(e.id) >= 0) continue;
             pr.hits.push(e.id);
-            const s = this.src(pr.p, pr.wid, 'proj', pr.knock); s.kx = pr.vx; s.ky = pr.vy; s.critC = pr.critC;
+            if (pr.skip !== null && pr.skip(this, pr, e)) continue;
+            const s = this.src(pr.p, pr.wid, 'proj', pr.knock); s.x = pr.x; s.y = pr.y; s.critC = pr.critC;
             const dealt = this.hitFoe(e, pr.dmg, s);
             if (pr.onHit) pr.onHit(this, pr, e, dealt);
             if (pr.pierce-- <= 0) { pr.dead = true; break; }
@@ -362,7 +372,7 @@
           this.foeEnd();
         } else {
           for (const p of this.living) {
-            const rr = pr.r + p.r * 0.7;
+            const rr = pr.r + p.r;
             if (U.dist2(pr.x, pr.y, p.x, p.y) <= rr * rr) { if (p.dashT <= 0) { this.hurtHero(p, pr.dmg, pr); pr.dead = true; } break; }
           }
         }
@@ -425,13 +435,13 @@
           z.tickT += z.tick;
           const dmg = z.dps * z.tick;
           if (z.team === 0) this.zoneFoes(z, (e) => { const s = this.src(z.p, z.wid, 'zone', z.knock); s.x = z.x; s.y = z.y; this.hitFoe(e, dmg, s); if (!e.dead) applyOpt(this, e, z, z.p); });
-          else for (const p of this.living) if (this.zoneHas(z, p.x, p.y, p.r * 0.7)) this.hurtHero(p, dmg, z);
+          else for (const p of this.living) if (this.zoneHas(z, p.x, p.y, p.r)) this.hurtHero(p, dmg, z);
           if (z.onTick) z.onTick(this, z);
         }
       } else if (z.onTick) z.onTick(this, z);
       if (z.t >= z.dur) {
         if (z.warn && z.dmg > 0) {
-          if (z.team === 1) { for (const p of this.living) if (this.zoneHas(z, p.x, p.y, p.r * 0.7)) this.hurtHero(p, z.dmg, z); }
+          if (z.team === 1) { for (const p of this.living) if (this.zoneHas(z, p.x, p.y, p.r)) this.hurtHero(p, z.dmg, z); }
           else this.zoneFoes(z, (e) => { const s = this.src(z.p, z.wid, 'zone', z.knock); s.x = z.x; s.y = z.y; this.hitFoe(e, z.dmg, s); if (!e.dead) applyOpt(this, e, z, z.p); });
           this.emit({ t: 'boom', pid: z.p ? z.p.pid : '', wid: z.wid, x: Math.round(z.x), y: Math.round(z.y), r: Math.round(z.r || z.w), look: z.k, team: z.team });
         }
@@ -443,35 +453,35 @@
   };
 
   // ---------------- heroes take damage ----------------
-  // Ignored while invulnerable, dashing, downed or dead. Damage x (1 - p.dr) - armor, min 1, rounded; 0.5 s i-frames; 0 HP -> heroDown. Returns the damage taken.
+  // Ignored while invulnerable, dashing, downed or dead, and outside the Sanctum fight's st 1 (sanctum.js). Damage x (1 - p.dr) - armor, min 1, rounded; 0.5 s i-frames; 0 HP -> heroDown. Returns the damage taken.
   W.hurtHero = function (p, dmg, src) {
-    if (!this.alive(p) || p.invuln > 0 || p.dashT > 0 || this.cheats.god) return 0;
+    if (!this.alive(p) || p.invuln > 0 || p.dashT > 0 || this.cheats.god || (this.sanctum && this.sanctum.st !== 1)) return 0;
     const d = Math.max(1, Math.round(dmg * (1 - (p.dr || 0)) - p.stats.armor));
-    p.hp -= d; p.invuln = C.IFRAME; p.hurtT = 0.2;
+    p.hp -= d; p.taken += d; p.invuln = C.IFRAME; p.hurtT = 0.2;
     this.emit({ t: 'hurt', pid: p.pid, dmg: d, x: Math.round(p.x), y: Math.round(p.y) });
     if (p.hp <= 0) this.heroDown(p);
     return d;
   };
   // Foe-side blast (exploders, boss slams without a telegraph zone): hurts living heroes within r. Emits 'boom' (team 1).
   W.foeBlast = function (e, x, y, r, dmg, look) {
-    for (const p of this.living) if (U.dist2(x, y, p.x, p.y) <= (r + p.r * 0.7) ** 2) this.hurtHero(p, dmg, e);
+    for (const p of this.living) if (U.dist2(x, y, p.x, p.y) <= (r + p.r) ** 2) this.hurtHero(p, dmg, e);
     this.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r: Math.round(r), look: look || 'fire', team: 1 });
   };
 
   // ---------------- braziers ----------------
   // Breaks every intact brazier the circle (x, y, r) touches; with a hero p, only braziers overlapping p's view.
   W.hitBraziers = function (x, y, r, p) {
+    if (this.arena.room) return; // the Sanctum has no braziers
     const B = this.arena.braziers;
     for (let i = 0; i < B.length; i++) { const b = B[i]; if (!b.broken && U.dist2(x, y, b.x, b.y) <= (r + b.r) * (r + b.r) && (!p || ED.inView(p, b.x, b.y, b.r))) this.breakBrazier(b, p); }
   };
-  // Drops: food 20%, magnet 5%, holy bomb 2%, else 1-5 gold (GAME-DESIGN §9). b.t = the sim time it broke (relight: progress.js).
+  // Drops: food 20%, holy bomb 2%, else 1-5 gold (GAME-DESIGN §9). b.t = the sim time it broke (relight: progress.js).
   W.breakBrazier = function (b, p) {
     if (b.broken) return;
     b.broken = true; b.hp = 0; b.t = this.time;
     const r = this.rng.next();
     if (r < 0.2) this.spawnPickup('food', b.x, b.y, 30);
-    else if (r < 0.25) this.spawnPickup('magnet', b.x, b.y, 1);
-    else if (r < 0.27) this.spawnPickup('bomb', b.x, b.y, 1);
+    else if (r < 0.22) this.spawnPickup('bomb', b.x, b.y, 1);
     else this.spawnPickup('gold', b.x, b.y, this.rng.int(1, 5));
     this.emit({ t: 'brazier', id: b.id, x: b.x, y: b.y, pid: p ? p.pid : '' });
   };

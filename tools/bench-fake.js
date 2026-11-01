@@ -4,7 +4,7 @@
 'use strict';
 function runOne(cfg) {
   const ED = runOne.ED || (runOne.ED = require('./sim.js').load());
-  cfg = Object.assign({ stage: 0, cls: 'knight', seed: 1, meta: 'none', maxTime: 1080, skill: 1 }, cfg || {});
+  cfg = Object.assign({ stage: 0, cls: 'knight', seed: 1, meta: 'none', maxTime: 1380, skill: 1 }, cfg || {});
   const skill = cfg.skill;
   let h = 2166136261;
   for (const ch of JSON.stringify([cfg.stage, cfg.cls, cfg.seed, cfg.meta, skill])) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
@@ -24,7 +24,7 @@ function runOne(cfg) {
     const twin = cfg.stage === 0 && b.id === 'twins' && cfg.seed % 2 === 1;
     bosses.push({ id: twin ? 'twinhammer' : b.id, at: Math.round((b.t + ttk) * 10) / 10, spawn: twin ? null : b.t });
   }
-  const form = ED.WEAPONS[sig].paths[0].form, took = time > 300 && rnd() < 0.7, evolved = {};
+  const form = ED.WEAPONS[sig].paths[0].forms[0], took = time > 300 && rnd() < 0.7, evolved = {};
   const dealt = { [sig]: Math.round(time * 40 * (0.5 + rnd())), [ED.HEROES[cfg.cls].skills[0]]: Math.round(time * 5 * rnd()) };
   if (took) { dealt[form] = Math.round(time * 30 * (0.5 + rnd())); evolved[sig] = Math.round(240 + rnd() * (time - 240)); }
   const weapons = [{ id: took ? form : sig, lvl: took ? 8 : 5, evo: took, pr: took ? [3, 2, 1] : [2, 1, 1], fl: 0 }];

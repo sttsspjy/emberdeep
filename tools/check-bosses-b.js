@@ -1,9 +1,10 @@
 // Headless check (exit 1 on failure): Drowned King, Hollow King, Demon Cyclops, Giant Samurai, Rift Weaver, Wick-Eater. Usage: node tools/check-bosses-b.js
-// Per boss: spawned directly next to a solo knight (90 s, hero kept alive, boss HP forced to each phase in turn): no exceptions, every attack runs, phases 2 and 3 fire,
+// Per boss at its stage slot (finals at 20:00; Cyclops and Weaver as the Ossuary / Glowmire 15:00 mid-bosses): spawned directly next to a solo knight (90 s, hero kept alive, boss HP forced to each phase in turn): no exceptions, every attack runs, phases 2 and 3 fire,
 // hostile telegraphs >= 0.6 s (also enraged), its zones / shots reach the hero (hurt calls by source; landed hits share i-frames with the horde), every look it uses is registered, zones die with the boss,
 // a mid-boss drops a chest and a final boss wins the run, and two runs with the same seed give the same digest.
 // Mechanics: the King's whirlpool pulls a still hero, the Hollow King's shards orbit and the crown comes back, the Cyclops stomp wave expands, beams stop at obstacles, enrage x3 damage,
 // the Weaver's gates open and shoot and its strands stay, the Wick-Eater's dark ring closes in and its maw inhales.
+// Adds: the borrowed Cyclops (Ossuary) and Weaver (Glowmire) summon host-roster kinds, home bosses keep their own adds, adds never push dashers over W.dasherCap, lib summon maps too.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
@@ -22,12 +23,12 @@ function drawAll(w) {
 }
 const players = (list) => list.map((cls, i) => ({ pid: 'p' + (i + 1), name: 'P' + (i + 1), slot: i, cls, meta: { shop: {}, sigs: [] } }));
 const BOSSES = [
-  { id: 'king', stage: 1, t: 600, attacks: ['beam', 'trident', 'leap', 'whirl', 'adds'] },
-  { id: 'hollow', stage: 0, t: 900, final: true, attacks: ['combo', 'crown', 'blink', 'nova', 'starfall'] },
-  { id: 'cyclops', stage: 1, t: 900, final: true, attacks: ['laser', 'stomp', 'leap', 'gaze', 'adds'] },
+  { id: 'king', stage: 1, t: 1200, final: true, attacks: ['beam', 'trident', 'leap', 'whirl', 'adds'] },
+  { id: 'hollow', stage: 0, t: 1200, final: true, attacks: ['combo', 'crown', 'blink', 'nova', 'starfall'] },
+  { id: 'cyclops', stage: 0, t: 900, attacks: ['laser', 'stomp', 'leap', 'gaze', 'adds'] },
   { id: 'samurai', stage: 2, t: 300, attacks: ['dash', 'waves', 'iaido', 'spin'] },
-  { id: 'weaver', stage: 2, t: 600, attacks: ['gates', 'weave', 'blink', 'adds'] },
-  { id: 'wickeater', stage: 2, t: 900, final: true, attacks: ['devour', 'dark', 'lash', 'bloom', 'adds'] },
+  { id: 'weaver', stage: 1, t: 900, attacks: ['gates', 'weave', 'blink', 'adds'] },
+  { id: 'wickeater', stage: 2, t: 1200, final: true, attacks: ['devour', 'dark', 'lash', 'bloom', 'adds'] },
 ];
 const LEN = 90, ATK_SEEDS = 10;
 
@@ -41,7 +42,7 @@ function fight(b, opt) {
   w.hurtHero = function (p, dmg, src) { p.hp = Math.max(p.hp, 1e6); const d = hurt.call(this, p, dmg, src); const k = !src ? 'other' : src.def ? (src.boss ? 'boss contact' : 'foe contact') : String(src.k); out.tryBy[k] = (out.tryBy[k] || 0) + 1; if (d > 0) { out.hurt++; out.hurtBy[k] = (out.hurtBy[k] || 0) + 1; } p.hp = p.maxHp; return d; };
   const e = w.spawnBoss({ t: b.t, id: b.id, final: !!b.final });
   e.takeMul = 0.0001;
-  out.baseDmg = e.dmg;
+  out.baseDmg = e.dmg; out.hp0 = e.maxHp;
   const foesAtStart = new Set(w.foes.map(f => f.id));
   try {
     for (let tick = 0; tick < LEN * 60 && w.state === 'play'; tick++) {
@@ -84,10 +85,11 @@ function fight(b, opt) {
     // kill: owned zones must vanish, a mid-boss drops a chest, a final boss wins the run
     e.takeMul = 1;
     w.hitFoe(e, 1e9, w.src(w.heroes[0], 'test'));
+    w.heroes[0].x = e.x + 400; w.heroes[0].y = e.y; // out of pickup reach: the chest stays on the ground
     w.update(C.TICK); w.update(C.TICK);
     out.zonesAfter = w.zones.filter(z => !z.dead && (z.src === e)).length;
     out.chest = w.pickups.some(g => g.k === 'chest' && !g.dead);
-    out.won = w.state === 'won';
+    out.won = w.won === true; // banked win (the Last Light lap follows)
   } catch (err) { out.err = err; }
   return out;
 }
@@ -107,6 +109,8 @@ for (const b of BOSSES) {
   ok([...r.looks].every(k => ED.LOOK_IDX[k] !== undefined), `${b.id}: every look is registered (${[...r.looks].join(', ')})`);
   ok(r.zonesAfter === 0, `${b.id}: its zones die with it (${r.zonesAfter} left)`);
   ok(b.final ? r.won : r.chest, `${b.id}: ${b.final ? 'its death wins the run' : 'drops a chest'}`);
+  const hp = Math.round({ 300: 5000, 600: 9000, 900: 13000, 1200: 22000 }[b.t] * ED.STAGES[b.stage].foe.hp); // GAME-DESIGN §8 anchors
+  ok(r.hp0 === hp && ED.STAGES[b.stage].bosses.some(x => x.id === b.id && x.t === b.t && !!x.final === !!b.final), `${b.id}: ${ED.STAGES[b.stage].id} ${U.fmtTime(b.t)} slot, HP ${r.hp0} (want ${hp})`);
   if (b.id === 'king') { ok(r.pullMoved > 20, `king: whirlpool pulls a still hero (${r.pullMoved.toFixed(0)} px in 4 s)`); ok(r.addsSeen > 0, `king: telegraphed adds arrive (${r.addsSeen})`); }
   if (b.id === 'hollow') { ok(r.maxShards === 6, `hollow: 3 + 3 orbit shards by phase 3 (max ${r.maxShards})`); ok(r.crownOut > 0 && r.crownMax >= 3, `hollow: crowns fly (max ${r.crownMax} at once)`); }
   if (b.id === 'cyclops') ok(r.waveMaxR > 200, `cyclops: stomp wave rolls out (r ${r.waveMaxR.toFixed(0)})`);
@@ -128,6 +132,41 @@ for (const b of BOSSES) {
   const w = new ED.World({ seed: 3, stage: 1, players: players(['knight']) }), o = w.arena.obstacles[0], L = ED.Bosses.libB;
   const len = L.rayLen(w, o.x - o.r - 80, o.y, 0, 330);
   ok(len < 90 && len > 60, `beams stop at an obstacle (ray ${len} px to a pillar 80 px away)`);
+}
+// Boss adds come from the host stage's roster by kind and respect brain caps (W.stageKin / W.addKin / W.foeAtCap): the adds attack started `casts` times at t s
+// with normal spawns off, every summon circle resolved at once; full: W.dasherCap - 1 icewolves (chargers) spawned first. Returns { ids (circle ids), spawned (add ids), dashers (alive after), cap, w, e }.
+function addsAt(id, stage, t, casts, full) {
+  const w = new ED.World({ seed: 11, stage, players: players(['knight']) });
+  w.updateSpawner = () => {}; w.time = t;
+  const e = w.spawnBoss({ t, id }), before = new Set(w.foes.map(f => f.id)), ids = [];
+  ED.Bosses.lib.vars(e);
+  if (full) for (let i = 0, n = w.dasherCap() - 1; i < n; i++) w.spawnFoe('icewolf', e.x + 600 + i * 20, e.y);
+  const preIds = new Set(w.foes.map(f => f.id));
+  for (let c = 0; c < casts; c++) {
+    ED.Bosses[id].attacks.adds.start(w, e);
+    for (const z of w.zones) if (!z.dead && z.k === 'summon' && z.onEnd) { ids.push(z.st); z.onEnd(w, z); z.dead = true; }
+  }
+  const spawned = w.foes.filter(f => !f.dead && !preIds.has(f.id) && !before.has(f.id)).map(f => f.def.id);
+  const dashers = w.foes.filter(f => !f.dead && !f.boss && ['charger', 'diver', 'blinker'].includes(f.def.ai)).length;
+  return { ids, spawned, dashers, cap: w.dasherCap(), w, e };
+}
+{
+  const native = (s) => { const sd = ED.STAGES[s], o = new Set(); for (const row of sd.timeline) for (const r of row.roster) o.add(r[0]); o.add(sd.events.flock.id); return o; };
+  const uniq = (a) => [...new Set(a)].sort().join(', ');
+  for (const c of [{ id: 'cyclops', stage: 0, t: 900 }, { id: 'weaver', stage: 1, t: 900 }]) {
+    const r = addsAt(c.id, c.stage, c.t, 4), nat = native(c.stage), sid = ED.STAGES[c.stage].id;
+    ok(r.spawned.length > 0 && r.ids.every(x => nat.has(x)) && r.spawned.every(x => nat.has(x)), `${c.id} on ${sid} ${U.fmtTime(c.t)}: adds are ${sid} roster kinds (${uniq(r.spawned)})`);
+    const q = addsAt(c.id, c.stage, c.t, 6, true);
+    ok(q.dashers <= q.cap && q.spawned.length > 0, `${c.id} on ${sid}: adds never push dashers over W.dasherCap (${q.dashers} / ${q.cap}; adds ${uniq(q.spawned)})`);
+  }
+  const h = addsAt('cyclops', 1, 600, 3);
+  ok(h.spawned.length > 0 && h.spawned.every(x => x === 'cavespider' || x === 'shroomhulk') && h.spawned.includes('cavespider') && h.spawned.includes('shroomhulk'), `home cyclops on glowmire 10:00 still summons cavespider / shroomhulk (${uniq(h.spawned)})`);
+  const k = addsAt('king', 1, 1200, 2), wk = addsAt('wickeater', 2, 1200, 2);
+  ok(k.ids.every(x => ['glowslime', 'myconid', 'spitter'].includes(x)) && wk.ids.every(x => ['starspawn', 'shade', 'voideye'].includes(x)), `home finals keep their own adds (king ${uniq(k.ids)}; wickeater ${uniq(wk.ids)})`);
+  // lib summon (bosses.js) goes through W.addKin too
+  const o = addsAt('cyclops', 0, 900, 0);
+  ED.Bosses.lib.summon(o.w, o.e, ['cavespider']);
+  ok(o.w.foes.filter(f => !f.dead && !f.boss).every(f => f.def.id === 'bulwark') && o.w.foes.some(f => f.def.id === 'bulwark'), `lib summon maps cavespider to the Ossuary kin (bulwark)`);
 }
 console.log((fails ? 'check-bosses-b: ' + fails + ' failure(s)' : 'check-bosses-b: all passed') + ' in ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s');
 process.exitCode = fails ? 1 : 0;

@@ -1,4 +1,4 @@
-// Knight visuals (pixel only: atlas sprites + Batch primitives): crescent outlines, gale crescents and spiral blades (projectiles), crack / cut zones, Q shove / bulwark zones,
+// Knight visuals (pixel only: atlas sprites + Batch primitives): crescent outlines, gale crescents, spiral blades and twisters (projectiles), crack / cut zones, Q ward zones (shove cast wave, bulwark ward),
 // spin fans (full-spin swing events), big slam rims (quake booms), a blade glint orbiting a knight holding a spin Form (HeroFx). Everything derives from render-visible fields and view time; per-zone variation from U.hash3(z.id, i, ...).
 (function (ED) {
   'use strict';
@@ -42,7 +42,18 @@
     for (let i = 1; i <= 3; i++) B.rect(Math.round(pr.x - c * i * 9 + ((pr.id + i) % 3 - 1) * 4), Math.round(pr.y - s * i * 9), 2, 1, rgba(WIND, 200 - i * 50));
     return true;
   };
-  const knightProj = (B, pr, t) => (pr.k === 'gale' ? galeProj(B, pr, t) : crescent(B, pr));
+  // Twister (Whirlwind, look 'whirl'): three stacked open rings narrowing upward, each spinning (ellipse 0.45 tall), dust outer stroke over a 1 px white core.
+  const twistProj = (B, pr, t) => {
+    const R = U.clamp(pr.r, 8, 30);
+    for (let j = 0; j < 3; j++) {
+      const r = R * (1 - j * 0.28), cy = pr.y - j * R * 0.55, a0 = t * (14 - j * 3) + pr.id + j * 2.1;
+      for (let i = 0; i < 9; i++) { const b = a0 + i / 8 * 4.6; PT[i * 2] = pr.x + Math.cos(b) * r; PT[i * 2 + 1] = cy + Math.sin(b) * r * 0.45; }
+      B.poly(PT, 9, 2, rgba(DUST, 210 - j * 30));
+      B.poly(PT, 5, 1, rgba(0xffffff, 150));
+    }
+    return true;
+  };
+  const knightProj = (B, pr, t) => (pr.k === 'gale' ? galeProj(B, pr, t) : pr.k === 'whirl' ? twistProj(B, pr, t) : crescent(B, pr));
 
   // ---------------- zones ----------------
   // Crack: a jagged dark fissure grows along the line until it erupts at dur (dust puffs and rock flecks along it in the last 30%).
@@ -82,33 +93,27 @@
     return true;
   };
   // ---------------- Q: Bulwark Shove ----------------
-  // Shove: a shield wave expanding from the hero to the shove edge (z.r) in 0.3 s: a thick steel front with a white leading line, a pale wash behind it, a big shield flash at the hero,
-  // dust kicked up along the front. Bulwark: the ring at the shove edge (band z.w): dark band, steel rims, shields standing on it every ~44 px, a slow pulse; fades out over its last 0.4 s.
+  // Ward cast ('shove'): a thin steel front growing from the hero to the ward edge (z.r) in 0.25 s with dust along it, fading out. Ward ('bulwark'): a faint pale fill, a clear 3 px
+  // steel edge with a thin white rim, small shields standing on the edge every ~44 px; the radius grows over the first 0.25 s (as the sim's exclusion does), fades in its last 0.6 s.
   const shoveZone = (B, z, t) => {
-    const k = U.clamp(z.t / z.dur, 0, 1), f = U.easeOut(Math.min(1, z.t / 0.3)), r = Math.max(4, z.r * (0.15 + 0.85 * f)), al = 1 - Math.max(0, (k - 0.55) / 0.45);
-    kick(z, 6);
-    B.circ(z.x, z.y - 4, r, rgba(0xfff1d6, 34 * al), 0);
-    B.circ(z.x, z.y - 4, r, rgba(STEEL, 230 * al), 4);
-    B.circ(z.x, z.y - 4, r + 3, rgba(0xffffff, 200 * al), 1);
-    B.circ(z.x, z.y - 4, r * 0.7, rgba(STEEL, 90 * al), 1);
-    if (k < 0.5) B.spr('proj.shield', 0, z.x, z.y - 12, o(1 - k * 2, 3, 0, true));
-    if (k < 0.4) B.spr('fx.ring.shock', at('fx.ring.shock', k / 0.4), z.x, z.y - 6, o(1 - k / 0.4, 3, 0, true));
-    const n = B.zoneLite ? 8 : 16;
+    const k = U.clamp(z.t / z.dur, 0, 1), f = U.easeOut(Math.min(1, z.t / 0.25)), r = Math.max(4, z.r * f), al = 1 - k;
+    kick(z, 3);
+    B.circ(z.x, z.y, r, rgba(STEEL, 200 * al), 2);
+    const n = B.zoneLite ? 8 : 14;
     for (let i = 0; i < n; i++) {
-      const a = (i + H(z.id, i, 1) * 0.6) / n * TAU, x = z.x + Math.cos(a) * r, y = z.y - 4 + Math.sin(a) * r * 0.9;
-      if (i & 1) B.spr('fx.puff', at('fx.puff', k), x, y, o(al * 0.8, 1));
+      const a = (i + H(z.id, i, 1) * 0.6) / n * TAU, x = z.x + Math.cos(a) * r, y = z.y + Math.sin(a) * r;
+      if (i & 1) B.spr('fx.puff', at('fx.puff', k), x, y, o(al * 0.7, 1));
       else B.rect(Math.round(x), Math.round(y - 3 * f), 2, 2, rgba(DUST, 220 * al));
     }
     return true;
   };
   const bulwarkZone = (B, z, t) => {
-    const k = life(z, 0.15, 0.4), r = z.r, bw = Math.max(4, z.w), pulse = 0.5 + 0.5 * Math.sin(t * 5 + z.id);
-    if (k <= 0) return true;
-    B.circ(z.x, z.y, r, rgba(0x1a2230, 120 * k), bw);
-    B.circ(z.x, z.y, r - bw / 2, rgba(STEEL, (150 + 60 * pulse) * k), 2);
-    B.circ(z.x, z.y, r + bw / 2, rgba(STEEL, (150 + 60 * pulse) * k), 2);
-    B.circ(z.x, z.y, r + bw / 2 + 2, rgba(0xffffff, 70 * pulse * k), 1);
-    const n = U.clamp(Math.round(TAU * r / (B.zoneLite ? 88 : 44)), 6, 40);
+    const k = life(z, 0.12, 0.6), r = z.r * Math.min(1, z.t / 0.25);
+    if (k <= 0 || r < 2) return true;
+    B.circ(z.x, z.y, r, rgba(0xcfe0ff, 30 * k), 0);
+    B.circ(z.x, z.y, r, rgba(STEEL, 210 * k), 3);
+    B.circ(z.x, z.y, r + 2, rgba(0xffffff, 70 * k), 1);
+    const n = U.clamp(Math.round(TAU * r / (B.zoneLite ? 88 : 44)), 4, 24);
     for (let i = 0; i < n; i++) { const a = i / n * TAU + z.id * 0.37; B.spr('proj.shield', 0, z.x + Math.cos(a) * r, z.y + Math.sin(a) * r - 4, o(k, 1, 0)); }
     return true;
   };

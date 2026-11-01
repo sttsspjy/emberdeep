@@ -1,33 +1,35 @@
-// Knight (brawler): hero data, signature Cleave (3 paths x 3 ranks), 5 Forms (Colossus Blade, Whirlwind, Rending Gale; hybrids Earthsplitter, Blade Tempest), Q Bulwark Shove.
-// Zones (networked, drawn by hfx-knight.js): 'shove' / 'bulwark' (Q); 'crack' team-0 warn lines that erupt at dur; 'cut' lingering wind lines (len = full length, drawn growing).
+// Knight (brawler): hero data, signature Cleave (3 paths x 3 shape ranks), 5 Forms (Greatblade: Colossus Blade, Earthsplitter; Whirl: Whirlwind; Edge Wave: Rending Gale, Blade Tempest), Q Aegis Ward.
+// Zones (networked, drawn by hfx-knight.js): 'shove' (Q cast wave) / 'bulwark' (Q ward); 'crack' team-0 warn lines that erupt at dur; 'cut' lingering wind lines (len = full length, drawn growing).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU, PI = Math.PI;
 
   ED.regLook('crescent', 'shove', 'bulwark', 'slash', 'whirl', 'crack', 'cut', 'gale');
-  ED.addHero({ id: 'knight', name: 'Knight', hp: 130, speed: 68, crit: 0.05, sig: 'cleave', skills: ['shove'], icon: 'hero.knight.idle', col: '#c9d4e8', txt: 'Sword and shield. Holds the line.' });
+  ED.addHero({ id: 'knight', name: 'Knight', hp: 130, speed: 78, crit: 0.05, sig: 'cleave', skills: ['shove'], icon: 'hero.knight.idle', col: '#c9d4e8', txt: 'Sword and shield. Holds the line.' });
 
   // ---------------- shared strike ----------------
   // Every knight weapon attacks in strings: fire() strikes at once, then S.n - 1 more strikes FORM.gap s apart (directional strikes alternate +-0.3 rad).
   // Strike keys (base + path / refine mods): arc (rad), back (directional strikes mirror behind at 0.5x damage, without waves or slams; follow-up strikes 0.8x), spin (a string's last strike is 360 deg), wave (crescents per strike), ret (crescents fly back),
   // slam (directional: blast at each strike tip; 360 Forms: ring around the hero on the string's last strike), stag (stun s on strike hits).
-  // Form keys: cracks (Colossus: crack lines across the first front sweep of a string), cutT (Gale: cut line life s), quake + fiss (Earthsplitter: every quake-th attack, fiss radial fissures), orbit (Tempest: spiral blades).
-  // FORM[wid]: full (strikes are 360 spins), spin (honours S.spin; Forms ignore it), gap (s between strikes), one (a single strike per attack; each S.n above 1 adds 2 cracks instead), heart (foes within half reach take that much extra), crack, swirl (spin hits push foes around the hero), gale (big crescents + cut lines), spiral (spiral blades per attack),
-  // quake (fissure ring every S.quake attacks), move (cooldown runs this much faster while moving), big (directional Forms: big foes take that many x from sweeps and crescents).
+  // Form keys: cracks (Colossus: crack lines across the first front sweep of a string), cutT (Gale: cut line life s), quake + fiss (Earthsplitter: every quake-th attack, fiss radial fissures), orbit (Tempest: spiral blades), twist (Whirlwind: twisters per whirl).
+  // FORM[wid]: full (strikes are 360 spins), spin (honours S.spin; Forms ignore it), gap (s between strikes), one (a single strike per attack; each S.n above 1 adds 2 cracks instead), heart (foes within half reach take that much extra), crack, swirl (spin hits push foes around the hero), gale (big crescents + cut lines), spiral (spiral blades per attack), twist (twisters per attack),
+  // quake (fissure ring every S.quake attacks), move (cooldown runs this much faster while moving), big (big foes take that many x from sweeps and Gale crescents; bigAll: from slams too; never from Edge Wave crescents),
+  // cone (half-angle rad: the swing arc is at most 2 x cone, no back swing, follow-up strikes on the aim line, crescents and cut lines fan within +-0.6 x cone).
   const FORM = {
-    cleave: { gap: 0.15, spin: true },
+    cleave: { gap: 0.15, spin: true, big: 1.6, bigAll: true },
     colossus: { gap: 0.3, crack: true, one: true, heart: 2.5, big: 1.6 },
-    whirlwind: { full: true, gap: 0.14, swirl: true, move: 0.3, heart: 1 },
-    gale: { gap: 0.18, gale: true, big: 1.6 },
-    earthsplitter: { full: true, gap: 0.2, quake: true, heart: 1 },
-    tempest: { full: true, gap: 0.16, spiral: true, heart: 1 },
+    whirlwind: { full: true, gap: 0.14, swirl: true, move: 0.3, heart: 1, twist: true, big: 1.5 },
+    gale: { gap: 0.18, gale: true, big: 1.6, cone: PI / 6 },
+    earthsplitter: { full: true, gap: 0.2, quake: true, heart: 1, big: 1.6, bigAll: true },
+    tempest: { full: true, gap: 0.16, spiral: true, heart: 1, big: 1.6 },
   };
   const CRACK_MAX = 200; // crack / fissure / cut reach (px): stays inside the view
   const SPIN_K = 0.6; // Cleave's path spin (Whirl rank 3) deals x SPIN_K
-  // Big foes (radius >= BIG_R: brutes, elites, bosses) hit by a Form with F.big take the extra (big - 1) x dealt as a second, no-crit, no-knock hit.
-  const BIG_R = 12;
-  const heavy = (w, p, wid, e, dealt) => {
-    const k = FORM[wid] ? FORM[wid].big || 1 : 1;
+  // Big foes (radius >= BIG_R: brutes, elites, bosses) hit by a weapon with F.big take the extra (big - 1) x dealt as a second, no-crit, no-knock hit.
+  // Seeking hits (Whirlwind twisters, Tempest blades) deal x SEEK_BIG to big foes instead.
+  const BIG_R = 12, SEEK_BIG = 2.2;
+  const heavy = (w, p, wid, e, dealt, kk) => {
+    const k = kk || (FORM[wid] ? FORM[wid].big || 1 : 1);
     if (k <= 1 || !(dealt > 0) || e.dead || !(e.r >= BIG_R || e.elite || e.boss)) return;
     const s = w.src(p, wid, 'weapon', 0); s.critC = 0; s.x = e.x; s.y = e.y;
     w.hitFoe(e, dealt * (k - 1) / (e.takeMul || 1), s);
@@ -35,29 +37,47 @@
   let HP = null, HW = '';
   const arcBig = (w, e, dealt) => heavy(w, HP, HW, e, dealt);
   const projBig = (w, pr, e, dealt) => heavy(w, pr.p, pr.wid, e, dealt);
+  const seekBig = (w, pr, e, dealt) => heavy(w, pr.p, pr.wid, e, dealt, SEEK_BIG);
 
   let DK = 1; // damage factor of the current strike: back side 0.5, follow-up strikes (k > 0) 0.8
   // Swirl: tangential push (counter-clockwise, spiralling outward) around (SX, SY); elites take half (on top of w.knock's elite factor).
   let SX = 0, SY = 0, SWF = 0;
-  const swirl = (w, e) => { const dx = e.x - SX, dy = e.y - SY; w.knock(e, -dy + dx * 0.5, dx + dy * 0.5, SWF * (e.elite ? 0.5 : 1)); };
+  const swirl = (w, e, dealt) => { const dx = e.x - SX, dy = e.y - SY; w.knock(e, -dy + dx * 0.5, dx + dy * 0.5, SWF * (e.elite ? 0.5 : 1)); arcBig(w, e, dealt); };
   const ARC = { knock: 0, look: 'slash', stun: 0, onHit: null, noEv: false };
-  const SLAM = { knock: 0, look: 'quake', stun: 0 };
-  // Crescent wave: piercing; ret doubles its life so the outbound leg keeps its reach.
-  const WAVE = { look: 'crescent', speed: 250, dmg: 0, pierce: 999, r: 12, life: 0.5, knock: 0, ret: false };
-  const wave = (w, p, ws, S, a, k) => {
-    WAVE.dmg = S.dmg * k * DK; WAVE.r = 10 * S.area; WAVE.knock = S.knock * 0.4; WAVE.ret = !!S.ret;
+  const SLAM = { knock: 0, look: 'quake', stun: 0, onHit: null };
+  // Leg cap: the crescents of one strike hit one foe at most cap times per leg (out / back; Edge Wave WAVE_CAP, Gale GALE_CAP). Each strike takes a record of a per-slot ring
+  // (WSET records, lazily built in ws.st.wr) holding per leg the foe ids hit and their counts (WIDS foes each; past that, no limit).
+  const WSET = 16, WIDS = 64, WAVE_CAP = 1, GALE_CAP = 6;
+  const legOk = (L, id, cap) => {
+    for (let i = 0; i < L.n; i++) if (L.ids[i] === id) { if (L.c[i] >= cap) return false; L.c[i]++; return true; }
+    if (L.n < WIDS) { L.ids[L.n] = id; L.c[L.n++] = 1; }
+    return true;
+  };
+  const leg = () => ({ ids: new Int32Array(WIDS), c: new Uint8Array(WIDS), n: 0 });
+  const waveSkip = (w, pr, e) => !legOk(pr.back ? pr.st.b : pr.st.o, e.id, WAVE_CAP);
+  const galeSkip = (w, pr, e) => !legOk(pr.back ? pr.st.b : pr.st.o, e.id, GALE_CAP);
+  const strikeSet = (st) => {
+    if (!st.wr) { st.wr = []; for (let i = 0; i < WSET; i++) st.wr.push({ o: leg(), b: leg() }); st.wi = 0; }
+    const R = st.wr[st.wi = (st.wi + 1) % WSET]; R.o.n = 0; R.b.n = 0;
+    return R;
+  };
+  const WAVE = { look: 'crescent', speed: 250, dmg: 0, pierce: 999, r: 12, life: 0.5, knock: 0, ret: false, onHit: null, skip: waveSkip, st: null };
+  const wave = (w, p, ws, S, a, k, R) => {
+    WAVE.st = R; WAVE.dmg = S.dmg * k * DK; WAVE.r = 10 * S.area; WAVE.knock = S.knock * 0.4; WAVE.ret = !!S.ret;
     WAVE.life = Math.min(0.72, 0.5 * Math.sqrt(S.area)) * (S.ret ? 2 : 1);
     w.shoot(p, ws.id, p.x + Math.cos(a) * 14, p.y - 4 + Math.sin(a) * 14, a, S, WAVE);
   };
-  // Gale crescent: big, piercing, leaves a cut line (dps zone along its whole flight, ticking once the crescent has passed its start).
-  const GALE = { look: 'gale', speed: 260, dmg: 0, pierce: 999, r: 16, life: 0.7, knock: 0, ret: false, onHit: projBig };
+  // Gale crescent: big, piercing, starts 2 x its radius out (its body inside the cone), leaves a cut line (dps zone along its whole flight, ticking once the crescent has passed its start);
+  // a returning crescent ends back at its start distance (2 x radius + one step), so its body never sweeps around the hero.
+  const galeTick = (w, pr) => { const p = pr.p; if (pr.back && p && Math.hypot(p.x - pr.x, p.y - pr.y) < pr.r * 2 + 8) pr.dead = true; };
+  const GALE = { look: 'gale', speed: 260, dmg: 0, pierce: 999, r: 16, life: 0.7, knock: 0, ret: false, onHit: projBig, tick: galeTick, skip: galeSkip, st: null };
   const CUT = { team: 0, p: null, wid: '', look: 'cut', x: 0, y: 0, a: 0, len: 1, w: 12, dur: 1, tick: 0.25, tickDelay: 0.3, dps: 0, stun: 0 };
-  const gale = (w, p, ws, S, a) => {
-    GALE.dmg = S.dmg * 0.7 * DK; GALE.r = 15 * S.area; GALE.knock = S.knock * 0.3; GALE.ret = !!S.ret; GALE.life = 0.68 * (S.ret ? 2 : 1);
-    const x = p.x + Math.cos(a) * 14, y = p.y - 4 + Math.sin(a) * 14;
+  const gale = (w, p, ws, S, a, R) => {
+    GALE.st = R; GALE.dmg = S.dmg * 0.4 * DK; GALE.r = 15 * S.area; GALE.knock = S.knock * 0.3; GALE.ret = !!S.ret; GALE.life = 0.9 * (S.ret ? 2 : 1);
+    const o = GALE.r * 2, x = p.x + Math.cos(a) * o, y = p.y - 4 + Math.sin(a) * o;
     w.shoot(p, ws.id, x, y, a, S, GALE);
-    CUT.p = p; CUT.wid = ws.id; CUT.x = x; CUT.y = y; CUT.a = a; CUT.len = Math.min(CRACK_MAX, GALE.speed * 0.68); CUT.w = 12 * Math.sqrt(S.area);
-    CUT.dur = S.cutT; CUT.dps = S.dmg * 0.45; CUT.stun = 0;
+    CUT.p = p; CUT.wid = ws.id; CUT.x = x; CUT.y = y; CUT.a = a; CUT.len = Math.min(CRACK_MAX, GALE.speed * 0.9); CUT.w = 12 * Math.sqrt(S.area);
+    CUT.dur = S.cutT; CUT.dps = S.dmg * 0.3; CUT.stun = 0;
     w.zone(CUT);
   };
   // Crack / fissure: a team-0 warn line from (x, y) along a that erupts after dur (hit, stagger, knock away from its start).
@@ -67,22 +87,47 @@
     CRACK.dur = dur; CRACK.dmg = S.dmg * k * DK; CRACK.stun = (S.stag || 0) + 0.3; CRACK.knock = S.knock * 0.5;
     w.zone(CRACK);
   };
-  const slam = (w, p, ws, S, x, y, r, k) => { SLAM.knock = S.knock * 1.2; SLAM.stun = (S.stag || 0) + 0.3; w.blast(p, ws.id, x, y, r, S.dmg * k * DK, SLAM); };
-  // Spiral blade (Tempest): circles its hero at up to 48 px for 0.4 s, then spirals out to ~200 px (pr.oa angle, pr.od turn sign), re-hits a foe every 0.6 s.
+  const slam = (w, p, ws, S, x, y, r, k) => {
+    SLAM.knock = S.knock * 1.2; SLAM.stun = (S.stag || 0) + 0.3; SLAM.onHit = FORM[ws.id].bigAll ? arcBig : null; HP = p; HW = ws.id;
+    w.blast(p, ws.id, x, y, r, S.dmg * k * DK, SLAM);
+  };
+  // Nearest elite / boss inside hero p's view, or null.
+  const small = (e) => !(e.elite || e.boss);
+  const bigFoe = (w, p) => w.heroFoe(p, 400, small);
+  // Spiral blade (Tempest): circles its hero at up to 48 px for 0.4 s, then spirals out to ~200 px (pr.oa angle, pr.od turn sign), re-hits a foe every 0.6 s, big foes x SEEK_BIG.
+  // With a target (pr.tgt: the nearest elite / boss in view at the attack) it flies at it instead (<= 320 px/s) and circles it at its radius + 6 px until the blade's life ends.
   const spiral = (w, pr, dt) => {
     const p = pr.p; if (!p || dt <= 0) return;
     pr.oa += pr.od * 4.2 * dt;
-    const r = Math.min(48, 22 + pr.t * 110) + Math.max(0, pr.t - 0.4) * 150, tx = p.x + Math.cos(pr.oa) * r, ty = p.y - 4 + Math.sin(pr.oa) * r * 0.8;
-    pr.vx = (tx - pr.x) / dt; pr.vy = (ty - pr.y) / dt;
+    const e = pr.tgt;
+    let tx, ty;
+    if (pr.t > 0.4 && e && !e.dead && e.id === pr.tgtId) { const r = e.r + 6; tx = e.x + Math.cos(pr.oa) * r; ty = e.y + Math.sin(pr.oa) * r * 0.8; }
+    else { const r = Math.min(48, 22 + pr.t * 110) + Math.max(0, pr.t - 0.4) * 150; tx = p.x + Math.cos(pr.oa) * r; ty = p.y - 4 + Math.sin(pr.oa) * r * 0.8; }
+    let vx = (tx - pr.x) / dt, vy = (ty - pr.y) / dt;
+    const v = Math.hypot(vx, vy); if (pr.t > 0.4 && v > 320) { vx *= 320 / v; vy *= 320 / v; }
+    pr.vx = vx; pr.vy = vy;
   };
-  const ORB = { look: 'crescent', speed: 1, dmg: 0, pierce: 999, r: 10, life: 1.4, knock: 0, rehit: 0.6, tick: spiral };
+  const ORB = { look: 'crescent', speed: 1, dmg: 0, pierce: 999, r: 10, life: 1.4, knock: 0, rehit: 0.6, tick: spiral, onHit: seekBig };
   const spirals = (w, p, ws, S, k) => {
-    const n = (S.orbit | 0) + (S.wave | 0), sets = S.back ? 2 : 1;
-    ORB.dmg = S.dmg * 0.18; ORB.r = 10 * S.area; ORB.knock = S.knock * 0.3;
+    const n = (S.orbit | 0) + (S.wave | 0), sets = S.back ? 2 : 1, e = bigFoe(w, p);
+    ORB.dmg = S.dmg * 0.18; ORB.r = 10 * S.area; ORB.knock = S.knock * 0.3; ORB.life = e ? 2.6 : 1.4;
     for (let s = 0; s < sets; s++) for (let i = 0; i < n; i++) {
       const a = (i + 0.5 * (k & 1) + 0.25 * s) / n * TAU, pr = w.shoot(p, ws.id, p.x + Math.cos(a) * 22, p.y - 4 + Math.sin(a) * 18, a + PI / 2, S, ORB);
-      pr.oa = a; pr.od = s ? -1 : 1;
+      pr.oa = a; pr.od = s ? -1 : 1; pr.tgt = e; pr.tgtId = e ? e.id : 0;
     }
+  };
+  // Twister (Whirlwind): leaves along the hero's heading; with a target (pr.tgt: the nearest elite / boss in view at the whirl) it turns toward it at 9 rad/s and keeps circling through it.
+  // Pierces, re-hits a foe every 0.3 s, big foes x SEEK_BIG.
+  const twistTick = (w, pr, dt) => {
+    const e = pr.tgt; if (!e || e.dead || e.id !== pr.tgtId) return;
+    const a = Math.atan2(pr.vy, pr.vx), d = U.angDiff(a, Math.atan2(e.y - pr.y, e.x - pr.x)), st = 9 * dt, na = a + (Math.abs(d) < st ? d : Math.sign(d) * st);
+    pr.vx = Math.cos(na) * pr.sp; pr.vy = Math.sin(na) * pr.sp;
+  };
+  const TWIST = { look: 'whirl', speed: 150, dmg: 0, pierce: 999, r: 12, life: 2.5, knock: 0, rehit: 0.3, tick: twistTick, onHit: seekBig };
+  const twisters = (w, p, ws, S) => {
+    TWIST.dmg = S.dmg * S.twist; TWIST.r = 12 * S.area; TWIST.knock = S.knock * 0.2;
+    const e = bigFoe(w, p), pr = w.shoot(p, ws.id, p.x, p.y - 4, e ? Math.atan2(e.y - p.y, e.x - p.x) : p.mdir, S, TWIST);
+    pr.tgt = e; pr.tgtId = e ? e.id : 0;
   };
 
   // Strike reach: range x area; full spins leave out Velocity (S.range carries it): spin radius grows with area only.
@@ -93,20 +138,20 @@
     ARC.knock = F.swirl ? 0 : S.knock; ARC.stun = S.stag || 0; ARC.look = full ? 'whirl' : 'slash'; ARC.onHit = F.swirl ? swirl : F.big ? arcBig : null;
     SX = cx; SY = cy; SWF = S.knock; HP = p; HW = ws.id;
     const sk = full && !F.full ? SPIN_K : 1;
-    const sides = !full && S.back ? 2 : 1, nw = S.wave | 0;
+    const sides = !full && S.back && !F.cone ? 2 : 1, nw = S.wave | 0, arc = full ? TAU : F.cone ? Math.min(S.arc, 2 * F.cone) : S.arc;
     for (let s = 0; s < sides; s++) {
       const b = a + s * PI;
       DK = (s ? 0.5 : 1) * (k ? 0.8 : 1) * sk;
-      w.arc(p, ws.id, cx, cy, b, R, full ? TAU : S.arc, S.dmg * DK, ARC);
-      if (F.heart) { ARC.noEv = true; w.arc(p, ws.id, cx, cy, b, R * 0.5, full ? TAU : S.arc, S.dmg * DK * F.heart, ARC); ARC.noEv = false; }
+      w.arc(p, ws.id, cx, cy, b, R, arc, S.dmg * DK, ARC);
+      if (F.heart) { ARC.noEv = true; w.arc(p, ws.id, cx, cy, b, R * 0.5, arc, S.dmg * DK * F.heart, ARC); ARC.noEv = false; }
       if (full) continue;
-      if (F.gale && !s) for (let i = 0; i < nw; i++) gale(w, p, ws, S, b + (i - (nw - 1) / 2) * 0.3);
-      else if (!s) for (let i = 0; i < nw; i++) wave(w, p, ws, S, b + (i - (nw - 1) / 2) * 0.35, 0.45);
+      if (F.gale && !s && nw > 0) { const R = strikeSet(ws.st); for (let i = 0; i < nw; i++) gale(w, p, ws, S, b + (nw > 1 ? (i / (nw - 1) * 2 - 1) * F.cone * 0.6 : 0), R); }
+      else if (!s && nw > 0) { const R = strikeSet(ws.st); for (let i = 0; i < nw; i++) wave(w, p, ws, S, b + (i - (nw - 1) / 2) * 0.35, 0.7, R); }
       if (F.crack && k === 0 && s === 0) { const c = (S.cracks | 0) + (F.one ? 2 * ((S.n | 0) - 1) : 0); for (let i = 0; i < c; i++) crack(w, p, ws, S, b + (c > 1 ? (i / (c - 1) - 0.5) * S.arc * 0.85 : 0), R * 1.9, 0.7, 0.3 + 0.05 * i); }
       if (S.slam && !s) slam(w, p, ws, S, cx + Math.cos(b) * R * 0.8, cy + Math.sin(b) * R * 0.8, 24 * S.area, 0.8);
     }
     ARC.onHit = null; DK = k ? 0.8 : 1;
-    if (full && !F.spiral) for (let i = 0; i < nw; i++) wave(w, p, ws, S, (i + 0.5 * (k & 1)) / nw * TAU, 0.5);
+    if (full && !F.spiral && nw > 0) { const R = strikeSet(ws.st); for (let i = 0; i < nw; i++) wave(w, p, ws, S, (i + 0.5 * (k & 1)) / nw * TAU, 0.5, R); }
     if (F.full && S.slam && last) slam(w, p, ws, S, cx, cy, R * 1.35, 0.8);
     DK = 1;
   };
@@ -117,6 +162,7 @@
       const F = FORM[ws.id], st = ws.st, n = F.one ? 1 : S.n | 0, a = aim(w, p, ws);
       st.k = 0; st.a = a; st.left = n - 1; st.t = F.gap;
       if (F.spiral) spirals(w, p, ws, S, st.q = (st.q | 0) + 1);
+      if (F.twist) twisters(w, p, ws, S);
       strike(w, p, ws, S, a, 0, n <= 1);
       if (F.quake && (st.q = (st.q | 0) + 1) >= (S.quake | 0)) {
         st.q = 0;
@@ -131,34 +177,34 @@
       if (F.move && p.moving) ws.cd -= dt * F.move;
       if (!(st.left > 0) || (st.t -= dt) > 0) return;
       st.t = F.gap; st.left--; st.k++;
-      strike(w, p, ws, S, F.full ? st.a + st.k * 0.4 : st.a + (st.k & 1 ? 0.3 : -0.3), st.k, st.left === 0);
+      strike(w, p, ws, S, F.full ? st.a + st.k * 0.4 : F.cone ? st.a : st.a + (st.k & 1 ? 0.3 : -0.3), st.k, st.left === 0);
     },
   };
 
   // ---------------- Cleave and its Forms ----------------
   ED.addWeapon({
     id: 'cleave', name: 'Cleave', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', txt: 'Sword arc toward your cursor',
-    base: { dmg: 24, cd: 1.1, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 120, range: 56, arc: 2.0, wave: 0, stag: 0, slam: 0 },
+    base: { dmg: 36, cd: 1.1, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 120, range: 56, arc: 2.0, wave: 0, stag: 0, slam: 0 },
     paths: [
-      { id: 'great', name: 'Greatblade', form: 'colossus', ranks: [
+      { id: 'great', name: 'Greatblade', forms: ['colossus', 'earthsplitter'], ranks: [
         { mods: { area: 0.3, cd: 0.15, stag: 0.3 }, txt: 'Bigger, slower swings that stagger' },
         { mods: { arc: 0.9, dmg: 0.3 }, txt: 'Much wider arc, +30% damage' },
         { mods: { slam: 1 }, txt: 'Each swing ends in a ground slam' }] },
-      { id: 'whirl', name: 'Whirl', form: 'whirlwind', ranks: [
+      { id: 'whirl', name: 'Whirl', forms: ['whirlwind'], ranks: [
         { mods: { back: true }, txt: 'Also swings behind you' },
         { mods: { n: 1 }, txt: '+1 swing per attack' },
         { mods: { spin: true }, txt: 'Last swing becomes a full spin' }] },
-      { id: 'edge', name: 'Edge Wave', form: 'gale', ranks: [
+      { id: 'edge', name: 'Edge Wave', forms: ['gale', 'tempest'], ranks: [
         { mods: { wave: 1 }, txt: 'Swings fling a crescent wave' },
         { mods: { wave: 2 }, txt: '+2 waves in a fan' },
         { mods: { ret: true, dmg: 0.2 }, txt: 'Waves fly back to you, +20% damage' }] },
     ],
-    hybrids: [{ need: [0, 1], form: 'earthsplitter' }, { need: [1, 2], form: 'tempest' }], noAmount: true,
+    noAmount: true,
   }, IMPL);
-  // Whirlwind (Whirl): 360 spins (60 px at Form base), hits swirl foes around and out from the hero, the cooldown runs 1.3x while moving.
+  // Whirlwind (Whirl): 360 spins (60 px at Form base), hits swirl foes around and out from the hero, the cooldown runs 1.3x while moving; each whirl hurls a twister.
   ED.addWeapon({
     id: 'whirlwind', name: 'Whirlwind', icon: 'weapon.alt.double_axe', sig: 'knight', mode: 'around', evolved: true, form: true, from: 'cleave', txt: 'Nonstop spins, faster while moving',
-    base: { dmg: 12, cd: 0.9, n: 1, pierce: 0, area: 1.2, speed: 0, dur: 0, knock: 150, range: 50, arc: TAU, wave: 0, stag: 0, slam: 0 },
+    base: { dmg: 8.4, cd: 0.9, n: 1, pierce: 0, area: 1.2, speed: 0, dur: 0, knock: 150, range: 50, arc: TAU, wave: 0, stag: 0, slam: 0, twist: 0.4 },
     refine: [
       { mods: { n: 1 }, txt: '+1 spin per whirl' },
       { mods: { area: 0.15 }, txt: '+15% spin size' },
@@ -167,7 +213,7 @@
   // Colossus Blade (Greatblade): one huge slow 200 deg sweep that staggers; cracks fan across it and erupt 0.3 s later.
   ED.addWeapon({
     id: 'colossus', name: 'Colossus Blade', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', evolved: true, form: true, from: 'cleave', txt: 'One giant sweep that cracks the ground',
-    base: { dmg: 58, cd: 1.8, n: 1, pierce: 0, area: 1.5, speed: 0, dur: 0, knock: 200, range: 60, arc: 3.5, wave: 0, stag: 0.5, slam: 0, cracks: 3 },
+    base: { dmg: 40.6, cd: 1.8, n: 1, pierce: 0, area: 1.5, speed: 0, dur: 0, knock: 200, range: 60, arc: 3.5, wave: 0, stag: 0.5, slam: 0, cracks: 3 },
     refine: [
       { mods: { cracks: 2 }, txt: '+2 ground cracks' },
       { mods: { area: 0.2, stag: 0.4 }, txt: '+20% sweep size, longer stagger' },
@@ -176,58 +222,73 @@
   // Rending Gale (Edge Wave): swings fling big piercing crescents that leave cutting wind lines.
   ED.addWeapon({
     id: 'gale', name: 'Rending Gale', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', evolved: true, form: true, from: 'cleave', txt: 'Big crescents that leave cutting wind',
-    base: { dmg: 20, cd: 1.3, n: 1, pierce: 0, area: 1.15, speed: 0, dur: 0, knock: 80, range: 56, arc: 2.0, wave: 3, stag: 0, slam: 0, cutT: 1.0 },
+    base: { dmg: 12.6, cd: 0.7, n: 1, pierce: 0, area: 1.15, speed: 0, dur: 0, knock: 80, range: 56, arc: 2.0, wave: 3, stag: 0, slam: 0, cutT: 1.0 },
     refine: [
       { mods: { wave: 2 }, txt: '+2 crescents' },
       { mods: { cutT: 1.0 }, txt: 'Wind cuts linger twice as long' },
     ], noAmount: true,
   }, IMPL);
-  // Earthsplitter (Greatblade + Whirl): heavy spins; every quake-th attack fissures radiate all around and the ground slams.
+  // Earthsplitter (Greatblade): heavy spins; every quake-th attack fissures radiate all around and the ground slams.
   ED.addWeapon({
     id: 'earthsplitter', name: 'Earthsplitter', icon: 'weapon.alt.double_axe', sig: 'knight', mode: 'around', evolved: true, form: true, from: 'cleave', txt: 'Heavy spins; every 3rd splits the earth',
-    base: { dmg: 25, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 160, range: 46, arc: TAU, wave: 0, stag: 0.3, slam: 0, quake: 3, fiss: 8 },
+    base: { dmg: 15, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 160, range: 46, arc: TAU, wave: 0, stag: 0.3, slam: 0, quake: 3, fiss: 8 },
     refine: [
       { mods: { fiss: 4 }, txt: '+4 fissures' },
       { mods: { quake: -1 }, txt: 'Splits the earth every 2nd spin' },
     ], noAmount: true,
   }, IMPL);
-  // Blade Tempest (Whirl + Edge Wave): each attack releases blades that spiral out around the hero (with back: a second ring turning the other way).
+  // Blade Tempest (Edge Wave): each attack releases blades that spiral out around the hero (with back: a second ring turning the other way).
   ED.addWeapon({
     id: 'tempest', name: 'Blade Tempest', icon: 'weapon.alt.double_axe', sig: 'knight', mode: 'around', evolved: true, form: true, from: 'cleave', txt: 'Blades spiral out around you',
-    base: { dmg: 11, cd: 1.2, n: 1, pierce: 0, area: 1.2, speed: 0, dur: 0, knock: 120, range: 50, arc: TAU, wave: 0, stag: 0, slam: 0, orbit: 3 },
+    base: { dmg: 7.7, cd: 1.2, n: 1, pierce: 0, area: 1.2, speed: 0, dur: 0, knock: 120, range: 50, arc: TAU, wave: 0, stag: 0, slam: 0, orbit: 3 },
     refine: [
       { mods: { orbit: 2 }, txt: '+2 spiral blades' },
       { mods: { orbit: 1, area: 0.2 }, txt: '+1 blade, +20% blade size' },
     ], noAmount: true,
   }, IMPL);
 
-  // ---------------- Q: Bulwark Shove ----------------
-  // Zero damage. Every foe within N.r px of the hero (inside its view) slides out to N.r x OUT px from it (W.push: elites half the way, bosses and knockback-immune foes stay)
-  // and is slowed N.slow for N.slowT s; stun (L3): also stunned N.stun s first. ring (L4): a ring at the shove edge holds N.ring s at the cast point; foes cannot cross it inward
-  // (W.blockZone with st.out). Zones: 'shove' (visual wave, r = shove edge), 'bulwark' (the ring, w = band width).
-  const OUT = 5 / 3;
+  // ---------------- Q: Aegis Ward ----------------
+  // Zero damage. A ward of radius N.r at the hero for N.dur s: no non-boss foe stays within N.r + its radius of the centre (each tick one inside is put on the edge and loses its inward
+  // knockback; the exclusion radius grows from 0 to N.r over SLIDE s while the cast push slides foes out: W.push, elites half, bosses and knockback-immune foes stay). Projectiles pass.
+  // follow (L5): the ward centre tracks the hero every tick (walking shoulders foes aside). Zones: 'shove' (cast wave, r = N.r), 'bulwark' (the ward, r = N.r, drawn growing over SLIDE s).
+  const SLIDE = 0.25;
+  const wardTick = (w, z) => {
+    const R = z.r * Math.min(1, z.t / SLIDE), A = w.arena, q = w.foeScan(z.x, z.y, R + 32);
+    for (let k = 0; k < q.length; k++) {
+      const e = q[k]; if (e.dead || e.boss) continue;
+      const m = R + e.r, dx = e.x - z.x, dy = e.y - z.y, d = Math.hypot(dx, dy);
+      if (d >= m) continue;
+      let ux = dx / d, uy = dy / d;
+      if (!(d > 1e-3)) { const a = e.id * 2.39996; ux = Math.cos(a); uy = Math.sin(a); }
+      e.x = z.x + ux * m; e.y = z.y + uy * m;
+      const kr = e.kbx * ux + e.kby * uy; if (kr < 0) { e.kbx -= kr * ux; e.kby -= kr * uy; }
+      ED.Arena.collide(A, e, e.r);
+    }
+    w.foeEnd();
+  };
+  // Base r 50: foes held on the edge (centre distance 50 + their radius) stay inside base Cleave reach (56 + radius from 4 px above the hero).
   ED.addSkill({
-    id: 'shove', name: 'Bulwark Shove', icon: 'shield.kite', cd: 9, txt: 'Shove the crowd away and slow it',
-    base: { r: 120, slow: 0.5, slowT: 3, stun: 0, ring: 0 },
+    id: 'shove', name: 'Aegis Ward', icon: 'shield.kite', cd: 25, txt: 'A ward the horde cannot step into',
+    base: { r: 50, dur: 6.5, follow: false },
     levels: [
-      { mods: { r: 0.3 }, txt: '+30% shove radius' },
-      { mods: { stun: 1 }, txt: 'Shoved foes are stunned 1 s' },
-      { mods: { ring: 3 }, txt: 'Leaves a ring foes cannot cross' },
+      { mods: { r: 0.2 }, txt: '+20% ward radius' },
+      { mods: { dur: 1.5 / 6.5 }, txt: 'The ward holds 1.5 s longer' },
+      { mods: { cd: -0.2 }, txt: 'Ward cooldown 25 s to 20 s' },
+      { mods: { follow: true }, txt: 'The ward moves with you' },
     ],
   }, (w, p, x, y, N) => {
-    const R = N.r, to = R * OUT, q = w.foeScan(p.x, p.y, R);
+    const R = N.r, q = w.foeScan(p.x, p.y, R + 32);
     let n = 0;
     for (let k = 0; k < q.length; k++) {
-      const e = q[k], d = Math.hypot(e.x - p.x, e.y - p.y);
-      if (e.dead || d > R + e.r || !ED.inView(p, e.x, e.y, e.r)) continue;
-      w.push(e, p.x, p.y, to - d);
-      w.slow(e, N.slow, N.slowT);
-      if (N.stun > 0) w.stun(e, N.stun);
+      const e = q[k]; if (e.dead) continue;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d >= R + e.r) continue;
+      w.push(e, p.x, p.y, R + e.r - d + 2);
       n++;
     }
     w.foeEnd();
-    w.zone({ team: 0, p, wid: 'shove', x: p.x, y: p.y, r: to, dur: 0.45, look: 'shove' });
-    if (N.ring > 0) w.zone({ team: 0, p, wid: 'shove', x: p.x, y: p.y, r: to, w: 14, dur: N.ring, look: 'bulwark', st: { out: true, lure: 0, lt: 0 }, onTick: ED.blockTick });
-    return { r: Math.round(to), n, shake: 6, stop: 0.06 };
+    w.zone({ team: 0, p, wid: 'shove', x: p.x, y: p.y, r: R, dur: 0.35, look: 'shove' });
+    w.zone({ team: 0, p, wid: 'shove', x: p.x, y: p.y, r: R, dur: N.dur, look: 'bulwark', follow: N.follow ? p.pid : '', onTick: wardTick });
+    return { r: Math.round(R), n, shake: 4, stop: 0.04 };
   });
 })(globalThis.ED || (globalThis.ED = {}));

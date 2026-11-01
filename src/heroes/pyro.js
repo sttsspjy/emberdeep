@@ -1,4 +1,4 @@
-// Pyro: hero data, signature Fire Bolt (3 paths x 3 ranks: Blaze, Mortar, Combustion), Forms Inferno / Firestorm / Wildfire (pure) and Pyre / Napalm (hybrid), Q Flashpoint (3 skill levels).
+// Pyro: hero data, signature Fire Bolt (3 paths x 3 ranks: Blaze, Mortar, Combustion), Forms Inferno (Blaze), Firestorm + Napalm (Mortar), Wildfire + Pyre (Combustion), Q Flashpoint (4 skill levels).
 // Role: area denial. Instant hits are weak; fire pools, burns and death blasts carry the damage. Every damage source credits the slot's current id (ws.id).
 // Ground fire (pools 'firepool', pyres 'pyre', fire lines 'napalm') lives in ws.st.pools (ring of live zones, refs checked by id), at most POOL_MAX + S.pools per hero; a new one past the cap ends the oldest.
 // Shared by the root and every Form (impl.tick / impl.kill): Mortar shells (S.shells, Forms with def.shellForm lob their own), death blasts of burning foes (S.combust) and fire leaps (S.spread).
@@ -8,7 +8,7 @@
   const POOL_MAX = 12, INF_R = 95, DQ_MAX = 40, RANGE = 210, SHELL_RANGE = 220;
 
   ED.regLook('firepool', 'ember', 'shell', 'bomblet', 'pyre', 'napalm', 'seed', 'flash');
-  ED.addHero({ id: 'pyro', name: 'Pyro', hp: 85, speed: 74, crit: 0.05, sig: 'firebolt', skills: ['flashpoint'], icon: 'hero.pyro.idle', col: '#ff8a3d', txt: 'Paints the ground with fire.' });
+  ED.addHero({ id: 'pyro', name: 'Pyro', hp: 100, speed: 80, crit: 0.05, sig: 'firebolt', skills: ['flashpoint'], icon: 'hero.pyro.idle', col: '#ff8a3d', txt: 'Paints the ground with fire.' });
 
   // ---------------- ground fire ----------------
   // Live ground-fire list of a slot: ws.st.pools = [zone], ws.st.ids = [id]; returns the live count after dropping dead entries.
@@ -75,12 +75,15 @@
     pool(w, p, ws, S, z.x, z.y, z.r * 0.7, S.dmg * 0.45);
     bomblets(w, p, z.wid, S, z.x, z.y, z.r, z.st);
   };
-  // Mortar emitter (root, Inferno, Wildfire, Pyre): every 2 x S.cd, S.shells shells (1.25 x dmg), the first on the densest cluster within SHELL_RANGE, the rest on random foes in view.
+  // Shell aim of hero p within range: the nearest elite or boss in view, else the densest cluster point (w.pt), else null.
+  const smallFoe = (e) => !(e.elite || e.boss);
+  const shellAim = (w, p, range) => w.heroFoe(p, range, smallFoe) || w.target('densest', p, range);
+  // Mortar emitter (root, Inferno, Wildfire, Pyre): every 2 x S.cd, S.shells shells (1.25 x dmg), the first on shellAim within SHELL_RANGE, the rest on random foes in view.
   const mortarTick = (w, p, ws, S, dt) => {
     const s = ws.st;
     s.mt = (s.mt === undefined ? 1 : s.mt) - dt;
     if (s.mt > 0) return;
-    const t = w.target('densest', p, SHELL_RANGE);
+    const t = shellAim(w, p, SHELL_RANGE);
     if (!t) { s.mt = 0.3; return; }
     s.mt = S.cd * 2;
     const tx = t.x, ty = t.y, n = S.shells | 0, r = 34 * S.area;
@@ -185,22 +188,21 @@
   };
   ED.addWeapon({
     id: 'firebolt', name: 'Fire Bolt', icon: 'weapon.firestaff', look: 'fireball', sig: 'pyro', mode: 'cursor', txt: 'Bolt that leaves a fire pool',
-    base: { dmg: 12, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 230, dur: 2.5, knock: 20, range: RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    base: { dmg: 15, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 230, dur: 2.5, knock: 20, range: RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     paths: [
-      { id: 'blaze', name: 'Blaze', form: 'inferno', ranks: [
+      { id: 'blaze', name: 'Blaze', forms: ['inferno'], ranks: [
         { mods: { area: 0.3 }, txt: 'Fire bursts and pools 30% wider' },
         { mods: { dur: 0.6, pools: 4 }, txt: 'Fire pools last 60% longer' },
         { mods: { flare: 0.8, dmg: 0.2 }, txt: 'Pools flare as they die, +20% damage' }] },
-      { id: 'mortar', name: 'Mortar', form: 'firestorm', ranks: [
-        { mods: { shells: 1 }, txt: 'Lobs a shell at the thickest crowd' },
+      { id: 'mortar', name: 'Mortar', forms: ['firestorm', 'napalm'], ranks: [
+        { mods: { shells: 1 }, txt: 'Lobs a shell at elites or crowds' },
         { mods: { shells: 1 }, txt: '+1 shell' },
         { mods: { cluster: 4 }, txt: 'Shells scatter 4 burning bomblets' }] },
-      { id: 'combust', name: 'Combustion', form: 'wildfire', ranks: [
+      { id: 'combust', name: 'Combustion', forms: ['wildfire', 'pyre'], ranks: [
         { mods: { combust: 3 }, txt: 'Burning foes explode when they die' },
         { mods: { cemb: 3 }, txt: 'Death blasts fling 3 burning embers' },
         { mods: { spread: 1, dmg: 0.1 }, txt: 'Fire leaps between foes, +10% damage' }] },
-    ],
-    hybrids: [{ need: [0, 2], form: 'pyre' }, { need: [0, 1], form: 'napalm' }],
+    ],
   }, impl((w, p, ws, S) => fan(w, p, ws, S, BOLT, 0.25)));
 
   // ---------------- Inferno (Blaze) ----------------
@@ -233,7 +235,7 @@
   const IBOLT = { look: 'fireball', onHit: infHit, onEnd: infEnd, st: null };
   ED.addWeapon({
     id: 'inferno', name: 'Inferno', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'cursor', evolved: true, form: true, from: 'firebolt', txt: 'Pools merge and spread',
-    base: { dmg: 16, cd: 1.0, n: 3, pierce: 1, area: 1.5, speed: 250, dur: 3.5, knock: 30, range: RANGE, pools: 8, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    base: { dmg: 11.2, cd: 1.0, n: 3, pierce: 1, area: 1.5, speed: 250, dur: 3.5, knock: 30, range: RANGE, pools: 8, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 1 }, txt: '+1 bolt' },
       { mods: { area: 0.25, dur: 0.3 }, txt: '+25% pool size, last 30% longer' },
@@ -241,17 +243,17 @@
   }, impl((w, p, ws, S) => fan(w, p, ws, S, IBOLT, 0.18)));
 
   // ---------------- Firestorm (Mortar) ----------------
-  // A walking salvo: S.n + S.shells shells land in a line across the densest cluster within SHELL_RANGE along the line of fire (26 px x area apart, 0.08 s apart);
+  // A walking salvo: S.n + S.shells shells land in a line across shellAim within SHELL_RANGE along the line of fire (26 px x area apart, 0.08 s apart);
   // each blasts, leaves a fire pool and scatters S.cluster bomblets. No foe: the salvo walks 120 px out along the cursor dir.
   ED.addWeapon({
     id: 'firestorm', name: 'Firestorm', icon: 'weapon.inferno', look: 'shell', sig: 'pyro', mode: 'densest', evolved: true, form: true, from: 'firebolt', shellForm: true, txt: 'A walking salvo of shells',
-    base: { dmg: 24, cd: 1.6, n: 3, pierce: 0, area: 1.2, speed: 0, dur: 2.5, knock: 100, range: SHELL_RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    base: { dmg: 16, cd: 1.6, n: 3, pierce: 0, area: 1.2, speed: 0, dur: 2.5, knock: 100, range: SHELL_RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 2 }, txt: '+2 shells per salvo' },
       { mods: { area: 0.25, cluster: 2 }, txt: 'Blasts 25% wider, +2 bomblets' },
     ],
   }, impl((w, p, ws, S) => {
-    const t = w.target('densest', p, S.range);
+    const t = shellAim(w, p, S.range);
     let tx, ty;
     if (t) { tx = t.x; ty = t.y; } else { const a = w.aimDir(p); tx = p.x + Math.cos(a) * 120; ty = p.y + Math.sin(a) * 120; }
     const a = Math.atan2(ty - p.y, tx - p.x), c = Math.cos(a), s = Math.sin(a), n = Math.max(1, (S.n | 0) + (S.shells | 0)), step = 26 * S.area, r = 34 * S.area;
@@ -277,14 +279,14 @@
   const SEED = { look: 'seed', homing: 4, onHit: seedHit, st: null };
   ED.addWeapon({
     id: 'wildfire', name: 'Wildfire', icon: 'weapon.inferno', look: 'seed', sig: 'pyro', mode: 'cursor', evolved: true, form: true, from: 'firebolt', txt: 'Fire that jumps from foe to foe',
-    base: { dmg: 16, cd: 1.0, n: 3, pierce: 0, area: 1.2, speed: 240, dur: 2.5, knock: 20, range: RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 5, cemb: 2, spread: 0, cgen: 3, bmul: 1.4 },
+    base: { dmg: 11.2, cd: 1.0, n: 3, pierce: 0, area: 1.2, speed: 240, dur: 2.5, knock: 20, range: RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 5, cemb: 2, spread: 0, cgen: 3, bmul: 1.4 },
     refine: [
       { mods: { n: 1, cemb: 1 }, txt: '+1 seed, +1 ember per blast' },
       { mods: { area: 0.3, spread: 1 }, txt: 'Blasts 30% wider, fire leaps more' },
     ],
   }, impl((w, p, ws, S) => fan(w, p, ws, S, SEED, 0.3)));
 
-  // ---------------- Pyre (Blaze + Combustion) ----------------
+  // ---------------- Pyre (Combustion) ----------------
   // Bolts plant pyres (26 px x area, smoulder 0.15 x dmg per second) that erupt after 1.2 s: a blast (1.4 x radius, dmg x (1 + S.flare / 2), burn) that leaves a 0.7 x fire pool.
   const ERUPT = { look: 'fire', burn: null, knock: 120 };
   const pyreEnd = (w, z) => {
@@ -303,16 +305,16 @@
   const PBOLT = { look: 'fireball', onHit: (w, pr, e) => plant(w, pr, e.x, e.y), onEnd: (w, pr) => plant(w, pr, pr.x, pr.y), st: null };
   ED.addWeapon({
     id: 'pyre', name: 'Pyre', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'cursor', evolved: true, form: true, from: 'firebolt', txt: 'Fire that gathers, then erupts',
-    base: { dmg: 14, cd: 1.1, n: 2, pierce: 0, area: 1.3, speed: 230, dur: 2.5, knock: 20, range: RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    base: { dmg: 9.8, cd: 1.1, n: 2, pierce: 0, area: 1.3, speed: 230, dur: 2.5, knock: 20, range: RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 1 }, txt: '+1 bolt' },
       { mods: { area: 0.3, cemb: 2 }, txt: 'Eruptions 30% wider, +2 embers' },
     ],
   }, impl((w, p, ws, S) => fan(w, p, ws, S, PBOLT, 0.45)));
 
-  // ---------------- Napalm (Blaze + Mortar) ----------------
-  // S.n + S.shells canisters lob onto the densest cluster and random foes within SHELL_RANGE (no foe: 120 px out along the cursor dir, extras fanned 0.5 rad); each splashes (26 px x area, 0.6 x dmg) and leaves a fire line
-  // (90 px x area long, 16 px x area wide, across the throw, 0.45 x dmg per second, 1.3 x S.dur s); S.cluster bomblets.
+  // ---------------- Napalm (Mortar) ----------------
+  // S.n + S.shells canisters lob onto shellAim and random foes within SHELL_RANGE (no foe: 120 px out along the cursor dir, extras fanned 0.5 rad); each splashes (26 px x area, 0.6 x dmg) and leaves a fire line
+  // (90 px x area long, 16 px x area wide, across the throw, 0.6 x dmg per second, 1.3 x S.dur s); S.cluster bomblets.
   const LINE = { team: 0, p: null, wid: '', x: 0, y: 0, r: 0, a: 0, len: 0, w: 0, dur: 0, dps: 0, tick: 0.5, burn: null, look: 'napalm', onEnd: null };
   const SPL = { look: 'fire', burn: null, knock: 60 };
   const canEnd = (w, z) => {
@@ -321,19 +323,19 @@
     w.blast(p, z.wid, z.x, z.y, 26 * S.area, z.st, SPL);
     const a = z.a + Math.PI / 2, len = 90 * S.area;
     LINE.p = p; LINE.wid = z.wid; LINE.a = a; LINE.len = len; LINE.w = 16 * S.area; LINE.x = z.x - Math.cos(a) * len / 2; LINE.y = z.y - Math.sin(a) * len / 2;
-    LINE.dur = S.dur * 1.3; LINE.dps = S.dmg * 0.45; LINE.onEnd = null;
+    LINE.dur = S.dur * 1.3; LINE.dps = S.dmg * 0.6; LINE.onEnd = null;
     ground(w, ws, S, LINE);
     bomblets(w, p, z.wid, S, z.x, z.y, 26 * S.area, z.st);
   };
   ED.addWeapon({
     id: 'napalm', name: 'Napalm', icon: 'weapon.inferno', look: 'shell', sig: 'pyro', mode: 'densest', evolved: true, form: true, from: 'firebolt', shellForm: true, txt: 'Shells that leave walls of fire',
-    base: { dmg: 16, cd: 1.4, n: 2, pierce: 0, area: 1.2, speed: 0, dur: 3, knock: 60, range: SHELL_RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
+    base: { dmg: 12.6, cd: 1.4, n: 2, pierce: 0, area: 1.2, speed: 0, dur: 3, knock: 60, range: SHELL_RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 1 }, txt: '+1 canister' },
       { mods: { area: 0.25, dur: 0.3 }, txt: 'Fire walls 25% longer, last longer' },
     ],
   }, impl((w, p, ws, S) => {
-    const t = w.target('densest', p, S.range);
+    const t = shellAim(w, p, S.range);
     let tx, ty;
     if (t) { tx = t.x; ty = t.y; } else { const a = w.aimDir(p); tx = p.x + Math.cos(a) * 120; ty = p.y + Math.sin(a) * 120; }
     const n = Math.max(1, (S.n | 0) + (S.shells | 0));
@@ -347,16 +349,10 @@
 
   // ---------------- Q: Flashpoint ----------------
   // Zero damage. A flash at the hero: every foe within N.r px (inside its view) slides N.push px away (W.push: elites half, bosses and knockback-immune foes stay) and flees from
-  // the hero for N.flee s (W.foeFlee; bosses never); gems (L4): every xp gem within N.gem px flies to the hero. Zone 'flash' (visual, r = flash radius).
-  ED.addSkill({
-    id: 'flashpoint', name: 'Flashpoint', icon: 'fx.blast.red', cd: 10, txt: 'A flash that sends the horde fleeing',
-    base: { r: 140, push: 120, flee: 2, gem: 0 },
-    levels: [
-      { mods: { r: 0.3 }, txt: '+30% flash radius' },
-      { mods: { flee: 1.5 }, txt: 'Foes flee 1.5 s longer' },
-      { mods: { gem: 200 }, txt: 'The flash pulls in gems' },
-    ],
-  }, (w, p, x, y, N) => {
+  // the hero for N.flee s (W.foeFlee; bosses never); gems (L4): every xp gem within N.gem px flies to the hero. again (L5): a second flash bursts AGAIN s later wherever the hero
+  // stands (p.fl2 = its sim time, fired by HOOK.pyro; dropped if the hero is down then). Zone 'flash' (visual, r = flash radius).
+  const AGAIN = 1;
+  const flash = (w, p, N) => {
     const R = N.r, q = w.foeScan(p.x, p.y, R);
     let n = 0;
     for (let k = 0; k < q.length; k++) {
@@ -369,6 +365,30 @@
     w.foeEnd();
     if (N.gem > 0) w.pullGems(p, p.x, p.y, N.gem);
     w.zone({ team: 0, p, wid: 'flashpoint', x: p.x, y: p.y, r: R, dur: 0.5, look: 'flash' });
-    return { r: Math.round(R), n, shake: 6, stop: 0.05 };
+    return n;
+  };
+  ED.addSkill({
+    id: 'flashpoint', name: 'Flashpoint', icon: 'fx.blast.red', cd: 10, txt: 'A flash that sends the horde fleeing',
+    base: { r: 140, push: 120, flee: 2, gem: 0, again: false },
+    levels: [
+      { mods: { r: 0.3 }, txt: '+30% flash radius' },
+      { mods: { flee: 1.5 }, txt: 'Foes flee 1.5 s longer' },
+      { mods: { gem: 200 }, txt: 'The flash pulls in gems' },
+      { mods: { again: true }, txt: 'A second flash bursts 1 s later' },
+    ],
+  }, (w, p, x, y, N) => {
+    const n = flash(w, p, N);
+    if (N.again) p.fl2 = w.time + AGAIN;
+    return { r: Math.round(N.r), n, shake: 6, stop: 0.05 };
   });
+  ED.HOOK.pyro = {
+    init(w, p) { p.fl2 = 0; },
+    tick(w, p) {
+      if (!(p.fl2 > 0) || w.time < p.fl2) return;
+      const late = w.time - p.fl2; p.fl2 = 0;
+      if (late > 0.1 || !w.alive(p)) return;
+      const i = p.skills.findIndex(sk => sk.id === 'flashpoint'); if (i < 0) return;
+      w.vclamp = p; flash(w, p, w.skillN(p, i)); w.vclamp = null;
+    },
+  };
 })(globalThis.ED || (globalThis.ED = {}));

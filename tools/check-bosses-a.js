@@ -1,7 +1,10 @@
 // Headless check for bosses warden, spore, twins (exit 1 on failure). Usage: node tools/check-bosses-a.js
 // Per boss: spawned at its stage minute over a live horde vs a scripted hero (circles it, dashes, picks cards; HP kept topped up) for 60 s (keeps 220 px off the warden 8-18 s), HP forced through every phase:
 // no exceptions, every attack key used, phase events, foe telegraphs >= 0.6 s, normal spawns at 50% while it lives, deterministic digest, client draw hooks run on a mock batch.
-// Then killable with a cheat build (might x60): one 'boss' phase -1 event, a chest drops, w.boss clears. Twins: a fallen twin rises after its revive circle; both down ends the fight.
+// Then killable with a cheat build (might x60, Cleave with Edge Wave at rank 5): one 'boss' phase -1 event, a chest drops, w.boss clears (twins also as the Abyss 15:00 mid-boss: two halves of 13000 x stage HP).
+// Twins: a fallen twin rises after its revive circle; both down ends the fight.
+// Last Light (final boss kill at 20:00 over a live horde): 'victory', foes cleared, gems sent to heroes, a level-up pause holds the clock, no spawns in the calm, the lap floods to the hard cap
+// (no elites, bosses, chests, gems or XP), one coin per C.LAP.coin hero kills, the timer ends the run won, same seed same digest; every co-op hero down mid-lap or a solo death in the calm ends it won.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
@@ -40,14 +43,14 @@ function fight(o) {
   const w = new ED.World({ seed: o.seed || 4242, stage: o.stage, players: players(o.cls || ['knight']), cheats: o.cheats || { might: 0.05 } }); // behaviour fights: the hero chips, scripted HP drives phases
   const T = o.minute * 60, out = { w, ctx: null, err: null, minTele: Infinity, phases: [], ends: 0, falls: 0, rises: 0, hurts: 0, digest: 0, chest: false, half: null, st3: 0, carpet: 0, slowed: 0, pods: 0, boss: null, endT: -1, swords: 0, combos: 0 };
   try {
-    w.time = T; w.sp.bossI = 99; w.sp.swarmT = T + 90; w.sp.eliteT = T + 60;
+    w.time = T; w.sp.bossI = 99; w.sp.swarmT = T + 90; w.sp.flockT = T + 90; w.sp.eliteT = T + 60;
     for (let i = 0; i < 300; i++) w.update(C.TICK); // horde warm-up
     w.events.length = 0;
     const e = out.boss = w.spawnBoss({ t: T, id: o.id });
     // 50% spawn rate while the boss lives: one 1 s spawner step at an alive cap of 0
     const acc0 = w.sp.acc; w.sp.acc = 0; w.aliveCap = () => 0; w.updateSpawner(1); const row = w.timelineRow();
     out.half = Math.abs(w.sp.acc - Math.min(10, row.rate * (1 + 0.25 * (w.partyN - 1)) * 0.5)) < 1e-6; delete w.aliveCap; w.sp.acc = acc0;
-    const start = w.time, ctx = out.ctx = { e };
+    const start = w.time, ctx = out.ctx = { e, hp: w.bossList.map(b => b.maxHp) };
     for (let tick = 0; w.time - start < (o.len || 60) && w.state === 'play'; tick++) {
       const far = o.away && w.time - start >= o.away[0] && w.time - start < o.away[1] ? 220 : 0;
       for (const p of w.heroes) { drive(w, p, tick, w.boss || e, far); if (!o.mortal && !w.cheats.god && p.hp < HUGE / 2) { p.maxHp = HUGE; p.hp = HUGE; } }
@@ -86,7 +89,7 @@ const t0 = Date.now();
 reset();
 const wdO = { id: 'warden', stage: 0, minute: 5, away: [8, 18], phaseAt: [[20, 0.6], [38, 0.3]] }, wd = fight(wdO), wdN = cover(wdO, ['warden']);
 ok(!wd.err, 'warden: 60 s throws nothing' + (wd.err ? ': ' + wd.err.stack : ''));
-ok(wd.boss && wd.boss.maxHp === 1500, 'warden: HP 1500 x (5 min / 5)^2.5 = 1500 (' + (wd.boss && wd.boss.maxHp) + ')');
+ok(wd.boss && wd.boss.maxHp === 5000, 'warden: HP 5000 at 5:00 (' + (wd.boss && wd.boss.maxHp) + ')');
 ok(allUsed('warden').length === 0, 'warden: every attack used within ' + wdN + ' fight(s) ' + JSON.stringify(used.warden));
 ok(wd.phases.join() === '2,3', 'warden: phases 2, 3 (' + wd.phases.join() + ')');
 ok(wd.st3 > 0, 'warden: punish window opened after a slam (' + wd.st3 + ' ticks)');
@@ -101,7 +104,7 @@ ok(wd.digest === wd2.digest, `warden: deterministic (${wd.digest} / ${wd2.digest
 reset();
 const spO = { id: 'spore', stage: 0, minute: 10, phaseAt: [[25, 0.6], [42, 0.3]] }, sp = fight(spO), spN = cover(spO, ['spore']);
 ok(!sp.err, 'spore: 60 s throws nothing' + (sp.err ? ': ' + sp.err.stack : ''));
-ok(sp.boss && sp.boss.maxHp === 8485, 'spore: HP 1500 x (10 min / 5)^2.5 = 8485 (' + (sp.boss && sp.boss.maxHp) + ')');
+ok(sp.boss && sp.boss.maxHp === 9000, 'spore: HP 9000 at 10:00 (' + (sp.boss && sp.boss.maxHp) + ')');
 ok(allUsed('spore').length === 0, 'spore: every attack used within ' + spN + ' fight(s) ' + JSON.stringify(used.spore));
 ok(sp.phases.join() === '2,3', 'spore: phases 2, 3 (' + sp.phases.join() + ')');
 ok(sp.pods === 4, 'spore: 4 pods rose (' + sp.pods + ')');
@@ -134,7 +137,7 @@ const twO = {
   },
 }, tw = fight(twO), twN = cover(twO, ['twins', 'twinhammer']);
 ok(!tw.err, 'twins: 75 s throws nothing' + (tw.err ? ': ' + tw.err.stack : ''));
-ok(tw.w.bossList.length === 2 && tw.w.bossList.every(b => b.maxHp === Math.round(Math.round(1500 * ED.STAGES[1].foe.hp) / 2)), 'twins: two bodies sharing the 5:00 boss HP (1500 x stage HP factor) half and half (' + tw.w.bossList.map(b => b.maxHp).join(' / ') + ')');
+ok(tw.w.bossList.length === 2 && tw.w.bossList.every(b => b.maxHp === Math.round(Math.round(5000 * ED.STAGES[1].foe.hp) / 2)), 'twins: two bodies sharing the 5:00 boss HP (5000 x stage HP factor) half and half (' + tw.w.bossList.map(b => b.maxHp).join(' / ') + ')');
 ok(allUsed('twins').length === 0, 'twins: every Lancer attack used within ' + twN + ' fight(s) ' + JSON.stringify(used.twins));
 ok(allUsed('twinhammer').length === 0, 'twins: every Hammer attack used within ' + twN + ' fight(s) ' + JSON.stringify(used.twinhammer));
 ok(tw.phases.join() === '2', 'twins: one phase-2 event at half combined HP (' + tw.phases.join() + ')');
@@ -146,8 +149,10 @@ ok(tw.half, 'twins: normal spawns at 50% while they live');
 ok(tw.w.bossBar.on && tw.w.bossBar.name === 'The Twins' && tw.w.bossBar.n === 2, 'twins: boss bar data (' + JSON.stringify(tw.w.bossBar) + ')');
 
 // ---------- killable with a cheat build ----------
-for (const [id, stage, minute] of [['warden', 0, 5], ['spore', 0, 10], ['twins', 1, 5]]) {
-  const r = fight({ id, stage, minute, cls: ['knight'], cheats: { god: true, might: 60 }, len: 90, stop: (w, out) => out.ends > 0 && w.time > 0 });
+for (const [id, stage, minute] of [['warden', 0, 5], ['spore', 0, 10], ['twins', 1, 5], ['twins', 2, 15]]) {
+  const r = fight({ id, stage, minute, cls: ['knight'], cheats: { god: true, might: 60 }, len: 90, stop: (w, out) => out.ends > 0 && w.time > 0,
+    script: (w, ctx, tick) => { if (!tick) w.setRanks(w.heroes[0], w.heroes[0].weapons[0], ED.TUNE_MAX, 2, ED.PATH_MAX); } }); // Edge Wave 5: crescents reach the boss from the kite distance
+  if (minute === 15) { const half = Math.round(ED.bossHp(900, ED.STAGES[stage].foe.hp) / 2), hp = r.ctx ? r.ctx.hp : []; ok(hp.length === 2 && hp.every(v => v === half), `twins at 15:00 on ${ED.STAGES[stage].id}: two bodies of ${half} HP (${hp.join(' / ')})`); }
   ok(!r.err, id + ': cheat kill throws nothing' + (r.err ? ': ' + r.err.stack : ''));
   ok(r.ends === 1 && r.chest && !r.w.boss && r.w.bossList.length === 0 && !r.w.bossBar.on, `${id}: killable with might x60 (ends ${r.ends}, chest ${r.chest}, at ${r.endT.toFixed(1)} s)`);
   ok(!r.w.zones.some(z => z.team === 1 && z.src && z.src.boss && !z.dead) && !r.w.projs.some(pr => pr.team === 1 && pr.e && pr.e.boss && !pr.dead), id + ': its shots and telegraphs vanish with it');
@@ -160,6 +165,70 @@ for (const [id, stage, minute] of [['warden', 0, 5], ['spore', 0, 10], ['twins',
     if (Math.abs(t - 8) < C.TICK / 2) { const b = P.H; if (!b.dead) slay(w, b); }
   } });
   ok(!r.err && r.ends === 1 && r.falls === 1 && r.rises === 0 && r.chest, `twins: both down inside the revive window ends the fight (ends ${r.ends}, falls ${r.falls}, rises ${r.rises}, chest ${r.chest})`);
+}
+// ---------- Last Light: the final boss's death banks the win, a 2 s calm, a 60 s lap at the lap cap with coins instead of gems, then the run ends won ----------
+// o: { seed, party, cheats, script(w, out, t, tick) (each tick; t = s since the kill), pend (a level-up queued before the kill: the solo game pauses on it, picked 30 ticks later) }.
+function lapRun(o) {
+  const w = new ED.World({ seed: o.seed || 31, stage: 0, players: players(o.party || ['knight']), cheats: o.cheats || { god: true, might: 3 } }), L = C.LAP;
+  const out = { w, err: null, victory: 0, lapEv: [], ends: 0, endEv: null, foesAfterKill: -1, gemsLeft: -1, calmFoes: 0, calmT: 0, xpLap: null, gemsLap: 0, elites: 0, bosses: 0, chests: 0, peak: 0, coins: 0, digest: 0, paused: 0 };
+  try {
+    const T = 1200;
+    w.time = T; w.sp.bossI = 99; w.sp.swarmT = T + 90; w.sp.flockT = T + 90; w.sp.eliteT = T + 60;
+    for (let i = 0; i < 240; i++) { for (const p of w.heroes) drive(w, p, i, null); w.update(C.TICK); }
+    for (let i = 0; i < 6; i++) w.dropGem(w.heroes[0].x + 300 + i * 40, w.heroes[0].y, 5); // gems on the ground, outside pickup reach
+    w.events.length = 0;
+    const e = w.spawnBoss({ t: T, id: 'hollow', final: true }), p0 = w.heroes[0];
+    if (o.pend) p0.pend++;
+    const dc = w.dropCoin; w.dropCoin = function (x, y, v) { out.coins++; return dc.call(this, x, y, v); };
+    const sp = w.spawnPickup; w.spawnPickup = function (k, x, y, v) { if (k === 'chest' && this.lap) out.chests++; return sp.call(this, k, x, y, v); };
+    w.killFoe(e, w.src(p0, 'test'));
+    out.victory = w.events.filter(ev => ev.t === 'victory').length;
+    out.foesAfterKill = w.foes.filter(f => !f.dead).length;
+    out.gemsLeft = w.pickups.filter(g => !g.dead && g.k.startsWith('xp') && !g.pull).length;
+    const k0 = w.time;
+    for (let tick = 0; w.state === 'play' && tick < 80 * 60; tick++) {
+      const t = w.time - k0;
+      for (const p of w.heroes) drive(w, p, tick, null);
+      if (o.pend && tick < 30) p0.in.pick = 0;
+      if (o.script) o.script(w, out, t, tick);
+      const tt = w.time;
+      w.update(C.TICK);
+      if (w.time === tt) out.paused++;
+      const lp = w.lap;
+      if (lp && !lp.ph) { out.calmFoes = Math.max(out.calmFoes, w.foes.length); out.calmT = w.time - k0; }
+      if (lp && lp.ph && w.state === 'play') {
+        if (out.xpLap === null) out.xpLap = w.xp + w.level * 1e9;
+        else if (out.xpLap !== w.xp + w.level * 1e9) out.xpLap = -1;
+        let gems = 0; for (const g of w.pickups) if (!g.dead && g.k.startsWith('xp')) gems++;
+        out.gemsLap = Math.max(out.gemsLap, gems);
+        out.peak = Math.max(out.peak, w.foes.length);
+        for (const f of w.foes) { if (f.elite) out.elites++; if (f.boss) out.bosses++; }
+      }
+      for (const ev of w.events) { if (ev.t === 'lap') out.lapEv.push(ev.ph + '@' + (w.time - k0).toFixed(2)); else if (ev.t === 'end') { out.ends++; out.endEv = ev; } }
+      w.events.length = 0;
+      if (tick % 60 === 0) out.digest = (Math.imul(out.digest, 31) + U.hashStr([w.tick, w.kills, w.foes.length, w.gold, w.lap ? w.lap.kills + ',' + w.lap.gold : '', w.heroes[0].x.toFixed(2)].join('|'))) >>> 0;
+    }
+    out.endT = w.time - k0;
+  } catch (err) { out.err = err; }
+  return out;
+}
+{
+  const L = C.LAP, r = lapRun({ pend: true }), r2 = lapRun({ pend: true }), w = r.w, lp = w.lap;
+  ok(!r.err, 'Last Light: solo lap throws nothing' + (r.err ? ': ' + r.err.stack : ''));
+  ok(r.victory === 1 && w.won && r.foesAfterKill === 0 && r.gemsLeft === 0, `Last Light: the kill banks the win, emits 'victory', clears every foe and sends every gem to a hero (victory ${r.victory}, foes ${r.foesAfterKill}, free gems ${r.gemsLeft})`);
+  ok(r.paused > 0 && r.calmFoes === 0 && Math.abs(r.calmT - L.calm) < 0.05 && Math.abs(parseFloat(r.lapEv[0].slice(2)) - L.calm) < 0.05 && r.lapEv[0][0] === '1', `Last Light: the solo level-up pause holds the clock (${r.paused} ticks), no spawns during the ${L.calm} s calm, the lap starts after it (${r.lapEv.join(', ')})`);
+  ok(r.xpLap !== -1 && r.gemsLap === 0, `Last Light: no XP and no gems during the lap (xp/level unchanged: ${r.xpLap !== -1}, gems on the ground ${r.gemsLap})`);
+  ok(r.peak >= w.lapCap() - 20 && r.peak <= w.lapCap() && w.lapCap() === Math.min(900, Math.round(w.sdef.timeline[w.sdef.timeline.length - 1].cap * L.cap)) && r.elites === 0 && r.bosses === 0 && r.chests === 0, `Last Light: the horde floods to the lap cap (peak ${r.peak} / ${w.lapCap()}), no elites (${r.elites}), bosses (${r.bosses}) or chests (${r.chests})`);
+  ok(lp && lp.kills >= L.coin && r.coins === Math.floor(lp.kills / L.coin) && lp.gold > 0, `Last Light: one coin per ${L.coin} hero kills (${lp && lp.kills} kills, ${r.coins} coins, ${lp && lp.gold} gold collected)`);
+  ok(w.state === 'won' && r.ends === 1 && r.endEv.summary.won && Math.abs(r.endT - L.calm - L.dur) < 0.05 && r.lapEv[1] === '2@' + r.endT.toFixed(2) && w.foes.every(f => f.dead) && lp.t0 > 0 && lp.dur === L.dur,
+    `Last Light: the timer ends the run as a win (state ${w.state}, ends ${r.ends}, at ${r.endT.toFixed(2)} s after the kill, events ${r.lapEv.join(', ')}; w.lap kept)`);
+  ok(!r2.err && r2.digest === r.digest, `Last Light: same seed, same digest (${r.digest} / ${r2.digest})`);
+  // co-op: every hero down during the lap ends the run as a win at once
+  const c = lapRun({ party: ['knight', 'ranger'], cheats: { might: 3 }, script: (w, out, t) => { for (const p of w.heroes) { p.hp = Math.max(p.hp, 50); if (t >= L.calm + 5 && !p.downed && !p.dead) w.heroDown(p); } } });
+  ok(!c.err && c.w.state === 'won' && c.ends === 1 && c.endT > L.calm + 5 && c.endT < L.calm + 5.2 && c.w.heroes.every(p => p.downed), `Last Light: co-op, every hero down mid-lap -> won at once (state ${c.w.state}, ${c.endT.toFixed(2)} s after the kill)` + (c.err ? ': ' + c.err.stack : ''));
+  // solo: a hero dying in the calm still wins
+  const d = lapRun({ cheats: { might: 3 }, script: (w, out, t) => { const p = w.heroes[0]; if (t >= 1 && !p.dead) w.heroDown(p); else p.hp = Math.max(p.hp, 50); } });
+  ok(!d.err && d.w.state === 'won' && d.ends === 1 && d.endT < L.calm, `Last Light: solo death during the calm -> won (state ${d.w.state}, ${d.endT.toFixed(2)} s after the kill)` + (d.err ? ': ' + d.err.stack : ''));
 }
 ok(calls.n > 1000, 'client hooks drew on the mock batch (' + calls.n + ' calls)');
 console.log('check-bosses-a: ' + (fails ? fails + ' failed' : 'all passed') + ' in ' + ((Date.now() - t0) / 1000).toFixed(1) + ' s');

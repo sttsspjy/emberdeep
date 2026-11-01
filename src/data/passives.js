@@ -7,7 +7,7 @@
   add('might', 'Might', { might: 0.10 }, '+10% damage');
   add('haste', 'Haste', { haste: 0.08 }, '-8% weapon cooldown');
   add('reach', 'Reach', { reach: 0.10 }, '+10% area');
-  add('velocity', 'Velocity', { velocity: 0.15 }, '+15% projectile speed and range');
+  add('velocity', 'Velocity', { velocity: 0.2 }, '+20% projectile speed and range');
   add('duration', 'Duration', { duration: 0.12 }, '+12% effect duration');
   add('multishot', 'Multishot', { amount: [0, 1, 1, 2, 2] }, '+1 projectile at levels 2 and 4',
     ['Levels 2 and 4: +1 projectile', '+1 projectile on every weapon', 'Level 4: +1 more projectile', '+1 projectile on every weapon', 'Max level']);

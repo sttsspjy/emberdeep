@@ -34,13 +34,13 @@
   let inBurst = false; // kill bursts never chain
 
   // ---------------- Censer / Holy Censer ----------------
-  // Aura of S.rad x area px around the hero; every cd a pulse hits every foe inside (S.dmg, no event): slowK slows (for cd + 0.3 s), push knocks out, burn sets foes burning
+  // Aura of S.rad x area px around the hero; every cd a pulse hits every foe inside (S.dmg, no event), knocks them out by S.push and staggers them (stun STAG s): slowK slows (for cd + 0.3 s), burn sets foes burning
   // (S.dmg x burn per s, 2 s). ward: every 3rd pulse also blasts a push ring (look cward, knock 240, stun 0.3 s). embers: each pulse drops that many burning patches (look cember,
   // 12 x area px, 2.5 s, 80% damage per s) at random points inside. swing: censers orbit at 0.8 R (angle SWING_W x aura age + i x TAU / n; the client draws it from the zone's t),
   // each a 12 x area px hit every 0.2 s at 50% damage. burst (kill hook): a foe burning from the holder bursts on death (24 x area px, 60% damage, burns).
   // Holy Censer: kills inside the aura heal the holder 1 HP each, at most S.heal HP/s (allies: living allies inside heal too).
-  const SWING_W = 3.2;
-  const PULSE = { noEv: true, knock: 0, slow: null, burn: null };
+  const SWING_W = 3.2, STAG = 0.1;
+  const PULSE = { noEv: true, knock: 0, stun: STAG, slow: null, burn: null };
   const WARD = { noEv: true, knock: 240, stun: 0.3, slow: null };
   const SWING = { noEv: true, knock: 60 };
   const BURST = { look: 'fire', knock: 40, burn: null };
@@ -87,27 +87,26 @@
   };
   ED.addWeapon({
     id: 'censer', name: 'Censer', icon: 'shield.gold', look: 'censer', support: true, role: 'horde', mode: 'around', txt: 'A smoking aura burns foes near you', noAmount: true,
-    base: { dmg: 3, cd: 0.7, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 0, range: 0, rad: 40, swing: 0, push: 0, slowK: 0, ward: 0, burn: 0, embers: 0, burst: 0, heal: 0 },
+    base: { dmg: 8, cd: 0.7, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 0, range: 0, rad: 52, swing: 0, push: 50, slowK: 0, ward: 0, burn: 0, embers: 0, burst: 0, heal: 0 },
     paths: [
-      { id: 'size', name: 'Size', form: 'holycenser', ranks: [
+      { id: 'size', name: 'Size', forms: ['holycenser'], ranks: [
         { mods: { area: 0.2 }, txt: 'Aura 20% wider' },
         { mods: { swing: 1 }, txt: 'A censer swings around you' },
         { mods: { area: 0.2, swing: 1 }, txt: 'Aura 20% wider, +1 swinging censer' }] },
-      { id: 'ward', name: 'Ward', form: 'holycenser', ranks: [
+      { id: 'ward', name: 'Ward', forms: ['holycenser'], ranks: [
         { mods: { slowK: 0.25 }, txt: 'Foes in the aura slow 25%' },
-        { mods: { push: 60, dmg: 0.2 }, txt: 'Pulses push foes out, +20% damage' },
+        { mods: { push: 60, dmg: 0.2 }, txt: 'Pulses push harder, +20% damage' },
         { mods: { ward: 1 }, txt: 'Every 3rd pulse blasts foes back' }] },
-      { id: 'embers', name: 'Embers', form: 'holycenser', ranks: [
+      { id: 'embers', name: 'Embers', forms: ['holycenser'], ranks: [
         { mods: { burn: 0.4 }, txt: 'Pulses set foes burning' },
         { mods: { embers: 1 }, txt: 'Each pulse drops a burning ember' },
         { mods: { burst: 1 }, txt: 'Burning foes burst when slain' }] },
     ],
-    hybrids: [],
   }, { tick: (w, p, ws, S, dt) => censerTick(w, p, ws, S, dt, 'censer'), fire: censerFire, kill: censerKill });
   ED.addWeapon({
     id: 'holycenser', name: 'Holy Censer', icon: 'fx.burst', look: 'holycenser', support: true, role: 'horde', mode: 'around', evolved: true, form: true, from: 'censer',
     txt: 'Kills in the aura heal you', noAmount: true,
-    base: { dmg: 6, cd: 0.55, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 0, range: 0, rad: 60, swing: 0, push: 110, slowK: 0.2, heal: 3 },
+    base: { dmg: 10, cd: 0.55, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 0, range: 0, rad: 60, swing: 0, push: 110, slowK: 0.2, heal: 3 },
     refine: [
       { mods: { area: 0.2 }, txt: 'Holy aura 20% wider' },
       { mods: { heal: 2, allies: true }, txt: 'Heals allies too, up to 5 HP/s' },
@@ -168,22 +167,21 @@
   };
   ED.addWeapon({
     id: 'lanterns', name: 'Orbit Lanterns', icon: 'weapon.lantern', look: 'lantern', support: true, role: 'horde', mode: 'around', txt: 'Lanterns circle you, striking foes',
-    base: { dmg: 3, cd: 1, n: 3, pierce: 0, area: 1, speed: 1.7, dur: 0, knock: 70, range: 0, rad: 40, rehit: 0.4, ring2: 0, breathe: 0, flare: 0, flareR: 16, flareSlow: 0 },
+    base: { dmg: 5, cd: 1, n: 3, pierce: 0, area: 1, speed: 1.7, dur: 0, knock: 70, range: 0, rad: 40, rehit: 0.4, ring2: 0, breathe: 0, flare: 0, flareR: 16, flareSlow: 0 },
     paths: [
-      { id: 'count', name: 'Count', form: 'sunwheel', ranks: [
+      { id: 'count', name: 'Count', forms: ['sunwheel'], ranks: [
         { mods: { n: 1 }, txt: '+1 lantern' },
         { mods: { n: 1 }, txt: '+1 lantern' },
         { mods: { n: 1 }, txt: '+1 lantern' }] },
-      { id: 'radius', name: 'Radius', form: 'sunwheel', ranks: [
+      { id: 'radius', name: 'Radius', forms: ['sunwheel'], ranks: [
         { mods: { rad: 14, area: 0.15 }, txt: 'Wider orbit, bigger lanterns' },
         { mods: { ring2: 1 }, txt: 'An outer ring spins the other way' },
         { mods: { breathe: 1 }, txt: 'Rings swing in and out' }] },
-      { id: 'flare', name: 'Flare', form: 'sunwheel', ranks: [
+      { id: 'flare', name: 'Flare', forms: ['sunwheel'], ranks: [
         { mods: { flare: 1 }, txt: 'Lanterns burst on hit' },
         { mods: { flareSlow: 1, dmg: 0.2 }, txt: 'Bursts slow foes, +20% damage' },
         { mods: { flareR: 8 }, txt: 'Bursts 50% wider' }] },
     ],
-    hybrids: [],
   }, {
     tick(w, p, ws, S) { keepRing(w, p, ws, S, 'lantern', 1); },
     fire() { return false; }, // the ring is kept by tick
@@ -191,7 +189,7 @@
   ED.addWeapon({
     id: 'sunwheel', name: 'Sun Wheel', icon: 'fxbig.firespin', look: 'sunlantern', support: true, role: 'horde', mode: 'around', evolved: true, form: true, from: 'lanterns',
     txt: 'A burning wheel of suns flares out',
-    base: { dmg: 2.4, cd: 1.8, n: 4, pierce: 0, area: 1, speed: 1.4, dur: 0, knock: 90, range: 0, rad: 60, rehit: 0.4, burn: 1, flareR: 26 },
+    base: { dmg: 5, cd: 1.8, n: 4, pierce: 0, area: 1, speed: 1.4, dur: 0, knock: 90, range: 0, rad: 60, rehit: 0.4, burn: 1, flareR: 26 },
     refine: [
       { mods: { n: 2 }, txt: '+2 suns on the wheel' },
       { mods: { cd: -0.35 }, txt: 'The wheel flares 35% more often' },
@@ -268,20 +266,19 @@
     id: 'meteorcall', name: 'Meteor Call', icon: 'proj.fireball', look: 'meteor', support: true, role: 'horde', mode: 'random', txt: 'Meteors fall on foes near you',
     base: { dmg: 10, cd: 2.4, n: 3, pierce: 0, area: 1, speed: 0, dur: 2, knock: 140, range: 420, fall: 0.7, size: 22, dense: 0, crater: 0, craterK: 0, erupt: 0, shower: 0, shards: 0 },
     paths: [
-      { id: 'volley', name: 'Volley', form: 'starfall', ranks: [
+      { id: 'volley', name: 'Volley', forms: ['starfall'], ranks: [
         { mods: { n: 1 }, txt: '+1 meteor' },
         { mods: { n: 1 }, txt: '+1 meteor' },
         { mods: { dense: 1 }, txt: 'One meteor hits the densest pack' }] },
-      { id: 'crater', name: 'Crater', form: 'starfall', ranks: [
+      { id: 'crater', name: 'Crater', forms: ['starfall'], ranks: [
         { mods: { crater: 1 }, txt: 'Impacts leave burning ground' },
         { mods: { craterK: 0.3, dur: 0.5 }, txt: 'Craters 30% wider, 50% longer' },
         { mods: { erupt: 1 }, txt: 'Craters erupt again as they fade' }] },
-      { id: 'shower', name: 'Shower', form: 'starfall', ranks: [
+      { id: 'shower', name: 'Shower', forms: ['starfall'], ranks: [
         { mods: { shower: 1 }, txt: 'Small meteors fall between volleys' },
         { mods: { shower: 1 }, txt: 'Twice the small meteors' },
         { mods: { shards: 1 }, txt: 'Impacts throw ember shards' }] },
     ],
-    hybrids: [],
   }, {
     tick: showerTick,
     fire(w, p, ws, S) {
@@ -406,22 +403,21 @@
   ED.addWeapon({
     id: 'frostring', name: 'Frost Ring', icon: 'fx.ice.burst', look: 'frostring', support: true, role: 'control', mode: 'around', txt: 'A ring of frost slows foes near you',
     noAmount: true,
-    base: { dmg: 3, cd: 2.4, n: 1, pierce: 0, area: 1, speed: 0, dur: 1.5, knock: 70, range: 0, rad: 60, exp: 0.45, slowK: 0.4, shards: 0, frost: 0, freezeEv: 0, shatter: 0 },
+    base: { dmg: 8, cd: 2, n: 1, pierce: 0, area: 1, speed: 0, dur: 1.5, knock: 70, range: 0, rad: 60, exp: 0.45, slowK: 0.4, shards: 0, frost: 0, freezeEv: 0, shatter: 0 },
     paths: [
-      { id: 'reach', name: 'Reach', form: 'glacier', ranks: [
+      { id: 'reach', name: 'Reach', forms: ['glacier'], ranks: [
         { mods: { area: 0.2 }, txt: 'Rings 20% wider' },
         { mods: { area: 0.25 }, txt: 'Rings 25% wider' },
         { mods: { shards: 1 }, txt: 'Full rings burst into ice shards' }] },
-      { id: 'chill', name: 'Chill', form: 'glacier', ranks: [
+      { id: 'chill', name: 'Chill', forms: ['glacier'], ranks: [
         { mods: { frost: 1.5 }, txt: 'Rings leave frost that slows' },
         { mods: { n: 1 }, txt: 'A second ring follows the first' },
         { mods: { slowK: 0.2, frost: 1.5 }, txt: 'Slow 60%, frost lasts twice as long' }] },
-      { id: 'shatter', name: 'Shatter', form: 'glacier', ranks: [
+      { id: 'shatter', name: 'Shatter', forms: ['glacier'], ranks: [
         { mods: { freezeEv: 3 }, txt: 'Every 3rd ring freezes foes' },
         { mods: { shatter: 0.5 }, txt: 'A shatter ring breaks the frozen: +50%' },
         { mods: { freezeEv: -1 }, txt: 'Every 2nd ring freezes foes' }] },
     ],
-    hybrids: [],
   }, ringVolley);
   ED.addWeapon({
     id: 'glacier', name: 'Glacier', icon: 'fxbig.freezing', look: 'glacier', support: true, role: 'control', mode: 'around', evolved: true, form: true, from: 'frostring',

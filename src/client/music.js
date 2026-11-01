@@ -1,7 +1,7 @@
 // Synthesized adaptive music (no audio files). ED.Music drives a sequencer engine (Score, ported from the legacy score) on the music bus of ED.Audio.
-// Tracks: 'title' (menus), 'run<n>' per stage, 'boss<n>' and 'final<n>' (the final boss); theme n: 1 Ossuary, 2 Glowmire, 4 Abyss (by ED.STAGES id). A switch lands on the next bar
+// Tracks: 'title' (menus), 'run<n>' per stage, 'boss<n>' and 'final<n>' (the final boss), 'sanctum' (view.sanctum set); theme n: 1 Ossuary, 2 Glowmire, 4 Abyss, 5 Wickdeep (by ED.STAGES id). A switch lands on the next bar
 // while the old track fades over a bar. Level 0..3 sets the layer mix (pad, arp, bass, drums, perc, lead): in a run from the alive foe count (60 / 220 / 480), at least 1 from minute 8,
-// raised for 8-12 s by swarm / elite / boss warnings; during a boss from its HP (above 66% 1, above 33% 2, else 3; enraged 3). Rises at once, falls one step after 4 s lower.
+// raised for 8-12 s by swarm / elite / boss warnings; during a boss from its HP (above 66% 1, above 33% 2, else 3; enraged 3); the Last Light (view.lap calm and lap) plays the final track at 3. Rises at once, falls one step after 4 s lower.
 // Hero HP under 30% muffles the music and beats a heart; downed muffles harder; the solo pause muffles. Stingers: a mid-boss killed, victory, defeat (then the menu track).
 // Cost: notes are scheduled from a 100 ms timer 0.4 s ahead; ED.Music.update(view, dt) per frame only reads counts.
 (function (ED) {
@@ -34,11 +34,12 @@
   // kind calm | run | boss (level table) · S steps (16ths) per bar · root MIDI tonic · scale semitones · prog 8 bars [offset, chord] · lead.m motif [step, scale degree, steps] over two bars (developed per 8-bar cycle)
   // arp.p pattern over chord tones seq (index >= chord size = octave up) · bass.p / drums / perc patterns (x X o g hit, . rest; an array is per bar of the 8-bar cycle, or alternates) · drums / perc entries [voice, pattern, min level]
   // stab chord stab at each bar start from level stab.lv · amb ambience of the pad layer · drive bass distortion · pump sidechain duck of pad and arp per kick · g layer gains · rev / dly sends · lp tone cutoff · sparse explore lead (phrases 1 and 3 rest)
-  const AEO = [0, 2, 3, 5, 7, 8, 10], DOR = [0, 2, 3, 5, 7, 9, 10], LOC = [0, 1, 3, 5, 6, 8, 10];
+  const AEO = [0, 2, 3, 5, 7, 8, 10], DOR = [0, 2, 3, 5, 7, 9, 10], LOC = [0, 1, 3, 5, 6, 8, 10], PHD = [0, 1, 4, 5, 7, 8, 10], HMIN = [0, 2, 3, 5, 7, 8, 11];
   const THEME = {
     1: [[0, 4, 6], [6, 3, 2], [8, 2, 4], [16, 1, 4], [20, 0, 12]],
     2: [[0, 4, 2], [2, 2, 2], [4, 0, 2], [6, 2, 2], [8, 4, 2], [10, 5, 2], [12, 4, 2], [14, 6, 4], [18, 5, 2], [20, 4, 2], [22, 2, 6]],
     4: [[0, 0, 8], [8, 3, 6], [14, 2, 4], [18, 1, 2], [20, 0, 12]],
+    5: [[0, 0, 3], [3, 1, 3], [6, 2, 2], [8, 1, 6], [16, 4, 3], [19, 5, 3], [22, 4, 2], [24, 1, 8]],
   };
   const COMBAT = {
     1: { id: 'ossuary-c', bpm: 132, root: 45, scale: AEO, lp: 9000, rev: 0.22, dly: 0.75, dsend: 0.16, drive: 2.5, pump: 0.45,
@@ -59,6 +60,12 @@
       bass: { v: 'reese', oct: 0, p: bars('1.1.1.1.1.1.t.1.', null, '1.1.1.1.t.t.b.b.') },
       drums: [['kick', bars('x...x...x...x.x.', null, 'x...x...x.x.xxxx')], ['clap', '....x.......x...'], ['snare', bars('....x.......x...', '....x.......x.xx', '....x...x.xxXXXX')], ['hat', 'xxoxxxoxxxoxxxox'], ['crash', once('X...............')]],
       perc: [['anvil', '..x.......x.....'], ['ohat', '......o.......o.', 1], ['taiko', 'X.......X.......', 2]], g: { pad: 1.5 } },
+    5: { id: 'wickdeep-c', bpm: 138, root: 40, scale: PHD, lp: 9500, rev: 0.26, dly: 0.75, dsend: 0.16, drive: 3.5, pump: 0.5, amb: 'drone',
+      prog: [[0, 'M'], [0, 'M'], [1, 'M'], [1, 'M'], [8, 'M'], [8, 'M'], [7, 'm'], [1, 'M']],
+      pad: { v: 'choir', oct: 12, open: 1 }, arp: { v: 'sqpl', p: 'x.xxx.xxx.xxx.xx', seq: [0, 1, 2, 1, 3, 2], oct: 24 }, lead: { v: 'slead', oct: 12, m: THEME[5] },
+      bass: { v: 'reese', oct: -12, p: bars('1.11.1.11.1.b.1.', null, '1.11.1.11.b.b.t.') },
+      drums: [['kick', bars('x.....x...x.....', 'x.....x...x...x.', 'x.....x...x.xxxx')], ['snare', bars('....x.......x...', '....x.......x.xx', '....x...x.xxXXXX')], ['hat', 'xoxoxoxoxoxoxoxo'], ['crash', once('X...............')], ['tom', at8('........x.x.o.o.')]],
+      perc: [['anvil', '..x.....x.......'], ['taiko', 'X.......X.......', 1], ['ohat', '......o.......o.', 2]], g: { pad: 0.8, bass: 1.15 } },
   };
   const BOSS = {
     1: { id: 'warden', bpm: 150, root: 45, scale: AEO, lp: 9500, rev: 0.2, dly: 0.75, dsend: 0.12, drive: 3.5, pump: 0.5,
@@ -82,7 +89,22 @@
       bass: { v: 'reese', oct: 0, p: ['1.11.11.1.11.t.t', '1.11.11.1.11.b.b'] }, stab: { v: 'brass', oct: 12, lv: 0 },
       drums: [['kick', 'x.x.x.x.x.x.x.x.'], ['kick', '.x.x.x.x.x.x.x.x', 2], ['clap', '....x.......x...'], ['snare', bars('....x.......x...', '....x.......x.xx', '....x...xxxxXXXX')], ['hat', 'xoxoxoxoxoxoxoxo'], ['crash', ['X...............', '', 'x...............', '', 'X...............', '', 'x...............', '']]],
       perc: [['anvil', 'x.......x.......'], ['taiko', '....X.......X...', 1], ['tom', at8('xxxxxxxxxxxxxxxx'), 2]], g: { drums: 0.85 } },
+    5: { id: 'molten', bpm: 154, root: 40, scale: PHD, lp: 10000, rev: 0.25, dly: 0.75, dsend: 0.14, drive: 4.2, pump: 0.5,
+      prog: [[0, 'M'], [1, 'M'], [0, 'M'], [8, 'M'], [0, 'M'], [1, 'M'], [7, 'm'], [1, 'M']],
+      pad: { v: 'strings', oct: 12, open: 1 }, arp: { v: 'sqpl', p: 'xxxxxxxxxxxxxxxx', seq: [0, 2, 1, 3, 2, 4], oct: 24 },
+      lead: { v: 'brass', oct: 12, m: [[0, 0, 4], [4, 1, 4], [8, 2, 2], [10, 1, 2], [12, 0, 4], [16, 4, 4], [20, 5, 2], [22, 4, 2], [24, 1, 8]] },
+      bass: { v: 'reese', oct: -12, p: ['1.11.11.1.11.11.', '1.11.11.1.11.b.b'] }, stab: { v: 'brass', oct: 12, lv: 1 },
+      drums: [['kick', 'x...x...x...x...'], ['kick', '..x...x...x...xx', 2], ['snare', bars('....x.......x...', '....x.......x.x.', '....x...x.x.xxxx')], ['hat', 'xoxoxoxoxoxoxoxo'], ['crash', ['X...............', '', 'x...............', '', 'X...............', '', 'x...............', '']]],
+      perc: [['taiko', 'X.......X.......'], ['anvil', '....x.......x...', 1], ['tom', at8('........xxxxxxxx'), 1]], g: { lead: 0.8 } },
   };
+  // The Sanctum (stage 4's final fight): harmonic minor in D, a tolled bell under choir and brass, organ-like stabs on every bar, half-time taiko into a double-kick drive.
+  const SANCTUM = { id: 'sanctum', kind: 'boss', S: 16, bpm: 164, root: 38, scale: HMIN, lp: 10500, rev: 0.34, dly: 0.75, dsend: 0.14, drive: 4.8, pump: 0.56, amb: 'toll',
+    prog: [[0, 'm'], [0, 'm'], [8, 'M'], [8, 'M'], [5, 'm'], [1, 'M'], [7, 'M'], [7, 'tt']],
+    pad: { v: 'choir', oct: 12, open: 1 }, arp: { v: 'sqpl', p: 'xxxxxxxxxxxxxxxx', seq: [0, 1, 2, 3, 2, 1], oct: 24 },
+    lead: { v: 'brass', oct: 12, m: [[0, 0, 6], [6, 6, 2], [8, 5, 2], [10, 4, 2], [12, 2, 4], [16, 0, 2], [18, 1, 2], [20, 2, 2], [22, 4, 2], [24, 6, 4], [28, 7, 4]] },
+    bass: { v: 'reese', oct: -12, p: ['1.11.11.1.11.11.', '1.11.11.1.11.t.7'] }, stab: { v: 'brass', oct: 12, lv: 0 },
+    drums: [['kick', 'x...x...x...x...'], ['kick', '..x...x...x...xx', 2], ['kick', 'xx.xxx.xxx.xxx.x', 3], ['snare', bars('....x.......x...', '....x.......x.xx', '....x...xxxxXXXX')], ['hat', 'xoxoxoxoxoxoxoxo', 1], ['crash', ['X...............', '', 'x...............', '', 'X...............', '', 'x...............', '']]],
+    perc: [['taiko', 'X.......X.......'], ['anvil', '....x.......x...', 1], ['tom', at8('xxxxxxxxxxxxxxxx'), 2]], g: { pad: 1.2, lead: 0.8 } };
   const CAMP = { id: 'title', kind: 'calm', bpm: 76, S: 16, root: 50, scale: [0, 2, 4, 5, 7, 9, 11], lp: 4800, rev: 0.4, dly: 0.75, dsend: 0.26, amb: 'crackle',
     prog: [[0, 'add9'], [0, 'add9'], [9, 'm7'], [9, 'm7'], [5, 'M7'], [7, 'sus4'], [0, 'add9'], [0, 'add9']],
     pad: { v: 'pad', oct: 12, open: 0 }, lead: { v: 'pluck', oct: 12, m: [[0, 4, 3], [4, 2, 2], [6, 4, 2], [8, 5, 4], [12, 4, 4], [16, 2, 4], [20, 1, 2], [22, 2, 2], [24, 0, 8]] }, arp: null,
@@ -99,11 +121,12 @@
   S.piece = (key) => {
     if (CACHE[key]) return CACHE[key];
     if (key === 'title') return (CACHE[key] = CAMP);
+    if (key === 'sanctum') return (CACHE[key] = SANCTUM);
     const m = /^(run|boss|final)(\d)$/.exec(key || ''), n = m && +m[2];
     if (!m || !COMBAT[n]) return null;
     return (CACHE[key] = m[1] === 'run' ? merge(COMBAT[n], { kind: 'run', S: 16 }) : merge(m[1] === 'boss' ? BOSS[n] : finalOf(BOSS[n]), { kind: 'boss', S: 16 }));
   };
-  S.TRACKS = () => { const o = ['title']; for (const n of [1, 2, 4]) o.push('run' + n, 'boss' + n, 'final' + n); return o; };
+  S.TRACKS = () => { const o = ['title']; for (const n of [1, 2, 4, 5]) o.push('run' + n, 'boss' + n, 'final' + n); o.push('sanctum'); return o; };
 
   // ---------------- motif ----------------
   const OPS = {
@@ -463,7 +486,7 @@
 
   // ---------------- controller ----------------
   const M = ED.Music = { eng: null, track: null, lv: 0, low: 0, bump: 0, bumpT: 0, hold: 0, hb: 0, mu: 20000, Score: S };
-  const THEME_OF = { ossuary: 1, glowmire: 2, abyss: 4 };
+  const THEME_OF = { ossuary: 1, glowmire: 2, abyss: 4, wickdeep: 5 };
   const themeOf = (v) => { const sd = ED.STAGES && ED.STAGES[v.stage | 0]; return (sd && THEME_OF[sd.id]) || [1, 2, 4][(v.stage | 0) % 3]; };
   const lite = () => !!(ED.Render && ED.Render.quality === 'low');
   // Called by ED.Audio.init once the audio graph exists.
@@ -497,7 +520,10 @@
     if (b) { const hs = b.maxHp ? b.hp / b.maxHp : b.hpQ !== undefined ? b.hpQ / 255 : 1; raw = b.enraged ? 3 : hs > 0.66 ? 1 : hs > 0.33 ? 2 : 3; }
     else { const n = v.foes ? v.foes.length : 0; raw = n < 60 ? 0 : n < 220 ? 1 : n < 480 ? 2 : 3; if (v.time >= 480 && raw < 1) raw = 1; }
     if (t < M.bumpT && M.bump > raw) raw = M.bump;
-    play((b ? (b.final ? 'final' : 'boss') : 'run') + themeOf(v), raw, t);
+    const lap = !!(v.lap && v.lap.ph), san = v.sanctum; // Last Light (calm and lap): the final track at full intensity; the Sanctum: its own track (level 0 during the entry fade)
+    if (lap) raw = 3;
+    if (san && san.st === 0) raw = 0;
+    play(san ? 'sanctum' : (b ? (b.final ? 'final' : 'boss') : lap ? 'final' : 'run') + themeOf(v), raw, t);
     level(raw, t);
     const me = v.me, G = ED.Game, paused = !!(G && (G.paused || (G.w && G.w.paused)));
     let hz = 20000;

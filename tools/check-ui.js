@@ -74,7 +74,10 @@ async function main() {
     check(await page.locator('.hero-tile').count() === 7, '7 hero tiles');
     check(await page.locator('.hero-tile.locked').count() === 4, '4 locked heroes at start');
     await page.locator('.hero-tile[data-cls="necro"]').click();
-    check(/Survive 10 minutes/.test(await page.locator('#hero-detail').innerText()), 'locked hero shows its unlock rule');
+    check(/Survive 15 minutes/.test(await page.locator('#hero-detail').innerText()), 'locked hero shows its unlock rule');
+    await page.locator('.hero-tile[data-cls="shade"]').click();
+    check(/Buy at Camp for 4000 gold/.test(await page.locator('#hero-detail').innerText()) && await page.locator('#btn-hero-buy').isDisabled(), 'Shade: buy rule, unlock button disabled without 4000 gold');
+    await page.locator('.hero-tile[data-cls="necro"]').click();
     check(await page.locator('#btn-hero-next').isDisabled(), 'Next disabled on a locked hero');
     await shot(page, 'hero-locked');
     await page.locator('.hero-tile[data-cls="ranger"]').click();
@@ -98,33 +101,79 @@ async function main() {
     console.log('camp');
     await page.evaluate(() => { ED.App.profile.gold = 5000; ED.App.persist(); });
     await page.locator('#btn-camp').click();
-    const nShop = await page.evaluate(() => ED.SHOP.length);
-    check(await page.locator('.shop-row').count() === nShop, nShop + ' shop ranks');
+    const nShop = await page.evaluate(() => ED.SHOP.length), mc = await page.evaluate(() => ED.SHOP.find(s => s.id === 'might').cost);
+    check(await page.locator('.shop-row:not(.hero-row)').count() === nShop && await page.locator('.shop-row.hero-row').count() === 1, nShop + ' shop ranks + Shade for sale');
     await page.locator('.shop-row button[data-id="might"]').click();
     let pr = await page.evaluate(() => ({ g: ED.App.profile.gold, r: ED.App.profile.shop.might | 0 }));
-    check(pr.g === 4800 && pr.r === 1, 'buy Might: rank 1, gold 4800');
+    check(pr.g === 5000 - mc && pr.r === 1, 'buy Might: rank 1, gold ' + (5000 - mc));
     await page.locator('.shop-row button[data-id="might"]').click();
-    check(/Refund all \(\+600\)/.test(await page.locator('#btn-refund').innerText()), 'refund shows the total');
+    check(new RegExp('Refund all \\(\\+' + 5 * mc + '\\)').test(await page.locator('#btn-refund').innerText()), 'refund shows the total');
+    check(/Ranks 2 \/ \d+/.test(await page.locator('#camp-hint').innerText()), 'hint counts owned ranks');
     await shot(page, 'camp');
+    check(await page.evaluate(() => document.getElementById('scr-camp').scrollWidth <= innerWidth), 'camp: no horizontal scroll');
     await page.locator('#btn-refund').click();
     pr = await page.evaluate(() => ({ g: ED.App.profile.gold, r: ED.App.profile.shop.might | 0 }));
     check(pr.g === 5000 && pr.r === 0, 'refund returns all gold');
+    await page.locator('.shop-row button[data-id="hero.shade"]').click();
+    pr = await page.evaluate(() => ({ g: ED.App.profile.gold, s: ED.Save.heroUnlocked(ED.App.profile, 'shade') }));
+    check(pr.g === 1000 && pr.s && await page.locator('.shop-row.hero-row').count() === 0 && /New hero: Shade/.test(await page.locator('#camp-msg').innerText()), 'buy Shade at Camp: 4000 gold, row gone, news line');
     await page.locator('#btn-code-toggle').click();
     check(/^WK1-/.test(await page.locator('#inp-code').inputValue()), 'save code shown');
     check(await minFont(page, '.shop-row span, .shop-row button') >= 20, 'camp text >= 20 px');
     await page.keyboard.press('Escape');
     check(await vis(page, 'scr-title'), 'Esc leaves the camp');
 
+    console.log('wardrobe');
+    await page.evaluate(() => { ED.App.profile.gold = 3000; ED.App.persist(); ED.App.sel.cls = 'knight'; });
+    await page.locator('#btn-camp').click();
+    await page.locator('#btn-wardrobe').click();
+    check(await vis(page, 'scr-wardrobe'), 'Wardrobe opens from the Camp');
+    check(await page.locator('#wd-tabs button').count() === 6 && await page.locator('#wd-heroes .pick-btn').count() === 7, '6 tabs, 7 heroes on the skin tab');
+    const nKs = await page.evaluate(() => ED.COSMETICS.filter(d => d.kind === 'skin' && d.hero === 'knight').length);
+    check(await page.locator('.wd-item').count() === nKs + 1, 'knight: default + ' + nKs + ' skin cards');
+    // preview canvases paint, and a skin paints different pixels from the default look
+    const pxOf = (i) => page.evaluate((k) => { const cv = document.querySelectorAll('.wd-item canvas')[k], d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let n = 0, h = 0; for (let j = 0; j < d.length; j += 4) if (d[j + 3]) { n++; h = (h * 31 + d[j] * 7 + d[j + 1] * 3 + d[j + 2]) >>> 0; } return { n, h }; }, i);
+    { const a = await pxOf(0), b = await pxOf(1); check(a.n > 100 && b.n === a.n && b.h !== a.h, 'preview canvases paint; the skin recolours the same sprite (' + a.n + ' px)'); }
+    const VG = 'skin.knight.verdigris', pv = await page.evaluate(() => ED.COS_BY['skin.knight.verdigris'].price);
+    await page.locator('.wd-item button[data-id="' + VG + '"]').click();
+    let wd = await page.evaluate(() => ({ g: ED.App.profile.gold, own: ED.App.profile.cos.slice(), worn: ED.Save.worn(ED.App.profile, 'skin', 'knight'), saved: ED.Save.load().wear }));
+    check(wd.g === 3000 - pv && wd.own.indexOf(VG) >= 0 && wd.worn === VG && wd.saved.indexOf(VG) >= 0, 'buy Verdigris: ' + pv + ' gold, owned, worn, saved');
+    check(/Worn/.test(await page.locator('.wd-item.worn').innerText()) && (await page.locator('.wd-item.worn button').innerText()) === 'Take off', 'the worn card says Worn / Take off');
+    { const t = await page.locator('.wd-item button[data-id="skin.knight.gilded"]'); check(await t.isDisabled() && /Reward: Knight Victor/.test(await page.locator('.wd-item', { has: page.locator('button[data-id="skin.knight.gilded"]') }).innerText()), 'the reward skin is locked and names its achievement'); }
+    await page.locator('.wd-item button[data-id="default"]').click();
+    check(await page.evaluate(() => ED.Save.worn(ED.App.profile, 'skin', 'knight')) === '' && (await page.locator('.wd-item button[data-id="' + VG + '"]').innerText()) === 'Wear', 'Default takes the skin off; the owned card offers Wear');
+    await page.locator('.wd-item button[data-id="' + VG + '"]').click();
+    check(await page.evaluate(() => ED.Save.worn(ED.App.profile, 'skin', 'knight')) === 'skin.knight.verdigris', 'Wear puts it back on');
+    await shot(page, 'wardrobe');
+    for (const [tab, id] of [['tint', 'tint.crimson'], ['kill', 'kill.embers'], ['lvl', 'lvl.pillar'], ['title', 'title.lamplighter'], ['ncol', 'ncol.ember']]) {
+      await page.locator('#wd-tabs [data-tab="' + tab + '"]').click();
+      await page.locator('.wd-item button[data-id="' + id + '"]').click();
+      check(await page.evaluate((a) => ED.Save.worn(ED.App.profile, a[0]) === a[1], [tab, id]) && !(await vis(page, 'wd-heroes')), tab + ': bought and worn ' + id);
+      if (tab === 'tint') await shot(page, 'wardrobe-tint');
+    }
+    check(/Lamplighter/.test(await page.locator('.wd-tag').first().innerText()), 'name colour previews show the worn title over the name');
+    check(await minFont(page, '.wd-item span, .wd-item button, #wd-tabs button, #wd-hint') >= 20, 'wardrobe text >= 20 px');
+    check(await page.evaluate(() => document.getElementById('scr-wardrobe').scrollWidth <= innerWidth), 'wardrobe: no horizontal scroll');
+    await shot(page, 'wardrobe-ncol');
+    await page.keyboard.press('Escape');
+    check(await vis(page, 'scr-camp'), 'Esc returns to the Camp');
+    await page.keyboard.press('Escape');
+    await page.locator('#btn-play').click();
+    check(await page.evaluate(() => document.querySelector('.hero-tile[data-cls="knight"] canvas')._var === 'pal:skin.knight.verdigris'), 'hero select portrait wears the skin');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => { ED.App.profile.gold = 1000; ED.App.persist(); }); // the gold left after Shade (achievements below count on it)
+
     console.log('achievements');
     await page.evaluate(() => { const p = ED.App.profile; p.stats.bestTime = 432; p.stats.bestKills = 1840; p.stats.bestLevel = 21; p.played = ['knight']; ED.App.persist(); });
     await page.locator('#btn-achieve').click();
     check(await vis(page, 'scr-achieve'), 'Achievements opens');
-    const nAch = await page.evaluate(() => { const U0 = ED.UNLOCKS; return ED.HERO_IDS.filter(c => !U0.heroes[c].start).length + Object.keys(U0.stages).filter(i => !U0.stages[i].start).length; });
-    check(await page.locator('.ach-row').count() === nAch, nAch + ' unlock rows (heroes and stages only)');
-    check(await page.locator('.ach-row.done').count() === 0, 'none done yet');
+    const nAch = await page.evaluate(() => { const U0 = ED.UNLOCKS; return ED.HERO_IDS.filter(c => !U0.heroes[c].start).length + Object.keys(U0.stages).filter(i => !U0.stages[i].start && !ED.Save.stageHidden(ED.App.profile, +i)).length + ED.ACHIEVEMENTS.length; });
+    check(await page.locator('.ach-row').count() === nAch, nAch + ' rows (hero and stage unlocks but hidden stages, achievements)');
+    check(await page.locator('.ach-row.done').count() === 2, 'done: Shade (bought) and Still Standing (best time 7:12)');
     const at = await page.locator('#ach-list').innerText();
-    check(/7:12 \/ 10:00/.test(at) && /1840 \/ 3000/.test(at) && /Level 21 \/ 25/.test(at), 'unlock progress texts (Bell: level 25)');
-    check(/0 \/ \d+ unlocked/.test(await page.locator('#ach-count').innerText()), 'header counts unlocks');
+    check(/7:12 \/ 15:00/.test(at) && /1840 \/ 3000/.test(at) && /21 \/ 40/.test(at) && /\+100 gold/.test(at), 'progress texts (Necro 15:00, one-run kills, level 40) and gold rewards');
+    check(/1 \/ \d+ unlocked, 1 \/ \d+ achievements\. New: Still Standing \+50/.test(await page.locator('#ach-count').innerText()), 'header counts unlocks and achievements, names the new one');
+    check(await page.evaluate(() => ED.App.profile.gold === 1050 && ED.Save.load().ach.indexOf('time5') >= 0), 'achievement gold paid and saved');
     check(/Lifetime kills/.test(await page.locator('#ach-rec').innerText()) && await page.locator('.rec-stage').count() === 3, 'records and 3 stage bests');
     check(await minFont(page, '#scr-achieve span, #scr-achieve b') >= 20, 'achievements text >= 20 px');
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.getElementById('scr-achieve').scrollWidth <= innerWidth), 'achievements: no horizontal scroll');
@@ -142,7 +191,7 @@ async function main() {
     await page.locator('.cx-item[data-key="ranger"]').click();
     { const t = await page.locator('#cx-detail').innerText(); check(/Not discovered yet/.test(t) && !t.includes(await page.evaluate(() => ED.SKILLS[ED.HEROES.ranger.skills[0]].name)) && !/Ranger/.test(t), 'unmet open hero: only "Not discovered yet"'); }
     await page.locator('.cx-item[data-key="necro"]').click();
-    { const t = await page.locator('#cx-detail').innerText(); check(/Not discovered yet/.test(t) && /Locked: Survive 10 minutes/.test(t) && !/Lv 4|Necro/.test(t), 'unmet locked hero: unlock line kept, nothing else'); }
+    { const t = await page.locator('#cx-detail').innerText(); check(/Not discovered yet/.test(t) && /Locked: Survive 15 minutes/.test(t) && !/Lv 4|Necro/.test(t), 'unmet locked hero: unlock line kept, nothing else'); }
     await shot(page, 'codex-unseen');
     await page.locator('#cx-tabs [data-tab="weapons"]').click();
     { const n = await cxNames(), nw = await page.evaluate(() => ED.WEAPON_IDS.length); check(n.filter(x => x[0] === '+').join() === '+Cleave' && n.length === nw, 'weapons: only Cleave named of ' + nw); }
@@ -168,7 +217,7 @@ async function main() {
     await page.keyboard.press('ArrowDown');
     check((await page.locator('#cx-detail').innerText()).includes(await page.evaluate(() => ED.SKILLS[ED.HEROES.ranger.skills[0]].name)), 'keyboard focus selects (Ranger: its Q skill)');
     await page.locator('.cx-item[data-key="necro"]').click();
-    check(/Locked: Survive 10 minutes/.test(await page.locator('#cx-detail').innerText()) && /Lv 4/.test(await page.locator('#cx-detail').innerText()), 'locked hero shows unlock line and skill levels');
+    check(/Locked: Survive 15 minutes/.test(await page.locator('#cx-detail').innerText()) && /Lv 4/.test(await page.locator('#cx-detail').innerText()), 'locked hero shows unlock line and skill levels');
     check(await minFont(page, '#scr-codex span, #scr-codex b, #scr-codex button') >= 20, 'encyclopedia text >= 20 px');
     await shot(page, 'codex-hero');
     const tabs = { weapons: /Path: /, passives: /Lv \d/, foes: /Appears in/, bosses: /Attacks/, stages: /Bosses/ };
@@ -237,6 +286,8 @@ async function main() {
     await page.waitForFunction(() => !document.getElementById('btn-lobby-go').disabled, null, { timeout: 5000 }).catch(() => {});
     check(!(await page.locator('#btn-lobby-go').isDisabled()), 'Start enabled when everyone is ready');
     check(/Pyro/.test(await page.locator('#lobby-slots').innerText()), 'guest hero pick reaches the host');
+    check(await g.evaluate(() => { const s = document.querySelector('#lobby-slots .slot:not(.empty)'), t = s && s.querySelector('.sl-title'), n = s && s.querySelector('.sl-name'), cv = s && s.querySelector('canvas');
+      return !!t && t.textContent === 'Lamplighter' && n.style.color !== '' && cv._var === 'pal:skin.knight.verdigris'; }), 'the guest lobby shows the host title, name colour and skin');
     await shot(page, 'lobby-host'); await shot(g, 'lobby-guest');
     await g.locator('#btn-lobby-leave').click();
     check(await vis(g, 'scr-title'), 'guest leaves to the title');
@@ -247,30 +298,43 @@ async function main() {
     console.log('run: HUD, level-up, chest, pause');
     await page.evaluate(() => { ED.App.startSolo({ cls: 'knight', stage: 0, seed: 7, cheats: { god: true } }); });
     await wait(1500);
-    await page.evaluate(() => { const w = ED.Game.w; w.addXp(w.xpNext - w.xp + 1); });
+    check(await page.evaluate(() => { const c = ED.Game.cos.p1; return c.skin === 'skin.knight.verdigris' && c.tint === 'tint.crimson' && c.title === 'title.lamplighter' && c.ncol === 'ncol.ember'; }), 'the solo run wears the profile cosmetics');
+    // level 2 with every support banned: the weapon-card guarantee draws a tune card
+    await page.evaluate(() => { const w = ED.Game.w, p = w.heroes[0]; for (const id of ED.WEAPON_IDS) if (ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved) p.banned.push('w:' + id); w.addXp(w.xpNext - w.xp + 1); });
     await page.waitForFunction(() => !document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(await vis(page, 'ov-offer'), 'level-up cards shown (solo)');
     const nCards = await page.locator('.offer-card').count();
     check(nCards >= 3 && nCards <= 4, '3-4 cards');
+    check(/^Level \d+!$/.test(await page.locator('#offer-title').innerText()) && /^TUNE 1\/5$/.test(await page.locator('.offer-card.k-tune .badge').first().innerText().catch(() => '')), 'level-up title; tune card badge TUNE 1/5');
+    await page.evaluate(() => { ED.Game.w.heroes[0].banned.length = 0; });
     check(await minFont(page, '.offer-card .card-txt, .offer-card .card-name, .offer-card .card-sub, .offer-card .badge') >= 20, 'card text >= 20 px');
     await shot(page, 'offer');
     await page.keyboard.press('Digit1');
     await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(!(await vis(page, 'ov-offer')), 'key 1 picks a card');
+    // elite chest with the hero weapon path-ready: chest popup, then a path-pick offer (header names the weapon, 3 PERMANENT cards, no foot); key 1 picks path 0
+    await page.evaluate(() => { const w = ED.Game.w, p = w.heroes[0]; p.offer = null; p.pend = 0; w.setRanks(p, p.weapons[0], ED.TUNE_MAX); p.rerolls = 1; w.openChest(p, 1); });
+    await page.waitForFunction(() => !document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
+    check(/Chest!/.test(await page.locator('#ov-chest').innerText()) && /Choose a path/.test(await page.locator('#ov-chest').innerText()), 'elite chest popup: Choose a path');
+    check(await vis(page, 'ov-offer') && (await page.locator('#offer-title').innerText()) === 'Choose a path · Cleave' && (await page.locator('.offer-card.k-pathpick .badge.perm').count()) === 3 && !(await vis(page, 'offer-foot')), 'path-pick offer: header, 3 permanent path cards, no reroll / skip / banish');
+    await shot(page, 'path-offer');
+    await page.keyboard.press('Digit1');
+    await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
+    check(await page.evaluate(() => ED.Game.w.heroes[0].weapons[0].path === 0), 'key 1 picks path 0');
     // boss chest with a ready Form: chest popup says so, then a Form offer (header, no reroll / skip / banish foot); key 1 takes it
-    await page.evaluate(() => { const w = ED.Game.w, p = w.heroes[0]; p.offer = null; p.pend = 0; w.setRanks(p, p.weapons[0], 3, false); p.rerolls = 1; w.openChest(p, 2); });
+    await page.evaluate(() => { const w = ED.Game.w, p = w.heroes[0]; p.offer = null; p.pend = 0; w.setRanks(p, p.weapons[0], ED.TUNE_MAX, 0, ED.PATH_MAX); p.rerolls = 1; w.time = Math.max(w.time, 600); w.openChest(p, 2); });
     await page.waitForFunction(() => !document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(/Boss chest!/.test(await page.locator('#ov-chest').innerText()) && /Choose a Form/.test(await page.locator('#ov-chest').innerText()), 'boss chest popup: Choose a Form');
-    check(await vis(page, 'ov-offer') && (await page.locator('#offer-title').innerText()) === 'Choose a Form' && (await page.locator('.offer-card.k-form').count()) >= 1 && !(await vis(page, 'offer-foot')), 'Form offer: header, Form cards, no reroll / skip / banish');
+    check(await vis(page, 'ov-offer') && (await page.locator('#offer-title').innerText()) === 'Choose a Form · Cleave' && (await page.locator('.offer-card.k-form').count()) >= 1 && !(await vis(page, 'offer-foot')), 'Form offer: header, Form cards, no reroll / skip / banish');
     await shot(page, 'form-offer');
     await page.keyboard.press('Digit1');
     await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 5000 }).catch(() => {});
     check(await page.evaluate(() => ED.Game.w.heroes[0].weapons[0].evo), 'key 1 takes the Form');
-    // build a kit: every path at rank 3, the Form taken and refined, 5 passives, and a boss
+    // build a kit: the Form (taken above) refined, a support with tune and a path, 5 passives, and a boss
     await page.evaluate(() => {
       const w = ED.Game.w, p = w.heroes[0];
-      w.setRanks(p, p.weapons[0], 9, true);
-      if (p.weapons.length < 2) { const sup = ED.WEAPON_IDS.find(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved), s2 = sup && w.addWeapon(p, sup); if (s2) w.setRanks(p, s2, 4, false); } // slot 2 filled, slot 3 empty
+      while (w.refineForm(p, p.weapons[0]));
+      if (p.weapons.length < 2) { const sup = ED.WEAPON_IDS.find(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved), s2 = sup && w.addWeapon(p, sup); if (s2) w.setRanks(p, s2, ED.TUNE_MAX, 0, 2); } // slot 2 filled, slot 3 empty
       for (const id of ['might', 'haste', 'reach', 'vigor', 'magnet']) if (p.passives.length < 6 && !p.passives.some(x => x.id === id)) p.passives.push({ id, lvl: 2 });
       w.recalc(p, true); p.hp = Math.round(p.maxHp * 0.22); p.skills[0].cd = 6;
       w.spawnBoss({ t: 300, id: 'warden' });
@@ -286,7 +350,7 @@ async function main() {
     await page.keyboard.press('Escape');
     await wait(150);
     check(await vis(page, 'ov-pause'), 'Esc pauses');
-    check(await page.locator('#pause-build .pslot canvas').count() >= 5 && /Colossus Blade .*Greatblade 3/.test(await page.locator('#pause-build .pb-line').first().innerText()) && (await page.locator('#pause-build .pb-line').count()) === (await page.evaluate(() => ED.Game.w.heroes[0].weapons.length)), 'pause shows the build (weapon slots, one line per weapon: Form, path ranks; passives)');
+    check(await page.locator('#pause-build .pslot canvas').count() >= 5 && /^Cleave: Tune 5\/5 · Greatblade 5\/5 · Colossus Blade Refine 2\/2$/.test(await page.locator('#pause-build .pb-line').first().innerText()) && (await page.locator('#pause-build .pb-line').count()) === (await page.evaluate(() => ED.Game.w.heroes[0].weapons.length)), 'pause shows the build (weapon slots, one line per weapon: tune, path rank, Form + refine; passives)');
     await shot(page, 'pause');
     await page.locator('#btn-pause-settings').click();
     check(await vis(page, 'ov-settings') && !(await vis(page, 'ov-pause')), 'settings from pause');
@@ -339,11 +403,18 @@ async function main() {
       ED.Game.onEnd = (s) => ED.App.onRunEnd(s);
       w.end(true); ED.Game.drain();
     });
+    await page.keyboard.press('Enter'); // inside the input guard: ignored
     await wait(400);
-    check(await vis(page, 'scr-results'), 'results screen');
-    check(await page.locator('.bar-row').count() === 4, 'per-weapon damage bars');
-    check(/Victory/.test(await page.locator('#res-title').innerText()), 'victory title');
-    await wait(800);
+    check(await vis(page, 'scr-results'), 'results screen (Enter inside the input guard ignored)');
+    check(await page.evaluate(() => !document.getElementById('scr-results').contains(document.activeElement)), 'nothing focused inside the results input guard');
+    check(await page.locator('.bar-row').count() >= 5 && await page.locator('.bar-row.skill').count() === 1, 'weapon table: damage rows plus the Q skill row');
+    check(await page.locator('#res-tiles .tile').count() === 8, 'eight stat tiles');
+    check(await page.locator('#res-pane-party .ptab:not(.hd)').count() === 3 && await vis(page, 'res-pane-party'), 'co-op party table shown first');
+    check(await page.evaluate(() => { const c = document.getElementById('res-tl'); return c.width > 100 && c.height > 50; }), 'timeline canvas sized');
+    check(/victory/i.test(await page.locator('#res-title').innerText()), 'victory title');
+    check(/Achievement: Ascended \(\+200 gold, Ascension level-up effect\)/.test(await page.locator('#res-unlocks').innerText()), 'results announce a new achievement and its cosmetic reward');
+    await wait(1300);
+    check(await page.evaluate(() => document.activeElement && document.activeElement.id === 'btn-res-back'), 'Title focused once the guard ends (co-op: no Play again)');
     await shot(page, 'results');
     await page.locator('#btn-res-back').click();
     check(await vis(page, 'scr-title'), 'results back to title');

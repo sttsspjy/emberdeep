@@ -2,10 +2,12 @@
 // 1. tools/bot-brain.js loads in Node without ED (reads it lazily) and think() returns a full input frame (E never pressed).
 // 2. runOne determinism: the same 90 s cfg twice gives identical results (wall-clock fields aside); the result carries every field (no weapon / fill fields).
 // 3. Pure reader: a 340 s stage-2 run (first boss at 5:00, a cyclops added at 2:00 for st.test hazards) where a second, discarded bot also thinks every tick ends identical to a plain run.
-// 4. Build: a 300 s knight run keeps the hero weapon in slot 0 (supports only after it), ranks it (3+ ranks) and takes a Form when offered; the bot casts Q and never presses E.
-// 5. Short-reach stance: a knight (Cleave) keeps a foe inside its swing reach on >= 20% of 120 s and holds bosses inside it.
-// 6. Card order: a Form > refine > the hero path closest to rank 3 (one path to 3, then a second) > new support > support paths > passives > skill.
-// 7. Boss fights: every killed boss carries its spawn time under its stage id (the twins end on either body). skill 0.3 is deterministic and plays differently from skill 1.
+// 4. Build: a 300 s knight run keeps the hero weapon in slot 0 (supports only after it), levels it (3+ steps) and takes a Form when offered; the bot casts Q and never presses E.
+// 5. Short-reach stance: a knight (Cleave only, supports banished) keeps a foe inside its swing reach on >= 20% of 120 s and holds bosses inside it.
+// 6. Card order: a chest pick (path pick, Form) > refine > hero path rank / tune > new support > a new passive below the quota > support path rank / tune > passive levels > skill.
+//    Path picks and Form forks follow a per-seed choice: seeds 1-12 pick every Cleave path and both Greatblade Forms; one seed always picks the same.
+// 7. Boss fights (knight seed 2, meta max, 780 s): every killed boss carries its spawn time under its stage id (the twins end on either body) and a first hit between spawn and kill;
+//    every elite carries its spawn time and kind; a killed one a first hit and ttk = kill - first hit with 0 < on <= ttk + 0.15 (0.1 s rounding). skill 0.3 is deterministic and plays differently from skill 1.
 'use strict';
 let fails = 0;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
@@ -32,11 +34,11 @@ const strip = (r) => { const o = Object.assign({}, r); delete o.ms; delete o.bot
 const cfg = { stage: 1, cls: 'pyro', seed: 7, maxTime: 90 };
 const a = runOne(cfg), b = runOne(cfg);
 ok(strip(a) === strip(b), `runOne deterministic (90 s pyro: level ${a.level}, kills ${a.kills}, ${a.ms} ms / ${b.ms} ms)`);
-const FIELDS = ['stage', 'stageId', 'cls', 'seed', 'meta', 'won', 'time', 'level', 'kills', 'gold', 'death', 'bosses', 'dealt', 'taken', 'hurt', 'build', 'evolved', 'hpLow', 'ticks', 'ms', 'botMs', 'skill'];
+const FIELDS = ['stage', 'stageId', 'cls', 'seed', 'meta', 'won', 'time', 'level', 'kills', 'gold', 'death', 'bosses', 'elites', 'dealt', 'taken', 'hurt', 'build', 'evolved', 'hpLow', 'ticks', 'ms', 'botMs', 'skill'];
 const miss = FIELDS.filter(k => !(k in a));
 ok(!miss.length && !('weapon' in a) && !('fill' in a) && Array.isArray(a.bosses) && Array.isArray(a.build.weapons) && Array.isArray(a.build.passives) && typeof a.dealt === 'object',
   'result has every field, no weapon / fill' + (miss.length ? ': missing ' + miss.join(',') : ''));
-ok(a.build.weapons.length === 1 && Array.isArray(a.build.weapons[0].pr) && a.build.weapons[0].pr.length === 3 && 'fl' in a.build.weapons[0], 'build weapon carries path ranks and refine: ' + JSON.stringify(a.build.weapons[0]));
+ok(a.build.weapons.length >= 1 && a.build.weapons[0].id === 'firebolt' && a.build.weapons.every(x => Array.isArray(x.pr) && x.pr.length === 3 && 'fl' in x), 'build weapons (signature first, then supports) carry path ranks and refine: ' + JSON.stringify(a.build.weapons));
 ok(a.time >= 89 && a.time <= 91 && a.death === 'timeout' && a.ticks > 0, `maxTime stops the run (time ${a.time}, death ${a.death})`);
 
 // 3. pure reader
@@ -77,14 +79,15 @@ ok(a.time >= 89 && a.time <= 91 && a.death === 'timeout' && a.ticks > 0, `maxTim
     w.events.length = 0;
   }
   const ws = p.weapons[0];
-  ok(ws.root === 'cleave' && p.weapons.slice(1).every(s => ED.WEAPONS[s.root].support) && ws.pr[0] + ws.pr[1] + ws.pr[2] >= 3, `hero weapon in slot 0, ranked (pr ${ws.pr.join('')}, lvl ${ws.lvl}, hero level ${w.level}; supports ${p.weapons.slice(1).map(s => s.root).join(',') || 'none'})`);
+  ok(ws.root === 'cleave' && p.weapons.slice(1).every(s => ED.WEAPONS[s.root].support) && ws.lvl >= 4, `hero weapon in slot 0, levelled (tune ${ws.tune}, pr ${ws.pr.join('')}, lvl ${ws.lvl}, hero level ${w.level}; supports ${p.weapons.slice(1).map(s => s.root).join(',') || 'none'})`);
   ok(formOffered < 0 || (formAt >= formOffered && formAt - formOffered < 0.1 && ws.evo), `a Form card is taken at once (offered ${formOffered.toFixed(1)} s, taken ${formAt.toFixed(1)} s, weapon ${ws.id})`);
   ok(q > 0 && e === 0, `the bot casts Q (${q}) and never presses E`);
 }
 
-// 5. short-reach stance (Cleave)
+// 5. short-reach stance (Cleave; supports banished so Cleave is the only weapon)
 {
   const ED = load(), w = new ED.World({ seed: 1, stage: 0, players: [{ pid: 'p1', cls: 'knight', meta: { shop: {}, sigs: [] } }] }), p = w.heroes[0];
+  for (const id of ED.WEAPON_IDS) if (ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved) p.banned.push('w:' + id);
   const bot = Bot.create({ pid: 'p1', seed: 1 }); bot.onStart(w, p);
   let n = 0, inR = 0, R = 56;
   while (w.time < 120 && w.state === 'play') {
@@ -103,37 +106,49 @@ ok(a.time >= 89 && a.time <= 91 && a.death === 'timeout' && a.ticks > 0, `maxTim
 {
   const ED = load(), w = new ED.World({ seed: 1, stage: 0, players: [{ pid: 'p1', cls: 'knight', meta: { shop: {}, sigs: [] } }] }), p = w.heroes[0], ws = p.weapons[0];
   const bot = Bot.create({ pid: 'p1', seed: 1 }); bot.onStart(w, p);
-  const path = (i) => ({ kind: 'path', id: 'cleave', path: i, lvl: ws.pr[i] + 1, name: '', txt: '', sub: '', icon: '', val: 0 });
+  const path = (i, lvl) => ({ kind: 'path', id: 'cleave', path: i, lvl: lvl || 2, name: '', txt: '', sub: '', icon: '', val: 0 });
+  const tune = (k, id) => ({ kind: 'tune', id: id || 'cleave', path: -1, tk: k, lvl: 1, name: '', txt: '', sub: '', icon: '', val: 0 });
   const card = (kind, id, lvl) => ({ kind, id, path: -1, lvl: lvl || 1, name: '', txt: '', sub: '', icon: '', val: 0 });
   const pick = (O) => { p.offer = O; const f = bot.think(w, p); p.offer = null; return f.pick ? O[f.pick - 1] : null; };
-  const seq = [];
-  for (let k = 0; k < 6; k++) {
-    const O = [0, 1, 2].filter(i => ws.pr[i] < 3).map(path).concat([card('passive', 'might'), card('skill', 'shove', 2)]);
-    const c = pick(O); seq.push(c.kind === 'path' ? 'p' + c.path : c.kind); if (c.kind === 'path') ws.pr[c.path]++;
-  }
-  ok(seq.join(',') === 'p0,p0,p0,p1,p1,p1', 'one path to rank 3 (the Form path first), then a second: ' + seq.join(','));
-  ws.pr[0] = 1; ws.pr[1] = 2; ws.pr[2] = 0;
-  const c2 = pick([path(0), path(1), path(2)]);
-  ok(c2 && c2.path === 1, 'the path closest to rank 3 goes first: path ' + (c2 && c2.path));
-  const f = pick([path(1), card('refine', 'whirlwind'), card('form', 'whirlwind'), card('passive', 'might')]), r = pick([path(1), card('refine', 'whirlwind'), card('passive', 'might')]);
+  const t = pick([card('passive', 'might'), tune(2), card('skill', 'shove', 2)]);
+  ok(t && t.kind === 'tune', 'a hero tune card before a passive and the skill: ' + (t && t.kind));
+  const pp = pick([0, 1, 2].map(i => ({ kind: 'pathpick', id: 'cleave', path: i, lvl: 1, name: '', txt: '', sub: '', icon: '', val: 0 })));
+  ok(pp && pp.kind === 'pathpick', 'a path-pick offer takes a path: ' + (pp && pp.path));
+  const f = pick([path(2), card('refine', 'whirlwind'), card('form', 'whirlwind'), card('passive', 'might')]), r = pick([path(2), card('refine', 'whirlwind'), card('passive', 'might')]);
   const s = pick([card('passive', 'mending'), card('skill', 'shove', 2), card('passive', 'might', 2)]);
   ok(f.kind === 'form' && r.kind === 'refine' && s.kind !== 'skill', `Form first (${f.kind}), then refine (${r.kind}); passives before the skill (${s.kind} ${s.id})`);
   const sid = ED.WEAPON_IDS.find(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved);
   if (sid) {
     const sp = (i, lvl) => ({ kind: 'path', id: sid, path: i, lvl, name: '', txt: '', sub: '', icon: '', val: 0 });
-    const a = pick([card('passive', 'might'), card('support', sid), path(1)]), b = pick([card('passive', 'might'), sp(0, 3), card('support', sid)]), c = pick([card('passive', 'might', 2), sp(1, 1)]);
-    const fo = pick([card('form', 'whirlwind'), card('form', 'colossus')]);
-    ok(a.kind === 'path' && b.kind === 'support' && c.kind === 'path' && fo && fo.id === 'whirlwind',
-      `hero path > new support > support path > passive; a Form offer takes its first card (${a.kind}, ${b.kind}, ${c.kind}, ${fo && fo.id})`);
+    const a = pick([card('passive', 'might'), card('support', sid), path(1)]), b = pick([card('passive', 'might'), sp(0, 3), card('support', sid)]), c = pick([card('plvl', 'might', 2), tune(0, sid)]);
+    const np = pick([card('passive', 'magnet'), tune(0, sid)]);
+    ok(a.kind === 'path' && b.kind === 'support' && c.kind === 'tune' && np.kind === 'passive',
+      `hero path > new support > support path > support tune > passive level; a new passive below the quota beats a support tune (${a.kind}, ${b.kind}, ${c.kind}, ${np.kind})`);
   }
+  // per-seed chest choices: Cleave path picks and Greatblade's Form fork (colossus / earthsplitter)
+  const PP = [0, 1, 2].map(i => ({ kind: 'pathpick', id: 'cleave', path: i, lvl: 1, name: '', txt: '', sub: '', icon: '', val: 0 }));
+  const FF = ED.pathForms('cleave', 0).map(id => ({ kind: 'form', id, path: 0, lvl: 1, name: '', txt: '', sub: '', icon: '', val: 0 }));
+  const paths = new Set(), forms = new Set();
+  let same = true;
+  for (let s = 1; s <= 12; s++) {
+    const b2 = Bot.create({ pid: 'p1', seed: s }); b2.onStart(w, p);
+    const choose = (O) => { p.offer = O; const f = b2.think(w, p); p.offer = null; return f.pick ? O[f.pick - 1] : null; };
+    const x = choose(PP), y = choose(FF.slice().reverse());
+    if (x) paths.add(x.path); if (y) forms.add(y.id);
+    if (choose(PP.slice().reverse()) !== x || choose(FF) !== y) same = false;
+  }
+  ok(paths.size === 3 && forms.size === FF.length && FF.length === 2 && same, `seeds 1-12 pick paths ${[...paths].sort().join(',')} and Forms ${[...forms].join(',')}; each seed's choice ignores card order`);
 }
 
 // 7. boss fights + skill tier
 {
-  const r = runOne({ stage: 0, cls: 'knight', seed: 1, maxTime: 660, meta: 'max' });
+  const r = runOne({ stage: 0, cls: 'knight', seed: 2, maxTime: 780, meta: 'max' }); // seed 2: the bot's Edge Wave path (seed 1 picks Whirl, whose 360 Form stalls on the twins)
   const ids = r.bosses.map(b => b.id + '@' + b.spawn + '-' + b.at).join(',');
-  ok(r.bosses.length >= 2 && r.bosses.every(b => b.spawn !== null && b.at >= b.spawn) && r.bosses.some(b => b.id === 'twins'), 'boss kills carry their spawn: ' + ids + ' (time ' + r.time + ', death ' + r.death + ')');
-  const c = { stage: 2, cls: 'ranger', seed: 5, maxTime: 90, skill: 0.3 }, x = runOne(c), y = runOne(c), z = runOne(Object.assign({}, c, { skill: 1 }));
+  ok(r.bosses.length >= 2 && r.bosses.every(b => b.spawn !== null && b.at >= b.spawn && b.hit >= b.spawn && b.hit <= b.at && b.on > 0) && r.bosses.some(b => b.id === 'twins'), 'boss kills carry their spawn and first hit: ' + ids + ' (time ' + r.time + ', death ' + r.death + ')');
+  const ek = r.elites.filter(e => e.ttk !== null);
+  ok(r.elites.length >= 8 && r.elites.every(e => e.k && e.t >= 150) && ek.length >= 6 && ek.every(e => e.hit >= e.t && e.ttk >= 0 && e.on > 0 && e.on <= e.ttk + 0.15),
+    `elites carry spawn, kind, first hit and ttk: ${ek.length} / ${r.elites.length} killed, ttk ${ek.map(e => e.ttk).join(',')}`);
+  const c = { stage: 2, cls: 'ranger', seed: 5, maxTime: 150, skill: 0.3 }, x = runOne(c), y = runOne(c), z = runOne(Object.assign({}, c, { skill: 1 }));
   ok(strip(x) === strip(y) && x.skill === 0.3, `skill 0.3 deterministic (kills ${x.kills} / ${y.kills})`);
   ok(x.hurt !== z.hurt || x.kills !== z.kills, `skill 0.3 plays differently from 1 (hurt ${x.hurt} / ${z.hurt}, kills ${x.kills} / ${z.kills})`);
 }

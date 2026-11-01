@@ -49,7 +49,7 @@
     }
     const cls = opt.cls || A.sel.cls, stage = opt.stage !== undefined ? opt.stage : A.sel.stage;
     const seed = opt.seed !== undefined ? opt.seed : B && B.seed !== undefined ? B.seed : (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
-    const w = ED.Game.start({ mode: 'solo', seed, stage, players: [{ pid: 'p1', name: A.profile.name, slot: 0, cls, meta: B && B.meta !== 'profile' ? ED.Bot.metaFor(ED, B.meta) : S.metaBundle(A.profile) }], cheats: opt.cheats });
+    const w = ED.Game.start({ mode: 'solo', seed, stage, players: [{ pid: 'p1', name: A.profile.name, slot: 0, cls, meta: B && B.meta !== 'profile' ? ED.Bot.metaFor(ED, B.meta) : S.metaBundle(A.profile), cos: B ? null : S.cosBundle(A.profile, cls) }], cheats: opt.cheats });
     if (B) {
       const p = w.hero('p1');
       let bot;

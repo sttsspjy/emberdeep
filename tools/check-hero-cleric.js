@@ -1,7 +1,7 @@
 // Headless check of the Cleric tree (exit 1 on failure). Usage: node tools/check-hero-cleric.js
-// 1. Defs: 3 paths x 3 ranks, 3 pure Forms + 2 hybrids, 2 refines each, card lines <= 40 chars and never naming a Form.
-// 2. Every path rank changes the numbers and the pattern it promises (probe scene: a held ring of foes, pillars / leaps / aura / censers / beams counted).
-// 3. Forms: each is ready exactly under its rule (pure: its path at 3; hybrid: both paths at 3; none once one is taken) and fires its own pattern.
+// 1. Defs: 3 paths x 3 shape ranks, 5 Forms (Storm: Wrath; Censer: Halo, Consecration; Lance: Judgment Ray, Verdict), 2 refines each, card lines <= 40 chars and never naming a Form.
+// 2. Every shape rank changes the numbers and the pattern it promises (probe scene: a held ring of foes, pillars / leaps / aura / censers / beams counted).
+// 3. Forms: each is ready exactly with its own path at rank 5 (none once one is taken) and fires its own pattern.
 // 4. Healing: the Censer aura heals an ally inside, Consecration ground heals a hero standing in it. 5. View clamp: no damage on foes outside the hero's view.
 // 6. Sanctuary at every level: zero damage; heal, ward, revive, stunning rain. 7. Determinism: a 30 s maxed run per Form twice gives the same digest.
 'use strict';
@@ -20,12 +20,11 @@ function world(clsList, seed, god) {
 const HP = { hpMul: 1 };
 function ring(w, x, y, n, r, hpMul) { HP.hpMul = hpMul || 1; for (let i = 0; i < n; i++) { const a = i / n * U.TAU; w.spawnFoe('skeleton', x + Math.cos(a) * r, y + Math.sin(a) * r, HP); } }
 const step = (w, s, fn) => { for (let i = 0; i < Math.round(s * 60); i++) { w.update(C.TICK); if (fn) fn(w.events); w.events.length = 0; } };
-const build = (w, p, ranks, form) => {
-  const ws = p.weapons[0];
-  for (let i = 0; i < 3; i++) for (let r = 0; r < ranks[i]; r++) w.rankPath(p, ws, i);
-  if (form) { w.takeForm(p, ws, form); while (w.refineForm(p, ws)); }
-  w.recalc(p, false);
-  return ws;
+// Tune full and shape ranks [a, b, c] (one nonzero path at shape rank r -> path rank 2r - 1; all zero: tune only), path ranks when pr; form: that Form refined fully (ranks ignored).
+const build = (w, p, ranks, form, pr) => {
+  const ws = p.weapons[0], i = ranks.findIndex(x => x > 0);
+  if (form) return w.setForm(p, ws, form, 2);
+  return w.setRanks(p, ws, ED.TUNE_MAX, i, i < 0 ? 0 : pr ? ranks[i] : 2 * ranks[i] - 1);
 };
 const FORMS = ['wrath', 'halo', 'jray', 'consecration', 'verdict'];
 const root = ED.WEAPONS.smite;
@@ -34,7 +33,7 @@ const root = ED.WEAPONS.smite;
 {
   const forms = ED.weaponForms('smite').map(f => f.id).sort();
   ok(JSON.stringify(forms) === JSON.stringify(FORMS.slice().sort()), `smite Forms: ${forms.join(', ')}`);
-  ok(root.paths.length === 3 && root.paths.every(pa => pa.ranks.length === 3) && root.hybrids.length === 2, 'smite: 3 paths x 3 ranks, 2 hybrids');
+  ok(root.paths.length === 3 && root.paths.every(pa => pa.ranks.length === 3) && root.paths.map(pa => pa.forms.join('+')).join() === 'wrath,halo+consecration,jray+verdict', 'smite: 3 paths x 3 shape ranks, Forms per path');
   const names = FORMS.map(id => ED.WEAPONS[id].name.toLowerCase()).concat(['judgment']);
   const lines = [];
   root.paths.forEach(pa => { lines.push(pa.name); pa.ranks.forEach(r => lines.push(r.txt)); });
@@ -87,24 +86,23 @@ function probe(ranks, form) {
   ok(l[3].beams === 2, `Lance 3: a second beam (${l[3].beams})`);
 
   // ---------------- 3. Forms ----------------
-  const ready = (ranks) => { const w = world(['cleric'], 3), p = w.heroes[0], ws = build(w, p, ranks, ''); return w.formsReady(p, ws).map(f => f.id).sort().join(','); };
-  const R = [[[3, 0, 0], 'wrath'], [[0, 3, 0], 'halo'], [[0, 0, 3], 'jray'], [[3, 3, 0], 'consecration,halo,wrath'], [[3, 0, 3], 'jray,verdict,wrath'], [[0, 3, 3], 'halo,jray'],
-    [[2, 3, 3], 'halo,jray'], [[3, 2, 2], 'wrath'], [[2, 2, 2], ''], [[3, 3, 3], 'consecration,halo,jray,verdict,wrath']];
-  for (const [ranks, want] of R) { const got = ready(ranks); ok(got === want, `ranks ${ranks.join('')}: ready Forms [${got}]`); }
+  const ready = (ranks) => { const w = world(['cleric'], 3), p = w.heroes[0], ws = build(w, p, ranks, '', true); return w.formsReady(p, ws).map(f => f.id).sort().join(','); };
+  const R = [[[5, 0, 0], 'wrath'], [[0, 5, 0], 'consecration,halo'], [[0, 0, 5], 'jray,verdict'], [[4, 0, 0], ''], [[0, 4, 0], ''], [[0, 0, 4], ''], [[0, 0, 0], '']];
+  for (const [ranks, want] of R) { const got = ready(ranks); ok(got === want, `path ranks ${ranks.join('')}: ready Forms [${got}]`); }
   {
-    const w = world(['cleric'], 3), p = w.heroes[0], ws = build(w, p, [3, 3, 3], 'halo');
+    const w = world(['cleric'], 3), p = w.heroes[0], ws = build(w, p, [], 'halo');
     ok(ws.id === 'halo' && w.formsReady(p, ws).length === 0 && !w.takeForm(p, ws, 'wrath'), 'one Form per run: none ready after Halo, a second take refused');
   }
-  const F = {}; for (const id of FORMS) F[id] = probe([3, 3, 3], id);
-  const all = probe([3, 3, 3], '');
-  const need = { wrath: [3, 0, 0], halo: [0, 3, 0], jray: [0, 0, 3], consecration: [3, 3, 0], verdict: [3, 0, 3] }, f = {};
-  for (const id of FORMS) { f[id] = probe(need[id], id); ok(f[id].dealt > 0, `${id} (ranks ${need[id].join('')}, refine 2): fires, dealt ${f[id].dealt}`); }
+  const F = {}; for (const id of FORMS) F[id] = probe([], id);
+  const lance = probe([0, 0, 3], '');
+  const f = F;
+  for (const id of FORMS) ok(f[id].dealt > 0, `${id} (its path at rank 5, refine 2): fires, dealt ${f[id].dealt}`);
   ok(f.wrath.leaps > s[3].leaps * 1.5, `wrath: pillars hop foe to foe (chain links ${s[3].leaps} -> ${f.wrath.leaps})`);
   ok(f.halo.halo > 0 && f.halo.aura === 0 && f.halo.censers === 5, `halo: a ring wall (r ${f.halo.halo.toFixed(0)}) replaces the aura, 5 censers ride it`);
   ok(f.jray.rays === 5 && f.jray.beams === 0, `jray: 5 beams turn around the hero (${f.jray.rays}), no sweep`);
   ok(f.consecration.grounds > 0 && F.wrath.grounds === 0, `consecration: holy ground (${f.consecration.grounds} patches)`);
-  ok(f.verdict.pillars > all.pillars * 1.5, `verdict: the beam calls pillars (pillars ${all.pillars} at 333 -> ${f.verdict.pillars})`);
-  ok(F.wrath.beams === 2 && F.wrath.aura > 0 && F.wrath.censers === 2, 'wrath at 333 keeps the Censer aura and Lance beams');
+  ok(f.verdict.pillars > lance.pillars * 1.5, `verdict: the beam calls pillars (pillars ${lance.pillars} at Lance 5 -> ${f.verdict.pillars})`);
+  ok(F.consecration.aura > 0 && F.verdict.beams > 0, 'Censer and Lance Forms keep their path emitters (aura, beams)');
 }
 
 // ---------------- 4. healing ----------------
@@ -116,7 +114,7 @@ function probe(ranks, form) {
   const w2 = world(['cleric', 'knight']), [c2, k2] = w2.heroes; build(w2, c2, [0, 1, 0], '');
   k2.x = c2.x + 20; k2.y = c2.y; k2.hp = 40; ring(w2, c2.x, c2.y, 12, 40, 200); step(w2, 3);
   ok(k2.hp === 40, 'Censer 1: no healing yet');
-  const w3 = world(['cleric']), p3 = w3.heroes[0]; build(w3, p3, [3, 3, 0], 'consecration');
+  const w3 = world(['cleric']), p3 = w3.heroes[0]; build(w3, p3, [], 'consecration');
   p3.hp = 40; w3.spawnFoe('skelknight', p3.x + 10, p3.y, { hpMul: 1e5 }); step(w3, 3);
   ok(p3.hp > 40 && w3.zones.some(z => z.k === 'hallow'), `consecration: standing in holy ground heals (${p3.hp.toFixed(1)})`);
 }
@@ -124,20 +122,20 @@ function probe(ranks, form) {
 // ---------------- 5. view clamp ----------------
 {
   for (const id of FORMS) {
-    const w = world(['cleric'], 8), p = w.heroes[0]; build(w, p, [3, 3, 3], id);
+    const w = world(['cleric'], 8), p = w.heroes[0]; build(w, p, [], id);
     p.passives.push({ id: 'reach', lvl: 5 }); w.recalc(p, false);
     ring(w, p.x, p.y, 16, 80, 500);
     const out = [], pos = [];
     for (let i = 0; i < 8; i++) { const x = p.x + (i % 2 ? 1 : -1) * (ED.HERO_VIEW.hw + 30), y = p.y - 60 + i * 15; out.push(w.spawnFoe('skeleton', x, y, { hpMul: 500 })); pos.push([x, y]); }
     step(w, 5, () => { out.forEach((e, i) => { e.x = pos[i][0]; e.y = pos[i][1]; }); }); // held just outside the view rect
-    ok(out.every(e => e.hp === e.maxHp) && (p.dealt[id] || 0) > 0, `${id} at 333 + reach 5: foes outside the view untouched (dealt ${Math.round(p.dealt[id] || 0)} inside)`);
+    ok(out.every(e => e.hp === e.maxHp) && (p.dealt[id] || 0) > 0, `${id} refined + reach 5: foes outside the view untouched (dealt ${Math.round(p.dealt[id] || 0)} inside)`);
   }
 }
 
 // ---------------- 6. Sanctuary ----------------
 {
   const cast = (w, p, x, y, lvl) => { p.skills[0].lvl = lvl; w.input(p.pid, { q: true, ax: x, ay: y }); w.update(C.TICK); w.events.length = 0; };
-  for (let L = 1; L <= 4; L++) {
+  for (let L = 1; L <= 5; L++) {
     const w = world(['cleric', 'knight']), [c, k] = w.heroes;
     k.x = c.x + 100; k.y = c.y; k.hp = 40; ring(w, k.x, k.y, 10, 30, 200);
     c.weapons.length = 0; k.weapons.length = 0; // skill only
@@ -164,7 +162,7 @@ function probe(ranks, form) {
 
 // ---------------- 7. determinism ----------------
 function digestRun(form, seed) {
-  const w = world(['cleric'], seed), p = w.heroes[0]; build(w, p, [3, 3, 3], form); p.skills[0].lvl = 4;
+  const w = world(['cleric'], seed), p = w.heroes[0]; build(w, p, [], form); p.skills[0].lvl = 5;
   let d = 0;
   for (let tick = 0; tick < 1800; tick++) {
     if (tick % 30 === 0 && w.foes.length < 120) ring(w, p.x, p.y, 20, 80 + (tick % 7) * 20, 40);

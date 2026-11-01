@@ -1,6 +1,6 @@
 // Headless check for the Pyro tree (exit 1 on failure). Usage: node tools/check-hero-pyro.js
-// 1. defs: 3 paths x 3 ranks, 3 pure Forms + 2 hybrids, card lines <= 40 chars that never name a Form; 2. every path rank and refine changes the effective numbers;
-// 3. each Form is ready exactly when its paths are at rank 3, one Form per run; 4. every Form fires (crowd and no foe) and deals damage; 5. shells, death blasts and fire leaps act;
+// 1. defs: 3 paths x 3 shape ranks, 5 Forms (Blaze: Inferno; Mortar: Firestorm, Napalm; Combustion: Wildfire, Pyre), card lines <= 40 chars that never name a Form;
+// 2. every path rank 1-5 and refine changes the effective numbers; 3. each Form is ready exactly when its own path is at rank 5, one Form per run; 4. every Form fires (crowd and no foe) and deals damage; 5. shells, death blasts and fire leaps act;
 // 6. same seed -> same digest; 7. no damage outside the hero's view; 8. Flashpoint at levels 1-4: zero damage push + flee, radius / flee / gem levels, telegraph cancel.
 'use strict';
 const { load } = require('./sim.js');
@@ -13,15 +13,14 @@ const ROOT = ED.WEAPONS.firebolt, FORMS = ED.weaponForms('firebolt');
 const world = (seed) => {
   const w = new ED.World({ seed: seed || 5, stage: 0, players: [{ pid: 'p1', name: 'T', slot: 0, cls: 'pyro', meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
   for (const row of w.sdef.timeline) { row.rate = 0; row.floor = 0; }
-  w.sp.swarmT = w.sp.eliteT = Infinity; w.sdef = Object.assign({}, w.sdef, { bosses: [], bench: null });
+  w.sp.swarmT = w.sp.eliteT = w.sp.flockT = Infinity; w.sdef = Object.assign({}, w.sdef, { bosses: [], bench: null });
   return w;
 };
-const build = (w, p, ranks, form) => {
-  const ws = p.weapons[0];
-  for (let i = 0; i < 3; i++) for (let r = 0; r < ranks[i]; r++) w.rankPath(p, ws, i);
-  if (form) { w.takeForm(p, ws, form); while (w.refineForm(p, ws)); }
-  w.recalc(p, false);
-  return ws;
+// Tune full and shape ranks [a, b, c] (first nonzero path at shape rank r -> path rank 2r - 1; all zero: tune only), path ranks when pr; form: that Form refined fully (ranks ignored).
+const build = (w, p, ranks, form, pr) => {
+  const ws = p.weapons[0], i = ranks.findIndex(x => x > 0);
+  if (form) return w.setForm(p, ws, form, 2);
+  return w.setRanks(p, ws, ED.TUNE_MAX, i, i < 0 ? 0 : pr ? ranks[i] : 2 * ranks[i] - 1);
 };
 // Keeps n skeletons 30-200 px around the hero (seeded ring); returns the spawned count.
 const feed = (w, p, rng, n, hpMul) => {
@@ -37,9 +36,9 @@ const S0 = (w, p) => JSON.stringify(ED.Stats.weapon(p, 0));
 {
   const names = FORMS.map(f => ED.WEAPONS[f.id].name.toLowerCase());
   const lines = [];
-  ok(ROOT.paths.length === 3 && ROOT.paths.every(pa => pa.ranks.length === 3 && pa.form), 'Fire Bolt: 3 paths x 3 ranks, each with a Form');
+  ok(ROOT.paths.length === 3 && ROOT.paths.every(pa => pa.ranks.length === 3 && pa.forms.length >= 1), 'Fire Bolt: 3 paths x 3 shape ranks, each with a Form');
   for (const pa of ROOT.paths) for (const r of pa.ranks) lines.push(r.txt);
-  ok(FORMS.filter(f => f.path >= 0).length === 3 && FORMS.filter(f => f.path < 0).length === 2, `3 pure Forms + 2 hybrids (${FORMS.map(f => f.id + ':' + f.need.join('+')).join(', ')})`);
+  ok(ROOT.paths.map(pa => pa.forms.join('+')).join() === 'inferno,firestorm+napalm,wildfire+pyre', `Forms per path (${ROOT.paths.map(pa => pa.name + ': ' + pa.forms.join('+')).join(', ')})`);
   for (const f of FORMS) {
     const d = ED.WEAPONS[f.id];
     ok(d.form && d.evolved && d.from === 'firebolt' && d.refine.length === 2 && d.sig === 'pyro', `${f.id}: Form of firebolt, 2 refine ranks`);
@@ -53,15 +52,14 @@ const S0 = (w, p) => JSON.stringify(ED.Stats.weapon(p, 0));
 // 2. every rank and refine changes the numbers
 {
   for (let i = 0; i < 3; i++) {
-    const w = world(), p = w.heroes[0], ws = p.weapons[0];
-    for (let r = 1; r <= 3; r++) {
-      const a = S0(w, p); w.rankPath(p, ws, i); w.recalc(p, false); const b = S0(w, p);
-      ok(a !== b, `${ROOT.paths[i].name} rank ${r} changes the numbers (${ROOT.paths[i].ranks[r - 1].txt})`);
+    const w = world(), p = w.heroes[0], ws = build(w, p, [0, 0, 0], '');
+    for (let r = 1; r <= ED.PATH_MAX; r++) {
+      const a = S0(w, p); if (r === 1) w.pickPath(p, ws, i); else w.rankPath(p, ws, i); w.recalc(p, false); const b = S0(w, p);
+      ok(a !== b, `${ROOT.paths[i].name} rank ${r} changes the numbers (${r & 1 ? ROOT.paths[i].ranks[r >> 1].txt : 'generic step'})`);
     }
   }
   for (const f of FORMS) {
-    const w = world(), p = w.heroes[0], ws = build(w, p, [3, 3, 3], '');
-    w.takeForm(p, ws, f.id); w.recalc(p, false);
+    const w = world(), p = w.heroes[0], ws = w.setForm(p, p.weapons[0], f.id, 0);
     for (let r = 1; r <= 2; r++) { const a = S0(w, p); w.refineForm(p, ws); w.recalc(p, false); ok(a !== S0(w, p), `${f.id} refine ${r} changes the numbers`); }
   }
 }
@@ -69,15 +67,15 @@ const S0 = (w, p) => JSON.stringify(ED.Stats.weapon(p, 0));
 // 3. Form rules
 {
   let bad = [];
-  for (let m = 0; m < 8; m++) {
-    const ranks = [m & 1 ? 3 : 2, m & 2 ? 3 : 2, m & 4 ? 3 : 2];
-    const w = world(), p = w.heroes[0], ws = build(w, p, ranks, ''), ready = w.formsReady(p, ws).map(f => f.id).sort().join(',');
-    const want = FORMS.filter(f => f.need.every(i => ranks[i] === 3)).map(f => f.id).sort().join(',');
+  for (let m = 0; m < 6; m++) {
+    const ranks = [0, 0, 0]; ranks[m % 3] = m < 3 ? ED.PATH_MAX - 1 : ED.PATH_MAX;
+    const w = world(), p = w.heroes[0], ws = build(w, p, ranks, '', true), ready = w.formsReady(p, ws).map(f => f.id).sort().join(',');
+    const want = FORMS.filter(f => ranks[f.path] === ED.PATH_MAX).map(f => f.id).sort().join(',');
     if (ready !== want) bad.push(ranks.join('') + ': ' + ready + ' != ' + want);
-    for (const f of FORMS) { const w2 = world(), p2 = w2.heroes[0], ws2 = build(w2, p2, ranks, ''); const took = w2.applyCard(p2, { kind: 'form', id: f.id }) || ws2.id === f.id; if (took !== (want.split(',').indexOf(f.id) >= 0)) bad.push(ranks.join('') + ' took ' + f.id); }
+    for (const f of FORMS) { const w2 = world(), p2 = w2.heroes[0], ws2 = build(w2, p2, ranks, '', true); w2.applyCard(p2, { kind: 'form', id: f.id }); const took = ws2.id === f.id; if (took !== (want.split(',').indexOf(f.id) >= 0)) bad.push(ranks.join('') + ' took ' + f.id); }
   }
-  ok(!bad.length, 'each Form is takeable exactly when its paths are at rank 3' + (bad.length ? ': ' + bad.join('; ') : ''));
-  const w = world(), p = w.heroes[0], ws = build(w, p, [3, 3, 3], 'pyre');
+  ok(!bad.length, 'each Form is takeable exactly when its own path is at rank 5' + (bad.length ? ': ' + bad.join('; ') : ''));
+  const w = world(), p = w.heroes[0], ws = build(w, p, [], 'pyre');
   ok(ws.id === 'pyre' && !w.formsReady(p, ws).length && !w.takeForm(p, ws, 'inferno'), 'one Form per run: none ready after one is taken');
 }
 
@@ -141,10 +139,10 @@ for (const id of ['firebolt'].concat(FORMS.map(f => f.id))) {
 }
 
 // 8. Flashpoint levels (zero damage): foes within r slide 120 px away (elites half, bosses / knockback-immune stay) and flee from the hero for 2 s (L3 3.5 s), then return;
-// L2 +30% radius; L4 pulls gems within 200 px; a foe in wind-up loses its telegraph.
+// L2 +30% radius; L4 pulls gems within 200 px; a foe in wind-up loses its telegraph; L5 a second flash 1 s later wherever the hero stands.
 {
   const def = ED.SKILLS.flashpoint, U2 = U.dist;
-  ok(def.cd >= 7 && def.cd <= 16 && def.levels.length === 3 && def.levels.every(l => l.txt.length <= 40) && def.txt.length <= 40, `Flashpoint: cooldown ${def.cd} s, 3 level cards, lines <= 40 chars`);
+  ok(def.cd >= 7 && def.cd <= 16 && def.levels.length === 4 && def.levels.every(l => l.txt.length <= 40) && def.txt.length <= 40, `Flashpoint: cooldown ${def.cd} s, 4 level cards, lines <= 40 chars`);
   for (let L = 1; L <= 4; L++) {
     const w = world(3), p = w.heroes[0]; p.skills[0].lvl = L; p.weapons.length = 0;
     const N = w.skillN(p, 0), cx = p.x, cy = p.y;
@@ -173,6 +171,21 @@ for (const id of ['firebolt'].concat(FORMS.map(f => f.id))) {
       `Flashpoint L${L}: 12/12 pushed >= 110 px (${pushed}), elite ${de.toFixed(0)} px (half), immune foe moved ${Math.abs(U2(cx, cy, im.x, im.y) - di0).toFixed(0)} px, boss ${Math.abs(U2(cx, cy, boss.x, boss.y) - db0).toFixed(0)} px, boss flee ${boss.ovT}`);
     ok(kept >= 10 && back >= 10 && cancelled, `Flashpoint L${L}: foes keep fleeing (${kept}/12) then come back (${back}/12); wind-up telegraph cancelled ${cancelled}`);
     ok((L >= 4) === (gem.pull === p.pid), `Flashpoint L${L}: gem pull ${gem.pull === p.pid}`);
+  }
+  for (const L of [4, 5]) { // L5: a second flash 1 s later at the hero's new spot sends a foe that walked up fleeing; none at L4
+    const w = world(3), p = w.heroes[0]; p.skills[0].lvl = L; p.weapons.length = 0;
+    const cx = p.x, cy = p.y;
+    p.in.q = true; p.in.ax = cx + 60; p.in.ay = cy; step(w, p); p.in.q = false; w.events.length = 0;
+    let late = null, flashes = [];
+    for (let i = 0; i < 70; i++) {
+      p.x = cx + 100; p.y = cy;
+      if (i === 30) { late = w.spawnFoe('skeleton', cx + 140, cy, { hpMul: 50 }); late.spd = 0; }
+      step(w, p); w.events.length = 0;
+      for (const z of w.zones) if (!z.dead && z.k === 'flash' && z.t < 0.02) flashes.push(Math.round(z.x - cx));
+    }
+    const ok5 = late.ovK === 1 && flashes.length === 1 && flashes[0] === 100 && late.hp === late.maxHp;
+    if (L === 5) ok(ok5, `Flashpoint L5: second flash at the hero's new spot (+${flashes.join(',')} px), a foe that walked up flees (${late.ovK === 1}), zero damage`);
+    else ok(flashes.length === 0 && late.ovK === 0, `Flashpoint L4: no second flash (${flashes.length})`);
   }
 }
 

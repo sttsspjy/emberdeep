@@ -74,7 +74,8 @@
     for (; k < m; k++) if (!es[k].dead) { out.push(es[k]); added = true; }
     return added;
   };
-  // Nearest live foe to (x, y) within maxD (centre distance), skipping foes for which skip(e) is true and, while w.vclamp holds a hero, foes outside its view; null when none.
+  // Nearest live foe to (x, y) within maxD (centre distance), skipping warded foes (takeMul < 0.01: hits deal 1), foes for which skip(e) is true and, while w.vclamp holds a hero, foes
+  // outside its view; null when none.
   // Searches outward (96 px, doubling).
   G.nearestFoe = function (x, y, maxD, skip) {
     let r = Math.min(maxD, 96);
@@ -83,7 +84,7 @@
       const q = this.foeScan(x, y, r);
       let best = null, bd = r * r;
       for (let k = 0; k < q.length; k++) {
-        const e = q[k]; if ((skip && skip(e)) || (V && !(Math.abs(e.x - V.x) <= VW.hw + e.r && Math.abs(e.y - V.y + VW.oy) <= VW.hh + e.r))) continue;
+        const e = q[k]; if (e.takeMul < 0.01 || (skip && skip(e)) || (V && !(Math.abs(e.x - V.x) <= VW.hw + e.r && Math.abs(e.y - V.y + VW.oy) <= VW.hh + e.r))) continue;
         const dx = e.x - x, dy = e.y - y, d = dx * dx + dy * dy;
         if (d < bd) { bd = d; best = e; }
       }

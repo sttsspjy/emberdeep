@@ -12,12 +12,15 @@
     MAX_PLAYERS: 4,
     SNAP_HZ: 20,
     INPUT_HZ: 30,
-    HERO_R: 10,           // hero collision radius
+    HERO_R: 6,            // hero hitbox (p.r): foe contact, foe shots, zones, blasts, slams; hero-foe body separation
+    HERO_BODY: 10,        // hero wall-collision radius and touch / trigger reach (pickups, braziers, foe attack triggers); not a hitbox
     DASH: { t: 0.2, dist: 80, cd: 3.5 }, // dash length (s), distance (px), cooldown (s); i-frames for its whole length
     IFRAME: 0.5,          // invulnerability after a hit (s)
-    RUN_LEN: 900,         // survival length (s): the final boss spawns here
-    ENRAGE_T: 1020,       // the final boss enrages at this time (s)
-    GOLD: { mid: 150, final: 300, win: 300, bounty: 25 }, // mid-boss coin drop, final boss kill and victory gold, run-end bounty (1 per 25 kills, win or loss); x the stage gold multiplier (GAME-DESIGN §9)
+    RUN_LEN: 1200,        // survival length (s): the final boss spawns here
+    ENRAGE_T: 1320,       // the final boss enrages at this time (s)
+    GOLD: { mid: 100, final: 300, win: 300, bounty: 62, minute: 10 }, // mid-boss coin drop, final boss kill and victory gold; run-end pay (win or loss): 1 per 62 kills + 10 per full minute survived; all x the stage gold multiplier (GAME-DESIGN §9)
+    LAP: { calm: 2, dur: 60, coin: 5, cap: 1.3 }, // Last Light (GAME-DESIGN §2): calm after the final boss's death (s), lap length (s), hero kills per gold coin, alive cap x the final-minute solo cap (x party factor, at most the hard cap)
+    SANCTUM: { w: 720, h: 480, fade: 2.5, end: 3, boss: 110, foot: 70, wall: 24 }, // the Sanctum (GAME-DESIGN §2): room inner size (world px, centred on the arena centre), fade before the teleport (s), victory calm before the run ends (s), boss spawn below the top wall, party arrival above the bottom wall (px), drawn wall thickness
     VERSION: '2.0.0',
   };
 
@@ -137,5 +140,5 @@
   // Look registry: projectile / zone look names -> wire index. Files register their looks at load time (fixed script order keeps the index identical on every peer).
   ED.LOOKS = []; ED.LOOK_IDX = {};
   ED.regLook = (...names) => { for (const n of names) if (ED.LOOK_IDX[n] === undefined) { ED.LOOK_IDX[n] = ED.LOOKS.length; ED.LOOKS.push(n); } };
-  ED.regLook('dot', 'arrow', 'bolt', 'knife', 'fireball', 'bone', 'skull', 'thorn', 'hammer', 'shield', 'trident', 'web', 'orb', 'tele', 'fire', 'poison', 'holy', 'frost');
+  ED.regLook('dot', 'arrow', 'bolt', 'knife', 'fireball', 'bone', 'skull', 'thorn', 'hammer', 'shield', 'trident', 'web', 'orb', 'tele', 'fire', 'poison', 'holy', 'frost', 'aim', 'dash');
 })(globalThis.ED || (globalThis.ED = {}));

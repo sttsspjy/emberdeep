@@ -1,8 +1,10 @@
 // Foe brains: ED.AI[name] = fn(w, e, dt), called by updateFoes for a foe with a living target (e.tgt) that is not stunned, frozen or rushing.
 // Open arena: straight-line steering (obstacles slide via ED.Arena.move), no line of sight. State: e.st (0 move, 1 wind-up, 2 act), e.stT (s in state), e.acd (attack cooldown), e.aa (locked angle).
 // Telegraph rule: every attack beyond contact shows a warn zone (team 1, >= 0.6 s) for its whole wind-up and resolves from the brain at the wind-up end with the aim locked at its start;
-// the zone itself carries no damage, dies with its caster and is dropped when a stun or freeze cancels the attack (w.foeCancel). Ranged attacks start only on the target's screen.
-// Elites widen attacks (shape, not numbers): ranged +2 shots (ring x1.5), charge / dive x1.35 longer, slam x1.5 radius plus a shot ring, summons +3, blink slash x1.5 radius. Kinds: GAME-DESIGN §7.
+// the zone itself carries no damage, dies with its caster and is dropped when a stun or freeze cancels the attack (w.foeCancel). Ranged attacks start only on the target's screen
+// Attack budget: ranged, charge, dive and blink starts spend one of the target's attack tokens (p.atkTok, refilled in updateFoes; none: the attack waits). Ranged / summoner foes never back away from the target.
+// Charge / dive lanes (look 'dash') start only when the lane (speed x dur + r) reaches 12 px past the target's spot; after the dash the foe stands still in st 3 for rest s.
+// Elites widen attacks (shape, not numbers): ranged +2 shots in the stream (ring x1.5, lob x1.5 radius), charge / dive x1.35 longer, slam x1.35 radius plus a shot ring, summons +3, blink slash x1.5 radius. Kinds: GAME-DESIGN §7.
 // Options: charge.guard (shield up outside a vulnerable window after the bash), slam.pull (the wind-up drags heroes in), summoner, march (wall packs), blinker.
 (function (ED) {
   'use strict';
@@ -14,8 +16,9 @@
   // Scratch zone options (w.zone copies every field): one telegraph per attack start, no allocation.
   const Z = { team: 1, warn: true, dmg: 0, x: 0, y: 0, r: 0, a: 0, len: 0, w: 0, arc: 0, dur: 0.6, src: null, followSrc: false, look: 'tele', wid: '' };
   // wid: optional client overlay key (ED.SkillFx, e.g. 'summon', 'blinkmark').
-  const warn = (w, e, x, y, r, a, len, wd, arc, dur, follow, wid) => {
-    Z.x = x; Z.y = y; Z.r = r; Z.a = a; Z.len = len; Z.w = wd; Z.arc = arc; Z.dur = Math.max(0.6, dur); Z.src = e; Z.followSrc = follow; Z.wid = wid || '';
+  // lk: zone look ('tele' default; 'aim' for ranged aim lines, 'dash' for charge / dive lanes).
+  const warn = (w, e, x, y, r, a, len, wd, arc, dur, follow, wid, lk) => {
+    Z.x = x; Z.y = y; Z.r = r; Z.a = a; Z.len = len; Z.w = wd; Z.arc = arc; Z.dur = Math.max(0.6, dur); Z.src = e; Z.followSrc = follow; Z.wid = wid || ''; Z.look = lk || 'tele';
     const z = w.zone(Z); Z.src = null;
     e.tz = z; e.tzId = z.id;
     return z;
@@ -53,7 +56,7 @@
   AI.brute = (w, e, dt) => {
     const S = e.def.slam, t = e.tgt;
     if (!S) { AI.chaser(w, e, dt); return; }
-    const R = S.r * (e.elite ? 1.5 : 1);
+    const R = S.r * (e.elite ? 1.35 : 1);
     if (e.st === 1) {
       e.stT += dt; e.vx = e.vy = 0;
       if (e.stT >= W6(S.wind)) {
@@ -66,44 +69,48 @@
     }
     e.acd -= dt;
     const d = w.steer(e, t.x, t.y, 1, dt), P = S.pull;
-    if (e.acd <= 0 && d < (P ? P.r * 0.7 : R * 0.75 + t.r)) {
+    if (e.acd <= 0 && d < (P ? P.r * 0.7 : R * 0.75 + ED.CONST.HERO_BODY)) {
       const dur = start(e, S.wind);
       if (P) { PZ.x = e.x; PZ.y = e.y; PZ.r = P.r; PZ.dur = dur; PZ.src = e; PZ.st = P; w.zone(PZ); PZ.src = null; }
       warn(w, e, e.x, e.y, R, 0, 0, 0, 0, dur, true);
     }
   };
 
-  // Keeps R px from target t (closes in when farther or off its screen, backs off inside R - 50, else strafes by id parity) and faces it. Returns the distance before the step.
+  // Closes in on target t while farther than R + 20 px or off its screen, else strafes by id parity (never backs away) and faces it. Returns the distance before the step.
   const hold = (w, e, t, R, vis, dt) => {
     const dx = t.x - e.x, dy = t.y - e.y, d = Math.hypot(dx, dy) || 1;
     if (d > R + 20 || !vis) w.steer(e, t.x, t.y, 1, dt);
-    else if (d < R - 50) w.steer(e, e.x - dx, e.y - dy, 0.7, dt);
     else { const s = (e.id & 1) ? 1 : -1; w.steer(e, e.x - dy / d * 50 * s, e.y + dx / d * 50 * s, 0.35, dt); }
     faceTo(e, t.x);
     return d;
   };
 
-  // Ranged: holds def.range from the target (closes in, backs off, strafes), then a telegraphed shot: aim line (one shot), cone (fan) or circle (ring).
+  // Foe shot along a at speed v that lives until it passes d + 160 px (d: caster-to-target distance at fire), at most 4 s.
+  const shoot = (w, e, a, v, S, dmg, d) => { w.foeShoot(e, a, v, S.look, dmg, 4).life = Math.min(4, (d + 160) / v); };
+  // Ranged: holds def.range from the target (closes in, strafes), then a telegraphed attack: a stream along the aim line (n shots, shot i at speed x (1 - 0.12 i)),
+  // a shot ring (circle), or shot.lob: a circle of lob px (elites x1.5) at the target's spot at the wind-up start, a poison blast there at its end.
   AI.ranged = (w, e, dt) => {
     const S = e.def.shot, t = e.tgt, ring = S.spread === 'ring';
     if (e.st === 1) {
       e.stT += dt; faceTo(e, t.x);
       if (e.stT >= W6(S.wind)) {
-        const dmg = S.dmg * w.foeDmgK() * (e.elite ? 1.5 : 1);
-        if (ring) { const n = e.elite ? Math.round(S.n * 1.5) : S.n; for (let i = 0; i < n; i++) w.foeShoot(e, e.aa + i * TAU / n, S.speed, S.look, dmg, 4); }
-        else { const n = S.n + (e.elite ? 2 : 0), sp = S.spread || 0.2; for (let i = 0; i < n; i++) w.foeShoot(e, e.aa + (i - (n - 1) / 2) * sp, S.speed, S.look, dmg, 4); }
+        const dmg = S.dmg * w.foeDmgK() * (e.elite ? 1.5 : 1), d = Math.hypot(t.x - e.x, t.y - e.y);
+        if (S.lob) w.foeBlast(e, e.vars.x, e.vars.y, S.lob * (e.elite ? 1.5 : 1), dmg, S.look);
+        else if (ring) { const n = e.elite ? Math.round(S.n * 1.5) : S.n; for (let i = 0; i < n; i++) shoot(w, e, e.aa + i * TAU / n, S.speed, S, dmg, d); }
+        else { const n = S.n + (e.elite ? 2 : 0); for (let i = 0; i < n; i++) shoot(w, e, e.aa, S.speed * (1 - 0.12 * i), S, dmg, d); }
         done(w, e, S.cd);
       }
       return;
     }
     e.acd -= dt;
     const R = e.def.range || 160, vis = onScreen(e, t), d = hold(w, e, t, R, vis, dt);
-    if (e.acd > 0 || !vis || d > R + 70) return;
+    if (e.acd > 0 || !vis || d > R + 70 || !(t.atkTok >= 1)) return;
+    t.atkTok -= 1;
     e.aa = Math.atan2(t.y - e.y, t.x - e.x);
-    const dur = start(e, S.wind), n = S.n + (e.elite ? 2 : 0);
-    if (ring) warn(w, e, e.x, e.y, e.r + 30, 0, 0, 0, 0, dur, true);
-    else if (n > 1) warn(w, e, e.x, e.y, Math.min(d + 40, 240), e.aa, 0, 0, (S.spread || 0.2) * (n - 1) + 0.2, dur, true);
-    else warn(w, e, e.x, e.y, 0, e.aa, Math.min(d + 60, 280), 8, 0, dur, true);
+    const dur = start(e, S.wind);
+    if (S.lob) { const v = e.vars || (e.vars = { x: 0, y: 0 }); v.x = t.x; v.y = t.y; warn(w, e, v.x, v.y, S.lob * (e.elite ? 1.5 : 1), 0, 0, 0, 0, dur, false); }
+    else if (ring) warn(w, e, e.x, e.y, e.r + 30, 0, 0, 0, 0, dur, true);
+    else warn(w, e, e.x, e.y, 0, e.aa, Math.min(d + 60, 280), 8, 0, dur, true, '', 'aim');
   };
 
   // Exploder: rushes in with a wobble; on contact range it stops, shows its blast circle for def.fuse s and bursts (killing it first cancels the blast).
@@ -120,41 +127,44 @@
     }
     const a = Math.atan2(t.y - e.y, t.x - e.x) + Math.sin(e.age * 4 + e.id) * 0.3;
     w.steer(e, e.x + Math.cos(a) * 100, e.y + Math.sin(a) * 100, 1, dt);
-    const rr = e.r + t.r + 20;
+    const rr = e.r + ED.CONST.HERO_BODY + 20;
     if ((t.x - e.x) * (t.x - e.x) + (t.y - e.y) * (t.y - e.y) < rr * rr) { e.vx = e.vy = 0; warn(w, e, e.x, e.y, R, 0, 0, 0, 0, start(e, e.def.fuse || 0.7), true); }
   };
 
-  // Charger: chases; in range it plants, shows its charge lane, then dashes straight along it (contact hurts on the way) and stops early at an obstacle.
-  // def.guard { open, take }: shield up (damage taken x def.take) except for `open` s after each dash, when it stands still in st 3 taking x guard.take.
+  // Stands still in st 3 (recover after a dash) until rest s pass, then back to st 0. Returns true while resting.
+  const rest = (e, dt, secs) => { if (e.st !== 3) return false; e.stT += dt; e.vx = e.vy = 0; if (e.stT >= secs) { e.st = 0; e.stT = 0; } return true; };
+  // Charger: chases; at 50 < d <= min(range, lane - 12) it plants, shows its charge lane (lane = speed x dur + r, through the target's spot), dashes along it (contact hurts on the way,
+  // stops early at an obstacle), then rests charge.rest s in st 3. def.guard { open, take }: shield up (damage taken x def.take) except in st 3, which lasts guard.open s and takes x guard.take.
   AI.charger = (w, e, dt) => {
-    const C = e.def.charge, G = e.def.guard, t = e.tgt, dur = C.dur * (e.elite ? 1.35 : 1);
-    if (G) {
-      if (e.st === 3) { e.stT += dt; e.vx = e.vy = 0; if (e.stT >= G.open) { e.st = 0; e.stT = 0; e.takeMul = e.def.take || 1; } return; }
-      e.takeMul = e.def.take || 1;
-    }
+    const C = e.def.charge, G = e.def.guard, t = e.tgt, dur = C.dur * (e.elite ? 1.35 : 1), L = C.speed * dur + e.r;
+    if (rest(e, dt, G ? G.open : C.rest)) { if (G && e.st === 0) e.takeMul = e.def.take || 1; return; }
+    if (G) e.takeMul = e.def.take || 1;
     if (e.st === 1) { e.stT += dt; if (e.stT >= W6(C.wind)) { e.st = 2; e.stT = 0; e.cd = 0; e.tz = null; } return; }
-    if (e.st === 2) { e.stT += dt; if (dash(w, e, C.speed, dt) || e.stT >= dur) { done(w, e, C.cd); if (G) { e.st = 3; e.takeMul = G.take; e.vx = e.vy = 0; } } return; }
+    if (e.st === 2) { e.stT += dt; if (dash(w, e, C.speed, dt) || e.stT >= dur) { done(w, e, C.cd); e.st = 3; e.vx = e.vy = 0; if (G) e.takeMul = G.take; } return; }
     e.acd -= dt;
     const d = w.steer(e, t.x, t.y, 1, dt);
-    if (e.acd <= 0 && d > 50 && d < C.range && onScreen(e, t)) {
+    if (e.acd <= 0 && d > 50 && d <= Math.min(C.range, L - 12) && onScreen(e, t) && t.atkTok >= 1) {
+      t.atkTok -= 1;
       e.aa = Math.atan2(t.y - e.y, t.x - e.x); e.vx = e.vy = 0;
-      warn(w, e, e.x, e.y, 0, e.aa, C.speed * dur + e.r, e.r * 2 + 6, 0, start(e, C.wind), true);
+      warn(w, e, e.x, e.y, 0, e.aa, L, e.r * 2 + 6, 0, start(e, C.wind), true, '', 'dash');
     }
   };
 
-  // Diver: circles the target at def.dive.hover px (direction by id parity), then shows a lane and dives through the target's spot.
+  // Diver: spirals in (inward + 0.7 x tangential, side by id parity) at its walk speed; at 50 < d <= min(range, lane - 12) it shows a lane (lane = speed x dur + r)
+  // and dives through the target's spot, then rests dive.rest s in st 3.
   AI.diver = (w, e, dt) => {
-    const V = e.def.dive, t = e.tgt, dur = V.dur * (e.elite ? 1.35 : 1);
+    const V = e.def.dive, t = e.tgt, dur = V.dur * (e.elite ? 1.35 : 1), L = V.speed * dur + e.r;
+    if (rest(e, dt, V.rest)) return;
     if (e.st === 1) { e.stT += dt; faceTo(e, t.x); if (e.stT >= W6(V.wind)) { e.st = 2; e.stT = 0; e.cd = 0; e.tz = null; } return; }
-    if (e.st === 2) { e.stT += dt; if (dash(w, e, V.speed, dt) || e.stT >= dur) done(w, e, V.cd); return; }
+    if (e.st === 2) { e.stT += dt; if (dash(w, e, V.speed, dt) || e.stT >= dur) { done(w, e, V.cd); e.st = 3; e.vx = e.vy = 0; } return; }
     e.acd -= dt;
-    const dx = e.x - t.x, dy = e.y - t.y, d = Math.hypot(dx, dy) || 1, s = (e.id & 1) ? 1 : -1, k = U.clamp((d - V.hover) / 40, -1, 1);
-    const mx = -dy / d * s - dx / d * k, my = dx / d * s - dy / d * k;
-    w.steer(e, e.x + mx * 60, e.y + my * 60, 1, dt);
+    const dx = t.x - e.x, dy = t.y - e.y, d = Math.hypot(dx, dy) || 1, s = (e.id & 1) ? 0.7 : -0.7, ux = dx / d, uy = dy / d;
+    w.steer(e, e.x + (ux - uy * s) * 60, e.y + (uy + ux * s) * 60, 1, dt);
     faceTo(e, t.x);
-    if (e.acd <= 0 && d < V.range && d > 50 && onScreen(e, t)) {
-      e.aa = Math.atan2(-dy, -dx); e.vx = e.vy = 0;
-      warn(w, e, e.x, e.y, 0, e.aa, V.speed * dur + e.r, e.r * 2 + 4, 0, start(e, V.wind), true);
+    if (e.acd <= 0 && d > 50 && d <= Math.min(V.range, L - 12) && onScreen(e, t) && t.atkTok >= 1) {
+      t.atkTok -= 1;
+      e.aa = Math.atan2(dy, dx); e.vx = e.vy = 0;
+      warn(w, e, e.x, e.y, 0, e.aa, L, e.r * 2 + 4, 0, start(e, V.wind), true, '', 'dash');
     }
   };
 
@@ -205,11 +215,11 @@
     }
     e.acd -= dt;
     const d = w.steer(e, t.x, t.y, 1, dt);
-    if (e.acd <= 0 && d < B.range && onScreen(e, t)) {
+    if (e.acd <= 0 && d < B.range && onScreen(e, t) && t.atkTok >= 1) {
       const a = Math.atan2(e.y - t.y, e.x - t.x) + w.rng.sign() * w.rng.range(1.6, 2.6);
       v.x = t.x + Math.cos(a) * B.side; v.y = t.y + Math.sin(a) * B.side;
       if (ED.Arena.blocked(w.arena, v.x, v.y, e.r)) { e.acd = 0.5; return; }
-      e.vx = e.vy = 0;
+      t.atkTok -= 1; e.vx = e.vy = 0;
       warn(w, e, v.x, v.y, e.r + 8, 0, 0, 0, 0, start(e, B.wind), false, 'blinkmark');
     }
   };

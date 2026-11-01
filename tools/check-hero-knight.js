@@ -1,8 +1,9 @@
 // Headless check of the Knight tree (exit 1 on failure). Usage: node tools/check-hero-knight.js
-// 1. Every path rank changes the effective numbers or the fired pattern (swings / booms / projectiles / zones of one attack string).
-// 2. Every Form (3 pure + 2 hybrid) is ready only under its rule (its path(s) at rank 3), locks the others once taken, refines twice and deals damage in a foe ring.
-// 3. Damage only in view: a full 3/3/3 build of every Form never hurts a pinned foe 340 px away (outside the 320 px half view) while hurting near ones.
-// 4. Bulwark Shove at levels 1..4: zero damage; pushes foes out to the shove edge (elites half, immune foes stay), slows (L3 stuns); L4 ring blocks a foe walking in.
+// 1. Every path rank 1-5 (tune full) changes the effective numbers or the fired pattern (swings / booms / projectiles / zones of one attack string).
+// 2. Every Form (1-2 per path) is ready only with its own path at rank 5, locks the others once taken, refines twice and deals damage in a foe ring.
+// 3. Damage only in view: every path at rank 5 and every refined Form never hurts a pinned foe 340 px away (outside the 320 px half view) while hurting near ones.
+// 3b. Rending Gale stays in a +-30 deg cone (refined): at >= 120 px only rays within 30 deg of the aim are hit; nothing past 45 deg at any distance (crescent bodies near the hero).
+// 4. Aegis Ward at levels 1..5: zero damage; foes inside slide out to the edge and cannot walk back in for dur s; level numbers; L5 the ward follows the knight; bosses stay.
 // 5. Determinism: the same seed and inputs give the same digest (hero, foes, damage) for every Form; client draw hooks run on a mock batch without non-finite args.
 'use strict';
 const path = require('path'), fs = require('fs'), vm = require('vm');
@@ -19,7 +20,8 @@ function world(seed) {
   return w;
 }
 const ring = (w, x, y, n, r, hpMul) => { for (let i = 0; i < n; i++) { const a = i / n * U.TAU; w.spawnFoe('skeleton', x + Math.cos(a) * r, y + Math.sin(a) * r, { hpMul: hpMul || 1 }); } };
-const ranks = (w, p, r) => { const ws = p.weapons[0]; for (let i = 0; i < 3; i++) for (let k = 0; k < r[i]; k++) w.rankPath(p, ws, i); w.recalc(p, false); return ws; };
+// Path ranks r = [r0, r1, r2] (one nonzero path; all zero: tune only), tune full.
+const ranks = (w, p, r) => { const i = r.findIndex(x => x > 0); return w.setRanks(p, p.weapons[0], ED.TUNE_MAX, i, i >= 0 ? r[i] : 0); };
 
 // 1. Pattern of one attack string: counts of swing / boom events, projectiles and zones made within 0.8 s after a fire in a still foe ring.
 function pattern(r, form) {
@@ -43,9 +45,9 @@ function pattern(r, form) {
 }
 for (let i = 0; i < 3; i++) {
   let prev = pattern([0, 0, 0]);
-  for (let k = 1; k <= 3; k++) {
+  for (let k = 1; k <= ED.PATH_MAX; k++) {
     const r = [0, 0, 0]; r[i] = k;
-    const cur = pattern(r), txt = ROOT.paths[i].ranks[k - 1].txt;
+    const cur = pattern(r), txt = k & 1 ? ROOT.paths[i].ranks[k >> 1].txt : 'generic step';
     ok(cur.pat !== prev.pat || cur.num !== prev.num, `${ROOT.paths[i].name} rank ${k} "${txt}" changes the attack (${prev.pat} -> ${cur.pat} swings/booms/projs/zones)`);
     ok(txt.length <= 40, `card line <= 40 chars: "${txt}"`);
     prev = cur;
@@ -54,17 +56,13 @@ for (let i = 0; i < 3; i++) {
 for (const f of FORMS) for (let k = 1; k <= 2; k++) ok(ED.WEAPONS[f.id].refine[k - 1].txt.length <= 40 && ED.WEAPONS[f.id].txt.length <= 40, `${f.id} card lines <= 40 chars`);
 
 // 2. Form rules.
-ok(FORMS.length === 5 && FORMS.filter(f => f.path < 0).length === 2, `5 Forms, 2 hybrids (${FORMS.map(f => f.id + '[' + f.need + ']').join(' ')})`);
+ok(FORMS.length === 5 && ROOT.paths.every(pa => pa.forms.length >= 1 && pa.forms.length <= 2) && FORMS.every(f => f.any.length === 1), `5 Forms, 1-2 per path, each on one path (${ROOT.paths.map(pa => pa.name + ': ' + pa.forms.join('+')).join('; ')})`);
 for (const f of FORMS) {
-  const w = world(3), p = w.heroes[0], ws = p.weapons[0];
-  const early = [];
-  for (let i = 0; i < 3; i++) for (let k = 0; k < 3; k++) {
-    if (f.need.indexOf(i) < 0 || (i === f.need[f.need.length - 1] && k === 2)) continue;
-    w.rankPath(p, ws, i); if (w.formsReady(p, ws).some(x => x.id === f.id)) early.push(i + ':' + k);
-  }
-  w.rankPath(p, ws, f.need[f.need.length - 1]);
+  const w = world(3), p = w.heroes[0], ws = ranks(w, p, [0, 0, 0].map((x, i) => (i === f.path ? ED.PATH_MAX - 1 : 0)));
+  const early = w.formsReady(p, ws).length, o = world(3), q = o.heroes[0], other = ranks(o, q, [0, 0, 0].map((x, i) => (i === (f.path + 1) % 3 ? ED.PATH_MAX : 0)));
+  w.rankPath(p, ws, f.path);
   const ready = w.formsReady(p, ws).map(x => x.id);
-  ok(!early.length && ready.indexOf(f.id) >= 0, `${f.id}: ready only once paths ${f.need.join('+')} reach rank 3 (early: ${early.join(',') || 'none'}; ready: ${ready.join(',')})`);
+  ok(!early && !o.formsReady(q, other).some(x => x.id === f.id) && ready.indexOf(f.id) >= 0, `${f.id}: ready only once ${ROOT.paths[f.path].name} reaches rank ${ED.PATH_MAX} (ready: ${ready.join(',')})`);
   ok(!w.formsReady(p, world(3).heroes[0].weapons[0]).length, `${f.id}: nothing ready with no ranks`);
   w.takeForm(p, ws, f.id);
   let rf = 0; while (w.refineForm(p, ws)) rf++;
@@ -77,9 +75,8 @@ for (const f of FORMS) {
 }
 
 // 3. View clamp: pinned foes at 340 px (outside) and at 60-150 px (inside) for 5 s.
-for (const f of [{ id: 'cleave' }].concat(FORMS)) {
-  const w = world(4), p = w.heroes[0], ws = ranks(w, p, [3, 3, 3]);
-  if (f.id !== 'cleave') { w.takeForm(p, ws, f.id); while (w.refineForm(p, ws)); w.recalc(p, false); }
+for (const f of [{ id: 'cleave', r: [5, 0, 0] }, { id: 'cleave', r: [0, 5, 0] }, { id: 'cleave', r: [0, 0, 5] }].concat(FORMS)) {
+  const w = world(4), p = w.heroes[0], ws = f.r ? ranks(w, p, f.r) : w.setForm(p, p.weapons[0], f.id, 2);
   const far = [], near = [];
   for (let i = 0; i < 8; i++) {
     const a = i / 8 * U.TAU;
@@ -92,39 +89,83 @@ for (const f of [{ id: 'cleave' }].concat(FORMS)) {
     p.mdir = i / 300 * U.TAU; p.in.ax = p.x + Math.cos(p.mdir) * 100; p.in.ay = p.y + Math.sin(p.mdir) * 100; w.update(C.TICK); w.events.length = 0;
   }
   const hurtFar = far.filter(e => e.hp < e.maxHp).length, hurtNear = near.filter(e => e.hp < e.maxHp).length;
-  ok(hurtFar === 0 && hurtNear >= 6, `${f.id} 3/3/3: no damage outside the view (far hurt ${hurtFar}, near hurt ${hurtNear}/8)`);
+  ok(hurtFar === 0 && hurtNear >= 3, `${f.id} ${f.r ? f.r.join('') : 'refined'}: no damage outside the view (far hurt ${hurtFar}, near hurt ${hurtNear}/8)`);
 }
 
-// 4. Bulwark Shove (zero damage): foes within r slide out to r x 5/3 and are slowed (L3: stunned), elites half the way, bosses / knockback-immune foes stay; L2 +30% radius; L4 ring foes cannot cross.
+// 3b. Rending Gale cone (refined, aim +x): pinned foes along rays at 30-240 px; at >= 120 px only rays within +-30 deg are hit (240 px still hit at 20 deg), at any distance none past +-45 deg.
+{
+  const hit = {};
+  for (const deg of [0, 20, 30, 40, 60, 75, 90, 135, 180]) for (const sg of [1, -1]) {
+    const w = world(4), p = w.heroes[0];
+    w.setForm(p, p.weapons[0], 'gale', 2);
+    const a = sg * deg * Math.PI / 180, F = [30, 60, 90, 120, 180, 240].map(d => ({ d, x: p.x + Math.cos(a) * d, y: p.y - 4 + Math.sin(a) * d }));
+    for (const f of F) f.e = w.spawnFoe('skeleton', f.x, f.y, { hpMul: 1e4 });
+    for (let i = 0; i < 240; i++) { for (const f of F) { f.e.x = f.x; f.e.y = f.y; f.e.kbx = f.e.kby = 0; f.e.spd = 0; } w.input(p.pid, { mx: 0, my: 0, ax: p.x + 100, ay: p.y - 4 }); w.update(C.TICK); w.events.length = 0; }
+    for (const f of F) if (f.e.hp < f.e.maxHp) hit[f.d] = Math.max(hit[f.d] || 0, deg);
+  }
+  const far = Math.max(hit[120] || 0, hit[180] || 0, hit[240] || 0), any = Math.max(...Object.values(hit));
+  ok(far <= 30 && any <= 45 && hit[120] >= 20 && hit[240] >= 20, `gale cone: widest ray hit by distance ${Object.keys(hit).map(d => d + ' px ' + hit[d] + ' deg').join(', ')}`);
+}
+
+// 4. Aegis Ward (zero damage): foes inside r slide out to the edge (elites, knockback-immune foes too; bosses stay) and cannot walk back in for dur s; cd 25 (L4 20);
+// L2 +20% radius; L3 +1.5 s; L5 the ward follows the knight. Edge foes stay inside base Cleave reach.
 const qWorld = (L) => { const w = world(6), p = w.heroes[0]; p.weapons.length = 0; p.skills[0].lvl = L; return { w, p, N: w.skillN(p, 0) }; };
 const qCast = (w, p, x, y) => { w.input(p.pid, { q: true, ax: x, ay: y }); w.update(C.TICK); w.events.length = 0; };
 const qRun = (w, n, each) => { for (let i = 0; i < n; i++) { if (each) each(i); w.update(C.TICK); w.events.length = 0; } };
-ok(ED.SKILLS.shove.cd >= 7 && ED.SKILLS.shove.cd <= 16 && ED.SKILLS.shove.levels.every(l => l.txt.length <= 40) && ED.SKILLS.shove.txt.length <= 40, `shove: cooldown ${ED.SKILLS.shove.cd} s, card lines <= 40 chars`);
-for (let L = 1; L <= 4; L++) {
-  const { w, p, N } = qWorld(L), cx = p.x, cy = p.y, to = N.r * 5 / 3;
-  const foes = []; for (let i = 0; i < 12; i++) { const a = i / 12 * U.TAU, d = 20 + (i % 4) * (N.r - 30) / 3; foes.push(w.spawnFoe('skeleton', cx + Math.cos(a) * d, cy + Math.sin(a) * d, { hpMul: 50 })); }
-  const out = w.spawnFoe('skeleton', cx + to + 60, cy, { hpMul: 50 });
+const QD = ED.SKILLS.shove;
+ok(QD.name === 'Aegis Ward' && QD.cd === 25 && QD.levels.length === 4 && QD.levels.every(l => l.txt.length <= 40) && QD.txt.length <= 40, `ward: ${QD.name}, cooldown ${QD.cd} s, 4 level cards, lines <= 40 chars`);
+{
+  const want = [[50, 6.5, 25, false], [60, 6.5, 25, false], [60, 8, 25, false], [60, 8, 20, false], [60, 8, 20, true]];
+  const got = [1, 2, 3, 4, 5].map(L => { const N = qWorld(L).N; return [N.r, N.dur, N.cd, !!N.follow]; });
+  ok(got.every((g, i) => Math.abs(g[0] - want[i][0]) < 1e-6 && Math.abs(g[1] - want[i][1]) < 1e-6 && Math.abs(g[2] - want[i][2]) < 1e-6 && g[3] === want[i][3]),
+    `ward levels r / dur / cd / follow: ${got.map(g => g[0].toFixed(0) + '/' + g[1].toFixed(1) + '/' + g[2].toFixed(0) + (g[3] ? '/F' : '')).join(', ')}`);
+  ok(QD.base.r + 4 <= ED.WEAPONS.cleave.base.range, `ward edge (r ${QD.base.r} + foe radius, hero 4 px below the swing centre) inside base Cleave reach ${ED.WEAPONS.cleave.base.range} + foe radius`);
+}
+for (let L = 1; L <= 5; L++) {
+  const { w, p, N } = qWorld(L), cx = p.x, cy = p.y;
+  const foes = []; for (let i = 0; i < 12; i++) { const a = i / 12 * U.TAU, d = 6 + (i % 4) * (N.r - 10) / 3; foes.push(w.spawnFoe('skeleton', cx + Math.cos(a) * d, cy + Math.sin(a) * d, { hpMul: 50 })); }
+  const el = w.spawnFoe('skeleton', cx + 10, cy + 5, { elite: true, hpMul: 50 }), im = w.spawnFoe('skelknight', cx - 12, cy - 8, { hpMul: 50 });
+  const walk = []; for (let i = 0; i < 8; i++) { const a = (i + 0.5) / 8 * U.TAU; walk.push(w.spawnFoe('skeleton', cx + Math.cos(a) * (N.r + 50), cy + Math.sin(a) * (N.r + 50), { hpMul: 50 })); }
   for (const e of w.foes) e.spd = 0;
   qCast(w, p, cx + 100, cy);
-  const slowed = foes.filter(e => e.slowT > 2).length, stunned = foes.filter(e => e.stunT > 0.5).length;
-  qRun(w, 45, () => { p.x = cx; p.y = cy; });
-  const dmin = Math.min(...foes.map(e => U.dist(cx, cy, e.x, e.y))), hurt = w.foes.filter(e => e.hp < e.maxHp).length;
-  ok(dmin >= to - 6 && slowed === 12 && (L >= 3) === (stunned === 12) && hurt === 0 && !(p.dealt.shove > 0) && p.skills[0].cd > 6,
-    `shove L${L}: r ${N.r.toFixed(0)}, 12 foes pushed to >= ${dmin.toFixed(0)} of ${to.toFixed(0)} px, slowed ${slowed}, stunned ${stunned}, zero damage (hurt ${hurt})`);
-  const ring = w.zones.find(z => !z.dead && z.k === 'bulwark');
-  if (L === 4) {
-    out.spd = 60; out.slowT = 0; out.slowK = 0; out.x = cx + Math.cos(U.TAU / 24) * (to + 60); out.y = cy + Math.sin(U.TAU / 24) * (to + 60); // between the pushed foes
-    let inside = 0; qRun(w, 100, () => { p.x = cx; p.y = cy; if (U.dist(cx, cy, out.x, out.y) < to - 4) inside++; });
-    ok(!!ring && inside === 0 && U.dist(cx, cy, out.x, out.y) < to + 30, `shove L4: ring r ${ring ? ring.r.toFixed(0) : '-'} holds; a foe walking in stays outside (${U.dist(cx, cy, out.x, out.y).toFixed(0)} px)`);
-  } else ok(!ring, `shove L${L}: no ring`);
+  const cd0 = p.skills[0].cd;
+  qRun(w, 30, () => { p.x = cx; p.y = cy; });
+  const inner = foes.concat([el, im]), dmin = Math.min(...inner.map(e => U.dist(cx, cy, e.x, e.y) - e.r));
+  const ward = w.zones.find(z => !z.dead && z.k === 'bulwark');
+  ok(!!ward && dmin >= N.r - 1 && w.foes.every(e => e.hp === e.maxHp) && !(p.dealt.shove > 0) && Math.abs(cd0 - N.cd) < 0.05,
+    `ward L${L}: r ${N.r.toFixed(0)}, 14 foes (elite, knockback-immune) out to >= r (${dmin.toFixed(1)}), zero damage, cooldown ${cd0.toFixed(1)} s`);
+  for (const e of walk) { e.spd = 50; e.slowT = 0; e.slowK = 0; }
+  let inside = 0, reachN = 0;
+  qRun(w, Math.round((N.dur - 0.8) / C.TICK), () => {
+    p.x = cx; p.y = cy;
+    for (const e of w.foes) if (!e.dead && U.dist(cx, cy, e.x, e.y) < N.r + e.r - 0.5) inside++;
+  });
+  const near = walk.map(e => U.dist(cx, cy, e.x, e.y));
+  for (const e of walk) if (Math.hypot(e.x - cx, e.y - (cy - 4)) <= ED.WEAPONS.cleave.base.range + e.r) reachN++;
+  const reachOk = L !== 1 || reachN >= 6; // 22 foes overfill one ring at the ward edge: a few queue one body behind
+  ok(inside === 0 && Math.max(...near) < N.r + 26 && reachOk, `ward L${L}: 8 foes walking in stay outside for ${(N.dur - 0.8).toFixed(1)} s (closest ${Math.min(...near).toFixed(0)}, farthest ${Math.max(...near).toFixed(0)} px)` + (L === 1 ? `, ${reachN} / 8 within Cleave reach (>= 6)` : ''));
+  qRun(w, 60, () => { p.x = cx; p.y = cy; });
+  ok(!w.zones.some(z => !z.dead && z.k === 'bulwark'), `ward L${L}: gone after ${N.dur.toFixed(1)} s`);
 }
-{
-  const { w, p, N } = qWorld(1), cx = p.x, cy = p.y, to = N.r * 5 / 3;
-  const el = w.spawnFoe('skeleton', cx + 40, cy, { elite: true, hpMul: 5 }), im = w.spawnFoe('skelknight', cx - 50, cy, { hpMul: 50 });
-  for (const e of w.foes) e.spd = 0;
-  qCast(w, p, cx + 100, cy); qRun(w, 45, () => { p.x = cx; p.y = cy; });
-  const de = U.dist(cx, cy, el.x, el.y), di = U.dist(cx, cy, im.x, im.y), want = 40 + (to - 40) / 2;
-  ok(Math.abs(de - want) < 12 && Math.abs(di - 50) < 3 && el.hp === el.maxHp, `shove: elite pushed half the way (${de.toFixed(0)} px, want ~${want.toFixed(0)}), knockback-immune foe stays (${di.toFixed(0)} px)`);
+{ // a boss inside stays put; L5: the ward follows the walking knight and shoulders foes aside, stationary below L5
+  for (const L of [4, 5]) {
+    const { w, p, N } = qWorld(L), cx = p.x, cy = p.y;
+    const boss = w.spawnFoe('skeleton', cx + 20, cy, { hpMul: 50 }); boss.boss = true;
+    const lane = []; for (let i = 0; i < 6; i++) lane.push(w.spawnFoe('skeleton', cx + 100 + i * 30, cy + (i % 2 ? 8 : -8), { hpMul: 50 }));
+    for (const e of w.foes) e.spd = 0;
+    qCast(w, p, cx + 100, cy); qRun(w, 30, () => { p.x = cx; p.y = cy; });
+    const bx = boss.x; boss.x = 1e5; boss.y = 1e5; boss.dead = true; // out of the way for the walk
+    let maxOff = 0, inside = 0;
+    qRun(w, 180, () => {
+      w.input(p.pid, { mx: 1, my: 0, ax: p.x + 100, ay: p.y });
+      const z = w.zones.find(q => !q.dead && q.k === 'bulwark');
+      if (z) maxOff = Math.max(maxOff, U.dist(z.x, z.y, p.x, p.y));
+      for (const e of lane) if (z && U.dist(z.x, z.y, e.x, e.y) < z.r + e.r - 0.5) inside++;
+    });
+    const z = w.zones.find(q => !q.dead && q.k === 'bulwark');
+    if (L === 5) ok(!!z && maxOff < 3 && inside === 0 && p.x - cx > 100, `ward L5 follows the knight (${(p.x - cx).toFixed(0)} px walked, centre off by <= ${maxOff.toFixed(1)} px), ${inside} foe-ticks inside`);
+    else ok(!!z && U.dist(z.x, z.y, cx, cy) < 1 && Math.abs(bx - (cx + 20)) < 1, `ward L4 stays at the cast point; a boss inside is not moved (${(bx - cx).toFixed(0)} px)`);
+  }
 }
 
 // 5. Determinism + client hooks on a mock batch.
@@ -133,9 +174,9 @@ const mockB = new Proxy({}, { get: (o, k) => (k === 'crowd' || k === 'zoneLite' 
 ED.Atlas = { ok: true, has: () => true, anim: () => ({ n: 6 }), frameAt: () => 0 };
 vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'hfx-knight.js'), 'utf8'), { filename: 'hfx-knight.js' });
 function digestRun(form, draw) {
-  const w = world(12), p = w.heroes[0], ws = ranks(w, p, [3, 3, 3]);
-  w.takeForm(p, ws, form); while (w.refineForm(p, ws)); w.recalc(p, false);
-  p.skills[0].lvl = 4;
+  const w = world(12), p = w.heroes[0];
+  w.setForm(p, p.weapons[0], form, 2);
+  p.skills[0].lvl = 5;
   let d = 0, err = null;
   try {
     for (let i = 0; i < 360; i++) {

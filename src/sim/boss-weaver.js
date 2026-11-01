@@ -1,4 +1,4 @@
-// Boss 'weaver' (Rift Weaver, stage 3 mid-boss; art foe.riftcaller scaled): a void caster who keeps range and fills the ground with rifts and threads.
+// Boss 'weaver' (Rift Weaver, mid-boss: Abyss 10:00, Glowmire 15:00; art foe.riftcaller scaled): a void caster who keeps range and fills the ground with rifts and threads.
 // P1: rift gates (warned circles around the target open into portals that fire void bolts at the nearest hero), weave (warned threads crossing the target), blink (warned landing circle, then a bolt ring).
 // P2 (66%): 3 gates, a second weave through the same point (rotated) and threads that stay as live strands, telegraphed adds. P3 (33%): 4 gates firing faster, 4 threads per weave, a second bolt ring on landing.
 (function (ED) {
@@ -85,7 +85,7 @@
         return s.k > s.rings && t >= s.d + 0.5;
       },
     },
-    // Adds (P2+): telegraphed void eyes and glooms around him.
+    // Adds (P2+): telegraphed void eyes and glooms around him (the host stage's kin: bosses.js W.addKin).
     adds: { w: 1, phase: 2, wind: 0.9, start(w, e) { adds(w, e, ADDS, 90, 0.9); }, update: (w, e, dt, t) => t >= 1.1 },
   }, { idle: approach(170), onPhase(w, e, ph) { if (ph >= 2) B.lib.force(e, 'gates'); } });
 })(globalThis.ED || (globalThis.ED = {}));

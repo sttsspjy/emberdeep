@@ -1,6 +1,6 @@
 // Headless check for the Necro tree (exit 1 on failure). Usage: node tools/check-hero-necro.js
-// 1. Every path rank changes the effective numbers; card lines <= 40 chars. 2. Forms: each pure Form is ready only with its path at rank 3, each hybrid only with both
-// paths at rank 3; one Form per run; every Form fires and deals damage in a crowd. 3. Pattern checks: army cap / kill-rise extras, splinters, pools (cap, burst, spread),
+// 1. Every path rank 1-5 changes the effective numbers; card lines <= 40 chars. 2. Forms: each is ready only with its own path at rank 5 (Legion: Bone Lord, Ossuary;
+// Shards: Bone Storm; Plague: Plague Field, Lich); one Form per run; every Form fires and deals damage in a crowd. 3. Pattern checks: army cap / kill-rise extras, splinters, pools (cap, burst, spread),
 // Bone Knight slams, ghoul bursts leave pools, archers shoot. 4. Damage lands only on foes inside the hero's view. 5. Bone Wall at levels 1-4 (block, ring, taunt, zero damage).
 // 6. Same seed -> same digest.
 'use strict';
@@ -14,16 +14,15 @@ const ROOT = ED.WEAPONS.boneshard, FORMS = ['bonelord', 'bonestorm', 'plaguefiel
 const world = (seed) => {
   const w = new ED.World({ seed: seed || 5, stage: 0, players: [{ pid: 'p1', name: 'N', slot: 0, cls: 'necro', meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
   for (const row of w.sdef.timeline) { row.rate = 0; row.floor = 0; }
-  w.sp.swarmT = w.sp.eliteT = Infinity; w.sdef = Object.assign({}, w.sdef, { bosses: [], bench: null });
+  w.sp.swarmT = w.sp.eliteT = w.sp.flockT = Infinity; w.sdef = Object.assign({}, w.sdef, { bosses: [], bench: null });
   return w;
 };
-const build = (w, p, ranks, form) => {
-  const ws = p.weapons[0];
-  for (let i = 0; i < 3; i++) for (let k = 0; k < ranks[i]; k++) w.rankPath(p, ws, i);
-  const took = form ? w.takeForm(p, ws, form) : true;
-  if (form) while (w.refineForm(p, ws));
-  w.recalc(p, false);
-  return took;
+// Tune full and shape ranks [a, b, c] (first nonzero path at shape rank r -> path rank 2r - 1; all zero: tune only), path ranks when pr; form: that Form refined fully (ranks ignored).
+const build = (w, p, ranks, form, pr) => {
+  const ws = p.weapons[0], i = ranks.findIndex(x => x > 0);
+  if (form) return w.setForm(p, ws, form, 2).id === form;
+  w.setRanks(p, ws, ED.TUNE_MAX, i, i < 0 ? 0 : pr ? ranks[i] : 2 * ranks[i] - 1);
+  return true;
 };
 // Keeps n skeletons 30-200 px around the hero; returns nothing.
 const crowd = (w, p, rng, n) => {
@@ -53,12 +52,13 @@ const runCrowd = (ranks, form, secs, opt) => {
 
 // 1. ranks change the numbers; card lines
 {
-  const w = world(), p = w.heroes[0], ws = p.weapons[0];
-  const snap = () => JSON.stringify(ED.Stats.weapon(p, 0));
   for (let i = 0; i < 3; i++) {
-    for (let r = 0; r < 3; r++) {
-      const a = snap(); w.rankPath(p, ws, i); w.recalc(p, false); const b = snap();
-      ok(a !== b, `path ${ROOT.paths[i].id} rank ${r + 1} changes the numbers ("${ROOT.paths[i].ranks[r].txt}")`);
+    const w = world(), p = w.heroes[0], ws = p.weapons[0];
+    const snap = () => JSON.stringify(ED.Stats.weapon(p, 0));
+    w.setRanks(p, ws, ED.TUNE_MAX);
+    for (let r = 1; r <= ED.PATH_MAX; r++) {
+      const a = snap(); if (r === 1) w.pickPath(p, ws, i); else w.rankPath(p, ws, i); w.recalc(p, false); const b = snap();
+      ok(a !== b, `path ${ROOT.paths[i].id} rank ${r} changes the numbers ("${r & 1 ? ROOT.paths[i].ranks[r >> 1].txt : 'generic step'}")`);
     }
   }
   const lines = [ROOT.txt].concat(...ROOT.paths.map(pa => pa.ranks.map(l => l.txt)), ...FORMS.map(f => [ED.WEAPONS[f].txt].concat(ED.WEAPONS[f].refine.map(l => l.txt))), ED.SKILLS.bonewall.levels.map(l => l.txt));
@@ -69,19 +69,16 @@ const runCrowd = (ranks, form, secs, opt) => {
 
 // 2. Form rules
 {
-  const ready = (ranks) => { const w = world(), p = w.heroes[0]; build(w, p, ranks, ''); return w.formsReady(p, p.weapons[0]).map(f => f.id).sort().join(','); };
-  ok(ready([2, 3, 3]) === 'bonestorm,plaguefield', `path 0 at rank 2: no Bone Lord, no hybrids (${ready([2, 3, 3])})`);
-  ok(ready([3, 0, 0]) === 'bonelord', `Legion 3 -> Bone Lord only (${ready([3, 0, 0])})`);
-  ok(ready([0, 3, 0]) === 'bonestorm', `Shards 3 -> Bone Storm only (${ready([0, 3, 0])})`);
-  ok(ready([0, 0, 3]) === 'plaguefield', `Plague 3 -> Plague Field only (${ready([0, 0, 3])})`);
-  ok(ready([3, 0, 3]) === 'bonelord,lich,plaguefield', `Legion 3 + Plague 3 -> Lich (${ready([3, 0, 3])})`);
-  ok(ready([3, 3, 0]) === 'bonelord,bonestorm,ossuary', `Legion 3 + Shards 3 -> Ossuary (${ready([3, 3, 0])})`);
+  const ready = (ranks) => { const w = world(), p = w.heroes[0]; build(w, p, ranks, '', true); return w.formsReady(p, p.weapons[0]).map(f => f.id).sort().join(','); };
+  ok(ready([4, 0, 0]) === '' && ready([0, 4, 0]) === '' && ready([0, 0, 4]) === '', 'no Form below path rank 5');
+  ok(ready([5, 0, 0]) === 'bonelord,ossuary', `Legion 5 -> Bone Lord, Ossuary (${ready([5, 0, 0])})`);
+  ok(ready([0, 5, 0]) === 'bonestorm', `Shards 5 -> Bone Storm only (${ready([0, 5, 0])})`);
+  ok(ready([0, 0, 5]) === 'lich,plaguefield', `Plague 5 -> Plague Field, Lich (${ready([0, 0, 5])})`);
   const w = world(), p = w.heroes[0], ws = p.weapons[0];
-  build(w, p, [3, 3, 3], 'lich');
-  ok(ws.id === 'lich' && ws.fl === 2 && w.formsReady(p, ws).length === 0 && !w.takeForm(p, ws, 'bonelord'), 'one Form per run: Lich taken, refined twice, no other Form');
+  build(w, p, [], 'lich');
+  ok(ws.id === 'lich' && ws.fl === 2 && w.formsReady(p, ws).length === 0 && !w.takeForm(p, ws, 'plaguefield'), 'one Form per run: Lich taken, refined twice, no other Form');
   for (const f of FORMS) {
-    const need = f === 'lich' ? [3, 0, 3] : f === 'ossuary' ? [3, 3, 0] : f === 'bonelord' ? [3, 0, 0] : f === 'bonestorm' ? [0, 3, 0] : [0, 0, 3];
-    const r = runCrowd(need, f, 6);
+    const r = runCrowd([], f, 6);
     ok(r.p.weapons[0].id === f && r.dealt > 0 && r.p.dealt[f] > 0, `${f}: fires and deals damage (${Math.round(r.dealt / 6)} dps)`);
   }
 }
@@ -140,10 +137,11 @@ const runCrowd = (ranks, form, secs, opt) => {
   ok(inn > 0 && out === 0, `damage lands only inside the view (in ${inn}, out ${out})`);
 }
 
-// 5. Bone Wall at levels 1-4 (zero damage): an arc wall at the cursor that walking foes cannot cross (bosses can); L2 longer; L3 a ring that holds foes inside and out; L4 taunts foes within 160 px.
+// 5. Bone Wall at levels 1-5 (zero damage): an arc wall at the cursor that walking foes cannot cross (bosses can); L2 longer; L3 a ring that holds foes inside and out; L4 taunts foes within 160 px;
+//    L5 walls last 2x as long and slow foes touching them 50%.
 {
   const def = ED.SKILLS.bonewall;
-  ok(def.cd >= 7 && def.cd <= 16 && def.levels.length === 3 && def.levels.every(l => l.txt.length <= 40) && def.txt.length <= 40, `Bone Wall: cooldown ${def.cd} s, 3 level cards, lines <= 40 chars`);
+  ok(def.cd >= 7 && def.cd <= 16 && def.levels.length === 4 && def.levels.every(l => l.txt.length <= 40) && def.txt.length <= 40, `Bone Wall: cooldown ${def.cd} s, 4 level cards, lines <= 40 chars`);
   const setup = (L) => { const w = world(), p = w.heroes[0]; p.weapons.length = 0; p.skills[0].lvl = L; return { w, p, N: w.skillN(p, 0), cx: p.x, cy: p.y }; };
   const tick = (w, p, cx, cy, n, each) => { for (let i = 0; i < n; i++) { p.x = cx; p.y = cy; p.offer = null; p.pend = 0; w.update(C.TICK); w.events.length = 0; if (each) each(); } };
   // walkers: 8 foes 70 px beyond the cursor (on the hero-cursor axis, +-30 px) walking at the hero; counts foes ever inside the wall's arc (radius < R - 2, within the span)
@@ -190,11 +188,20 @@ const runCrowd = (ranks, form, secs, opt) => {
     const gap = U.dist(mx, cy, e.x, e.y) - N.ring;
     ok(lured && gap < 30 && boss.ovT === 0, `Bone Wall L4: foe 120 px off the ring lured (${lured}), now ${gap.toFixed(0)} px from it; boss never lured`);
   }
+  for (const L of [4, 5]) { // L5: the ring lasts 2x and slows the foe pressed against it 50%; a foe away from it is not slowed
+    const { w, p, N, cx, cy } = setup(L), mx = cx + 150;
+    const e = w.spawnFoe('skeleton', mx + N.ring + 40, cy, { hpMul: 50 }), off = w.spawnFoe('skeleton', mx + 400, cy, { hpMul: 50 }); off.spd = 0;
+    p.in.q = true; p.in.ax = mx; p.in.ay = cy; tick(w, p, cx, cy, 1); p.in.q = false;
+    let slowed = 0; tick(w, p, cx, cy, 240, () => { if (e.slowT > 0 && e.slowK >= 0.5) slowed++; });
+    const z = w.zones.find(q => !q.dead && q.k === 'bonewall'), dur = z ? z.dur : 0;
+    if (L === 5) ok(Math.abs(dur - 10) < 1e-9 && slowed > 60 && off.slowT <= 0 && e.hp === e.maxHp, `Bone Wall L5: lasts ${dur} s, the foe at the ring slowed 50% for ${slowed} ticks, zero damage`);
+    else ok(Math.abs(dur - 5) < 1e-9 && slowed === 0, `Bone Wall L4: lasts ${dur} s, no slow`);
+  }
 }
 
 // 6. determinism
 {
-  const a = runCrowd([3, 3, 3], 'lich', 5, { q: true, lvl: 4, seed: 21 }), b = runCrowd([3, 3, 3], 'lich', 5, { q: true, lvl: 4, seed: 21 });
+  const a = runCrowd([3, 3, 3], 'lich', 5, { q: true, lvl: 5, seed: 21 }), b = runCrowd([3, 3, 3], 'lich', 5, { q: true, lvl: 5, seed: 21 });
   ok(a.digest === b.digest && a.dealt === b.dealt, `same seed -> same digest (${a.digest} / ${b.digest})`);
 }
 console.log(`check-hero-necro: ${fails ? fails + ' failure(s)' : 'all passed'} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);

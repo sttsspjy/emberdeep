@@ -4,7 +4,7 @@
 //        node tools/bench.js --resume DIR [any flag above overrides the stored cfg] [--force]   (skips jobs already in DIR/results.jsonl)
 //        node tools/bench.js --report DIR [--tables pooled|all]                                (rebuilds summary.json + report.html from DIR/results.jsonl)
 //   --skill: bot reflex tiers 0..1 (1 competent, 0.3 sloppy). --quick: --seeds 2 --stages 0. Defaults: all stages, all heroes, 8 seeds from 1,
-//   meta none, skill 1,0.3, maxTime 1080, jobs = logical cores - 1. --low: children at low OS priority and default jobs halved (for using the PC meanwhile).
+//   meta none, skill 1,0.3, maxTime 1380, jobs = logical cores - 1. --low: children at low OS priority and default jobs halved (for using the PC meanwhile).
 //   --runner: module path exporting runOne(cfg) (default ./bot.js; ./bench-fake.js is a fast deterministic stub). --resume refuses a maxTime other than the stored one or a
 //   changed code hash unless --force. --tables all: a stdout table per group (default: only the groups pooled over stages, per meta x skill).
 // Mechanism: job key = stage|hero|seed|meta|skill|maxTime; job order: seed outermost, then stage, hero, meta, skill (deterministic, every cell gets seed 1 first).
@@ -38,7 +38,7 @@ function parseArgs(argv) {
   if (o.tables !== undefined && o.tables !== 'pooled' && o.tables !== 'all') throw new Error('--tables is pooled or all');
   return o;
 }
-const DEFAULTS = { stages: 'all', heroes: 'all', seeds: 8, seed0: 1, meta: 'none', skill: '1,0.3', maxTime: 1080, runner: 'tools/bot.js' };
+const DEFAULTS = { stages: 'all', heroes: 'all', seeds: 8, seed0: 1, meta: 'none', skill: '1,0.3', maxTime: 1380, runner: 'tools/bot.js' };
 function cfgFrom(flags, base) {
   // a stored cfg without skill / runner predates them: those benches ran skill 1 on tools/bot.js
   const c = Object.assign({}, DEFAULTS, base ? { skill: '1', runner: DEFAULTS.runner } : {}, base || {});

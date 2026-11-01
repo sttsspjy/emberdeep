@@ -1,5 +1,6 @@
 // Open arena: deterministic props from (stage, seed) and circle collision against the bounds and the obstacles. Pure; clients rebuild the same arena from the seed.
-// ED.Arena.generate(stage, seed) -> A = { size, obstacles: [{id, x, y, r, look}], braziers: [{id, x, y, r, hp, broken, t (sim time it broke), look}], deco: [{x, y, look}], cell, cw, cells: [[obstacle index]] }.
+// ED.Arena.generate(stage, seed) -> A = { size, obstacles: [{id, x, y, r, look}], braziers: [{id, x, y, r, hp, broken, t (sim time it broke), look}], deco: [{x, y, look}], cell, cw, cells: [[obstacle index]], room }.
+// A.room: null, or the Sanctum rectangle { x0, y0, x1, y1 } (set by sanctum.js on the host, by the snapshot mirror on clients): collide / move / blocked / segBlocked then see only its walls (obstacles ignored).
 // Obstacles come from the stage theme features (ED.STAGES theme.features): colonnade rows, broken wall arcs with one gap, tight clusters, singles. Separate features keep a LANE px
 // passage (heroes and the horde pass, crowds squeeze into chokepoints); nothing within arena.clear of the centre (the party start).
 (function (ED) {
@@ -13,7 +14,7 @@
   Ar.generate = (stage, seed) => {
     const sd = ED.STAGES[stage] || ED.STAGES[0], th = sd.theme, ar = sd.arena, size = ar.size || ED.CONST.ARENA;
     const rng = U.RNG((seed ^ 0xa7e4a11) >>> 0), c = size / 2;
-    const A = { size, obstacles: [], braziers: [], deco: [], cell: CELL, cw: Math.ceil(size / CELL), cells: null };
+    const A = { size, obstacles: [], braziers: [], deco: [], cell: CELL, cw: Math.ceil(size / CELL), cells: null, room: null };
     // true when circle (x, y, r) is inside the margins, outside the centre clearing and at least gap px from obstacles [0, upto)
     const free = (x, y, r, gap, upto) => {
       if (x < r + 60 || y < r + 60 || x > size - r - 60 || y > size - r - 60) return false;
@@ -76,6 +77,13 @@
   // Pushes circle e (x, y) of radius r out of the obstacles and inside the bounds. Returns the obstacle it touched (or the bound as true), else null.
   // A body heading straight into an obstacle slides along it: the push-out leaves the tangential part of its motion.
   Ar.collide = (A, e, r) => {
+    const R = A.room;
+    if (R) {
+      let h = null;
+      if (e.x < R.x0 + r) { e.x = R.x0 + r; h = true; } else if (e.x > R.x1 - r) { e.x = R.x1 - r; h = true; }
+      if (e.y < R.y0 + r) { e.y = R.y0 + r; h = true; } else if (e.y > R.y1 - r) { e.y = R.y1 - r; h = true; }
+      return h;
+    }
     let hit = null;
     const list = Ar.near(A, e.x, e.y);
     if (list) for (let k = 0; k < list.length; k++) {
@@ -104,6 +112,8 @@
 
   // True when a circle at (x, y) of radius r overlaps an obstacle or leaves the arena.
   Ar.blocked = (A, x, y, r) => {
+    const R = A.room;
+    if (R) return x < R.x0 + r || y < R.y0 + r || x > R.x1 - r || y > R.y1 - r;
     if (x < r || y < r || x > A.size - r || y > A.size - r) return true;
     const list = Ar.near(A, x, y);
     if (list) for (let k = 0; k < list.length; k++) { const o = A.obstacles[list[k]]; if (U.dist2(x, y, o.x, o.y) < (o.r + r) * (o.r + r)) return true; }
@@ -112,6 +122,7 @@
 
   // True when the segment (x0, y0)-(x1, y1) passes through an obstacle (radius pad added); checks the buckets along the segment.
   Ar.segBlocked = (A, x0, y0, x1, y1, pad) => {
+    if (A.room) return false;
     const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / CELL)), seen = Ar._seen || (Ar._seen = new Set());
     seen.clear();
     for (let i = 0; i <= n; i++) {

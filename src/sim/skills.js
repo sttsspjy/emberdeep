@@ -1,6 +1,6 @@
 // Hero skill (Q, one per hero) and the hero registries. Cooldowns are host-side (sim state). The E input is unbound (ignored).
 // ED.addHero(def) registers ED.HEROES[cls] (def: { id, name, hp, speed, crit, sig (signature weapon id), skills: [qId], icon, col, txt }). ED.HERO_IDS order is the save / wire index: append only.
-// ED.addSkill(def, cast): ED.SKILLS[id] = { id, name, icon, cd, txt, base: { r, dur, charges, ... }, levels: [{ mods, txt }] x 3 }, ED.CAST[id] = cast(w, p, x, y, N, sk) where (x, y) is the
+// ED.addSkill(def, cast): ED.SKILLS[id] = { id, name, icon, cd, txt, base: { r, dur, charges, ... }, levels: [{ mods, txt }] x 4 (levels 2-5; level 5 is a capstone that changes the skill's shape) }, ED.CAST[id] = cast(w, p, x, y, N, sk) where (x, y) is the
 // aim point (world px), N = ED.Stats.skill numbers, sk the slot { id, lvl, cd, cdMax }. A cast returns false to refuse (no cooldown), else an object merged into the 'skill' event or nothing.
 // Hero skills are utility: they deal no damage (push, stun, slow, flee, lure, block, heal, gem pull).
 // ED.HOOK[cls] = { init(w, p), tick(w, p, dt), kill(w, p, e), hit(w, p, e, dealt, src), stats(p, add) } (all optional).
@@ -25,10 +25,10 @@
     sk.gp -= dt;
     if (sk.ch > 0) { sk.cd = Math.max(0, sk.gp); sk.cdMax = GAP; } else { sk.cd = sk.rc; sk.cdMax = cd; }
   };
-  // Every xp gem within r px of (x, y) flies to hero p (zero-damage gem pull of utility skills).
+  // Every xp gem within r px of (x, y) flies to hero p (zero-damage gem pull of utility skills); r < 0: every xp gem inside p's view rect.
   W.pullGems = function (p, x, y, r) {
     const r2 = r * r;
-    for (const g of this.pickups) if (!g.dead && !g.pull && g.k.charCodeAt(0) === 120 && U.dist2(x, y, g.x, g.y) <= r2) { g.pull = p.pid; g.t = 0; } // 120 'x': xp gems
+    for (const g of this.pickups) if (!g.dead && !g.pull && g.k.charCodeAt(0) === 120 && (r < 0 ? ED.inView(p, g.x, g.y, 0) : U.dist2(x, y, g.x, g.y) <= r2)) { g.pull = p.pid; g.t = 0; } // 120 'x': xp gems
   };
 
   W.updateSkills = function (dt) {

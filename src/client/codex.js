@@ -1,8 +1,9 @@
 // Achievements and Encyclopedia screens (client only; DOM in #scr-achieve / #scr-codex, shown through ED.UI.show).
-// ED.Codex.renderAchievements(): one row per ED.UNLOCKS unlock (non-start heroes, non-start stages) with progress from ED.App.profile, plus lifetime and per-stage records.
+// ED.Codex.renderAchievements(): earns what the profile now meets (ED.UI.evalAch), then one row per ED.UNLOCKS unlock (non-start heroes, non-start stages) and per ED.ACHIEVEMENTS entry
+// (progress, gold reward) from ED.App.profile, plus lifetime and per-stage records. ED.Codex.achIcon(id): atlas icon of an achievement.
 // ED.Codex.renderCodex(tab?): tab row (heroes | weapons (hero weapons, then a Supports section) | passives | foes | bosses | stages), entry list and detail pane, read from the data tables. Only what the profile has met
 // (profile.seen via ED.Save.isSeen; bosses by their foe id) is described: the rest lists as a '???' silhouette whose detail says 'Not discovered yet' (plus the unlock line for
-// locked heroes / stages), and cross-references to unmet entries read '???'.
+// locked heroes / stages), and cross-references to unmet entries read '???'. A hidden stage (ED.Save.stageHidden) and its foes, bosses, records and achievement stay out of every list until it unlocks.
 // List entries select on click or on keyboard focus (a hover-focus never changes the detail).
 (function (ED) {
   'use strict';
@@ -21,7 +22,7 @@
     if (A && A.ok) for (const s of ['.idle', '.walk', '.walk.d', '.walk.0', '']) if (A.has(look + s)) return look + s;
     return look + '.idle';
   };
-  const foeIcon = (id) => (ED.FOES[id] ? lookIcon(ED.FOES[id].look) : '');
+  const foeIcon = C.foeIcon = (id) => (ED.FOES[id] ? lookIcon(ED.FOES[id].look) : '');
   const finalBoss = (sd) => (sd.bosses || []).find(b => b.final) || (sd.bosses || [])[0];
   const stageIcon = (i) => { const b = finalBoss(ED.STAGES[i]); return b ? foeIcon(b.id) : ''; };
   const UNSEEN = 'Not discovered yet';
@@ -31,41 +32,57 @@
   const supportRoots = () => ED.WEAPON_IDS.filter(id => ED.WEAPONS[id].support && !ED.WEAPONS[id].evolved);
 
   // ---------------- achievements ----------------
-  // Unlock rows: { sec, icon, name, rule, k (0..1), txt, done }.
+  // Icon of achievement id: its data icon, else from the rule (stage boss, hero, hero weapon), else a chest.
+  C.achIcon = (id) => {
+    const a = ED.ACHIEVEMENTS.find(x => x.id === id); if (!a) return 'pickup.chest';
+    const r = a.rule, h = ED.HEROES[r.winWith || r.form], w = h && r.form ? ED.WEAPONS[h.sig] : null;
+    return a.icon || (r.beat !== undefined ? stageIcon(r.beat) : w ? w.icon : h ? UI.heroIcon(h.id) : 'pickup.chest');
+  };
+  // Progress text of achievement a: time or counts as 'cur / need', single goals 'Done' / 'Not yet'.
+  const achTxt = (a, g) => (g.done ? 'Done' : g.need === 1 ? 'Not yet' : a.rule.time ? U.fmtTime(g.cur) + ' / ' + U.fmtTime(g.need) : U.fmtNum(g.cur) + ' / ' + U.fmtNum(g.need));
+  // Rows: { sec, icon, name, rule, k (0..1), txt, done, gold (achievements: reward, else undefined), reward (achievements: cosmetic id or '') }; unlock rows first.
   C.achievements = (p) => {
     const out = [], U0 = ED.UNLOCKS;
     for (const cls of ED.HERO_IDS) {
       const r = U0.heroes[cls], h = ED.HEROES[cls]; if (!r || r.start || !h) continue;
       const done = SV.heroUnlocked(p, cls), pr = UI.unlockProgress(p, r);
-      out.push({ sec: 'Heroes', icon: UI.heroIcon(cls), name: h.name, rule: r.txt || '', k: done ? 1 : pr.k, txt: pr.txt || (done ? 'Done' : 'Not yet'), done });
+      out.push({ sec: 'Heroes', icon: UI.heroIcon(cls), name: h.name, rule: r.txt || '', k: done ? 1 : pr.k, txt: done ? 'Done' : pr.txt || 'Not yet', done });
     }
     ED.STAGES.forEach((sd, i) => {
-      const r = U0.stages[i]; if (!r || r.start) return;
+      const r = U0.stages[i]; if (!r || r.start || SV.stageHidden(p, i)) return;
       const done = SV.stageUnlocked(p, i);
       out.push({ sec: 'Stages', icon: stageIcon(i), name: (i + 1) + '. ' + sd.name, rule: r.txt || '', k: done ? 1 : 0, txt: done ? 'Done' : 'Not yet', done });
     });
+    for (const a of ED.ACHIEVEMENTS) {
+      const g = SV.achProgress(p, a), t = SV.achText(a);
+      if (a.rule.beat !== undefined && SV.stageHidden(p, a.rule.beat)) { out.push({ sec: 'Achievements', icon: 'pickup.chest', name: '???', rule: 'Something waits below', k: 0, txt: 'Not yet', done: false, gold: a.gold, reward: '' }); continue; }
+      out.push({ sec: 'Achievements', icon: C.achIcon(a.id), name: t.name, rule: t.txt, k: g.k, txt: achTxt(a, g), done: g.done, gold: a.gold, reward: a.reward || '' });
+    }
     return out;
   };
   C.renderAchievements = () => {
-    const p = App().profile, rows = C.achievements(p), list = $('ach-list');
+    const got = UI.evalAch(), p = App().profile, rows = C.achievements(p), list = $('ach-list');
     list.textContent = '';
     let sec = '';
     for (const a of rows) {
       if (a.sec !== sec) { sec = a.sec; list.appendChild(div('cx-sec', esc(sec))); }
       const r = div('ach-row' + (a.done ? ' done' : ''));
       r.appendChild(UI.iconCanvas(a.icon, 64));
-      r.insertAdjacentHTML('beforeend', `<span class="ach-name">${esc(a.name)}</span><span class="ach-rule">${esc(a.rule)}</span>` +
+      const rd = a.reward && ED.COS_BY ? ED.COS_BY[a.reward] : null, rw = [a.gold ? '+' + a.gold + ' gold' : '', rd ? rd.name + ' ' + SV.COS_NOUN[rd.kind] : ''].filter(Boolean).join(' · ');
+      r.insertAdjacentHTML('beforeend', `<span class="ach-name">${esc(a.name)}</span><span class="ach-rule">${esc(a.rule)}${rw ? ` <span class="ach-gold">${rw}</span>` : ''}</span>` +
         `<span class="ach-prog">${meter(a.k)}<span class="ach-v">${esc(a.txt)}</span></span>`);
-      r.setAttribute('aria-label', a.name + ': ' + a.rule + ', ' + a.txt);
+      r.setAttribute('aria-label', a.name + ': ' + a.rule + (rw ? ', ' + rw : '') + ', ' + a.txt);
       list.appendChild(r);
     }
-    const n = rows.filter(a => a.done).length;
-    $('ach-count').textContent = n + ' / ' + rows.length + ' unlocked';
+    const unl = rows.filter(a => a.sec !== 'Achievements'), ach = rows.filter(a => a.sec === 'Achievements');
+    $('ach-count').textContent = unl.filter(a => a.done).length + ' / ' + unl.length + ' unlocked, ' + ach.filter(a => a.done).length + ' / ' + ach.length + ' achievements' +
+      (got.length ? '. New: ' + got.map(a => a.name + (a.gold ? ' +' + a.gold : '')).join(', ') : '');
     const st = p.stats, box = $('ach-rec');
     let h = '<span class="cx-h">Records</span><div class="rec-grid">' +
       [['Runs', st.runs], ['Wins', st.wins], ['Lifetime kills', U.fmtNum(st.kills)], ['Best time', U.fmtTime(st.bestTime)], ['Best kills (one run)', U.fmtNum(st.bestKills)], ['Best level', st.bestLevel]]
         .map(x => `<span>${x[0]}</span><b>${x[1]}</b>`).join('') + '</div><span class="cx-h">Stage bests</span>';
     ED.STAGES.forEach((sd, i) => {
+      if (SV.stageHidden(p, i)) return;
       const b = p.best[sd.id];
       h += `<div class="rec-stage"><span class="rec-sn">${i + 1}. ${esc(sd.name)}</span>` + (b
         ? `<span class="${b.won ? 'won' : 'mut'}">${b.won ? 'Beaten' : 'Not beaten yet'}</span><div class="rec-grid"><span>Time</span><b>${U.fmtTime(b.time)}</b><span>Kills</span><b>${U.fmtNum(b.kills)}</b><span>Level</span><b>${b.level}</b></div>`
@@ -107,11 +124,15 @@
     ref(box, d.icon, d.name, d.txt + (d.cd ? ' (' + d.cd + ' s cooldown)' : ''), key);
     lvls(box, (d.levels || []).map((l, i) => ['Lv ' + (i + 2), l.txt]));
   };
-  // Forms of root weapon d: name and line once discovered, else ???; how to reach them stays hidden.
-  const formLine = (box, d) => {
-    const F = ED.weaponForms(d.id); if (!F.length) return;
-    h3(box, F.length > 1 ? 'Forms (one per weapon, from chests)' : 'Form (from a chest)');
-    for (const f of F) { const e = ED.WEAPONS[f.id]; ref(box, e.icon, e.name, e.txt, '', !seen('weapons', e.id)); }
+  // Weapon tree of root weapon d: tune kinds, then per path its shape ranks (path ranks 1 / 3 / 5) and its Forms (name and line once discovered, else ???).
+  const weaponTree = (box, d) => {
+    h3(box, 'Tune (' + (ED.TUNE_MAX || 5) + ' level-ups, at most ' + (ED.TUNE_KIND_MAX || 3) + ' of one)');
+    lvls(box, (ED.TUNE || []).map(t => ['Tune', t.txt]));
+    (d.paths || []).forEach((pa, i) => {
+      h3(box, 'Path: ' + pa.name);
+      lvls(box, pa.ranks.map((l, k) => ['Rank ' + (2 * k + 1), l.txt]).concat(ED.PATH_STEP ? [['Rank 2, 4', ED.PATH_STEP.txt]] : []));
+      for (const id of ED.pathForms(d.id, i)) { const e = ED.WEAPONS[id]; ref(box, e.icon, e.name, e.txt, '', !seen('weapons', e.id)); }
+    });
   };
 
   const heroDetail = (box, cls) => {
@@ -133,8 +154,7 @@
     head(box, d.icon, d.name, tag, d.txt);
     if (MODE[d.mode]) chips(box, [['Aims', MODE[d.mode]]]);
     if (d.form) { if (d.refine) { h3(box, 'Refine'); lvls(box, d.refine.map((l, i) => ['Rank ' + (i + 1), l.txt])); } return; }
-    for (const pa of d.paths || []) { h3(box, 'Path: ' + pa.name); lvls(box, pa.ranks.map((l, i) => ['Rank ' + (i + 1), l.txt])); }
-    formLine(box, d);
+    weaponTree(box, d);
   };
   // '+10% damage' at level n: every number in the line times n.
   const scaled = (txt, n) => txt.replace(/\d+(\.\d+)?/g, (v) => String(Math.round(+v * n * 100) / 100));
@@ -145,26 +165,26 @@
     else lvls(box, [['Each', d.txt], ['Lv ' + d.max, scaled(d.txt, d.max)]]);
   };
 
-  // Foe appearances: { id: [{ stage, min }] } from the stage timelines; split children inherit the parent's.
+  // Foe appearances: { id: [{ stage, min }] } from the stage timelines and flocks; split children inherit the parent's.
   const appearances = () => {
-    const out = {};
+    const out = {}, pr = App().profile;
     const add = (id, i, m) => { const a = out[id] || (out[id] = []); const e = a.find(x => x.stage === i); if (!e) a.push({ stage: i, min: m }); else e.min = Math.min(e.min, m); };
-    ED.STAGES.forEach((sd, i) => sd.timeline.forEach((row, m) => { for (const r of row.roster) if (r[1] > 0) add(r[0], i, m); }));
+    ED.STAGES.forEach((sd, i) => { if (SV.stageHidden(pr, i)) return; sd.timeline.forEach((row, m) => { for (const r of row.roster) if (r[1] > 0) add(r[0], i, m); }); const fl = sd.events && sd.events.flock; if (fl) add(fl.id, i, Math.floor(fl.first / 60)); });
     for (const id in out) { const sp = ED.FOES[id] && ED.FOES[id].split; if (sp) for (const a of out[id]) add(sp.id, a.stage, a.min); }
     return out;
   };
   const KIND = {
-    chaser: 'Chaser: walks straight at you', swarm: 'Swarmer: fast and weak, comes in packs', brute: 'Brute: slow and tough, a telegraphed slam',
-    ranged: 'Ranged: stops at range and shoots', exploder: 'Exploder: bursts after a short fuse', charger: 'Charger: a telegraphed dash', diver: 'Diver: hovers, then a telegraphed dive',
+    chaser: 'Chaser: walks straight at you', swarm: 'Swarmer: fast and weak; flocks fly straight past you', brute: 'Brute: slow and tough, a telegraphed slam',
+    ranged: 'Ranged: stops at range and shoots', exploder: 'Exploder: bursts after a short fuse', charger: 'Charger: a short telegraphed dash, then a pause', diver: 'Diver: closes in, then a telegraphed dive and a pause',
   };
   const foeDetail = (box, id) => {
     const d = ED.FOES[id], ap = appearances()[id] || [];
-    const kind = (KIND[d.ai] || '').split(': '), desc = kind[1] ? kind[1][0].toUpperCase() + kind[1].slice(1) : '';
+    const kind = (d.ai === 'swarm' && d.solo ? 'Swarmer: fast and weak, chases you' : KIND[d.ai] || '').split(': '), desc = kind[1] ? kind[1][0].toUpperCase() + kind[1].slice(1) : '';
     head(box, foeIcon(id), d.name, d.split ? 'Splitter' : kind[0], d.split ? 'Splits when it dies' : desc);
     chips(box, [['HP', d.hp], ['Speed', d.spd], ['XP', d.xp], d.kb === 0 ? ['Knockback', 'immune'] : null]);
     const L = [];
     if (d.split && ED.FOES[d.split.id]) L.push('Splits into ' + d.split.n[0] + '-' + d.split.n[1] + ' ' + ED.FOES[d.split.id].name);
-    if (d.shot) L.push('Shoots ' + (d.shot.spread === 'ring' ? 'a ring of ' + d.shot.n + ' bolts' : d.shot.n > 1 ? 'a fan of ' + d.shot.n + ' bolts' : 'a bolt') + ' (' + d.shot.dmg + ' damage) every ' + d.shot.cd + ' s');
+    if (d.shot) L.push((d.shot.lob ? 'Lobs a blast at your spot' : 'Shoots ' + (d.shot.spread === 'ring' ? 'a ring of ' + d.shot.n + ' bolts' : d.shot.n > 1 ? 'a stream of ' + d.shot.n + ' bolts' : 'a bolt')) + ' (' + d.shot.dmg + ' damage) every ' + d.shot.cd + ' s');
     if (d.boom) L.push('Bursts after ' + d.fuse + ' s: ' + d.boom.dmg + ' damage');
     if (d.slam) L.push('Slam: ' + d.slam.mul + 'x contact damage every ' + d.slam.cd + ' s' + (d.slam.ring ? ', plus a ring of ' + d.slam.ring.n + ' shots' : ''));
     if (d.charge) L.push('Dashes at you every ' + d.charge.cd + ' s');
@@ -186,6 +206,7 @@
     samurai: ['Dash slash along a warned lane, sword waves, a screen-long iaido cut', '66%: double dashes, five waves', '33%: triple dashes, a crossed iaido, spin slashes'],
     weaver: ['Rift gates open into portals that shoot; threads cross your spot; blink with a bolt ring', '66%: three gates, threads stay as strands, adds', '33%: four gates firing faster, four threads per weave'],
     wickeater: ['Devour: a warned cone drags you toward its bite', 'Closing dark: a shrinking ring, walk through its gap or dash', 'Lash fans and spiralling orb blooms; it swells at 33%'],
+    wickmother: ['Her heart is warded: break both wax hands at once and she kneels, heart exposed', '70%: the room darkens; light all four sconces at once to make her kneel', '35%: no ward; slay her before the great wick burns out and the flame floods the room'],
   };
   const bossOf = (key) => { const [si, bi] = key.split(':').map(Number); return ED.STAGES[si].bosses[bi]; }; // 'stage:index' -> stage boss row { id, t, final }
   const bossDetail = (box, key) => {
@@ -195,7 +216,7 @@
     h3(box, 'Attacks');
     lvls(box, (BOSS_TXT[b.id] || []).map((t, i) => [String(i + 1), t]));
     para(box, 'Every attack is telegraphed: a red outline marks where it lands.', 'mut');
-    para(box, b.final ? 'Beat it to win the stage. Still alive at ' + U.fmtTime(ED.CONST.ENRAGE_T) + ', it enrages: x3 damage and speed.' : 'Drops a chest: pick a Form for a ready weapon, else an extra level-up.');
+    para(box, b.sanctum ? 'Fought alone in the Sanctum: every other foe is gone. Beat it to win the stage.' : b.final ? 'Beat it to win the stage. Still alive at ' + U.fmtTime(ED.CONST.ENRAGE_T) + ', it enrages: x3 damage and speed.' : 'Drops a chest: pick a Form for a ready weapon (from the 10:00 boss on), else a path, else an extra level-up.');
     para(box, 'HP grows with the party size.', 'mut');
   };
   const stageDetail = (box, i) => {
@@ -206,7 +227,8 @@
     chips(box, [['Foe HP', 'x' + sd.foe.hp], ['Foe damage', 'x' + sd.foe.dmg]]);
     h3(box, 'Bosses');
     for (const b of sd.bosses) if (ED.FOES[b.id]) { const on = seen('foes', b.id), r = ref(box, foeIcon(b.id), on ? ED.FOES[b.id].name : '???', U.fmtTime(b.t) + (b.final ? ', final boss' : '')); if (!on) r.classList.add('unseen'); }
-    const ev = sd.events && sd.events.swarm;
+    const fl = sd.events && sd.events.flock, ev = sd.events && sd.events.swarm;
+    if (fl && ED.FOES[fl.id]) para(box, 'Flock of ' + ED.FOES[fl.id].name + 's every ' + fl.every + ' s from ' + U.fmtTime(fl.first) + ', flying past');
     if (ev) para(box, 'Swarm wave every ' + ev.every + ' s from ' + U.fmtTime(ev.first));
     if (sd.elites) para(box, 'Elite every ' + sd.elites.every + ' s from ' + U.fmtTime(sd.elites.first) + ': it drops a chest');
     para(box, best ? 'Your best: ' + U.fmtTime(best.time) + ', ' + U.fmtNum(best.kills) + ' kills, level ' + best.level + (best.won ? ', beaten' : '') : 'Not played yet', best && best.won ? 'ok' : 'mut');
@@ -258,11 +280,11 @@
     } },
     { id: 'bosses', name: 'Bosses', kind: 'foes', seenId: (k) => bossOf(k).id, detail: bossDetail, hidden: (box, k) => unseenDetail(box, foeIcon(bossOf(k).id)), list: () => {
       const out = [];
-      ED.STAGES.forEach((sd, i) => { out.push({ sec: sd.name }); (sd.bosses || []).forEach((b, j) => { if (ED.FOES[b.id]) out.push({ key: i + ':' + j, icon: foeIcon(b.id), name: ED.FOES[b.id].name, cls: b.final ? 'evo' : '' }); }); });
+      ED.STAGES.forEach((sd, i) => { if (SV.stageHidden(App().profile, i)) return; out.push({ sec: sd.name }); (sd.bosses || []).forEach((b, j) => { if (ED.FOES[b.id]) out.push({ key: i + ':' + j, icon: foeIcon(b.id), name: ED.FOES[b.id].name, cls: b.final ? 'evo' : '' }); }); });
       return out;
     } },
     { id: 'stages', name: 'Stages', kind: 'stages', seenId: (k) => ED.STAGE_IDS[+k], detail: (box, k) => stageDetail(box, +k),
-      hidden: (box, k) => unseenDetail(box, stageIcon(+k), SV.stageUnlocked(App().profile, +k) ? null : ED.UNLOCKS.stages[+k] || {}), list: () => ED.STAGES.map((sd, i) => ({ key: String(i), icon: stageIcon(i), name: (i + 1) + '. ' + sd.name, cls: SV.stageUnlocked(App().profile, i) ? '' : 'locked' })) },
+      hidden: (box, k) => unseenDetail(box, stageIcon(+k), SV.stageUnlocked(App().profile, +k) ? null : ED.UNLOCKS.stages[+k] || {}), list: () => ED.STAGES.map((sd, i) => ({ key: String(i), icon: stageIcon(i), name: (i + 1) + '. ' + sd.name, cls: SV.stageUnlocked(App().profile, i) ? '' : 'locked' })).filter(r => !SV.stageHidden(App().profile, +r.key)) },
   ];
   const tabOf = (id) => TABS.find(t => t.id === id) || TABS[0];
   const met = (tab, key) => seen(tab.kind, tab.seenId ? tab.seenId(key) : key);

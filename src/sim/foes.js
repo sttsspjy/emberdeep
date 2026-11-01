@@ -1,47 +1,62 @@
 // Foe pool, spawn, per-tick update (statuses, knockback, brain, contact), kill and drops, elites, off-screen recycling (GAME-DESIGN §7).
 // Foe fields: ARCHITECTURE §4 plus internal ones: tgt (nearest living hero, retargeted every RETARGET ticks staggered by id), cd (contact cooldown), age, invulnT, takeMul (damage taken factor),
-// scale (draw scale), final (final boss), rushT / rx / ry (stampede or closing ring: fixed heading), burnTick, hev / hevT (hit aggregation), enraged,
+// scale (draw scale), final (final boss), rushT / rx / ry (fly-through rusher: rush time left, fixed heading; spd is its flight speed), burnTick, hev / hevT (hit aggregation), enraged,
 // acd (attack cooldown), aa (locked attack angle), tz / tzId (the brain's live telegraph zone; ai.js), ovT / ovK / ovX / ovY / ovP (skill override: flee or lure, ai.js). No per-foe allocation: pooled objects carry every field.
+// Attack budget: each living hero's p.atkTok refills at 0.5 + 0.05 x minute per s (at most ATK_TOK); a ranged, charge, dive or blink start against it spends 1 (ai.js).
 (function (ED) {
   'use strict';
   const U = ED.U, W = ED.World.prototype;
-  const CONTACT_CD = 1.0, FAR = 900, FAR_ELITE = 1300, RETARGET = 20;
+  const CONTACT_CD = 1.0, FAR = 900, FAR_ELITE = 1300, RETARGET = 20, ATK_TOK = 2, FLY_OUT = 360, VW = ED.HERO_VIEW;
+  const SPLIT_ARC = 70 * Math.PI / 180, SPLIT_JIT = 0.08; // splitter children: half-arc half width, angle jitter (rad); sum < 90 deg
 
   W.initFoes = function () { this.foePool = []; };
-  // Contact damage at the current time: 3 at 0:00 rising to 12 at 15:00 (GAME-DESIGN §7), x the stage damage factor.
-  W.contactDmg = function () { return (3 + 9 * Math.min(1, this.time / 900)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
-  // Shot / blast damage factor at the current time: x1 at 0:00 rising to x2.2 at 15:00 (shots 4-11 per hit), x the stage damage factor.
-  W.foeDmgK = function () { return (1 + 1.2 * Math.min(1, this.time / 900)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
-  // Foe HP at the current time: base x (1 + 0.24 x minutes) x party factor x the stage HP factor.
-  W.foeHp = function (base) { return base * (1 + 0.24 * this.time / 60) * this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1); };
+  // Damage curve ramps (GAME-DESIGN §7): early 0..1 over 0:00-15:00, late 0..1 over 15:00-20:00; both hold after.
+  const early = (t) => Math.min(1, t / 900), late = (t) => U.clamp((t - 900) / 300, 0, 1);
+  // Contact damage at the current time: 3 at 0:00 rising to 9 at 15:00 and 11 at 20:00, x the stage damage factor.
+  W.contactDmg = function () { return (3 + 6 * early(this.time) + 2 * late(this.time)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
+  // Shot / blast damage factor at the current time: x1 at 0:00 rising to x1.8 at 15:00 and x2.1 at 20:00 (shots 4-9 per hit at 15:00), x the stage damage factor.
+  W.foeDmgK = function () { return (1 + 0.8 * early(this.time) + 0.3 * late(this.time)) * ((this.sdef.foe && this.sdef.foe.dmg) || 1); };
+  // HP of foe def spawned now: def.hp x FOE_HP_K (non-boss defs) x (1 + g x minutes) x party factor x the stage HP factor; g 0.06 swarm brain, 0.24 boss parts, else 0.11 (GAME-DESIGN §7).
+  const FOE_HP_K = 1.6;
+  W.foeHp = function (def) { return def.hp * (def.boss ? 1 : FOE_HP_K) * (1 + (def.ai === 'swarm' ? 0.06 : def.boss ? 0.24 : 0.11) * this.time / 60) * this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1); };
   // Walk speed factor of foes spawned now: 0.8 at 0:00 rising to 1 at 4:00; fixed at spawn, bosses exempt, telegraphed dashes keep their own speed.
   W.foePace = function () { return 0.8 + 0.2 * Math.min(1, this.time / 240); };
-  // Boss HP for a boss due at t s (GAME-DESIGN §8): 1500 x (minute / 5)^2.5 (1500 / 8485 / 23383 at 5 / 10 / 15 min) x party factor x the stage HP factor.
-  ED.bossHp = (t, k) => Math.round(1500 * Math.pow(t / 300, 2.5) * k); // boss HP at spawn time t s; k = party x stage HP factor (GAME-DESIGN §8)
+  // Boss HP for a boss due at t s (GAME-DESIGN §8): BOSS_HP anchors [t, HP] (5 / 10 / 15 / 20 min), linear between, held past the ends; x k (party factor x the stage HP factor).
+  const BOSS_HP = [[300, 5000], [600, 9000], [900, 13000], [1200, 22000]];
+  ED.bossHp = (t, k) => {
+    const A = BOSS_HP; let i = 1;
+    while (i < A.length - 1 && t > A[i][0]) i++;
+    return Math.round(U.lerp(A[i - 1][1], A[i][1], U.clamp((t - A[i - 1][0]) / (A[i][0] - A[i - 1][0]), 0, 1)) * k);
+  };
   W.bossHp = function (t) { return ED.bossHp(t, this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1)); };
+  // Elite HP at t s (GAME-DESIGN §7), absolute (not from the spawned HP): (EL0 + EL1 x minute) x EL_BRUTE for brutes x def.take (equal effective HP for armoured kinds),
+  // x EL_BENCH in the benchmark phase (bench true), x k (party factor x the stage HP factor).
+  const EL0 = 600, EL1 = 330, EL_BRUTE = 1.6, EL_BENCH = 0.85;
+  ED.eliteHp = (t, def, k, bench) => Math.round((EL0 + EL1 * t / 60) * (def.brute ? EL_BRUTE : 1) * (def.take || 1) * (bench ? EL_BENCH : 1) * k);
 
-  // Spawns foe k (id string or FOE_IDX) at (x, y). opts: { elite, hpMul, rush: [dx, dy, s] (fixed heading for s seconds, default 6) }. Returns the foe.
+  // Spawns foe k (id string or FOE_IDX) at (x, y). opts: { elite, hpMul, rush: [dx, dy, s, v] (fly-through: heading (dx, dy) at v px/s, rush time s) }. Returns the foe.
   W.spawnFoe = function (k, x, y, opts) {
     const def = typeof k === 'string' ? ED.FOES[k] : ED.FOES[ED.FOE_IDS[k]];
     if (!def) return null;
     const e = this.foePool.pop() || {};
     e.id = this.nextId(); e.k = def.idx; e.def = def; e.x = x; e.y = y; e.vx = 0; e.vy = 0; e.r = def.r;
-    e.maxHp = e.hp = Math.max(1, Math.round(this.foeHp(def.hp) * ((opts && opts.hpMul) || 1))); e.hpQ = 255;
+    e.maxHp = e.hp = Math.max(1, Math.round(this.foeHp(def) * ((opts && opts.hpMul) || 1))); e.hpQ = 255;
     e.dmg = this.contactDmg() * def.dmg; e.spd = def.boss ? def.spd : def.spd * this.foePace(); e.kbx = 0; e.kby = 0; e.face = 1; e.flash = 0; e.st = 0; e.stT = 0;
-    e.elite = false; e.boss = !!def.boss; e.final = false; e.enraged = false;
+    e.elite = false; e.boss = !!def.boss; e.final = false; e.enraged = false; e.sanctum = false;
     e.slowT = 0; e.slowK = 0; e.burnT = 0; e.burnDps = 0; e.burnOwner = null; e.burnTick = 0.5; e.stunT = 0; e.freezeT = 0;
     e.hitT = 0; e.vars = null; e.tgt = null; e.cd = 0; e.age = 0; e.invulnT = 0; e.takeMul = def.take || 1; e.scale = def.scale || 1; e.hev = 0; e.hevT = -1;
     e.rushT = 0; e.rx = 0; e.ry = 0; e.acd = 0.6 + (e.id % 7) * 0.2; e.aa = 0; e.tz = null; e.tzId = 0; e.dead = false;
     e.ovT = 0; e.ovK = 0; e.ovX = 0; e.ovY = 0; e.ovP = null; e.brI = 0; e.brT = 0;
-    if (opts && opts.rush) { e.rushT = opts.rush[2] || 6; e.rx = opts.rush[0]; e.ry = opts.rush[1]; }
+    if (opts && opts.rush) { e.rushT = opts.rush[2]; e.rx = opts.rush[0]; e.ry = opts.rush[1]; e.spd = opts.rush[3]; }
     if (opts && opts.elite) this.promoteElite(e);
     this.foes.push(e);
     return e;
   };
-  // Elite: 2x size, 15x HP, x1.5 contact damage; drops a chest (GAME-DESIGN §7). Brains widen its attacks (ai.js).
+  // Elite: 2x size, HP ED.eliteHp (benchmark factor from the stage's bench.t), x1.5 contact damage; drops a chest (GAME-DESIGN §7). Brains widen its attacks (ai.js).
   W.promoteElite = function (e) {
+    const bn = this.sdef.bench;
     e.elite = true; e.r = e.def.r * 2; e.scale = (e.def.scale || 1) * 2;
-    e.maxHp = e.hp = Math.round(e.hp * 15); e.dmg *= 1.5;
+    e.maxHp = e.hp = Math.max(1, ED.eliteHp(this.time, e.def, this.partyHp() * ((this.sdef.foe && this.sdef.foe.hp) || 1), !!(bn && this.time >= bn.t))); e.dmg *= 1.5;
   };
 
   // Moves e toward (tx, ty) at its speed x mul (slow applied), sliding around obstacles; sets face and vx/vy. Returns the distance to the target before the step.
@@ -55,6 +70,19 @@
     return d;
   };
 
+  // Removes e without a kill: no kill credit, 'die' event or drops; snapshots stop carrying it.
+  W.despawnFoe = function (e) { if (e.st) this.foeCancel(e); e.dead = true; e.hp = 0; e.hpQ = 0; };
+  // True when fly-through rusher e is more than FLY_OUT px outside every living hero's view and (while its rush time lasts) heading away from each.
+  W.flyGone = function (e) {
+    const L = this.living;
+    for (let h = 0; h < L.length; h++) {
+      const p = L[h], dx = e.x - p.x, dy = e.y - p.y;
+      if (Math.abs(dx) <= VW.hw + FLY_OUT && Math.abs(dy + VW.oy) <= VW.hh + FLY_OUT) return false;
+      if (e.rushT > 0 && dx * e.rx + dy * e.ry <= 0) return false;
+    }
+    return true;
+  };
+
   // Drops the brain's live telegraph (if still its own) and returns e to moving.
   W.foeCancel = function (e) {
     const z = e.tz;
@@ -63,7 +91,8 @@
   };
 
   W.updateFoes = function (dt) {
-    const list = this.foes, n = list.length, living = this.living, A = this.arena, nl = living.length;
+    const list = this.foes, n = list.length, living = this.living, A = this.arena, nl = living.length, tok = (0.5 + 0.05 * this.time / 60) * dt;
+    for (let h = 0; h < nl; h++) { const p = living[h]; p.atkTok = Math.min(ATK_TOK, p.atkTok + tok); }
     for (let i = 0; i < n; i++) {
       const e = list[i];
       if (e.dead) continue;
@@ -93,12 +122,10 @@
         e.tgt = tg;
       }
       if (e.freezeT > 0 || e.stunT > 0) { e.vx = e.vy = 0; if (e.st && !e.boss) this.foeCancel(e); }
-      else if (e.rushT > 0) {
+      else if (e.rx || e.ry) { // fly-through rusher: keeps its heading, never chases; despawns at the arena bound or once gone past every hero's view
         e.rushT -= dt;
-        const v = e.spd * 1.3; e.vx = e.rx * v; e.vy = e.ry * v;
-        e.x += e.vx * dt; e.y += e.vy * dt; e.face = e.rx < 0 ? -1 : 1;
-        if (e.x < -60 || e.y < -60 || e.x > A.size + 60 || e.y > A.size + 60) e.rushT = 0;
-        ED.Arena.collide(A, e, e.r);
+        e.vx = e.rx * e.spd; e.vy = e.ry * e.spd; e.face = e.rx < 0 ? -1 : 1;
+        if (ED.Arena.move(A, e, e.vx * dt, e.vy * dt, e.r) === true || (nl && this.flyGone(e))) { this.despawnFoe(e); continue; }
       } else if (e.ovT > 0) ED.AI.override(this, e, dt);
       else if (tg) {
         const brain = ED.AI[e.def.ai] || ED.AI.chaser;
@@ -111,8 +138,8 @@
           if ((p.x - e.x) * (p.x - e.x) + (p.y - e.y) * (p.y - e.y) <= rr * rr) { if (this.hurtHero(p, e.dmg, e) > 0) e.cd = CONTACT_CD; break; }
         }
       }
-      // off-screen recycling (once a second per foe): a normal foe further than FAR (elites FAR_ELITE) from every hero moves to a fresh spawn point ahead of a hero
-      if (!e.boss && nl && e.rushT <= 0 && (this.tick + e.id) % 60 === 0) {
+      // off-screen recycling (once a second per foe): a normal non-rusher foe further than FAR (elites FAR_ELITE) from every hero moves to a fresh spawn point ahead of a hero
+      if (!e.boss && nl && !(e.rx || e.ry) && (this.tick + e.id) % 60 === 0) {
         const far = e.elite ? FAR_ELITE : FAR;
         let out = true;
         for (let h = 0; h < nl; h++) { const p = living[h]; if ((p.x - e.x) * (p.x - e.x) + (p.y - e.y) * (p.y - e.y) < far * far) { out = false; break; } }
@@ -124,21 +151,27 @@
     }
   };
 
-  // Foe e dies: kill credit, 'die' event, drops (gem by def.xp; elites a chest, 1-5 gold x stage gold, a large gem and food at 50%; bosses via onBossKilled), splitter children, the killer's weapon kill callbacks, then its hero kill hook.
+  // Foe e dies: kill credit, 'die' event, drops (after the final boss: lap coins only, lap.js lapKill; else gem by def.xp; elites a chest, 1-5 gold x stage gold, a large gem and food at 50%; bosses via onBossKilled; a hero kill of a non-boss rolls a magnet), splitter children, the killer's weapon kill callbacks, then its hero kill hook.
   W.killFoe = function (e, src) {
     if (e.dead) return;
     e.dead = true; e.hp = 0; e.hpQ = 0;
     this.kills++;
     const p = src && src.p;
-    if (p) p.kills++;
+    if (p) { p.kills++; const k = src.wid || 'other'; p.kw[k] = (p.kw[k] || 0) + 1; }
     this.emit({ t: 'die', id: e.id, k: e.k, x: Math.round(e.x), y: Math.round(e.y), elite: e.elite, boss: e.boss });
-    if (e.boss) this.onBossKilled(e, p);
+    if (this.lap) this.lapKill(e, p);
+    else if (e.boss) this.onBossKilled(e, p);
     else if (e.elite) { this.spawnPickup('chest', e.x, e.y, 1); this.spawnPickup('gold', e.x + 8, e.y, Math.round(this.rng.int(1, 5) * (this.sdef.gold || 1))); this.dropGem(e.x - 8, e.y, 25); if (this.rng.chance(0.5)) this.spawnPickup('food', e.x, e.y + 10, 30); }
     else this.dropGem(e.x, e.y, e.def.xp || 1);
+    if (p && !e.boss) this.rollMagnet(e.x, e.y);
     const sp = e.def.split;
     if (sp && !e.boss) {
-      const n = this.rng.int(sp.n[0], sp.n[1]) + (e.elite ? 3 : 0);
-      for (let i = 0; i < n; i++) { const a = i / n * U.TAU + this.rng.next(), d = 8 + e.r * 0.5; this.spawnFoe(sp.id, e.x + Math.cos(a) * d, e.y + Math.sin(a) * d); }
+      const n = Math.min(this.rng.int(sp.n[0], sp.n[1]) + (e.elite ? 3 : 0), this.HARD_CAP - this.foes.length + 1); // the dying parent still counts in foes
+      // children fan out on a +-SPLIT_ARC half-arc facing away from the nearest living hero (none: random facing), so none starts closer to that hero than the parent
+      let h = null, hd = Infinity;
+      for (let k = 0; k < this.living.length; k++) { const q = this.living[k], d2 = (q.x - e.x) * (q.x - e.x) + (q.y - e.y) * (q.y - e.y); if (d2 < hd) { hd = d2; h = q; } }
+      const c = h ? Math.atan2(e.y - h.y, e.x - h.x) : this.rng.next() * U.TAU, d = 8 + e.r * 0.5;
+      for (let i = 0; i < n; i++) { const a = c + (n > 1 ? (i / (n - 1) * 2 - 1) * SPLIT_ARC : 0) + this.rng.range(-SPLIT_JIT, SPLIT_JIT); this.spawnFoe(sp.id, e.x + Math.cos(a) * d, e.y + Math.sin(a) * d); }
     }
     if (p) { this.weaponKill(p, e); const hk = ED.HOOK[p.cls]; if (hk && hk.kill) hk.kill(this, p, e); }
   };

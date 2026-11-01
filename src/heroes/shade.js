@@ -1,7 +1,8 @@
-// Shade (assassin): hero data, signature Twin Daggers (rapid narrow stabs toward the cursor; 3 paths x 3 ranks), Forms Thousand Cuts (path 0), Assassinate (path 1),
-// Shadow Fan (path 2), hybrids Death Lotus (paths 0 + 1) and Reaper's Return (paths 1 + 2); Q Shadow Step.
+// Shade (assassin): hero data, signature Twin Daggers (rapid narrow stabs toward the cursor; 3 paths x 3 ranks), Forms Thousand Cuts (Flurry), Assassinate + Death Lotus (Lethality),
+// Shadow Fan + Reaper's Return (Return); Q Shadow Step.
 // Stab: a segment from the hero's hand along the aim, S.len x area long, S.wid x area wide; every foe touching it is hit. Crit is rolled once per stab (a crit stab forces a crit on
 // every foe it touches, others never crit). A strike of S.n stabs is spread evenly over the cooldown (ws.st queue), each stab re-aimed. Visual: one line zone per stab.
+// S.scap > 0: one foe takes at most S.scap stabs of one strike (later stabs pass through it).
 // Zone looks: stab / stabx (crit) / tcut (storm stab) line zones 0.12 s; smark (mark on a foe), mcut (shadow X cut, w = cut length), petal (bloom, w = blade count), sexec (execute pop,
 // w = 1 with a burst), stepcut (blink slash), afterimg (Shadow Step decoy). Projectile looks: rknife (returning dagger), sknife (Shadow Fan), pknife (pinning dagger).
 (function (ED) {
@@ -9,7 +10,7 @@
   const U = ED.U, TAU = U.TAU;
   ED.regLook('stepcut', 'afterimg', 'sknife', 'stab', 'stabx', 'tcut', 'smark', 'mcut', 'petal', 'sexec', 'rknife', 'pknife');
 
-  ED.addHero({ id: 'shade', name: 'Shade', hp: 80, speed: 80, crit: 0.15, sig: 'daggers', skills: ['step'], icon: 'hero.shade.idle', col: '#8a9bd6', txt: 'Rapid stabs, deadly crits.' });
+  ED.addHero({ id: 'shade', name: 'Shade', hp: 80, speed: 84, crit: 0.15, sig: 'daggers', skills: ['step'], icon: 'hero.shade.idle', col: '#8a9bd6', txt: 'Rapid stabs, deadly crits.' });
 
   const AIM_CONE = 0.9, HAND = 6, VIS = 0.12;
   const ZO = { team: 0, p: null, wid: '', x: 0, y: 0, a: 0, len: 0, w: 0, r: 0, dur: VIS, look: '' };
@@ -20,13 +21,14 @@
   }
 
   // ---------------- hits ----------------
-  // True when a pinning dagger of slot state st sits in foe e (Reaper's Return).
-  const pinned = (st, e) => { const P = st.pins; if (P) for (let i = 0; i < P.length; i++) if (P[i].id === e.id) return true; return false; };
+  // Pinning daggers of slot state st sitting in foe e (Reaper's Return); a foe holds at most PIN_MAX.
+  const PIN_MAX = 2;
+  const pins = (st, e) => { const P = st.pins; let n = 0; if (P) for (let i = 0; i < P.length; i++) if (P[i].id === e.id) n++; return n; };
   // Live Assassinate mark of slot state st, or null.
   const markOf = (st) => { const m = st.mark; return m && !m.dead && m.id === st.mid ? m : null; };
   // One weapon hit on e: a forced crit on a crit stab, the mark (dmg x S.mk) or a pinned foe, else no crit; then execute (a non-boss foe left at or under S.exec of its max HP dies).
   function strike(w, p, ws, S, e, dmg, crit, kx, ky) {
-    const st = ws.st, onMark = S.mark && e === markOf(st), sure = crit || onMark || (S.pin && pinned(st, e));
+    const st = ws.st, onMark = S.mark && e === markOf(st), sure = crit || onMark || (S.pin && pins(st, e) > 0);
     const s = w.src(p, ws.id, 'weapon', S.knock); s.kx = kx; s.ky = ky; s.crit = sure; s.critC = sure ? -1 : 0;
     w.hitFoe(e, onMark ? dmg * S.mk : dmg, s);
     if (S.exec > 0 && !e.dead && !e.boss && e.hp <= e.maxHp * S.exec) execute(w, p, ws, S, e);
@@ -39,13 +41,22 @@
     vis(w, p, ws.id, 'sexec', e.x, e.y, 0, 0, S.burst ? 1 : 0, S.burst ? 26 : e.r + 4, 0.3);
     if (S.burst) w.blast(p, ws.id, e.x, e.y, 26, S.dmg * S.burst, BURST);
   }
-  // Segment hit from (x0, y0) along a for L px, half width hw: strike on every foe touching it. Returns the foe nearest the start (it may be dead) or null.
-  function seg(w, p, ws, S, x0, y0, a, L, hw, dmg, crit) {
+  // Stab cap (S.scap): per-strike stab counts per foe id in slot state (st.cid / st.cn, st.cl used; reset by fire). True when foe id may take one more stab (counted).
+  const CAP_N = 96;
+  function capOk(st, id, cap) {
+    const I = st.cid, N = st.cn;
+    for (let i = 0; i < st.cl; i++) if (I[i] === id) { if (N[i] >= cap) return false; N[i]++; return true; }
+    if (st.cl < CAP_N) { I[st.cl] = id; N[st.cl++] = 1; }
+    return true;
+  }
+  // Segment hit from (x0, y0) along a for L px, half width hw: strike on every foe touching it (cap: S.scap per strike). Returns the foe nearest the start (it may be dead) or null.
+  function seg(w, p, ws, S, x0, y0, a, L, hw, dmg, crit, cap) {
     const c = Math.cos(a), s = Math.sin(a), x1 = x0 + c * L, y1 = y0 + s * L, q = w.foeScan((x0 + x1) / 2, (y0 + y1) / 2, L / 2 + hw + 24);
     let first = null, fd = Infinity;
     for (let k = 0; k < q.length; k++) {
       const e = q[k]; if (e.dead) continue;
       const m = hw + e.r; if (U.segDist2(e.x, e.y, x0, y0, x1, y1) > m * m) continue;
+      if (cap && !capOk(ws.st, e.id, S.scap)) continue;
       const d = (e.x - x0) * c + (e.y - y0) * s; if (d < fd) { fd = d; first = e; }
       strike(w, p, ws, S, e, dmg, crit, c, s);
     }
@@ -70,7 +81,7 @@
     if (S.cone > 0) { a += (w.rng.next() * 2 - 1) * S.cone; L *= 0.8 + w.rng.next() * 0.35; look = 'tcut'; }
     if (crit) { look = 'stabx'; if (S.lunge > 0) { L *= 1 + S.lunge; hw *= 1.4; } }
     const x0 = p.x + Math.cos(a) * 4, y0 = p.y - HAND + Math.sin(a) * 4;
-    const first = seg(w, p, ws, S, x0, y0, a, L, hw, S.dmg, crit);
+    const first = seg(w, p, ws, S, x0, y0, a, L, hw, S.dmg, crit, S.scap > 0);
     vis(w, p, ws.id, look, x0, y0, a, L, hw * 2, 0, VIS);
     if (crit && S.bloom > 0 && first) bloom(w, p, ws, S, first.x, first.y, first.r, a);
   }
@@ -83,7 +94,7 @@
   // ---------------- thrown daggers ----------------
   // Every S.tcd s: S.thrown daggers fanned 0.35 rad along the cursor, out S.trange x area px and back (dmg x S.tdm, pierce all; each foe hit once out, once back);
   // S.hover: they spin 0.4 s at the far end, re-hitting every 0.15 s. S.fan (Shadow Fan): S.fan + S.thrown daggers fanned forward and as many behind; the return leg always crits.
-  // S.pin (Reaper's Return): a dagger sticks in the first foe it hits for S.pdur s (strikes on that foe crit), then tears out (a TEAR px cut, forced crits) and flies back as a forced crit.
+  // S.pin (Reaper's Return): a dagger sticks in the first foe it hits holding fewer than PIN_MAX pins for S.pdur s (strikes on that foe crit), then tears out (a TEAR px cut, forced crits) and flies back as a forced crit.
   // Per-dagger state st { h (hovering), e / id (pinned foe), t (pin time left), ws } from a pool, returned on the dagger's end.
   const HOVER = 0.4, TSPEED = 320, TEAR = 24, MBURST = { kind: 'weapon', knock: 80, noEv: true, crit: true };
   const stPool = [];
@@ -111,7 +122,7 @@
   function thrownHit(w, pr, e) {
     const p = pr.p; if (!p || !p.weapons[0]) return;
     const ws = p.weapons[0], S = w.weaponS(p, 0), s = pr.st;
-    if (s && S.pin && !pr.back && !s.e && !e.dead && ws.st.pins) { s.e = e; s.id = e.id; s.t = S.pdur; s.ws = ws; ws.st.pins.push(s); }
+    if (s && S.pin && !pr.back && !s.e && !e.dead && ws.st.pins && pins(ws.st, e) < PIN_MAX) { s.e = e; s.id = e.id; s.t = S.pdur; s.ws = ws; ws.st.pins.push(s); }
     if (S.exec > 0 && !e.dead && !e.boss && e.hp <= e.maxHp * S.exec) execute(w, p, ws, S, e);
   }
   const TO = { look: 'rknife', pierce: 999, ret: true, r: 5, speed: TSPEED, dmg: 0, life: 1, st: null, tick: thrownTick, onHit: thrownHit, onEnd: giveSt };
@@ -131,7 +142,7 @@
   // ---------------- Twin Daggers and the stab Forms ----------------
   // fire: one stab now and S.n - 1 queued at S.cd / S.n gaps (tick); thrown daggers on their own S.tcd timer; Assassinate: mark upkeep and shadow cuts (tick).
   const stabImpl = {
-    init(w, p, ws) { const st = ws.st; st.q = 0; st.qt = 0; st.gap = 0; st.tt = 0.3; st.mark = null; st.mid = 0; st.mx = 0; st.my = 0; st.mt = 0; st.mz = null; st.mzId = 0; st.ct = 0.3; st.pins = []; },
+    init(w, p, ws) { const st = ws.st; st.cid = new Int32Array(CAP_N); st.cn = new Uint8Array(CAP_N); st.cl = 0; st.q = 0; st.qt = 0; st.gap = 0; st.tt = 0.3; st.mark = null; st.mid = 0; st.mx = 0; st.my = 0; st.mt = 0; st.mz = null; st.mzId = 0; st.ct = 0.3; st.pins = []; },
     tick(w, p, ws, S, dt) {
       const st = ws.st;
       if (st.q > 0 && (st.qt -= dt) <= 0) { st.q--; st.qt += st.gap; stabOnce(w, p, ws, S); }
@@ -141,6 +152,7 @@
     fire(w, p, ws, S) {
       const st = ws.st, n = Math.max(1, S.n | 0);
       while (st.q > 0) { st.q--; stabOnce(w, p, ws, S); }
+      st.cl = 0;
       st.gap = S.cd / n; st.q = n - 1; st.qt = st.gap;
       stabOnce(w, p, ws, S);
       return true;
@@ -187,35 +199,34 @@
   }
 
   // Custom weapon keys (defaults below): len / wid (stab px), exec (execute HP fraction), burst (execute cut dmg factor), lunge (crit stab extra length), thrown (returning daggers),
-  // tcd (throw cooldown s), trange (throw distance px), tdm (thrown dmg factor), hover; Forms: fan, cone (storm jitter rad), mark, mk (mark dmg factor), mcd / mlen (shadow cut),
+  // tcd (throw cooldown s), trange (throw distance px), tdm (thrown dmg factor), hover, scap (stabs one foe takes per strike, 0 = all); Forms: fan, cone (storm jitter rad), mark, mk (mark dmg factor), mcd / mlen (shadow cut),
   // bloom / petals / plen, pin / pdur.
-  const KEYS = { len: 52, wid: 10, exec: 0, burst: 0, lunge: 0, thrown: 0, tcd: 1.2, trange: 100, tdm: 0.6, hover: false, fan: 0, cone: 0, mark: false, mk: 1, mcd: 0.5, mlen: 40,
+  const KEYS = { len: 52, wid: 10, exec: 0, burst: 0, lunge: 0, thrown: 0, tcd: 1.2, trange: 100, tdm: 0.6, hover: false, scap: 0, fan: 0, cone: 0, mark: false, mk: 1, mcd: 0.5, mlen: 40,
     bloom: 0, petals: 6, plen: 0.6, pin: false, pdur: 1.2 };
   const base = (o) => Object.assign({}, KEYS, o);
   ED.addWeapon({
     id: 'daggers', name: 'Twin Daggers', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', txt: 'Rapid stabs toward your cursor',
-    base: base({ dmg: 13, cd: 0.5, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.1 }),
+    base: base({ dmg: 16, cd: 0.5, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.1 }),
     paths: [
-      { id: 'flurry', name: 'Flurry', form: 'thousand', ranks: [
+      { id: 'flurry', name: 'Flurry', forms: ['thousand'], ranks: [
         { mods: { n: 1 }, txt: '+1 stab per flurry' },
         { mods: { len: 26 }, txt: 'Stabs lunge much farther' },
-        { mods: { n: 1, cd: -0.15 }, txt: '+1 stab, flurries come faster' }] },
-      { id: 'lethality', name: 'Lethality', form: 'assassinate', ranks: [
+        { mods: { n: 1, cd: -0.05, scap: 3 }, txt: '+1 stab, flurries come faster' }] },
+      { id: 'lethality', name: 'Lethality', forms: ['assassinate', 'lotus'], ranks: [
         { mods: { exec: 0.1 }, txt: 'Stabs execute foes under 10% HP' },
         { mods: { crit: 0.1, lunge: 0.8 }, txt: '+10% crit, crits stab much farther' },
         { mods: { exec: 0.05, burst: 0.6 }, txt: 'Executes burst, cutting foes nearby' }] },
-      { id: 'return', name: 'Return', form: 'shadowfan', ranks: [
+      { id: 'return', name: 'Return', forms: ['shadowfan', 'reaper'], ranks: [
         { mods: { thrown: 1 }, txt: 'Throw a dagger that flies back' },
         { mods: { thrown: 1 }, txt: '+1 returning dagger' },
         { mods: { hover: true, thrown: 1 }, txt: '+1 dagger, they spin at the far end' }] },
-    ],
-    hybrids: [{ need: [0, 1], form: 'lotus' }, { need: [1, 2], form: 'reaper' }],
+    ],
   }, stabImpl);
 
   // Shadow Fan (Return): stabs + a fan of S.fan + S.thrown returning daggers forward and as many behind (registered first: the old evolution id); the return leg always crits.
   ED.addWeapon({
     id: 'shadowfan', name: 'Shadow Fan', icon: 'weapon.knives', look: 'sknife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Daggers fan out, return and crit',
-    base: base({ dmg: 21, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, fan: 3, tcd: 1, trange: 120, tdm: 0.42 }),
+    base: base({ dmg: 14.7, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, fan: 3, tcd: 1, trange: 120, tdm: 0.42 }),
     refine: [
       { mods: { fan: 2 }, txt: '+2 daggers each way' },
       { mods: { trange: 48, dmg: 0.15 }, txt: 'Daggers fly farther, +15% damage' },
@@ -224,7 +235,7 @@
   // Thousand Cuts (Flurry): the stab storm, each stab jittered within +-S.cone of the aim.
   ED.addWeapon({
     id: 'thousand', name: 'Thousand Cuts', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A storm of stabs in a narrow cone',
-    base: base({ dmg: 20, cd: 0.4, n: 6, pierce: 0, area: 1, speed: 0, dur: 0, knock: 2, range: 0, crit: 0.1, len: 68, wid: 12, cone: 0.36 }),
+    base: base({ dmg: 15, cd: 0.4, n: 6, pierce: 0, area: 1, speed: 0, dur: 0, knock: 2, range: 0, crit: 0.1, len: 68, wid: 12, cone: 0.36 }),
     refine: [
       { mods: { n: 2 }, txt: '+2 stabs per storm' },
       { mods: { cone: 0.12, len: 14 }, txt: 'Storm widens, stabs reach farther' },
@@ -233,25 +244,25 @@
   // Assassinate (Lethality): stabs + the mark and the shadow's X cuts.
   ED.addWeapon({
     id: 'assassinate', name: 'Assassinate', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A shadow hunts the toughest foe',
-    base: base({ dmg: 18, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.15, mark: true, mk: 1.1, mcd: 0.45, mlen: 64 }),
+    base: base({ dmg: 12.6, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.15, mark: true, mk: 0.95, mcd: 0.45, mlen: 64, scap: 2 }),
     refine: [
-      { mods: { mcd: -0.2 }, txt: 'The shadow strikes far more often' },
+      { mods: { mcd: -0.15 }, txt: 'The shadow strikes far more often' },
       { mods: { mlen: 40 }, txt: 'Shadow cuts reach twice as far' },
     ],
   }, stabImpl);
-  // Death Lotus (Flurry + Lethality): crit stabs bloom into a ring of blades around their first foe.
+  // Death Lotus (Lethality): crit stabs bloom into a ring of blades around their first foe.
   ED.addWeapon({
     id: 'lotus', name: 'Death Lotus', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Crits bloom into a ring of blades',
-    base: base({ dmg: 19, cd: 0.45, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 10, range: 0, crit: 0.15, bloom: 0.32, petals: 6, plen: 0.6 }),
+    base: base({ dmg: 13.3, cd: 0.45, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 10, range: 0, crit: 0.15, bloom: 0.32, petals: 6, plen: 0.6, scap: 4 }),
     refine: [
       { mods: { petals: 2 }, txt: '+2 blades per bloom' },
       { mods: { crit: 0.1, plen: 0.4 }, txt: '+10% crit, blades reach farther' },
     ],
   }, stabImpl);
-  // Reaper's Return (Lethality + Return): stabs + thrown daggers that pin a foe (strikes on it crit), then tear back as crits.
+  // Reaper's Return (Return): stabs + thrown daggers that pin a foe (strikes on it crit), then tear back as crits.
   ED.addWeapon({
     id: 'reaper', name: "Reaper's Return", icon: 'weapon.knives', look: 'pknife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Daggers pin foes, then tear back',
-    base: base({ dmg: 18, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, thrown: 3, tcd: 1, trange: 120, tdm: 1, pin: true, pdur: 1.2 }),
+    base: base({ dmg: 12.6, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, thrown: 3, tcd: 1, trange: 120, tdm: 1, pin: true, pdur: 1.2, scap: 2 }),
     refine: [
       { mods: { thrown: 1 }, txt: '+1 pinning dagger' },
       { mods: { thrown: 1, tcd: -0.3 }, txt: '+1 pinning dagger, thrown more often' },
@@ -261,32 +272,42 @@
   // ---------------- Shadow Step ----------------
   // Zero damage. Blinks toward the cursor (40..N.dist px, through foes and over obstacles), invulnerable 0.35 s. The afterimage left at the start is a decoy for N.dur s:
   // every 0.25 s each non-boss foe inside the decoy's view rect is lured to it (W.foeLure, 0.4 s, refreshed). charges (L4): 2 casts stored.
+  // lose (L5): for N.lose s after the step every non-boss foe targeting the Shade is lured to the decoy too, wherever it is (at the cast and on each decoy tick).
   // Zones: 'stepcut' (blink streak), 'afterimg' (the decoy).
   const DV = ED.HERO_VIEW;
   ED.addSkill({
     id: 'step', name: 'Shadow Step', icon: 'fx.smoke', cd: 8, txt: 'Blink and leave a decoy foes chase',
-    base: { dur: 2, dist: 130, charges: 1 },
+    base: { dur: 2, dist: 130, charges: 1, lose: 0 },
     levels: [
       { mods: { dist: 60 }, txt: 'Blink 60 px farther' },
       { mods: { dur: 0.75 }, txt: 'The decoy lasts 3.5 s' },
       { mods: { charges: 1 }, txt: '2 charges' },
+      { mods: { lose: 1.5 }, txt: 'Foes lose you for 1.5 s after a step' },
     ],
   }, (w, p, x, y, N) => {
     let a = Math.atan2(y - p.y, x - p.x), d = Math.hypot(x - p.x, y - p.y);
     if (d < 1) a = p.mdir;
     d = U.clamp(d, 40, N.dist);
     const ox = p.x, oy = p.y;
-    p.x += Math.cos(a) * d; p.y += Math.sin(a) * d; ED.Arena.collide(w.arena, p, p.r);
+    p.x += Math.cos(a) * d; p.y += Math.sin(a) * d; ED.Arena.collide(w.arena, p, ED.CONST.HERO_BODY);
     p.invuln = Math.max(p.invuln, 0.35); p.mdir = a;
     const len = Math.hypot(p.x - ox, p.y - oy) || 1;
     w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, a, len, w: 26, dur: 0.3, look: 'stepcut' });
-    w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, r: 24, a, dur: N.dur, look: 'afterimg', st: { nt: 0 }, onTick: decoyTick });
+    const z = w.zone({ team: 0, p, wid: 'step', x: ox, y: oy, r: 24, a, dur: N.dur, look: 'afterimg', st: { nt: 0, lose: N.lose || 0 }, onTick: decoyTick });
+    if (N.lose > 0) loseTrack(w, z);
     return { x0: Math.round(ox), y0: Math.round(oy), a, shake: 4 };
   });
+  // Every non-boss foe targeting the decoy's hero is lured to the decoy until st.lose.
+  function loseTrack(w, z) {
+    const T = Math.min(z.st.lose, z.dur) - z.t;
+    if (!(T > 0)) return;
+    for (const e of w.foes) if (!e.dead && e.tgt === z.p) w.foeLure(e, z.x, z.y, T);
+  }
   // Decoy: lures every non-boss foe inside its view rect (centred on the afterimage), every 0.25 s.
   function decoyTick(w, z) {
     if (z.t < z.st.nt) return;
     z.st.nt = z.t + 0.25;
+    if (z.st.lose > z.t) loseTrack(w, z);
     const q = w.foeScan(z.x, z.y, Math.hypot(DV.hw, DV.hh)), T = Math.min(0.4, z.dur - z.t + 0.05);
     for (let k = 0; k < q.length; k++) { const e = q[k]; if (!e.dead && Math.abs(e.x - z.x) <= DV.hw && Math.abs(e.y - z.y) <= DV.hh) w.foeLure(e, z.x, z.y, T); }
     w.foeEnd();

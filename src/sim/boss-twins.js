@@ -1,4 +1,4 @@
-// Boss 'twins' (The Twins): the Lancer (ED.FOES.twins, the spawned boss) and the Hammer ('twinhammer', added by the spawn hook) share the boss HP half and half and one phase clock (combined HP).
+// Boss 'twins' (The Twins, mid-boss: Ossuary 10:00, Abyss 15:00): the Lancer (ED.FOES.twins, the spawned boss) and the Hammer ('twinhammer', added by the spawn hook) share the boss HP half and half and one phase clock (combined HP).
 // Lancer: thrust (a warned lane, then a dash along it; twice from phase 2), sweep (cone). Hammer: slam (cone + shard ring), leap (lands on a warned circle + shard ring), quake (a stepping line of
 // circle warnings; three lines from phase 2). Every TW.combo s while both stand and idle they act together: the Lancer reels heroes in (warned ring, then a pull) or binds a hero's ground
 // (warned circle, then a slowing web) and the Hammer lands on that spot. A fallen twin rises at TW.reviveHp of its health after TW.revive s (a warned revive circle) unless the survivor falls
