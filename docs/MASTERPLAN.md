@@ -39,6 +39,11 @@ North-star: a co-op browser survivors-like (solo or up to 4 friends, zero instal
 - [ ] Your playtest of round 3
 - [ ] A second Form for the 7 paths that have one; one Form per support path
 
+## Polish 2026-11-01
+- [x] Korean language (Settings → Language), pixel Hangul font
+- [x] Hero and stage select redesign (no boss names, stage scenes, danger, records, paths)
+- [ ] Your check of the Korean text
+
 ## Next
 - [ ] Balance from your playtest (difficulty, Form strength, skill value)
 - [ ] Co-op test over a real internet connection
