@@ -1,5 +1,5 @@
 // Headless UI check (never a visible window): walks every screen and overlay in headless Chromium with mouse and keyboard, asserts the flows and
-// minimum text sizes, and saves screenshots (ui-*.png) to --outdir (default <tmp>/wickdeep-browse). Co-op lobby runs over ?net=local (BroadcastChannel) with two pages.
+// minimum text sizes, and saves screenshots (ui-*.png) to --outdir (default <tmp>/wickdeep-browse). Co-op lobby runs over ?net=local (BroadcastChannel) with two pages. Locale en-US (English UI).
 // Usage: node tools/check-ui.js [--viewport=1920x1080] [--outdir=DIR] [--timeout=180]. Exit 0 pass, 1 check failure, 2 harness error.
 'use strict';
 const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
@@ -39,7 +39,7 @@ async function main() {
   const dog = setTimeout(() => { console.log('timeout'); process.exit(2); }, TIMEOUT * 1000);
   const errors = [];
   try {
-    const ctx = await browser.newContext({ viewport: { width: +VP[1], height: +VP[2] }, deviceScaleFactor: 1 });
+    const ctx = await browser.newContext({ viewport: { width: +VP[1], height: +VP[2] }, deviceScaleFactor: 1, locale: 'en-US' }); // English UI whatever the host locale (ED.I18N.detect)
     await ctx.route((u) => u.protocol.startsWith('http') && u.origin !== server.base, (r) => r.abort());
     const open = async (q) => {
       const page = await ctx.newPage();
