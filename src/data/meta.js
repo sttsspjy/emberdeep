@@ -3,7 +3,7 @@
 //   stat (ED.Stats key), per (value per rank), cost (rank 1 price), txt }.
 //   Price of rank r + 1 (r ranks owned): cost x (r + 1)^2 (ED.shopPrice).
 // ED.UNLOCKS: heroes: { cls: rule } where rule is { start } | { survive: s } (one run) | { beat: stage index } | { buy: gold } (Camp purchase) | { pure: true } (win any stage
-//   with 0 Camp ranks at run start), txt = the lock line; stages: { index: rule } (stage rules: start | beat | beatAll: [stage indices] every one beaten; hidden: not listed anywhere until unlocked).
+//   with 0 Camp ranks at run start), txt = the lock line, short = the hero tile's lock line; stages: { index: rule } (stage rules: start | beat | beatAll: [stage indices] every one beaten; hidden: not listed anywhere until unlocked).
 // ED.ACHIEVEMENTS: save order (append only): { id, name, txt, icon ('' = derived from the rule by the UI), gold (paid once when earned), reward (ED.COSMETICS id granted when earned, '' = none), rule }.
 //   Rule kinds (ED.Save.achProgress): { time: s } best run time | { beat: i } stage i beaten | { winWith: cls } a win as cls | { form: cls } cls's weapon reached a Form |
 //   { runKills: n } own kills in one run | { kills: n } lifetime kills | { level: n } one run | { wins: n } lifetime | { pure: true } a win with 0 Camp ranks |
@@ -37,10 +37,10 @@
   ED.UNLOCKS = {
     heroes: {
       knight: { start: true }, ranger: { start: true }, pyro: { start: true },
-      necro: { survive: 900, txt: 'Survive 15 minutes' },
-      cleric: { beat: 0, txt: 'Beat stage 1' },
-      shade: { buy: 4000, txt: 'Buy at Camp for 4000 gold' },
-      bell: { pure: true, txt: 'Win any stage with no Camp ranks' },
+      necro: { survive: 900, txt: 'Survive 15 minutes', short: 'Survive 15:00' },
+      cleric: { beat: 0, txt: 'Beat stage 1', short: 'Beat stage 1' },
+      shade: { buy: 4000, txt: 'Buy at Camp for 4000 gold', short: '4000 gold' },
+      bell: { pure: true, txt: 'Win any stage with no Camp ranks', short: 'Win, no Camp' },
     },
     stages: { 0: { start: true }, 1: { beat: 0, txt: 'Beat stage 1' }, 2: { beat: 1, txt: 'Beat stage 2' }, 3: { beatAll: [0, 1, 2], hidden: true, txt: 'Beat stages 1, 2 and 3' } },
   };

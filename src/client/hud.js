@@ -1,12 +1,12 @@
 // In-run HUD on the screen canvas (device px). Sizes are CSS px at 1280x720 scaled by k = dpr x clamp(viewport / 1280x720, 1, 2), so text never drops below its CSS size (numbers >= 16 px).
 // Draws: XP bar across the top with the level, timer, kills / gold, 3 weapon slots (hero weapon + 2 supports, empty ones dim; level; Form = gold frame) + 6 passive slots with levels,
 // HP bar, Q cooldown dial and the dash dial with charge pips, boss bar, Last Light (view.lap: a VICTORY banner during the calm; the lap countdown and lap gold in place of the timer), the Sanctum's VICTORY banner (view.sanctum st 2), teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
-// low-HP edge glow, banners and the bot-watch tag (view.botTag / view.botPick, bottom-left). No per-frame allocation: strings are cached by value. Font 'Pixel Operator'.
+// low-HP edge glow, banners and the bot-watch tag (view.botTag / view.botPick, bottom-left). No per-frame allocation: strings are cached by value. Font 'Pixel Operator' (Hangul falls back to 'Wickdeep Hangul').
 (function (ED) {
   'use strict';
-  const U = ED.U, TAU = Math.PI * 2;
+  const U = ED.U, TAU = Math.PI * 2, T = ED.t, L = ED.tr;
   const H = ED.HUD = { banner: null, k: 1 };
-  const FONT = 'px "Pixel Operator", monospace';
+  const FONT = 'px "Pixel Operator", "Wickdeep Hangul", monospace';
   const SLOT_COL = ['#ffd27a', '#6ad7ff', '#7fe39a', '#ff8ad8'];
   const NUM = []; for (let i = 0; i <= 99; i++) NUM.push(String(i));
   let c = null, k = 1, W = 0, Hh = 0, now = 0, hudTop = 0;
@@ -44,10 +44,11 @@
   // value -> string caches (one slot per call site)
   const cache = {};
   const cs = (key, v, fmt) => { let e = cache[key]; if (!e) e = cache[key] = { v: NaN, s: '' }; if (e.v !== v) { e.v = v; e.s = fmt(v); } return e.s; };
-  const fmtLv = (v) => 'LV ' + v, fmtKills = (v) => U.fmtNum(v), fmtHp = (v) => (v >> 12) + ' / ' + (v & 4095), fmtSec = (v) => String(v), fmtBleed = (v) => 'DOWN  ' + v, fmtT = (v) => U.fmtTime(v), fmtLapG = (v) => '+' + U.fmtNum(v);
+  ED.I18N.on(() => { for (const key in cache) cache[key].v = NaN; }); // cached strings rebuild in the new language
+  const fmtLv = (v) => T('LV {0}', v), fmtKills = (v) => U.fmtNum(v), fmtHp = (v) => (v >> 12) + ' / ' + (v & 4095), fmtSec = (v) => String(v), fmtBleed = (v) => T('DOWN {0}', v), fmtT = (v) => U.fmtTime(v), fmtLapG = (v) => '+' + U.fmtNum(v);
   const heroIcon = (cls) => (ED.HEROES[cls] && ED.HEROES[cls].icon) || '';
   const RUN = {}; const runIcon = (cls) => RUN[cls] || (RUN[cls] = ED.Atlas && ED.Atlas.has('hero.' + cls + '.run') ? 'hero.' + cls + '.run' : 'fx.smoke');
-  const bossName = (v) => { const def = ED.FOES[ED.FOE_IDS[v >> 1]]; return (def ? def.name : 'Boss') + (v & 1 ? '  ENRAGED' : ''); };
+  const bossName = (v) => { const def = ED.FOES[ED.FOE_IDS[v >> 1]], n = def ? L(def.name) : T('Boss'); return v & 1 ? T('{0} ENRAGED', n) : n; };
   const keyLbl = { q: 'Q', dash: 'Space', t: 0 };
   const keys = () => {
     if (now - keyLbl.t < 1) return; keyLbl.t = now;
@@ -106,7 +107,7 @@
       c.fillStyle = col; c.fillRect(x, yy, R(4), R(30));
       icon(heroIcon(p.cls), x + R(6), yy + R(1), R(28), 0, skinOf(heroIcon(p.cls), p));
       txt(p.name, x + R(38), yy + R(1), p.dead ? '#7d6c58' : '#fff1d6', 16);
-      if (p.dead) txt('dead', x + R(190), yy + R(1), '#7d6c58', 16, 'right');
+      if (p.dead) txt(T('dead'), x + R(190), yy + R(1), '#7d6c58', 16, 'right');
       else if (p.downed) {
         txt(cs('bl' + i, Math.ceil(p.bleed), fmtBleed), x + R(190), yy + R(1), (now * 3 | 0) % 2 ? '#ff6a5a' : '#ffb0a0', 16, 'right');
         bar(x + R(38), yy + R(20), R(152), R(7), p.revive, '#7fe39a');
@@ -159,7 +160,7 @@
     // timer (Last Light lap: its countdown and the lap's coin gold instead), kills, gold
     const lp = view.lap;
     if (lp && lp.ph === 2) {
-      txt('LAST LIGHT', W / 2, xh + R(4), '#ffd27a', 20, 'center');
+      txt(T('LAST LIGHT'), W / 2, xh + R(4), '#ffd27a', 20, 'center');
       txt(cs('lap', Math.ceil(lp.rem), fmtT), W / 2, xh + R(26), lp.rem <= 10 && (now * 4 | 0) % 2 ? '#ff8a6a' : '#fff1d6', 36, 'center');
       icon('pickup.coin', W / 2 - R(46), xh + R(68), R(22));
       txt(cs('lapg', lp.gold, fmtLapG), W / 2 - R(20), xh + R(68), '#ffd24a', 22, 'left');
@@ -180,8 +181,8 @@
     }
     const sc = view.sanctum;
     if (sc && sc.st === 2) { if (winT < 0 || view.time < winT) winT = view.time; } else winT = -1;
-    if (lp && lp.ph === 1) victory(lp.rem, ED.CONST.LAP.calm, 'THE LAST LIGHT IS COMING');
-    else if (winT >= 0) victory(Math.max(0, ED.CONST.SANCTUM.end - (view.time - winT)), ED.CONST.SANCTUM.end, 'THE WICKDEEP IS SNUFFED OUT');
+    if (lp && lp.ph === 1) victory(lp.rem, ED.CONST.LAP.calm, T('THE LAST LIGHT IS COMING'));
+    else if (winT >= 0) victory(Math.max(0, ED.CONST.SANCTUM.end - (view.time - winT)), ED.CONST.SANCTUM.end, T('THE WICKDEEP IS SNUFFED OUT'));
     if (!me) { banner(dt); return; }
     // weapon and passive slots (top-left)
     const x0 = R(10), ws = R(42), ps = R(32);
@@ -211,7 +212,7 @@
     if (me.downed) {
       const yy = Hh / 2 + R(70);
       txt(cs('mbl', Math.ceil(me.bleed), fmtBleed), W / 2, yy, (now * 3 | 0) % 2 ? '#ff6a5a' : '#ffb0a0', 32, 'center');
-      txt('A teammate can revive you', W / 2, yy + R(38), '#f0e0c8', 18, 'center');
+      txt(T('A teammate can revive you'), W / 2, yy + R(38), '#f0e0c8', 18, 'center');
       bar(Math.round(W / 2 - R(110)), yy + R(62), R(220), R(10), me.revive, '#7fe39a');
     }
     if (view.botTag) {
@@ -225,7 +226,7 @@
   function victory(rem, dur, sub) {
     const age = Math.max(0, dur - rem), s = 1 + Math.max(0, 0.3 - age) * 1.5 + 0.04 * Math.sin(now * 6), a = Math.min(1, age / 0.12, rem / 0.3 + 0.15), y = Math.round(Hh * 0.22);
     c.globalAlpha = a;
-    txt('VICTORY', W / 2, y, '#ffd27a', 72 * s, 'center', 'middle');
+    txt(T('VICTORY'), W / 2, y, '#ffd27a', 72 * s, 'center', 'middle');
     txt(sub, W / 2, y + R(58), '#fff1d6', 24, 'center', 'middle');
     c.globalAlpha = 1;
   }

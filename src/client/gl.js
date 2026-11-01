@@ -23,6 +23,9 @@
   };
   const hexCss = (v) => { let s = hex.get(v); if (s === undefined) { s = '#' + ((v >>> 0) & 0xffffff).toString(16).padStart(6, '0'); if (hex.size > 512) hex.clear(); hex.set(v, s); } return s; };
   B.rgbaCss = rgbaCss; B.hexCss = hexCss;
+  // Font px of canvas-fallback text s at k world px per font px: 8k; Hangul on its face's 16 px grid (16, from k 3 up 32), since 8 px Hangul is unreadable.
+  const HANGUL = /[ᄀ-ᇿ㄰-㆏가-힣]/;
+  B.textPx = (s, k) => (HANGUL.test(s) ? (8 * k >= 24 ? 32 : 16) : Math.round(8 * k));
   const viewRect = (camX, camY, w, h) => { vx0 = camX - 2; vy0 = camY - 2; vx1 = camX + w / sc + 2; vy1 = camY + h / sc + 2; };
 
   // ---- pixel geometry, shared by both backends: shapes are hard-edged at world px (no AA), a pixel is in a shape when its centre is ----
@@ -285,9 +288,9 @@
   D.text = (s, x, y, color, k, align, alpha) => {
     const A = ED.Atlas;
     if (A.font && A.covers(s)) return A.text(c, s, x, y, hexCss(color), k || 1, align, alpha);
-    c.font = Math.round(8 * (k || 1)) + 'px "Pixel Operator", monospace'; c.textAlign = align === 'l' ? 'left' : align === 'r' ? 'right' : 'center'; c.textBaseline = 'middle';
-    const ga = c.globalAlpha; if (alpha !== undefined) c.globalAlpha = alpha;
-    c.fillStyle = hexCss(color); c.fillText(s, x, y); c.globalAlpha = ga;
+    const cv = textImg(s, color, k || 1), w = cv.width, h = cv.height, ga = c.globalAlpha;
+    if (alpha !== undefined) c.globalAlpha = ga * alpha;
+    c.drawImage(cv, Math.round(align === 'l' ? x - 2 : align === 'r' ? x - w + 2 : x - w / 2), Math.round(y - h / 2)); c.globalAlpha = ga;
     return true;
   };
 
@@ -613,21 +616,26 @@ void main(){
     g.drawImage(t, 0, 0);
     return cv;
   }
-  // Canvas-text fallback (strings the pixel font does not cover), cached per string / colour / size.
+  // Canvas-text fallback (strings the pixel font does not cover; both backends), cached per string / colour / font px, with a dark outline one font px wide (px / 16).
   function textImg(s, color, k) {
-    const key = s + '|' + color + '|' + k;
+    const px = B.textPx(s, k), key = s + '|' + color + '|' + px;
     let cv = textCache.get(key);
     if (!cv) {
       if (textCache.size > 64) textCache.clear();
       cv = document.createElement('canvas');
-      const g = cv.getContext('2d'), font = Math.round(8 * k) + 'px "Pixel Operator", monospace';
-      g.font = font; const w = Math.ceil(g.measureText(s).width) + 4, h = Math.ceil(10 * k) + 4;
+      const g = cv.getContext('2d'), font = px + 'px "Pixel Operator", "Wickdeep Hangul", monospace', o = Math.max(1, Math.round(px / 16));
+      g.font = font; const w = Math.ceil(g.measureText(s).width) + 2 + 2 * o, h = Math.ceil(px * 1.25) + 2 + 2 * o;
       cv.width = w; cv.height = h;
-      g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = hexCss(color); g.fillText(s, w / 2, h / 2);
+      g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#120a06';
+      const mx = Math.round(w / 2), my = Math.round(h / 2);
+      for (let dy = -o; dy <= o; dy += o) for (let dx = -o; dx <= o; dx += o) if (dx || dy) g.fillText(s, mx + dx, my + dy);
+      g.fillStyle = hexCss(color); g.fillText(s, mx, my);
       textCache.set(key, cv);
     }
     return cv;
   }
+  // a face that finishes loading invalidates text images drawn with a fallback face
+  if (typeof document !== 'undefined' && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => textCache.clear());
   G.text = (s, x, y, color, k, align, alpha) => {
     if (seg) closeSeg();
     const A = ED.Atlas, F = A.font; k = k || 1;

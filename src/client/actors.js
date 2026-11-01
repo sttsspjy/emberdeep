@@ -230,7 +230,7 @@
     if (!b.ok) { // no art: a labelled placeholder
       B.circ(e.x, e.y - e.r, e.r, e.flash > 0 ? 0xffffffff : 0x7a3a8cff, 0);
       B.circ(e.x, e.y - e.r, e.r, e.st === 1 ? 0xff3a2aff : 0xffd27aff, 2);
-      B.text(def.name, e.x, e.y - e.r * 2 - 6, 0xffd27a, 1);
+      B.text(ED.tr(def.name), e.x, e.y - e.r * 2 - 6, 0xffd27a, 1);
       return;
     }
     if (e.flash > 0 && e.st === 0 && b.hit && now >= s.hitNext) { s.hitAt = now; s.hitNext = now + 1.2; }

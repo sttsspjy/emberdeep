@@ -1,4 +1,4 @@
-// Stages. ED.STAGES[i] = { id, name, theme, arena, foe, gold, timeline, events, elites, bench, bosses }; index i is the stage number (0 = stage 1).
+// Stages. ED.STAGES[i] = { id, name, blurb (stage select flavour line), theme, arena, foe, gold, timeline, events, elites, bench, bosses }; index i is the stage number (0 = stage 1).
 // theme: { floor: [[tile anim, weight]], deco: [anim ids] (non-colliding scatter), features: [obstacle feature] (src/sim/arena.js), brazier (anim),
 //   pal: { bg, wall, accent, light } } (bg: void outside the arena, wall: obstacle fill, accent/light: post grade).
 //   feature: { f: 'row' (colonnade) | 'arc' (broken wall with one gap) | 'cluster' (tight clump) | 'single', w (pick weight), look ('' = plain rock disc), r: [min, max], n: [min, max], gap: [min, max] (px between surfaces), spread (cluster radius) }.
@@ -39,7 +39,7 @@
 
   ED.STAGES = [
     {
-      id: 'ossuary', name: 'The Ossuary',
+      id: 'ossuary', name: 'The Ossuary', blurb: 'Bone halls where the dead still keep watch.',
       theme: {
         floor: [['tile.floor.ossuary.1', 40], ['tile.floor.ossuary.2', 6], ['tile.floor.ossuary.3', 6], ['tile.floor.ossuary.4', 4], ['tile.floor.ossuary.5', 3], ['tile.floor.ossuary.6', 3], ['tile.floor.ossuary.7', 2], ['tile.floor.ossuary.8', 2]],
         deco: ['deco.bones.0', 'deco.bones.1', 'deco.bones.2', 'deco.bones.3', 'deco.bones.4', 'deco.skull', 'deco.moss.0', 'deco.moss.1', 'deco.candle.0', 'deco.candle.1', 'deco.puddle.0', 'deco.urn.0', 'deco.urn.1'],
@@ -70,7 +70,7 @@
       bosses: [{ t: 300, id: 'warden' }, { t: 600, id: 'twins' }, { t: 900, id: 'cyclops' }, { t: 1200, id: 'hollow', final: true }],
     },
     {
-      id: 'glowmire', name: 'The Glowmire',
+      id: 'glowmire', name: 'The Glowmire', blurb: 'A drowned marsh lit by hungry fungus.',
       theme: {
         floor: [['tile.floor.glowmire.1', 30], ['tile.floor.glowmire.2', 6], ['tile.floor.glowmire.3', 6], ['tile.floor.glowmire.4', 4], ['tile.floor.glowmire.5', 3], ['tile.floor.glowmire.6', 3]],
         deco: ['deco.mushroom.0', 'deco.mushroom.1', 'deco.mushroom.2', 'deco.mushroom.3', 'deco.root.0', 'deco.root.1', 'deco.moss.2', 'deco.puddle.1', 'deco.puddle.2', 'deco.puddle.3'],
@@ -101,7 +101,7 @@
       bosses: [{ t: 300, id: 'spore' }, { t: 600, id: 'cyclops' }, { t: 900, id: 'weaver' }, { t: 1200, id: 'king', final: true }],
     },
     {
-      id: 'abyss', name: 'The Abyss',
+      id: 'abyss', name: 'The Abyss', blurb: 'Starless depths where the void looks back.',
       theme: {
         floor: [['tile.floor.abyss.1', 30], ['tile.floor.abyss.2', 6], ['tile.floor.abyss.3', 6], ['tile.floor.abyss.4', 4], ['tile.floor.abyss.5', 3], ['tile.floor.abyss.6', 3], ['tile.floor.abyss.7', 2], ['tile.floor.abyss.8', 2]],
         deco: ['deco.crystal.1', 'deco.crystal.2', 'deco.shard.0', 'deco.shard.1', 'deco.shard.2', 'deco.skull', 'deco.chain', 'deco.candle.2'],
@@ -133,7 +133,7 @@
     },
     {
       // Hidden stage 4 (unlock: ED.UNLOCKS.stages[3]): the hardest kinds of stages 1-3, the three old final bosses as mid-bosses, the final boss in the Sanctum (src/sim/sanctum.js).
-      id: 'wickdeep', name: 'The Wickdeep',
+      id: 'wickdeep', name: 'The Wickdeep', blurb: 'The burning heart beneath every flame.',
       theme: {
         floor: [['tile.floor.wickdeep.1', 36], ['tile.floor.wickdeep.2', 6], ['tile.floor.wickdeep.3', 6], ['tile.floor.wickdeep.4', 4], ['tile.floor.wickdeep.5', 3], ['tile.floor.wickdeep.6', 3], ['tile.floor.wickdeep.7', 2], ['tile.floor.wickdeep.8', 2]],
         deco: ['deco.candle.0', 'deco.candle.1', 'deco.candle.2', 'deco.candle.3', 'deco.chain', 'deco.skull', 'deco.bones.1', 'deco.bones.3', 'deco.shard.1', 'deco.urn.1'],

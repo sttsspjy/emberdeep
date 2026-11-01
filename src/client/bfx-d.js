@@ -162,10 +162,10 @@
     if (ev.t === 'boom' && ev.look === 'wmlimp') { F.puff(ev.x, ev.y - 10, 24, rgba(WAXC, 255), 110); F.addShake(3, 0); return; }
     if (ev.t !== 'boss' || ev.id !== 'wickmother') return;
     const p = ev.phase;
-    if (p === 2) F.banner('SNUFFING', 0xffb06a, 3, { big: true, sub: 'LIGHT ALL FOUR SCONCES AT ONCE', subCol: 0xfff1d6, k: 3, band: true });
-    else if (p === 3) F.banner('BURN-DOWN', 0xff6a3a, 3, { big: true, sub: 'SLAY HER BEFORE THE WICK BURNS OUT', subCol: 0xfff1d6, k: 3, band: true });
-    else if (p === 'kneel') { F.banner('SHE KNEELS: STRIKE THE HEART', 0xffd27a, 2.4, { k: 2 }); F.addShake(6, 0); }
-    else if (p === 'wick') { F.banner('THE WICK IS ALMOST GONE', 0xff3a2a, 2.6, { k: 3 }); F.screen(0xff302000, 0.35, 0.8); }
+    if (p === 2) F.banner(ED.t('SNUFFING'), 0xffb06a, 3, { big: true, sub: ED.t('LIGHT ALL FOUR SCONCES AT ONCE'), subCol: 0xfff1d6, k: 3, band: true });
+    else if (p === 3) F.banner(ED.t('BURN-DOWN'), 0xff6a3a, 3, { big: true, sub: ED.t('SLAY HER BEFORE THE WICK BURNS OUT'), subCol: 0xfff1d6, k: 3, band: true });
+    else if (p === 'kneel') { F.banner(ED.t('SHE KNEELS: STRIKE THE HEART'), 0xffd27a, 2.4, { k: 2 }); F.addShake(6, 0); }
+    else if (p === 'wick') { F.banner(ED.t('THE WICK IS ALMOST GONE'), 0xff3a2a, 2.6, { k: 3 }); F.screen(0xff302000, 0.35, 0.8); }
     else if (p === 'flood') { F.screen(0xff6a2a00, 0.7, 2.5); F.addShake(10, 0); }
     else if (p === 'snuff') F.addShake(3, 0);
   };

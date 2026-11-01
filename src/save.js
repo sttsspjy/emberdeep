@@ -90,7 +90,8 @@
   S.erase = () => { const L = ls(); if (L) try { L.removeItem(LS_KEY); } catch (e) { /* storage blocked */ } };
   // bindsV 1: skill 1 / skill 2 lost their LMB / RMB defaults; older saved binds still holding Mouse0 in skill1[1] or Mouse2 in skill2[1] are cleared once.
   const BINDS_V = 1;
-  S.defaultSettings = () => ({ master: 70, music: 55, sfx: 80, quality: 'high', shake: true, numbers: true, binds: null, bindsV: BINDS_V });
+  // lang: '' = auto (ED.I18N.detect: browser language), else 'en' | 'ko'.
+  S.defaultSettings = () => ({ master: 70, music: 55, sfx: 80, quality: 'high', shake: true, numbers: true, lang: '', binds: null, bindsV: BINDS_V });
   S.loadSettings = () => {
     const d = S.defaultSettings(), L = ls(); if (!L) return d;
     try {
