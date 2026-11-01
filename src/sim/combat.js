@@ -295,6 +295,7 @@
     return this.brzG;
   };
   W.projBraziers = function (pr) {
+    if (this.arena.room) return;
     if (pr.r > BPAD) { this.hitBraziers(pr.x, pr.y, pr.r, pr.p); return; }
     if (pr.p && !ED.inView(pr.p, pr.x, pr.y, pr.r)) return;
     const G = this.brzGrid(), cx = Math.floor(pr.x / BCELL), cy = Math.floor(pr.y / BCELL);
@@ -319,7 +320,7 @@
 
   const HOME_VIEW = 2 * Math.hypot(VW.hw, VW.hh); // reaches every foe in the owner's view from any point inside it
   W.updateProjs = function (dt) {
-    const A = this.arena, size = A.size, list = this.projs, n = list.length;
+    const A = this.arena, size = A.size, list = this.projs, n = list.length, RM = A.room;
     for (let i = 0; i < n; i++) {
       const pr = list[i];
       if (pr.dead) continue;
@@ -349,6 +350,7 @@
       }
       pr.x += pr.vx * dt; pr.y += pr.vy * dt; pr.a = Math.atan2(pr.vy, pr.vx);
       if (pr.x < -40 || pr.y < -40 || pr.x > size + 40 || pr.y > size + 40) pr.dead = true;
+      else if (RM && pr.life < 60 && (pr.x < RM.x0 || pr.y < RM.y0 || pr.x > RM.x1 || pr.y > RM.y1)) pr.dead = true; // Sanctum walls (persistent bodies steered around their owner excepted)
       else if (pr.team === 0 && pr.p && !ED.inView(pr.p, pr.x, pr.y, pr.r)) pr.dead = true; // fully outside the owner's view
       if (!pr.dead && pr.solid && ED.Arena.blocked(A, pr.x, pr.y, 1)) pr.dead = true;
       if (!pr.dead) {
@@ -451,9 +453,9 @@
   };
 
   // ---------------- heroes take damage ----------------
-  // Ignored while invulnerable, dashing, downed or dead. Damage x (1 - p.dr) - armor, min 1, rounded; 0.5 s i-frames; 0 HP -> heroDown. Returns the damage taken.
+  // Ignored while invulnerable, dashing, downed or dead, and outside the Sanctum fight's st 1 (sanctum.js). Damage x (1 - p.dr) - armor, min 1, rounded; 0.5 s i-frames; 0 HP -> heroDown. Returns the damage taken.
   W.hurtHero = function (p, dmg, src) {
-    if (!this.alive(p) || p.invuln > 0 || p.dashT > 0 || this.cheats.god) return 0;
+    if (!this.alive(p) || p.invuln > 0 || p.dashT > 0 || this.cheats.god || (this.sanctum && this.sanctum.st !== 1)) return 0;
     const d = Math.max(1, Math.round(dmg * (1 - (p.dr || 0)) - p.stats.armor));
     p.hp -= d; p.taken += d; p.invuln = C.IFRAME; p.hurtT = 0.2;
     this.emit({ t: 'hurt', pid: p.pid, dmg: d, x: Math.round(p.x), y: Math.round(p.y) });
@@ -469,6 +471,7 @@
   // ---------------- braziers ----------------
   // Breaks every intact brazier the circle (x, y, r) touches; with a hero p, only braziers overlapping p's view.
   W.hitBraziers = function (x, y, r, p) {
+    if (this.arena.room) return; // the Sanctum has no braziers
     const B = this.arena.braziers;
     for (let i = 0; i < B.length; i++) { const b = B[i]; if (!b.broken && U.dist2(x, y, b.x, b.y) <= (r + b.r) * (r + b.r) && (!p || ED.inView(p, b.x, b.y, b.r))) this.breakBrazier(b, p); }
   };

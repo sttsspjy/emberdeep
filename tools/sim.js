@@ -7,7 +7,7 @@ const ROOT = path.join(__dirname, '..', 'src') + '/';
 const BOSSES = ['warden', 'spore', 'king', 'hollow', 'twins', 'cyclops', 'samurai', 'weaver', 'wickeater'];
 const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
 const FILES = ['util.js', 'data/foes.js', 'data/stages.js', 'data/passives.js', 'data/meta.js', 'data/cosmetics.js', 'save.js',
-  'sim/stats.js', 'sim/arena.js', 'sim/grid.js', 'sim/world.js', 'sim/combat.js', 'sim/foes.js', 'sim/ai.js', 'sim/spawner.js', 'sim/weapons.js', 'sim/skills.js', 'sim/progress.js', 'sim/bosses.js', 'sim/lap.js',
+  'sim/stats.js', 'sim/arena.js', 'sim/grid.js', 'sim/world.js', 'sim/combat.js', 'sim/foes.js', 'sim/ai.js', 'sim/spawner.js', 'sim/weapons.js', 'sim/skills.js', 'sim/progress.js', 'sim/bosses.js', 'sim/lap.js', 'sim/sanctum.js',
   ...BOSSES.map(b => 'sim/boss-' + b + '.js'), ...HEROES.map(h => 'heroes/' + h + '.js'), 'weapons/support-a.js', 'weapons/support-b.js'];
 const SRC = new Map();
 function load() {

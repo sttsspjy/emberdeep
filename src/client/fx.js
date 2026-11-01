@@ -2,7 +2,7 @@
 // Everything is pooled and capped: particles, fx sprites, rings, flashes, slashes, chains, death pops, damage numbers, delayed bursts. Per-frame budgets scale bursts down when many foes die at once
 // and with the on-screen crowd. Damage numbers merge per foe per 150 ms, at most 60 alive (oldest dropped), crits big and yellow, off when FX.numbers is false.
 // Hit-stop (FX.hold, solo only; main.js skips sim steps while it runs) and screen shake (scaled down with the crowd, off when FX.shakeOn is false) only on skills, elite deaths and boss hits.
-// Overlays: Last Light ('victory' shockwave + flash, 'lap' banner and final flash), boss intro banner + letterbox, swarm / elite / phase / evolution banners, offscreen arrows to elites and bosses, level-up text, screen flashes, low-HP and hurt vignette.
+// Overlays: Last Light ('victory' shockwave + flash, 'lap' banner and final flash), Sanctum ('sanctum' entry banner, landing flash), boss intro banner + letterbox, swarm / elite / phase / evolution banners, offscreen arrows to elites and bosses, level-up text, screen flashes, low-HP and hurt vignette.
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU, PI = Math.PI;
@@ -90,6 +90,7 @@
   const ban = { text: '', sub: '', col: 0xffd27a, subCol: 0xfff1d6, life: 0, max: 1, k: 2, band: false };
   const ban2 = { text: '', sub: '', col: 0xffd27a, subCol: 0xfff1d6, life: 0, max: 1, k: 2, band: false };
   // Banner: big = the centre slot (boss intro, evolution), else the side slot (warnings, phases). k = font scale, band = dark band behind.
+  const C_SANCTUM_FADE = ED.CONST.SANCTUM.fade;
   F.banner = (text, col, secs, opt) => {
     const b = opt && opt.big ? ban : ban2;
     b.text = text; b.col = col; b.life = b.max = secs || 2; b.sub = (opt && opt.sub) || ''; b.subCol = (opt && opt.subCol) || 0xfff1d6; b.k = (opt && opt.k) || 2; b.band = !!(opt && opt.band);
@@ -282,6 +283,11 @@
         F.flash(ev.x, ev.y - 20, 160, 0xffffff00, 0.6, 1); F.burst(ev.x, ev.y - 20, 70, 0xffd27a00, 260, 1.2, 3, 10); F.burst(ev.x, ev.y - 20, 40, 0xffffff00, 180, 0.9, 2, 0);
         F.screen(0xfff6dc00, 0.9, 0.9); F.addShake(10, 0); letterT = 0;
         for (const q of tracks) q.t = 0;
+        break;
+      }
+      case 'sanctum': { // the Sanctum: ph 0 the fade starts (banner), ph 1 the party lands in the room (white flash out of the black)
+        if (ev.ph === 0) { F.banner('THE SANCTUM', 0xff8a4a, C_SANCTUM_FADE + 0.6, { big: true, sub: 'THE WICKDEEP DRAGS YOU DOWN', subCol: 0xffd0a0, k: 3, band: true }); F.screen(0xff302000, 0.4, 1.2); F.addShake(6, 0); letterT = 0; for (const q of tracks) q.t = 0; }
+        else if (ev.ph === 1) { F.screen(0xfff1d600, 0.9, 0.8); F.addShake(8, 0); }
         break;
       }
       case 'lap': { // Last Light: ph 1 the lap starts, ph 2 its timer ran out (every foe vanishes)

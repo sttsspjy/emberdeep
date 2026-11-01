@@ -2,7 +2,7 @@
 // Stage schedule: mid-bosses at 5:00, 10:00 and 15:00, the final boss at 20:00 (src/data/stages.js); scripts are stage-agnostic: add ids name home-stage foes and W.addKin swaps each for the host stage's
 // foe of the same kind (spawner.js W.stageKin; home-stage ids resolve to themselves) and skips a kind at its brain cap (W.foeAtCap). Boss bodies and parts (def.boss) bypass both.
 // HP = W.bossHp (foes.js: 1500 x (boss minute / 5)^2, x2 from the 15:00 boss, x party x stage HP factor; a multi-body boss splits it in its spawn hook). A living boss halves normal spawns (spawner). The fight ends when its last listed body dies:
-// a chest (evolution first) plus gems and a coin of ED.CONST.GOLD.mid x stage gold drop there (the final boss pays ED.CONST.GOLD.final straight to the party, World.payGold), hostile shots and telegraphs of its bodies vanish; the final boss's death banks the win and starts the Last Light (lap.js); at ED.CONST.ENRAGE_T a living final boss enrages (x3 damage and speed).
+// a chest (evolution first) plus gems and a coin of ED.CONST.GOLD.mid x stage gold drop there (the final boss pays ED.CONST.GOLD.final straight to the party, World.payGold), hostile shots and telegraphs of its bodies vanish; the final boss's death banks the win and starts the Last Light (lap.js), or in the Sanctum ends the fight (sanctum.js W.winSanctum); at ED.CONST.ENRAGE_T a living final boss enrages (x3 damage and speed) unless it is a Sanctum boss (e.sanctum: its script owns its enrage).
 // Boss attack state lives in e.vars ({ phase, st, t, atk, last, at, s: per-attack scratch, force, fq, rage }). Boss parts (foes with def.boss outside w.bossList, e.g. spore pods) drop only their def.xp gem.
 (function (ED) {
   'use strict';
@@ -63,8 +63,8 @@
     if (!s.landed) { s.landed = true; ED.Arena.collide(w.arena, e, e.r); }
     return true;
   };
-  // Clamps (x, y) into the arena with margin m; writes into out.
-  const inside = (w, x, y, m, out) => { const S = w.arena.size; out.x = U.clamp(x, m, S - m); out.y = U.clamp(y, m, S - m); return out; };
+  // Clamps (x, y) into the arena (the Sanctum room while it is set) with margin m; writes into out.
+  const inside = (w, x, y, m, out) => { const R = w.arena.room, S = w.arena.size; out.x = R ? U.clamp(x, R.x0 + m, R.x1 - m) : U.clamp(x, m, S - m); out.y = R ? U.clamp(y, R.y0 + m, R.y1 - m) : U.clamp(y, m, S - m); return out; };
   // Hits heroes touching e (body + pad) once each while it dashes; hit = per-attack pid list. Returns the number hit this call.
   const ram = (w, e, hit, dmg, pad) => {
     let n = 0;
@@ -140,10 +140,10 @@
   // Boss add id for home-stage foe id: this stage's kin (W.stageKin), or null when it is unknown or its brain is at the cap (W.foeAtCap).
   W.addKin = function (id) { const k = this.stageKin(id), d = ED.FOES[k]; return d && !this.foeAtCap(d) ? k : null; };
   W.initBosses = function () { this.bossList = []; this.bossBar = { on: false, id: '', name: '', q: 0, phase: 0, final: false, enraged: false, n: 0, rev: -1 }; };
-  // Spawns stage boss entry b ({ t, id, final }) 260-320 px from a random living hero; its script's spawn hook may split HP and add bodies.
-  W.spawnBoss = function (b) {
+  // Spawns stage boss entry b ({ t, id, final }) at `at` ({ x, y }; sanctum.js) or 260-320 px from a random living hero; its script's spawn hook may split HP and add bodies.
+  W.spawnBoss = function (b, at) {
     const L = this.living; if (!L.length || !ED.FOES[b.id]) return null;
-    const p = L[this.rng.int(0, L.length - 1)], pt = this.ringPoint(p, 260, 320, false) || { x: p.x + 280, y: p.y };
+    const p = L[this.rng.int(0, L.length - 1)], pt = at || this.ringPoint(p, 260, 320, false) || { x: p.x + 280, y: p.y };
     const e = this.spawnFoe(b.id, pt.x, pt.y);
     e.maxHp = e.hp = this.bossHp(b.t); e.hpQ = 255;
     e.final = !!b.final;
@@ -166,13 +166,13 @@
     // hostile shots and telegraphs of dead boss bodies vanish
     for (const pr of this.projs) if (pr.team === 1 && pr.e && pr.e.boss && (pr.e.dead || pr.e.id !== pr.owner)) pr.dead = true;
     for (const z of this.zones) if (z.team === 1 && z.src && z.src.boss && (z.src.dead || z.src.id !== z.srcId)) z.dead = true;
-    if (e.final) { this.payGold(C.GOLD.final); this.startLap(e.x, e.y); return; }
+    if (e.final) { this.payGold(C.GOLD.final); if (this.sanctum) this.winSanctum(e.x, e.y); else this.startLap(e.x, e.y); return; }
     this.spawnPickup('chest', e.x, e.y, 2);
     for (let k = 0; k < 3; k++) this.dropGem(e.x + (k - 1) * 12, e.y + 10, 25);
     this.spawnPickup('gold', e.x, e.y - 12, Math.round(C.GOLD.mid * (this.sdef.gold || 1)));
   };
   W.updateBosses = function () {
-    if (this.time >= C.ENRAGE_T) for (const e of this.bossList) if (e.final && !e.enraged && !e.dead) { e.enraged = true; e.dmg *= 3; e.spd *= 3; this.emit({ t: 'boss', id: e.def.id, fid: e.id, phase: 'enrage' }); }
+    if (this.time >= C.ENRAGE_T) for (const e of this.bossList) if (e.final && !e.sanctum && !e.enraged && !e.dead) { e.enraged = true; e.dmg *= 3; e.spd *= 3; this.emit({ t: 'boss', id: e.def.id, fid: e.id, phase: 'enrage' }); }
     const bar = this.bossBar, e = this.boss;
     if (!e || e.dead) { bar.on = false; return; }
     const s = B[e.def.id];

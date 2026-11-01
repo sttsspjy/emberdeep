@@ -42,7 +42,7 @@
     e.id = this.nextId(); e.k = def.idx; e.def = def; e.x = x; e.y = y; e.vx = 0; e.vy = 0; e.r = def.r;
     e.maxHp = e.hp = Math.max(1, Math.round(this.foeHp(def) * ((opts && opts.hpMul) || 1))); e.hpQ = 255;
     e.dmg = this.contactDmg() * def.dmg; e.spd = def.boss ? def.spd : def.spd * this.foePace(); e.kbx = 0; e.kby = 0; e.face = 1; e.flash = 0; e.st = 0; e.stT = 0;
-    e.elite = false; e.boss = !!def.boss; e.final = false; e.enraged = false;
+    e.elite = false; e.boss = !!def.boss; e.final = false; e.enraged = false; e.sanctum = false;
     e.slowT = 0; e.slowK = 0; e.burnT = 0; e.burnDps = 0; e.burnOwner = null; e.burnTick = 0.5; e.stunT = 0; e.freezeT = 0;
     e.hitT = 0; e.vars = null; e.tgt = null; e.cd = 0; e.age = 0; e.invulnT = 0; e.takeMul = def.take || 1; e.scale = def.scale || 1; e.hev = 0; e.hevT = -1;
     e.rushT = 0; e.rx = 0; e.ry = 0; e.acd = 0.6 + (e.id % 7) * 0.2; e.aa = 0; e.tz = null; e.tzId = 0; e.dead = false;

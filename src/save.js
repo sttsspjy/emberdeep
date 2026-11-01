@@ -108,7 +108,10 @@
 
   // ---------------- unlocks and shop ----------------
   S.heroUnlocked = (p, cls) => p.heroes.indexOf(cls) >= 0;
-  S.stageUnlocked = (p, i) => { const r = ED.UNLOCKS.stages[i]; return !!r && (r.start || p.beat.indexOf(r.beat) >= 0); };
+  // Stage rule (ED.UNLOCKS.stages): start | beat (that stage beaten) | beatAll (every listed stage beaten).
+  S.stageUnlocked = (p, i) => { const r = ED.UNLOCKS.stages[i]; return !!r && !!ED.STAGES[i] && (!!r.start || (r.beat !== undefined && p.beat.indexOf(r.beat) >= 0) || (!!r.beatAll && r.beatAll.every(k => p.beat.indexOf(k) >= 0))); };
+  // True while stage i is hidden (its rule has hidden and it is still locked): no stage card, lobby button, codex or achievement entry names it.
+  S.stageHidden = (p, i) => { const r = ED.UNLOCKS.stages[i]; return !!(r && r.hidden) && !S.stageUnlocked(p, i); };
   S.rank = (p, id) => p.shop[id] | 0;
   // Cost of the next rank (ED.shopPrice: cost x (rank + 1)^2), 0 when maxed or unknown.
   S.shopCost = (p, id) => { const s = ED.SHOP.find(x => x.id === id); return s ? ED.shopPrice(s, S.rank(p, id)) : 0; };
@@ -245,8 +248,14 @@
     }
     if (sum.won && me.ranks === 0 && ED.STAGES[stage]) add(p.pure, stage, (x, y) => x - y);
     if (sum.won && p.beat.indexOf(stage) < 0) {
-      p.beat.push(stage);
-      for (const i in ED.UNLOCKS.stages) if (ED.UNLOCKS.stages[i].beat === stage && ED.STAGES[+i]) { out.stages.push(+i); out.news.push({ kind: 'stage', id: ED.STAGE_IDS[+i], name: ED.STAGES[+i].name, txt: 'New stage: ' + ED.STAGES[+i].name }); }
+      const was = ED.STAGES.map((sd, i) => S.stageUnlocked(p, i));
+      p.beat.push(stage); p.beat.sort((x, y) => x - y);
+      ED.STAGES.forEach((sd, i) => {
+        if (was[i] || !S.stageUnlocked(p, i)) return;
+        out.stages.push(i);
+        const hid = !!(ED.UNLOCKS.stages[i] || {}).hidden;
+        out.news.push({ kind: 'stage', id: ED.STAGE_IDS[i], name: sd.name, txt: hid ? 'Something stirs below: ' + sd.name + ' is open' : 'New stage: ' + sd.name });
+      });
     }
     for (const cls of heroOrder()) {
       if (!ED.UNLOCKS.heroes[cls] || S.heroUnlocked(p, cls) || !S.heroProgress(p, cls).done) continue;
@@ -426,15 +435,16 @@
   M.refund = () => { const t = S.refundAll(M.get()); M.save(); return t; };
   M.unlocked = (cls) => S.heroUnlocked(M.get(), cls);
   M.stageUnlocked = (i) => S.stageUnlocked(M.get(), i);
+  M.stageHidden = (i) => S.stageHidden(M.get(), i);
   // Hero rows in save order: { id, unlocked, played (a finished run), txt (lock rule, '' for start heroes), prog (0..1), cur, need }.
   M.heroes = () => {
     const p = M.get();
     return heroOrder().filter(c => ED.UNLOCKS.heroes[c]).map(c => { const g = S.heroProgress(p, c), r = ED.UNLOCKS.heroes[c]; return { id: c, unlocked: S.heroUnlocked(p, c), played: p.played.indexOf(c) >= 0, txt: r.txt || '', prog: g.prog, cur: g.cur, need: g.need }; });
   };
-  // Stage rows: { i, id, name, unlocked, txt (lock rule), beat, best ({ time, kills, level, won } or null) }.
+  // Stage rows: { i, id, name, unlocked, hidden (S.stageHidden), txt (lock rule), beat, best ({ time, kills, level, won } or null) }.
   M.stages = () => {
     const p = M.get();
-    return ED.STAGES.map((sd, i) => { const r = ED.UNLOCKS.stages[i] || {}; return { i, id: ED.STAGE_IDS[i], name: sd.name, unlocked: S.stageUnlocked(p, i), txt: r.txt || '', beat: p.beat.indexOf(i) >= 0, best: p.best[ED.STAGE_IDS[i]] || null }; });
+    return ED.STAGES.map((sd, i) => { const r = ED.UNLOCKS.stages[i] || {}; return { i, id: ED.STAGE_IDS[i], name: sd.name, unlocked: S.stageUnlocked(p, i), hidden: S.stageHidden(p, i), txt: r.txt || '', beat: p.beat.indexOf(i) >= 0, best: p.best[ED.STAGE_IDS[i]] || null }; });
   };
   M.bundle = () => S.metaBundle(M.get());
   // Encyclopedia reveal of id in seen list k ('heroes'|'weapons'|'passives'|'foes'|'stages') for the bound profile.

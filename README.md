@@ -43,6 +43,8 @@ Menus work with the keyboard too: arrows or WASD move between buttons, Enter pre
 | The Glowmire | Sporemother | Demon Cyclops | Rift Weaver | Drowned King |
 | The Abyss | Blue Samurai | Rift Weaver | The Twins | The Wick-Eater |
 
+Beat all three and something below them wakes up. Bring your best build.
+
 Every boss and elite attack is telegraphed: a red outline marks where it lands. A final boss still alive at 22:00 enrages. The horde never thins out: if you kill faster than it arrives, more foes pour in.
 
 ## Co-op (2–4 players)
@@ -63,7 +65,7 @@ Every run pays gold, win or lose: bosses, minutes survived and a small kill boun
 
 **Wardrobe** (Camp → Wardrobe) sells looks, never power: two skins per hero (a third comes from winning a run with that hero), weapon tints that recolour your hero's weapon effects, kill and level-up effects, titles and name colours shown above your hero and in the co-op lobby. Some items are achievement rewards. Your party sees your skin, tint, level-up effect, title and name colour; kill effects show on your own screen.
 
-**Achievements** (main menu) lists every unlock and 29 achievements with your progress and their gold and Wardrobe rewards (each pays once; new ones show on the results screen), plus your records: runs, wins, lifetime kills, best time, kills and level, and each stage's best run. **Encyclopedia** (main menu) describes every hero, weapon and support weapon (with its paths and the Forms you found), passive, foe, boss and stage you have met: heroes and stages you started a run with, weapons, Forms and passives you owned, foes you saw and bosses you fought. The rest shows as a dark "???" until you find it; locked heroes and stages still show how to unlock them.
+**Achievements** (main menu) lists every unlock and 30 achievements with your progress and their gold and Wardrobe rewards (each pays once; new ones show on the results screen), plus your records: runs, wins, lifetime kills, best time, kills and level, and each stage's best run. **Encyclopedia** (main menu) describes every hero, weapon and support weapon (with its paths and the Forms you found), passive, foe, boss and stage you have met: heroes and stages you started a run with, weapons, Forms and passives you owned, foes you saw and bosses you fought. The rest shows as a dark "???" until you find it; locked heroes and stages still show how to unlock them.
 
 Progress saves in the browser automatically. Camp → **Show my code** gives a save code you can paste into **Load code** on another browser or device. The code carries your Encyclopedia discoveries and Wardrobe too; an older code still loads.
 

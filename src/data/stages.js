@@ -8,7 +8,7 @@
 //   15:00-20:00 adds no kind: the brute and the 10:00 kind weigh ~30% more by 18:00. The stage's swarmer is in no roster: it comes in flocks and swarm events.
 // timeline[m] (minute m; the last entry holds for the rest of the run): { rate (spawns/s solo), cap (alive cap solo), floor (density floor, fraction of the alive cap), roster: [[foeId, weight]] }.
 // events.flock: { id, first, every, n: [at first, at 10:00, at 20:00] } a pack or a line of swarmers flying through one hero's spot (spawner.js flockEvent); events.swarm: { first, every, ring: [ids], stampede: [ids] (used when in the current roster), n: [at first, at 12:00, at 20:00] } a closing ring or a stampede line flying through; elites: { first, every };
-// bench: { t (s), elite (s between elites) } the benchmark phase (HP-heavy roster, density floor 0.7, a 'surge' warning); bosses: [{ t (s), id, final }].
+// bench: { t (s), elite (s between elites) } the benchmark phase (HP-heavy roster, density floor 0.7, a 'surge' warning); bosses: [{ t (s), id, final, sanctum (the fight moves to the Sanctum room, src/sim/sanctum.js) }].
 (function (ED) {
   'use strict';
   const capAt = (m) => 5 * Math.round((m < 3 ? 52 + 45.5 * m : 195 + (Math.min(m, 12) - 3) * (260 / 9)) / 5); // GAME-DESIGN §7: 50 / 100 / 145 at 0:00-2:00, 195 at 3:00 to 455 at 12:00, rounded to 5
@@ -130,6 +130,44 @@
       events: { flock: { id: 'starspawn', first: 40, every: 18, n: [5, 26, 34] }, swarm: { first: 120, every: 120, ring: ['starspawn'], stampede: ['starspawn', 'shade', 'stalker'], n: [16, 33, 39] } },
       elites: { first: 150, every: 60 }, bench: BENCH,
       bosses: [{ t: 300, id: 'samurai' }, { t: 600, id: 'weaver' }, { t: 900, id: 'twins' }, { t: 1200, id: 'wickeater', final: true }],
+    },
+    {
+      // Hidden stage 4 (unlock: ED.UNLOCKS.stages[3]): the hardest kinds of stages 1-3, the three old final bosses as mid-bosses, the final boss in the Sanctum (src/sim/sanctum.js).
+      id: 'wickdeep', name: 'The Wickdeep',
+      theme: {
+        floor: [['tile.floor.wickdeep.1', 36], ['tile.floor.wickdeep.2', 6], ['tile.floor.wickdeep.3', 6], ['tile.floor.wickdeep.4', 4], ['tile.floor.wickdeep.5', 3], ['tile.floor.wickdeep.6', 3], ['tile.floor.wickdeep.7', 2], ['tile.floor.wickdeep.8', 2]],
+        deco: ['deco.candle.0', 'deco.candle.1', 'deco.candle.2', 'deco.candle.3', 'deco.chain', 'deco.skull', 'deco.bones.1', 'deco.bones.3', 'deco.shard.1', 'deco.urn.1'],
+        // obelisk colonnades, broken wall arcs, lone crypt columns, toppled ruins, slag rock
+        features: [ROW('prop.obelisk', [9, 11], [3, 5], [36, 60], 3), ARC('prop.pillar.broken', [13, 16], [4, 6], [6, 14], 3), ONE('prop.pillar', [12, 15], 2), CLUSTER('prop.grave.2', [8, 10], [2, 3], 20, 1), ONE('prop.ruin.1', [20, 24], 1), ONE('', [24, 38], 1)],
+        brazier: 'prop.brazier',
+        pal: { bg: '#060403', wall: '#2b1a10', accent: '#ffb347', light: '#fff0c0' },
+      },
+      arena: { size: 3200, obstacles: [30, 40], braziers: [40, 55], clear: 220 },
+      foe: { hp: 1.3, dmg: 1.25 }, gold: 2,
+      timeline: timeline(
+        RATE.map(r => Math.round(r * 1.1 * 10) / 10),
+        {
+          shade: [[0, 6], [3, 5], [5, 3], [7, 3], [10, 3], [13, 3]],
+          reaver: [[0, 3], [3, 3], [5, 2], [7, 1], [9, 0]],
+          jelly: [[1, 2], [3, 3], [5, 2], [7, 0]],
+          priest: [[1, 1], [3, 2], [8, 2], [10, 0]],
+          gloom: [[2, 1], [4, 2], [6, 1], [8, 0], [10, 0], [11, 2]],
+          icewolf: [[4, 1], [6, 3], [10, 2], [11, 0]],
+          voideye: [[6, 1], [8, 3], [10, 1], [11, 0]],
+          bulwark: [[5, 2], [7, 3], [11, 2]],
+          stalker: [[5, 1], [7, 2], [11, 2], [13, 2]],
+          skelknight: [[5, 0.6], [8, 1], [10, 2], [12, 2], [15, 2], [18, 2.6]],
+          horror: [[8, 0.5], [10, 1], [12, 1.5], [15, 1.5], [18, 2]],
+          riftcaller: [[9, 0.5], [10, 2]],
+          colossus: [[10, 0.6], [11, 1], [13, 1.5], [15, 1.5], [18, 2]],
+          bonecaller: [[10, 0.5], [11, 1.5], [15, 1.5], [18, 2]],
+          mirecrab: [[12, 0.6], [14, 1], [18, 1.5]],
+        },
+        { 2: { jelly: 3 }, 4: { priest: 2 }, 6: { bulwark: 3 }, 8: { voideye: 3 }, 11: { colossus: 1 }, 13: { horror: 2 }, 16: { mirecrab: 1 }, 18: { skelknight: 2 } }),
+      events: { flock: { id: 'cinderbat', first: 30, every: 16, n: [6, 30, 40] }, swarm: { first: 100, every: 100, ring: ['cinderbat'], stampede: ['cinderbat', 'shade', 'reaver', 'stalker'], n: [18, 36, 44] } },
+      elites: { first: 90, every: 45 }, bench: BENCH,
+      // 'hollow' at 20:00 is the placeholder Sanctum boss until the final boss script lands.
+      bosses: [{ t: 300, id: 'hollow' }, { t: 600, id: 'king' }, { t: 900, id: 'wickeater' }, { t: 1200, id: 'hollow', final: true, sanctum: true }],
     },
   ];
   ED.STAGE_IDS = ED.STAGES.map(s => s.id);

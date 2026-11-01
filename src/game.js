@@ -20,7 +20,7 @@
   const BLEND = 12;     // client: correction offset decay (1/s)
   const NET_EV_CAP = 5000;
 
-  const blankView = () => ({ me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: null, stage: 0, seed: 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, bossBar: null, lap: null, events: [], botTag: '', botPick: '' });
+  const blankView = () => ({ me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: null, stage: 0, seed: 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, bossBar: null, lap: null, sanctum: null, events: [], botTag: '', botPick: '' });
   const SFX_KEEP = { boss: 1, warn: 1, evolve: 1, level: 1, down: 1, dead: 1, revive: 1, end: 1 }; // events still sounded with sfxLite
 
   function Session() { this.onEnd = null; this.onEvent = null; this.clear(); }
@@ -55,7 +55,7 @@
   S.stop = function () { this.clear(); };
   S.syncView = function () {
     const w = this.w, v = this.view; if (!w || !v) return;
-    v.time = w.time; v.xp = w.xp; v.xpNext = w.xpNext; v.level = w.level; v.kills = w.kills; v.gold = w.gold; v.boss = w.boss; v.bossBar = w.bossBar; v.lap = w.lapView(this.lapV); v.me = w.hero(this.myPid);
+    v.time = w.time; v.xp = w.xp; v.xpNext = w.xpNext; v.level = w.level; v.kills = w.kills; v.gold = w.gold; v.boss = w.boss; v.bossBar = w.bossBar; v.lap = w.lapView(this.lapV); v.sanctum = w.sanctum; v.me = w.hero(this.myPid);
   };
 
   // Local input -> World / client latch (once per frame; edge flags latch until the next tick consumes them).
@@ -362,7 +362,7 @@
     if (this.mode !== 'client' || this.ended) return;
     const v = this.view, M = this.mir;
     this.finish({
-      won: M ? M.state === 'won' || !!(v.lap && v.lap.ph) : false, time: v.time, kills: v.kills, level: v.level, gold: v.gold, stage: v.stage, note: msg || '',
+      won: M ? M.state === 'won' || !!(v.lap && v.lap.ph) || !!(v.sanctum && v.sanctum.st === 2) : false, time: v.time, kills: v.kills, level: v.level, gold: v.gold, stage: v.stage, note: msg || '',
       perHero: (M ? M.heroes : []).map(h => ({ pid: h.pid, cls: h.cls, name: h.name, kills: h.kills | 0, dealt: {}, weapons: h.weapons.map(ws => ws.id),
         build: h.weapons.map(ws => ({ id: ws.id, tune: ws.tune | 0, path: ws.path === undefined ? -1 : ws.path, pr: (ws.pr || [0, 0, 0]).slice(), fl: ws.fl | 0 })) })),
     });

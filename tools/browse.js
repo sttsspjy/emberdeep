@@ -20,6 +20,8 @@
 //          --support=id,... (support root or Form id; all: every support root): one PNG per hero Form x support, the support's Form (a root: its first Form) beside the hero's.
 //   lap: a knight run (god cheat) with a horde at 19:50, the final boss downed (ED.Debug.lap): PNGs of the VICTORY beat, the Last Light lap ~6 s in (HUD countdown, lap gold) and the results;
 //        fails on a page / console error, no lap state or no results screen after the lap.
+//   sanctum: a knight run (god cheat) on the Wickdeep (stage 4) at 19:55: PNGs of the entry fade (THE SANCTUM banner), the room ~1.5 s after the teleport and ~5 s into the fight (hero moved to the top-left corner),
+//        the Sanctum boss downed (VICTORY), then the results; fails on a page / console error, a missing room, a hero outside it or no win.
 //   results: the results screen from synthetic summaries (solo victory with the Last Light lap, 4-hero co-op victory, solo loss) at --viewport; fails on page scroll,
 //            Enter inside the input guard leaving the screen, a wrong default focus after it, text below 16 px or a page / console error.
 //   coop: two pages of one browser context on ?net=local (BroadcastChannel transport): host + guest through the ED.Net lobby API (host, join, ready, start), then the real co-op
@@ -37,7 +39,7 @@ const fs = require('fs'), os = require('os'), path = require('path'), http = req
 const FLAGS = { scen: 's', cls: 's', form: 's', support: 's', cos: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', prof: 'b', json: 'b', help: 'b' };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
-const SCEN_RE = /^(smoke|shots|coop|botwatch|lap|results|crowd\d{1,4}|late[abc]?|forms)$/;
+const SCEN_RE = /^(smoke|shots|coop|botwatch|lap|sanctum|results|crowd\d{1,4}|late[abc]?|forms)$/;
 function parseArgs(argv) {
   const o = { scen: '', cls: HEROES.join(','), form: '', support: '', cos: '', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
   const pos = [];
@@ -53,7 +55,7 @@ function parseArgs(argv) {
   }
   o.scens = (o.scen ? o.scen.split(',') : []).concat(pos).map(s => s.trim()).filter(Boolean);
   if (!o.scens.length) o.scens = ['smoke'];
-  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, forms, crowdN, late[a|b|c], coop, botwatch, lap, results)');
+  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, forms, crowdN, late[a|b|c], coop, botwatch, lap, sanctum, results)');
   if (!['chromium', 'firefox'].includes(o.browser)) throw new Fail('--browser is chromium or firefox');
   const vp = /^(\d{3,5})x(\d{3,5})$/.exec(o.viewport);
   if (!vp) throw new Fail('--viewport is WxH');
@@ -603,6 +605,43 @@ async function scenLap() {
   return res;
 }
 
+// The Sanctum: entry fade, the room, the fight, the win, the results.
+async function scenSanctum() {
+  const o = S.opt, res = newResult('sanctum');
+  const { ctx, page, errors, info } = await openPage();
+  try {
+    res.notes.push(bootNote(info) + (o.software ? ', launched without GPU' : ''));
+    await call(page, 'settings', o.quality);
+    await call(page, 'start', 'knight', 3, { god: true, might: 20 });
+    await dbg(page, 'setTime', 1196);
+    await page.waitForFunction(() => { const w = window.ED.Game.w; return w.sanctum && w.time >= w.sanctum.t0 - 0.8; }, null, { timeout: 20000 }).catch(() => {});
+    await shoot(page, res, 'sanctum-enter' + (o.software ? '-soft' : ''));
+    await page.waitForFunction(() => { const w = window.ED.Game.w; return w.sanctum && w.sanctum.st === 1 && w.time >= w.sanctum.t0 + 1.5; }, null, { timeout: 20000 }).catch(() => {});
+    const st = await page.evaluate(() => {
+      const w = window.ED.Game.w, R = w.arena.room, v = window.ED.Game.view;
+      return { st: w.sanctum && w.sanctum.st, room: !!R && !!v.props.room, foes: w.foes.filter(e => !e.dead).length, boss: w.boss ? w.boss.def.id : '',
+        inside: !!R && w.heroes.every(p => p.x >= R.x0 && p.x <= R.x1 && p.y >= R.y0 && p.y <= R.y1), cam: [window.ED.Render.camX, window.ED.Render.camY] };
+    });
+    res.notes.push('sanctum: ' + JSON.stringify(st));
+    if (st.st !== 1 || !st.room || !st.boss || !st.inside) fail(res, 'no Sanctum room / boss, or a hero outside it');
+    await shoot(page, res, 'sanctum-room' + (o.software ? '-soft' : ''));
+    await wait(4000);
+    await page.evaluate(() => { const w = window.ED.Game.w, R = w.arena.room, p = w.heroes[0]; p.x = R.x0 + 40; p.y = R.y0 + 60; }); // the wall corner in view
+    await wait(1000);
+    await shoot(page, res, 'sanctum-fight' + (o.software ? '-soft' : ''));
+    const banked = await page.evaluate(() => { const w = window.ED.Game.w, p = w.heroes[0]; for (let k = 0; k < 6 && w.bossList.length; k++) { const e = w.bossList[0]; e.invulnT = 0; w.killFoe(e, w.src(p, p.weapons[0].id, 'x')); } return w.won && w.sanctum.st === 2 && !w.lap; });
+    if (!banked) fail(res, 'Sanctum boss death did not bank the win (or started a lap)');
+    await wait(900);
+    await shoot(page, res, 'sanctum-victory' + (o.software ? '-soft' : ''));
+    await page.waitForFunction(() => window.ED.App.state === 'results', null, { timeout: 10000 }).catch(() => {});
+    if (!(await call(page, 'visible', 'scr-results'))) fail(res, 'results screen not shown after the Sanctum win');
+    await shoot(page, res, 'sanctum-results');
+    await call(page, 'stop');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function scenCrowd(sc) {
   const o = S.opt, n = +sc.slice(5), res = newResult(sc), secs = o.seconds || 6;
   const { ctx, page, errors, info } = await openPage();
@@ -927,7 +966,7 @@ async function main() {
     for (const sc of S.opt.scens) {
       const t0 = Date.now();
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'forms' ? await scenForms() : sc === 'coop' ? await scenCoop() : sc === 'botwatch' ? await scenBotwatch() : sc === 'lap' ? await scenLap() : sc === 'results' ? await scenResults() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'forms' ? await scenForms() : sc === 'coop' ? await scenCoop() : sc === 'botwatch' ? await scenBotwatch() : sc === 'lap' ? await scenLap() : sc === 'sanctum' ? await scenSanctum() : sc === 'results' ? await scenResults() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
       catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); fail(r, 'harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); }
       r.wallMs = Date.now() - t0;
       if (S.server.missing.size) { r.missing = [...S.server.missing]; fail(r, 'missing files: ' + r.missing.join(', ')); S.server.missing.clear(); }
