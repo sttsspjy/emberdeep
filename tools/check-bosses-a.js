@@ -166,7 +166,7 @@ for (const [id, stage, minute] of [['warden', 0, 5], ['spore', 0, 10], ['twins',
   } });
   ok(!r.err && r.ends === 1 && r.falls === 1 && r.rises === 0 && r.chest, `twins: both down inside the revive window ends the fight (ends ${r.ends}, falls ${r.falls}, rises ${r.rises}, chest ${r.chest})`);
 }
-// ---------- Last Light: the final boss's death banks the win, a 2 s calm, a 60 s lap at the hard cap with coins instead of gems, then the run ends won ----------
+// ---------- Last Light: the final boss's death banks the win, a 2 s calm, a 60 s lap at the lap cap with coins instead of gems, then the run ends won ----------
 // o: { seed, party, cheats, script(w, out, t, tick) (each tick; t = s since the kill), pend (a level-up queued before the kill: the solo game pauses on it, picked 30 ticks later) }.
 function lapRun(o) {
   const w = new ED.World({ seed: o.seed || 31, stage: 0, players: players(o.party || ['knight']), cheats: o.cheats || { god: true, might: 3 } }), L = C.LAP;
@@ -218,7 +218,7 @@ function lapRun(o) {
   ok(r.victory === 1 && w.won && r.foesAfterKill === 0 && r.gemsLeft === 0, `Last Light: the kill banks the win, emits 'victory', clears every foe and sends every gem to a hero (victory ${r.victory}, foes ${r.foesAfterKill}, free gems ${r.gemsLeft})`);
   ok(r.paused > 0 && r.calmFoes === 0 && Math.abs(r.calmT - L.calm) < 0.05 && Math.abs(parseFloat(r.lapEv[0].slice(2)) - L.calm) < 0.05 && r.lapEv[0][0] === '1', `Last Light: the solo level-up pause holds the clock (${r.paused} ticks), no spawns during the ${L.calm} s calm, the lap starts after it (${r.lapEv.join(', ')})`);
   ok(r.xpLap !== -1 && r.gemsLap === 0, `Last Light: no XP and no gems during the lap (xp/level unchanged: ${r.xpLap !== -1}, gems on the ground ${r.gemsLap})`);
-  ok(r.peak >= 880 && r.peak <= 900 && r.elites === 0 && r.bosses === 0 && r.chests === 0, `Last Light: the horde floods to the hard cap (peak ${r.peak}), no elites (${r.elites}), bosses (${r.bosses}) or chests (${r.chests})`);
+  ok(r.peak >= w.lapCap() - 20 && r.peak <= w.lapCap() && w.lapCap() === Math.min(900, Math.round(w.sdef.timeline[w.sdef.timeline.length - 1].cap * L.cap)) && r.elites === 0 && r.bosses === 0 && r.chests === 0, `Last Light: the horde floods to the lap cap (peak ${r.peak} / ${w.lapCap()}), no elites (${r.elites}), bosses (${r.bosses}) or chests (${r.chests})`);
   ok(lp && lp.kills >= L.coin && r.coins === Math.floor(lp.kills / L.coin) && lp.gold > 0, `Last Light: one coin per ${L.coin} hero kills (${lp && lp.kills} kills, ${r.coins} coins, ${lp && lp.gold} gold collected)`);
   ok(w.state === 'won' && r.ends === 1 && r.endEv.summary.won && Math.abs(r.endT - L.calm - L.dur) < 0.05 && r.lapEv[1] === '2@' + r.endT.toFixed(2) && w.foes.every(f => f.dead) && lp.t0 > 0 && lp.dur === L.dur,
     `Last Light: the timer ends the run as a win (state ${w.state}, ends ${r.ends}, at ${r.endT.toFixed(2)} s after the kill, events ${r.lapEv.join(', ')}; w.lap kept)`);

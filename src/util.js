@@ -18,8 +18,8 @@
     IFRAME: 0.5,          // invulnerability after a hit (s)
     RUN_LEN: 1200,        // survival length (s): the final boss spawns here
     ENRAGE_T: 1320,       // the final boss enrages at this time (s)
-    GOLD: { mid: 100, final: 300, win: 300, bounty: 100, minute: 10 }, // mid-boss coin drop, final boss kill and victory gold; run-end pay (win or loss): 1 per 100 kills + 10 per full minute survived; all x the stage gold multiplier (GAME-DESIGN §9)
-    LAP: { calm: 2, dur: 60, coin: 8 }, // Last Light (GAME-DESIGN §2): calm after the final boss's death (s), lap length (s), hero kills per gold coin
+    GOLD: { mid: 100, final: 300, win: 300, bounty: 62, minute: 10 }, // mid-boss coin drop, final boss kill and victory gold; run-end pay (win or loss): 1 per 62 kills + 10 per full minute survived; all x the stage gold multiplier (GAME-DESIGN §9)
+    LAP: { calm: 2, dur: 60, coin: 5, cap: 1.3 }, // Last Light (GAME-DESIGN §2): calm after the final boss's death (s), lap length (s), hero kills per gold coin, alive cap x the final-minute solo cap (x party factor, at most the hard cap)
     VERSION: '2.0.0',
   };
 

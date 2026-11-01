@@ -171,7 +171,7 @@ async function main() {
     check(await page.locator('.ach-row').count() === nAch, nAch + ' rows (hero and stage unlocks, achievements)');
     check(await page.locator('.ach-row.done').count() === 2, 'done: Shade (bought) and Still Standing (best time 7:12)');
     const at = await page.locator('#ach-list').innerText();
-    check(/7:12 \/ 15:00/.test(at) && /1840 \/ 5000/.test(at) && /21 \/ 40/.test(at) && /\+100 gold/.test(at), 'progress texts (Necro 15:00, one-run kills, level 40) and gold rewards');
+    check(/7:12 \/ 15:00/.test(at) && /1840 \/ 3000/.test(at) && /21 \/ 40/.test(at) && /\+100 gold/.test(at), 'progress texts (Necro 15:00, one-run kills, level 40) and gold rewards');
     check(/1 \/ \d+ unlocked, 1 \/ \d+ achievements\. New: Still Standing \+50/.test(await page.locator('#ach-count').innerText()), 'header counts unlocks and achievements, names the new one');
     check(await page.evaluate(() => ED.App.profile.gold === 1050 && ED.Save.load().ach.indexOf('time5') >= 0), 'achievement gold paid and saved');
     check(/Lifetime kills/.test(await page.locator('#ach-rec').innerText()) && await page.locator('.rec-stage').count() === 3, 'records and 3 stage bests');

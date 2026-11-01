@@ -4,16 +4,16 @@
 // Density floor: while alive < row.floor x alive cap the spawn budget is raised to REFILL x the deficit (at least REFILL_MIN, at most REFILL_MAX per tick), so the screen refills within ~0.4 s.
 // Packs: def.pack foes spawn [min, max] together (1 spawn each);
 // def.wall packs spawn as a line across the hero's direction, def.wall px apart, each member keeping its side offset in e.aa (AI.march).
-// Flock (every events.flock.every s from events.flock.first): the stage's swarmer on the spawn ring at the next golden-angle step around a random living hero (8 at 0:40 to 40 at 10:00 to 52 at 20:00 x party factor),
+// Flock (every events.flock.every s from events.flock.first): the stage's swarmer on the spawn ring at the next golden-angle step around a random living hero (5 at 0:40 to 26 at 10:00 to 34 at 20:00 x party factor),
 // 50/50 a tight pack or a line (x1.5 members, LINE_GAP px apart across the heading); may exceed the alive cap by FLOCK_OVER (25%), never the hard cap; swarm-brain non-solo kinds come only from flocks and swarm events.
-// Swarm event (every events.swarm.every s): a closing ring of swarmers through one hero's spot, or a stampede line crossing that hero's screen (24 at the first event to 50 by 12:00 to 60 by 20:00).
+// Swarm event (every events.swarm.every s): a closing ring of swarmers through one hero's spot, or a stampede line crossing that hero's screen (16 at the first event to 33 by 12:00 to 39 by 20:00).
 // Flock and swarm-event members fly through (foes.js): a fixed heading through the hero's spot at FLY_V x W.foePace px/s, never chasing; rush time covers the crossing (distance + FLY_PAST px);
 // stampede members cycle the ring ids plus the stampede ids present in the current roster (a dasher member at W.dasherCap is skipped).
 // Benchmark phase (stage bench { t, elite }): from bench.t a 'warn' { kind: 'surge' } event and elites every bench.elite s.
 // Brain caps: a roster pick of a ranged-brain foe while alive ranged foes >= W.shooterCap (summoner: W.summonerCap; charger / diver / blinker together: W.dasherCap; brute: W.bruteCap) is re-picked among the uncapped roster rows;
 // packs shrink to the room left under their cap; elites never promote a capped kind (elite brutes may exceed the brute cap by 2); stampedes skip dasher members at the cap.
 // Elites: a non-swarm, non-exploder roster foe promoted. Bosses: a 5 s 'warn' event, then w.spawnBoss; a stage boss id without an ED.Bosses script spawns the stage's brute as an elite boss stand-in.
-// Last Light lap (lap.js): alive cap = hard cap, density floor 100%, the final-minute roster; no flocks, swarm events, elites or bosses; nothing spawns during the calm before it.
+// Last Light lap (lap.js): alive cap = W.lapCap, density floor 100%, the final-minute roster; no flocks, swarm events, elites or bosses; nothing spawns during the calm before it.
 // Stage kin (boss adds, bosses.js W.addKin): w.stageKin(id) maps a foe id to this stage's foe of the same kind, from a table built once at initSpawner; w.foeAtCap(def) counts its brain cap fresh.
 (function (ED) {
   'use strict';
@@ -56,6 +56,8 @@
   W.bruteCap = function () { return Math.round(Math.min(8, 2 + 0.35 * this.time / 60) * (1 + 0.25 * (this.partyN - 1))); };
   W.timelineRow = function () { const tl = this.sdef.timeline; return tl[Math.min(tl.length - 1, Math.floor(this.time / 60))]; };
   W.aliveCap = function () { const row = this.timelineRow(); return Math.min(HARD_CAP, Math.round(row.cap * (1 + 0.25 * (this.partyN - 1)))); };
+  // Last Light lap alive cap: the final timeline row's solo cap x C.LAP.cap x party factor, at most the hard cap.
+  W.lapCap = function () { const tl = this.sdef.timeline; return Math.min(HARD_CAP, Math.round(tl[tl.length - 1].cap * ED.CONST.LAP.cap * (1 + 0.25 * (this.partyN - 1)))); };
 
   // A free point on a ring rmin..rmax around hero p (ahead: within 70 degrees of its movement when it moves; a0: the first try at angle a0, later tries random). Returns the scratch point or null after 8 tries.
   W.ringPoint = function (p, rmin, rmax, ahead, a0) {
@@ -208,7 +210,7 @@
   W.updateSpawner = function (dt) {
     const L = this.living, lap = this.lap;
     if (!L.length || (lap && !lap.ph)) return;
-    const sd = this.sdef, row = lap ? sd.timeline[sd.timeline.length - 1] : this.timelineRow(), party = 1 + 0.25 * (this.partyN - 1), cap = lap ? HARD_CAP : this.aliveCap(), sp = this.sp;
+    const sd = this.sdef, row = lap ? sd.timeline[sd.timeline.length - 1] : this.timelineRow(), party = 1 + 0.25 * (this.partyN - 1), cap = lap ? this.lapCap() : this.aliveCap(), sp = this.sp;
     sp.nR = sp.nS = sp.nD = sp.nB = -1;
     const deficit = (lap ? 1 : row.floor || 0) * cap - this.foes.length;
     sp.acc = Math.min(10, sp.acc + row.rate * party * (this.boss ? 0.5 : 1) * dt);

@@ -137,7 +137,7 @@ ok(M.buy('might') && M.buy('might') && !M.buy('might') && M.gold() === G0 - 5 * 
 ok(S.load().shop.might === 2 && S.load().spent === 5 * B, 'Meta.buy persists ranks and spent');
 ok(M.shop()[0].val === 0.1 && M.refundTotal() === 5 * B && M.refund() === 5 * B && M.gold() === G0 && S.load().gold === G0, 'Meta.refund returns ' + 5 * B + ' and persists');
 ok(M.unlocked('knight') && !M.unlocked('shade') && M.stageUnlocked(0) && !M.stageUnlocked(1), 'Meta.unlocked / stageUnlocked');
-const news = M.recordRun(summary({ won: true, time: 900, kills: 3100, level: 41, perHero: [{ pid: 'me', cls: 'pyro', kills: 3100, ranks: 0 }] }), 'me');
+const news = M.recordRun(summary({ won: true, time: 900, kills: 2900, level: 41, perHero: [{ pid: 'me', cls: 'pyro', kills: 2900, ranks: 0 }] }), 'me');
 ok(eq(news.filter(x => x.kind !== 'ach').map(x => x.kind + ':' + x.id).sort(), ['hero:bell', 'hero:cleric', 'hero:necro', 'stage:' + ED.STAGE_IDS[1]].sort())
   && eq(news.filter(x => x.kind === 'ach').map(x => x.id), ['time5', 'beat0', 'win.pyro', 'level40', 'pure']), 'Meta.recordRun returns every new unlock, then achievements: ' + news.map(x => x.txt).join(' | '));
 ok(M.seen('heroes', 'knight') === false && typeof M.seen === 'function', 'Meta.seen reads the bound profile');
@@ -245,10 +245,10 @@ ok(olN.some(x => x.id === 'beat0') && olN.some(x => x.id === 'heroes') && eq(ol.
 // 11. economy
 ok(S.shopLeft(S.defaultProfile()) === 41160, 'shop total (every rank) = 41160 gold: ' + S.shopLeft(S.defaultProfile()));
 const C = ED.CONST;
-ok(C.GOLD.bounty === 100 && C.GOLD.minute === 10 && C.GOLD.mid === 100 && C.GOLD.final === 300 && C.GOLD.win === 300 && eq(ED.STAGES.map(s => s.gold), [1, 1.25, 1.5]), 'gold table: 1 per 100 kills, 10 per minute, mid-boss 100, final 300, win 300; stage gold 1 / 1.25 / 1.5');
+ok(C.GOLD.bounty === 62 && C.GOLD.minute === 10 && C.GOLD.mid === 100 && C.GOLD.final === 300 && C.GOLD.win === 300 && eq(ED.STAGES.map(s => s.gold), [1, 1.25, 1.5]), 'gold table: 1 per 62 kills, 10 per minute, mid-boss 100, final 300, win 300; stage gold 1 / 1.25 / 1.5');
 const endGold = (stage, kills, time, won) => { const w = new ED.World({ seed: 3, stage, players: [{ pid: 'p1', cls: 'knight', meta: { shop: {}, sigs: [] } }] }); w.kills = kills; w.time = time; w.end(won); return w.gold; };
-ok(endGold(0, 5000, 630, false) === 150 && endGold(2, 5000, 630, false) === 225, 'a 10:30 loss with 5000 kills pays 50 + 100 (x1.5 on stage 3)');
-ok(endGold(1, 20000, 1205, true) === Math.round(400 * 1.25) + Math.round(300 * 1.25), 'a win pays bounty + minutes, then the win bonus');
+ok(endGold(0, 3100, 630, false) === 150 && endGold(2, 3100, 630, false) === 225, 'a 10:30 loss with 3100 kills pays 50 + 100 (x1.5 on stage 3)');
+ok(endGold(1, 12400, 1205, true) === Math.round(400 * 1.25) + Math.round(300 * 1.25), 'a win pays bounty + minutes, then the win bonus');
 
 // 12. cosmetics (Wardrobe)
 const CI = ED.COS_IDS, CB = ED.COS_BY, cosOf = (k) => ED.COSMETICS.filter(d => d.kind === k);

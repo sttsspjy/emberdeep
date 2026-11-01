@@ -25,8 +25,9 @@
   };
   Object.assign(W.prototype, ED.Grid);
 
-  // XP to go from level L to L + 1 (GAME-DESIGN §6): 3 + 11 x (L - 1) + 1.5 x (L - 1)^2 + 300 x max(0, L - 15) (cumulative 731 to level 10, 8,106 to 20, 47,631 to 30, 90,186 to 36).
-  W.xpFor = (L) => Math.round(3 + 11 * (L - 1) + 1.5 * (L - 1) * (L - 1) + 300 * Math.max(0, L - 15));
+  // XP to go from level L to L + 1 (GAME-DESIGN §6): XP_K x (3 + 11 x (L - 1) + 1.5 x (L - 1)^2 + 300 x max(0, L - 15)), rounded (cumulative 438 to level 10, 4,862 to 20, 28,576 to 30, 54,109 to 36).
+  const XP_K = 0.6;
+  W.xpFor = (L) => Math.round(XP_K * (3 + 11 * (L - 1) + 1.5 * (L - 1) * (L - 1) + 300 * Math.max(0, L - 15)));
 
   W.prototype.nextId = function () { return this.nid++; };
   W.prototype.minute = function () { return Math.floor(this.time / 60); };

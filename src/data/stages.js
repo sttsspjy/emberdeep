@@ -11,7 +11,7 @@
 // bench: { t (s), elite (s between elites) } the benchmark phase (HP-heavy roster, density floor 0.7, a 'surge' warning); bosses: [{ t (s), id, final }].
 (function (ED) {
   'use strict';
-  const capAt = (m) => Math.round(m < 3 ? 80 + 70 * m : 300 + (Math.min(m, 12) - 3) * (400 / 9)); // GAME-DESIGN §7: 80 / 150 / 220 at 0:00-2:00, 300 at 3:00 to 700 at 12:00
+  const capAt = (m) => 5 * Math.round((m < 3 ? 52 + 45.5 * m : 195 + (Math.min(m, 12) - 3) * (260 / 9)) / 5); // GAME-DESIGN §7: 50 / 100 / 145 at 0:00-2:00, 195 at 3:00 to 455 at 12:00, rounded to 5
   const floorAt = (m) => (m < 1 ? 0 : m >= 12 ? 0.7 : Math.min(0.6, (m + 1) / 20)); // GAME-DESIGN §7: density floor = alive cap x min(0.6, 0.05 x (minute + 1)) from 1:00 (none at 0:00), 0.7 from 12:00
   // Weight of keyframes [[minute, weight], ...] at minute m: 0 before the first key, linear between keys, the last value after the last key.
   const keyAt = (keys, m) => {
@@ -30,7 +30,7 @@
     return out;
   };
   // Spawn rate per minute (solo spawns/s; GAME-DESIGN §7), shared by the stages (stage 3 x1.05); BENCH: the 17:00-20:00 benchmark phase.
-  const RATE = [1.2, 2.2, 2.8, 3.8, 4.9, 6, 8.1, 10.2, 11.9, 13.6, 14, 16.2, 17.8, 19.6, 21.3, 22.5, 23.5, 24.5, 25.5, 26, 24];
+  const RATE = [0.7, 1.3, 1.7, 2.3, 2.9, 3.6, 4.9, 6.1, 7.1, 8.2, 8.4, 9.7, 10.7, 11.8, 12.8, 13.5, 14.1, 14.7, 15.3, 15.6, 14.4];
   const BENCH = { t: 1020, elite: 30 };
   const ROW = (look, r, n, gap, w) => ({ f: 'row', w, look, r, n, gap });
   const ARC = (look, r, n, gap, w) => ({ f: 'arc', w, look, r, n, gap });
@@ -65,7 +65,7 @@
           bonecaller: [[10, 1], [11, 2], [15, 2], [18, 2.6]],
         },
         { 2: { slime: 3 }, 4: { imp: 2 }, 6: { bulwark: 3 }, 8: { frostwisp: 3 }, 11: { bonecaller: 2 }, 13: { skelknight: 2 }, 16: { bulwark: 2 }, 18: { skelknight: 2 } }),
-      events: { flock: { id: 'bat', first: 40, every: 18, n: [8, 40, 52] }, swarm: { first: 120, every: 120, ring: ['bat'], stampede: ['bat', 'skeleton', 'drowned'], n: [24, 50, 60] } },
+      events: { flock: { id: 'bat', first: 40, every: 18, n: [5, 26, 34] }, swarm: { first: 120, every: 120, ring: ['bat'], stampede: ['bat', 'skeleton', 'drowned'], n: [16, 33, 39] } },
       elites: { first: 150, every: 60 }, bench: BENCH,
       bosses: [{ t: 300, id: 'warden' }, { t: 600, id: 'twins' }, { t: 900, id: 'cyclops' }, { t: 1200, id: 'hollow', final: true }],
     },
@@ -96,7 +96,7 @@
           mirecrab: [[10, 0.6], [11, 1], [13, 1.5], [15, 1.5], [18, 2]],
         },
         { 2: { glowslime: 3 }, 4: { spitter: 2 }, 6: { bloater: 3 }, 8: { drone: 3 }, 11: { mirecrab: 1 }, 13: { shroomhulk: 2 }, 16: { mirecrab: 1 }, 18: { shroomhulk: 2 } }),
-      events: { flock: { id: 'glowlet', first: 40, every: 18, n: [8, 40, 52] }, swarm: { first: 120, every: 120, ring: ['glowlet'], stampede: ['glowlet', 'myconid', 'reaver'], n: [24, 50, 60] } },
+      events: { flock: { id: 'glowlet', first: 40, every: 18, n: [5, 26, 34] }, swarm: { first: 120, every: 120, ring: ['glowlet'], stampede: ['glowlet', 'myconid', 'reaver'], n: [16, 33, 39] } },
       elites: { first: 150, every: 60 }, bench: BENCH,
       bosses: [{ t: 300, id: 'spore' }, { t: 600, id: 'cyclops' }, { t: 900, id: 'weaver' }, { t: 1200, id: 'king', final: true }],
     },
@@ -127,7 +127,7 @@
           colossus: [[10, 0.6], [11, 1], [13, 1.5], [15, 1.5], [18, 2]],
         },
         { 2: { jelly: 3 }, 4: { voidwraith: 2 }, 6: { stalker: 3 }, 8: { voideye: 3 }, 11: { colossus: 1 }, 13: { horror: 2 }, 16: { colossus: 1 }, 18: { horror: 2 } }),
-      events: { flock: { id: 'starspawn', first: 40, every: 18, n: [8, 40, 52] }, swarm: { first: 120, every: 120, ring: ['starspawn'], stampede: ['starspawn', 'shade', 'stalker'], n: [24, 50, 60] } },
+      events: { flock: { id: 'starspawn', first: 40, every: 18, n: [5, 26, 34] }, swarm: { first: 120, every: 120, ring: ['starspawn'], stampede: ['starspawn', 'shade', 'stalker'], n: [16, 33, 39] } },
       elites: { first: 150, every: 60 }, bench: BENCH,
       bosses: [{ t: 300, id: 'samurai' }, { t: 600, id: 'weaver' }, { t: 900, id: 'twins' }, { t: 1200, id: 'wickeater', final: true }],
     },

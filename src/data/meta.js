@@ -56,11 +56,11 @@
     HEROES.map(c => A('win.' + c, '', '', 150, { winWith: c }, '', 'skin.' + c + '.' + VICTOR_SKIN[c])), // name / txt from the hero name (ED.Save.achText)
     HEROES.map(c => A('form.' + c, '', '', 100, { form: c })),
     [
-      A('kills5k', 'Reaper', 'Kill 5000 foes in one run', 100, { runKills: 5000 }, 'fx.sigil.skull', 'title.reaper'),
-      A('kills15k', 'Blender', 'Kill 15000 foes in one run', 200, { runKills: 15000 }, 'fx.sigil.skull', 'title.blender'),
-      A('life25k', 'Exterminator', 'Kill 25000 foes in total', 150, { kills: 25000 }, 'fx.blast.red'),
-      A('life100k', 'Scourge', 'Kill 100000 foes in total', 300, { kills: 100000 }, 'fx.blast.red'),
-      A('life250k', 'Extinction', 'Kill 250000 foes in total', 500, { kills: 250000 }, 'fx.blast.red', 'kill.supernova'),
+      A('kills5k', 'Reaper', 'Kill 3000 foes in one run', 100, { runKills: 3000 }, 'fx.sigil.skull', 'title.reaper'),
+      A('kills15k', 'Blender', 'Kill 10000 foes in one run', 200, { runKills: 10000 }, 'fx.sigil.skull', 'title.blender'),
+      A('life25k', 'Exterminator', 'Kill 15000 foes in total', 150, { kills: 15000 }, 'fx.blast.red'),
+      A('life100k', 'Scourge', 'Kill 65000 foes in total', 300, { kills: 65000 }, 'fx.blast.red'),
+      A('life250k', 'Extinction', 'Kill 160000 foes in total', 500, { kills: 160000 }, 'fx.blast.red', 'kill.supernova'),
       A('level40', 'Ascended', 'Reach level 40 in one run', 200, { level: 40 }, 'fx.spark.magic', 'lvl.ascension'),
       A('wins10', 'Veteran', 'Win 10 runs', 300, { wins: 10 }, 'pickup.chest', 'title.veteran'),
       A('pure', 'Purist', 'Win with no Camp ranks', 400, { pure: true }, 'fx.circle.white', 'title.purist'),

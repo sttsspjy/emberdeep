@@ -346,7 +346,7 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
   for (const row of W3.sdef.timeline) row.rate = 0;
   W3.sp.swarmT = W3.sp.eliteT = W3.sp.flockT = Infinity; W3.sdef = Object.assign({}, W3.sdef, { bosses: [] });
   const rng = U.RNG(3), ids = W3.sdef.timeline[W3.sdef.timeline.length - 1].roster.map(r => r[0]).filter(id => ED.FOES[id] && !ED.FOES[id].boss);
-  const top = () => { let k = 0; while (W3.foes.length < 900 && k++ < 400) { const p = W3.heroes[rng.int(0, 3)], a = rng.next() * U.TAU, d = 60 + Math.sqrt(rng.next()) * 380, x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d; if (!ED.Arena.blocked(W3.arena, x, y, 8)) W3.spawnFoe(ids[rng.int(0, ids.length - 1)], x, y, { hpMul: 1 }); } };
+  const top = () => { let k = 0; while (W3.foes.length < 900 && k++ < 400) { const p = W3.heroes[rng.int(0, 3)], a = rng.next() * U.TAU, d = 60 + Math.sqrt(rng.next()) * 380, x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d; if (!ED.Arena.blocked(W3.arena, x, y, 8)) W3.spawnFoe(ids[rng.int(0, ids.length - 1)], x, y, { hpMul: 0.625 }); } }; // hpMul 0.625 cancels the x1.6 foe HP: kill-made zones keep the scene zone-heavy
   const pidIdx = {}; W3.heroes.forEach((p, i) => { pidIdx[p.pid] = i; });
   const ccs = [1, 2, 3].map(i => ({ idx: i, vw: 641, vh: 361, ack: 0, seq: 0, pidIdx, evs: null, carry: [] }));
   const M = new N.Mirror({ stage: 0, seed: 11, roster: cls.map((c, i) => ({ pid: 'p' + i, slot: i, name: 'P' + i, cls: c })), myPid: 'p1' });

@@ -1,7 +1,7 @@
-// Last Light (GAME-DESIGN §2): the final boss's death banks the win (w.won: from then on the run can only end as a win), clears the field, then after C.LAP.calm s runs a C.LAP.dur s lap at the hard cap.
+// Last Light (GAME-DESIGN §2): the final boss's death banks the win (w.won: from then on the run can only end as a win), clears the field, then after C.LAP.calm s runs a C.LAP.dur s lap at the lap cap (spawner.js W.lapCap).
 // w.lap: null until then, else { t0 (sim time the lap starts), dur, kills (hero kills during the lap), gold (coin gold collected during the lap), ph (0 calm, 1 lap) }; kept through end().
 // Events: 'victory' { x, y } at the kill; 'lap' { ph: 1, dur } when the lap starts; 'lap' { ph: 2 } when the timer runs out (every foe dies), then 'end' (won).
-// During the lap: spawner.js floods at the hard cap (100% floor, the final-minute roster; no flocks, swarms, elites or bosses), every C.LAP.coin-th hero kill drops a coin of 1 x stage gold (foes.js -> lapKill), no XP (progress.js).
+// During the lap: spawner.js floods at the lap cap (100% floor, the final-minute roster; no flocks, swarms, elites or bosses), every C.LAP.coin-th hero kill drops a coin of 1 x stage gold (foes.js -> lapKill), no XP (progress.js).
 (function (ED) {
   'use strict';
   const C = ED.CONST, W = ED.World.prototype;
