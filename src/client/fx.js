@@ -5,7 +5,7 @@
 // Overlays: Last Light ('victory' shockwave + flash, 'lap' banner and final flash), Sanctum ('sanctum' entry banner, landing flash), boss intro banner + letterbox, swarm / elite / phase / evolution banners, offscreen arrows to elites and bosses, level-up text, screen flashes, low-HP and hurt vignette.
 (function (ED) {
   'use strict';
-  const U = ED.U, TAU = U.TAU, PI = Math.PI;
+  const U = ED.U, TAU = U.TAU, PI = Math.PI, T = ED.t, L = ED.tr;
   const F = ED.FX = { shake: 0, shakeOn: true, numbers: true, hold: 0, now: 0, sx: 0, sy: 0 };
   const P2D = 280; // Canvas2D particle budget: above it each particle's fixed eighth (p.q) decides whether it is drawn, so the kept subset is stable frame to frame
   let pq = 0;
@@ -117,7 +117,7 @@
   const heroCol = (cls) => hexCol(ED.HEROES[cls] && ED.HEROES[cls].col);
   const view = () => ED.Game && ED.Game.view;
   const heroOf = (pid) => { const v = view(); if (!v) return null; for (const p of v.heroes) if (p.pid === pid) return p; return null; };
-  const foeName = (id) => { const d = ED.FOES[id]; return d ? d.name : 'A boss'; };
+  const foeName = (id) => { const d = ED.FOES[id]; return d ? L(d.name) : T('A boss'); };
   const up = (s) => String(s).toUpperCase();
   // True when (x, y) is inside the camera view plus margin m (no Render yet: true).
   const seen = (x, y, m) => { const r = ED.Render; return !r || !r.bw || (x >= r.camX - m && x <= r.camX + r.bw + m && y >= r.camY - m && y <= r.camY + r.bh + m); };
@@ -245,7 +245,7 @@
       case 'evolve': {
         const p = heroOf(ev.pid);
         if (p) { F.ring(p.x, p.y - 10, 110, 0xffd27aff, 0.7, 6, 4); F.ring(p.x, p.y - 10, 70, 0xffffffff, 0.45, 4, 2); F.burst(p.x, p.y - 10, 40, 0xffd27a00, 150, 0.8, 3, 20); F.sprite('fx.spark.magic', p.x, p.y - 4, 2.5, 0, 0xffe08a); }
-        if (mine) { F.screen(0xfff1d600, 0.8, 0.4); F.hitStop(0.08); F.addShake(4, 0); F.banner(up((ED.WEAPONS[ev.wid] && ED.WEAPONS[ev.wid].name) || 'Weapon') + '!', 0xffd27a, 2.6, { big: true, sub: 'NEW FORM', subCol: 0xfff1d6, k: 3, band: true }); }
+        if (mine) { F.screen(0xfff1d600, 0.8, 0.4); F.hitStop(0.08); F.addShake(4, 0); F.banner(T('{0}!', up(ED.WEAPONS[ev.wid] ? L(ED.WEAPONS[ev.wid].name) : T('Weapon'))), 0xffd27a, 2.6, { big: true, sub: T('NEW FORM'), subCol: 0xfff1d6, k: 3, band: true }); }
         break;
       }
       case 'chest': {
@@ -255,27 +255,27 @@
         for (const r of ev.results || []) {
           if (r.kind === 'evo') continue;
           const d = r.kind === 'skill' ? ED.SKILLS[r.id] : r.kind === 'plvl' ? ED.PASSIVES[r.id] : null;
-          const txt = r.kind === 'gold' ? '+' + (r.val | 0) + ' GOLD' : r.kind === 'offer' ? 'EXTRA PICK' : r.kind === 'pathpick' ? 'NEW PATH' : r.kind === 'form' ? 'NEW FORM' : up(d ? d.name : r.id) + ' UP';
-          floatText(txt, p.x, p.y - 34 - i * 11, r.kind === 'gold' ? 0xffd24a : 0xbfefff, 1.6 + i * 0.25);
+          const txt = r.kind === 'gold' ? T('+{0} GOLD', r.val | 0) : r.kind === 'offer' ? T('EXTRA PICK') : r.kind === 'pathpick' ? T('NEW PATH') : r.kind === 'form' ? T('NEW FORM') : T('{0} UP', up(d ? L(d.name) : r.id));
+          floatText(txt, p.x, p.y - 34 - i * (ED.Batch.textPx(txt, 1) + 3), r.kind === 'gold' ? 0xffd24a : 0xbfefff, 1.6 + i * 0.25);
           i++;
         }
         break;
       }
       case 'warn': {
-        if (ev.kind === 'boss') { F.banner(up(foeName(ev.id)) + ' APPROACHES', 0xff7a6a, 3, { k: 2 }); F.screen(0xff302000, 0.25, 0.6); }
-        else if (ev.kind === 'elite') { const d = ED.FOES[ED.FOE_IDS[ev.k]]; F.banner('ELITE ' + up(d ? d.name : 'foe'), 0xffc94a, 2.2, { k: 2 }); if (ev.id) track(ev.id, 6, 0xffc94aff); }
-        else if (ev.kind === 'surge') { F.banner('THE HORDE SURGES', 0xff5a4a, 3, { k: 2 }); F.screen(0xff302000, 0.25, 0.6); }
-        else F.banner(ev.ring ? 'SURROUNDED!' : 'SWARM!', 0xffa04a, 1.8, { k: 2 });
+        if (ev.kind === 'boss') { F.banner(T('{0} APPROACHES', up(foeName(ev.id))), 0xff7a6a, 3, { k: 2 }); F.screen(0xff302000, 0.25, 0.6); }
+        else if (ev.kind === 'elite') { const d = ED.FOES[ED.FOE_IDS[ev.k]]; F.banner(T('ELITE {0}', up(d ? L(d.name) : T('foe'))), 0xffc94a, 2.2, { k: 2 }); if (ev.id) track(ev.id, 6, 0xffc94aff); }
+        else if (ev.kind === 'surge') { F.banner(T('THE HORDE SURGES'), 0xff5a4a, 3, { k: 2 }); F.screen(0xff302000, 0.25, 0.6); }
+        else F.banner(ev.ring ? T('SURROUNDED!') : T('SWARM!'), 0xffa04a, 1.8, { k: 2 });
         break;
       }
       case 'boss': {
         if (ev.phase === 0) {
-          F.banner(up(foeName(ev.id)), 0xff6a5a, 2.6, { big: true, sub: ev.final ? 'FINAL BOSS' : 'BOSS', subCol: 0xffd27a, k: 3, band: true });
+          F.banner(up(foeName(ev.id)), 0xff6a5a, 2.6, { big: true, sub: ev.final ? T('FINAL BOSS') : T('BOSS'), subCol: 0xffd27a, k: 3, band: true });
           letterT = 2.6; F.addShake(6, 0); F.hitStop(0.08); F.screen(0xff302000, 0.35, 0.5);
           if (ev.fid) track(ev.fid, 9999, 0xff5a4aff);
-        } else if (ev.phase === 'enrage') { F.banner('ENRAGED!', 0xff3a2a, 2.2, { k: 3 }); F.screen(0xff302000, 0.5, 0.6); F.addShake(6, 0); }
-        else if (ev.phase === -1) { if (!ev.final) F.banner(up(foeName(ev.id)) + ' FALLS', 0xffd27a, 2.2, { big: true, k: 3, band: true }); for (const q of tracks) if (q.id === ev.fid) q.t = 0; } // a final boss: the HUD's VICTORY banner
-        else if (ev.phase > 0) { F.banner('PHASE ' + ev.phase, 0xff7a6a, 1.6, { k: 2 }); F.addShake(5, 0); F.hitStop(0.06); const v = view(), b = v && v.boss; if (b) { F.ring(b.x, b.y - 20, 120, 0xff5a4aff, 0.5, 10, 4); F.flash(b.x, b.y - 20, 50, 0xffffff00, 0.15, 0.7); } }
+        } else if (ev.phase === 'enrage') { F.banner(T('ENRAGED!'), 0xff3a2a, 2.2, { k: 3 }); F.screen(0xff302000, 0.5, 0.6); F.addShake(6, 0); }
+        else if (ev.phase === -1) { if (!ev.final) F.banner(T('{0} FALLS', up(foeName(ev.id))), 0xffd27a, 2.2, { big: true, k: 3, band: true }); for (const q of tracks) if (q.id === ev.fid) q.t = 0; } // a final boss: the HUD's VICTORY banner
+        else if (ev.phase > 0) { F.banner(T('PHASE {0}', ev.phase), 0xff7a6a, 1.6, { k: 2 }); F.addShake(5, 0); F.hitStop(0.06); const v = view(), b = v && v.boss; if (b) { F.ring(b.x, b.y - 20, 120, 0xff5a4aff, 0.5, 10, 4); F.flash(b.x, b.y - 20, 50, 0xffffff00, 0.15, 0.7); } }
         break;
       }
       case 'victory': { // Last Light: the final boss died at (x, y): light shockwave rings, flash, shake (no hit-stop: the sim never slows)
@@ -286,18 +286,18 @@
         break;
       }
       case 'sanctum': { // the Sanctum: ph 0 the fade starts (banner), ph 1 the party lands in the room (white flash out of the black)
-        if (ev.ph === 0) { F.banner('THE SANCTUM', 0xff8a4a, C_SANCTUM_FADE + 0.6, { big: true, sub: 'THE WICKDEEP DRAGS YOU DOWN', subCol: 0xffd0a0, k: 3, band: true }); F.screen(0xff302000, 0.4, 1.2); F.addShake(6, 0); letterT = 0; for (const q of tracks) q.t = 0; }
+        if (ev.ph === 0) { F.banner(T('THE SANCTUM'), 0xff8a4a, C_SANCTUM_FADE + 0.6, { big: true, sub: T('THE WICKDEEP DRAGS YOU DOWN'), subCol: 0xffd0a0, k: 3, band: true }); F.screen(0xff302000, 0.4, 1.2); F.addShake(6, 0); letterT = 0; for (const q of tracks) q.t = 0; }
         else if (ev.ph === 1) { F.screen(0xfff1d600, 0.9, 0.8); F.addShake(8, 0); }
         break;
       }
       case 'lap': { // Last Light: ph 1 the lap starts, ph 2 its timer ran out (every foe vanishes)
         const me = heroOf(ctx.me);
-        if (ev.ph === 1) { F.banner('LAST LIGHT', 0xffd27a, 2.8, { big: true, sub: 'EVERY ' + ED.CONST.LAP.coin + ' KILLS DROP GOLD', subCol: 0xfff1d6, k: 3, band: true }); F.screen(0xffd27a00, 0.35, 0.6); F.addShake(5, 0); if (me) F.ring(me.x, me.y - 10, 300, 0xffd27aff, 0.8, 20, 4); }
+        if (ev.ph === 1) { F.banner(T('LAST LIGHT'), 0xffd27a, 2.8, { big: true, sub: T('EVERY {0} KILLS DROP GOLD', ED.CONST.LAP.coin), subCol: 0xfff1d6, k: 3, band: true }); F.screen(0xffd27a00, 0.35, 0.6); F.addShake(5, 0); if (me) F.ring(me.x, me.y - 10, 300, 0xffd27aff, 0.8, 20, 4); }
         else if (ev.ph === 2) { F.screen(0xffffff00, 1, 1.2); if (me) { F.ring(me.x, me.y - 10, 700, 0xfff1d6ff, 1.2, 20, 8); F.flash(me.x, me.y - 10, 200, 0xffffff00, 0.8, 1); } }
         break;
       }
       case 'down': { const p = heroOf(ev.pid); if (p) { F.ring(p.x, p.y - 8, 50, 0xff3a2aff, 0.5, 6, 3); F.burst(p.x, p.y - 8, 16, 0xff4a4a00, 90, 0.6, 2, 20); } if (mine) { F.screen(0xff202000, 0.5, 0.5); F.addShake(5, 0); hurtV = 1; } break; }
-      case 'revive': { const p = heroOf(ev.pid); if (p) { F.ring(p.x, p.y - 10, 70, 0xffe08aff, 0.6, 6, 3); F.burst(p.x, p.y - 10, 28, 0xffe08a00, 110, 0.8, 2, 40); F.sprite('fx.shield.gold', p.x, p.y - 4, 1.5); } if (mine) { F.banner('REVIVED', 0xffe08a, 1.6, { k: 2 }); F.screen(0xfff1d600, 0.4, 0.3); } break; }
+      case 'revive': { const p = heroOf(ev.pid); if (p) { F.ring(p.x, p.y - 10, 70, 0xffe08aff, 0.6, 6, 3); F.burst(p.x, p.y - 10, 28, 0xffe08a00, 110, 0.8, 2, 40); F.sprite('fx.shield.gold', p.x, p.y - 4, 1.5); } if (mine) { F.banner(T('REVIVED'), 0xffe08a, 1.6, { k: 2 }); F.screen(0xfff1d600, 0.4, 0.3); } break; }
       case 'dead': { const p = heroOf(ev.pid); if (p) F.burst(p.x, p.y - 8, 20, 0x8a84a800, 60, 0.9, 2, 20); break; }
       default: break;
     }
@@ -433,7 +433,7 @@
     for (const l of labels) if (l.life > 0) textS(B, l.s, Math.round(l.x), Math.round(l.y), l.col, 1, Math.min(1, l.life / 0.4));
     if (!r) return;
     const x0 = r.camX + F.sx, y0 = r.camY + F.sy, w = r.bw, h = r.bh, cx = x0 + w / 2;
-    if (v && v.me && lvlT > 0) { const k = 1 - lvlT / 1.1; textS(B, 'LEVEL UP', Math.round(v.me.x), Math.round(v.me.y - 34 - 10 * U.easeOut(Math.min(1, k * 3))), 0x8ae8ff, 2, Math.min(1, lvlT / 0.3)); }
+    if (v && v.me && lvlT > 0) { const k = 1 - lvlT / 1.1; textS(B, T('LEVEL UP'), Math.round(v.me.x), Math.round(v.me.y - 34 - 10 * U.easeOut(Math.min(1, k * 3))), 0x8ae8ff, 2, Math.min(1, lvlT / 0.3)); }
     // offscreen arrows: tracked elites and the boss
     if (v) {
       for (const q of tracks) {
@@ -468,15 +468,16 @@
     if (b.life <= 0) return;
     const age = b.max - b.life, al = Math.min(1, age / 0.12, b.life / 0.4), k = b.k;
     const pop = age < 0.1 ? 1 : 0; // one step larger for the first 100 ms
+    const sh = b.sub ? ED.Batch.textPx(b.sub, 1) - 8 : 0; // extra height of a Hangul sub line (16 px font against the 8 px pixel font)
     if (b.band) {
-      const bh = 12 * k + (b.sub ? 14 : 4), grow = U.easeOut(Math.min(1, age / 0.25));
+      const bh = 12 * k + (b.sub ? 14 + sh : 4), grow = U.easeOut(Math.min(1, age / 0.25));
       B.rect(cx - w / 2, y - bh / 2 - 2, w, bh + 4, rgbaK(0x0a060400, 0.6 * al));
       const lw = Math.round(w * 0.42 * grow);
       B.rect(cx - lw, y - bh / 2 - 3, lw * 2, 1, rgbaK((b.col << 8) >>> 0, al)); B.rect(cx - lw, y + bh / 2 + 2, lw * 2, 1, rgbaK((b.col << 8) >>> 0, al));
     }
-    const ty = b.sub ? y - 5 : y;
+    const ty = b.sub ? y - 5 - (sh >> 1) : y;
     textS(B, b.text, Math.round(cx), Math.round(ty), b.col, k + pop, al);
-    if (b.sub) textS(B, b.sub, Math.round(cx), Math.round(ty + 6 * k + 6), b.subCol, 1, al);
+    if (b.sub) textS(B, b.sub, Math.round(cx), Math.round(ty + 6 * k + 6 + (sh >> 1)), b.subCol, 1, al);
   }
 
   F.clear = () => {

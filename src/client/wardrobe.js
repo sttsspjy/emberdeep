@@ -4,10 +4,10 @@
 // (the effect sprite recoloured, a fixed particle pattern in the effect's colours, the chosen hero under level-ups); titles and name colours are text.
 (function (ED) {
   'use strict';
-  const UI = ED.UI, SV = ED.Save, esc = UI.esc;
+  const UI = ED.UI, SV = ED.Save, esc = UI.esc, T = ED.t, L = ED.tr;
   const $ = (id) => document.getElementById(id);
   const App = () => ED.App;
-  const TABS = [['skin', 'Skins'], ['tint', 'Weapon tints'], ['kill', 'Kill effects'], ['lvl', 'Level-ups'], ['title', 'Titles'], ['ncol', 'Name colours']];
+  const TABS = [['skin', () => T('Skins')], ['tint', () => T('Weapon tints')], ['kill', () => T('Kill effects')], ['lvl', () => T('Level-ups')], ['title', () => T('Titles')], ['ncol', () => T('Name colours')]];
   // Effect pictures by kind and style ('' = the default look): [particle pattern, colours, effect sprite ('' = none)].
   const PAT = {
     kill: { '': ['burst', ['#d8c8b0', '#ffffff'], ''], embers: ['rise', ['#ff7a2a', '#ffe08a'], 'fx.ember'], souls: ['rise', ['#9fdcff', '#ffffff'], 'fx.glint'],
@@ -60,13 +60,13 @@
   // Text preview of a title / name colour item (null = default), shown with the profile name.
   function textPrev(kind, d) {
     const p = App().profile, nc = SV.worn(p, 'ncol') && ED.COS_BY[SV.worn(p, 'ncol')], tt = SV.worn(p, 'title') && ED.COS_BY[SV.worn(p, 'title')];
-    const title = kind === 'title' ? (d ? d.name : '') : tt ? tt.name : '', col = kind === 'ncol' ? (d ? d.col : '') : nc ? nc.col : '';
+    const title = kind === 'title' ? (d ? L(d.name) : '') : tt ? L(tt.name) : '', col = kind === 'ncol' ? (d ? d.col : '') : nc ? nc.col : '';
     const pv = div('wd-prev wd-tag');
     const cols = kind === 'ncol' && d && d.cols, st = cols ? `background:linear-gradient(90deg,${cols.join(',')});-webkit-background-clip:text;background-clip:text;color:transparent` : col ? 'color:' + col : '';
-    pv.innerHTML = `<span class="wd-title">${esc(title || ' ')}</span><span class="wd-name"${st ? ` style="${st}"` : ''}>${esc(p.name)}</span>`;
+    pv.innerHTML = `<span class="wd-title">${esc(title || ' ')}</span><span class="wd-name" translate="no"${st ? ` style="${st}"` : ''}>${esc(p.name)}</span>`;
     return pv;
   }
-  const achName = (id) => { const a = ED.ACHIEVEMENTS.find(x => x.id === SV.cosAch(id)); return a ? SV.achText(a).name : 'an achievement'; };
+  const achName = (id) => { const a = ED.ACHIEVEMENTS.find(x => x.id === SV.cosAch(id)); return a ? L(SV.achText(a).name) : T('an achievement'); };
   const slotCls = () => (W.tab === 'skin' ? W.hero : undefined);
 
   W.render = (flash) => {
@@ -75,14 +75,14 @@
     $('wd-gold').textContent = p.gold;
     UI.paint($('wd-coin'), 'pickup.coin', 0);
     const own = p.cos.length, all = ED.COSMETICS.length;
-    $('wd-hint').textContent = 'Looks only, never power. Owned ' + own + ' / ' + all + (SV.cosLeft(p) ? ', ' + ED.U.fmtNum(SV.cosLeft(p)) + ' gold for the rest' : '') + '.';
+    $('wd-hint').textContent = SV.cosLeft(p) ? T('Looks only, never power. Owned {0} / {1}, {2} gold for the rest.', own, all, ED.U.fmtNum(SV.cosLeft(p))) : T('Looks only, never power. Owned {0} / {1}.', own, all);
     // tabs
     const tabs = $('wd-tabs'); tabs.textContent = '';
     for (const [k, name] of TABS) {
       const b = document.createElement('button'), on = k === W.tab;
-      b.className = 'btn btn-sm' + (on ? ' on' : ''); b.textContent = name; b.dataset.tab = k;
+      b.className = 'btn btn-sm' + (on ? ' on' : ''); b.textContent = name(); b.dataset.tab = k;
       b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', on ? 'true' : 'false');
-      b.onclick = () => { if (W.tab === k) return; W.tab = k; $('wd-msg').textContent = ''; W.render(); const nb = tabs.querySelector('[data-tab="' + k + '"]'); if (nb) nb.focus(); };
+      b.onclick = () => { if (W.tab === k) return; W.tab = k; UI.say('wd-msg', ''); W.render(); const nb = tabs.querySelector('[data-tab="' + k + '"]'); if (nb) nb.focus(); };
       tabs.appendChild(b);
     }
     // hero row (skins only)
@@ -90,8 +90,8 @@
     if (W.tab === 'skin') for (const cls of ED.HERO_IDS) {
       const h = ED.HEROES[cls]; if (!h) continue;
       const b = document.createElement('button'), on = cls === W.hero;
-      b.className = 'pick-btn' + (on ? ' on' : ''); b.dataset.cls = cls; b.title = h.name;
-      b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', on ? 'true' : 'false'); b.setAttribute('aria-label', h.name);
+      b.className = 'pick-btn' + (on ? ' on' : ''); b.dataset.cls = cls; b.title = L(h.name);
+      b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', on ? 'true' : 'false'); b.setAttribute('aria-label', L(h.name));
       b.appendChild(UI.iconCanvas(UI.heroIcon(cls), 48, '', UI.heroVar(cls)));
       b.onclick = () => { if (W.hero === cls) return; W.hero = cls; W.render(); const nb = hr.querySelector('[data-cls="' + cls + '"]'); if (nb) nb.focus(); };
       hr.appendChild(b);
@@ -104,16 +104,16 @@
       const id = d ? d.id : '', isWorn = id === worn, owned = !d || SV.cosOwned(p, id), cost = d ? SV.cosCost(p, id) : 0;
       const c = div('wd-item' + (isWorn ? ' worn' : '') + (owned ? ' owned' : ''));
       c.appendChild(kind === 'title' || kind === 'ncol' ? textPrev(kind, d) : preview(kind, d));
-      const state = isWorn ? 'Worn' : owned ? 'Owned' : cost ? cost + ' gold' : 'Reward: ' + achName(id);
-      c.insertAdjacentHTML('beforeend', `<span class="wd-iname">${esc(d ? d.name : 'Default')}</span><span class="wd-state">${esc(state)}</span>`);
+      const state = isWorn ? T('Worn') : owned ? T('Owned') : cost ? T('{0} gold', cost) : T('Reward: {0}', achName(id));
+      c.insertAdjacentHTML('beforeend', `<span class="wd-iname">${esc(d ? L(d.name) : T('Default'))}</span><span class="wd-state">${esc(state)}</span>`);
       const b = document.createElement('button');
       b.className = 'btn btn-sm'; b.dataset.id = id || 'default';
-      if (isWorn) { b.textContent = d ? 'Take off' : 'Worn'; b.disabled = !d; b.onclick = () => { SV.wear(p, '', kind, cls); A.persist(); W.render('default'); }; }
-      else if (owned) { b.textContent = 'Wear'; b.onclick = () => { SV.wear(p, id, kind, cls); A.persist(); W.render(id); }; }
+      if (isWorn) { b.textContent = d ? T('Take off') : T('Worn'); b.disabled = !d; b.onclick = () => { SV.wear(p, '', kind, cls); A.persist(); W.render('default'); }; }
+      else if (owned) { b.textContent = T('Wear'); b.onclick = () => { SV.wear(p, id, kind, cls); A.persist(); W.render(id); }; }
       else if (cost) {
-        b.textContent = 'Buy ' + cost; b.disabled = p.gold < cost;
-        b.onclick = () => { if (!SV.buyCos(p, id)) return; SV.wear(p, id, kind, cls); A.persist(); $('wd-msg').textContent = 'Bought and wearing ' + d.name + '.'; W.render(id); };
-      } else { b.textContent = 'Locked'; b.disabled = true; }
+        b.textContent = T('Buy {0}', cost); b.disabled = p.gold < cost;
+        b.onclick = () => { if (!SV.buyCos(p, id)) return; SV.wear(p, id, kind, cls); A.persist(); UI.say('wd-msg', () => T('Bought and wearing {0}.', L(d.name))); W.render(id); };
+      } else { b.textContent = T('Locked'); b.disabled = true; }
       c.appendChild(b);
       return c;
     };

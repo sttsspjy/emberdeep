@@ -7,6 +7,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; font-family: 'Pixel Operator', 'Wickdeep Hangul', monospace; font-size: var(--u); line-height: 1.25; }
+html:lang(ko) body { word-break: keep-all; overflow-wrap: break-word; } /* Korean wraps between words, never inside one */
 #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; cursor: var(--aim-cur); }
 #post { image-rendering: pixelated; }
 #ui { position: fixed; inset: 0; pointer-events: none; }
@@ -401,7 +402,7 @@ input[type="range"]::-moz-range-thumb { width: 0.9em; height: 1.4em; background:
 .offer-card.k-skill { border-color: #6a5ad0; }
 .offer-card.k-gold, .offer-card.k-heal { border-color: #6a5020; }
 .offer-card.evo-ready { border-color: var(--gold); box-shadow: 0 0 0 3px #000, 0 0 30px rgba(255, 210, 122, 0.6); }
-.offer-card.evo-ready::after { content: 'FORM'; position: absolute; top: -0.75em; right: -0.4em; background: var(--gold); color: #2a1408; padding: 0 0.4em; font-size: var(--u); border: 2px solid #000; transform: rotate(6deg); }
+.offer-card.evo-ready::after { content: attr(data-flag); position: absolute; top: -0.75em; right: -0.4em; background: var(--gold); color: #2a1408; padding: 0 0.4em; font-size: var(--u); border: 2px solid #000; transform: rotate(6deg); }
 .offer-foot { display: flex; gap: calc(var(--u) * 0.8); }
 .offer-card.banish { outline: 3px solid #ff5a5a; outline-offset: -3px; }
 #btn-banish.on { background: #7a2020; }

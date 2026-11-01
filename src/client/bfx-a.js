@@ -123,7 +123,7 @@
     B.circ(z.x, z.y, z.r, rgba(0xc58aff, 220), 2);
     o.sx = o.sy = 3; o.alpha = 0.6 + 0.4 * p;
     if (!B.spr('fx.sigil.skull', 0, z.x, z.y - 6, o)) B.circ(z.x, z.y - 6, 6, 0xffffffcc, 0);
-    B.text('RISING', z.x, z.y - z.r - 8, 0xc58aff, 1.5);
+    B.text(ED.t('RISING'), z.x, z.y - z.r - 8, 0xc58aff, 1.5);
     return true;
   };
   // Pull (after its warning): eight spokes spinning inward.
