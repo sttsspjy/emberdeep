@@ -91,6 +91,7 @@ const t5 = w.time; w.time = C.ENRAGE_T + 1; w.updateBosses(); w.time = t5;
 ok(!boss.enraged, 'the global enrage at ' + C.ENRAGE_T + ' s skips the Sanctum boss');
 
 // 6. bot in the room
+w.cheats.god = true; // the bot proves room bounds here, not survival
 const bot = Bot.create({ pid: 'a', seed: 7, skill: 1 }); bot.onStart(w, pa);
 let nan = 0, out = 0;
 for (let i = 0; i < 60 * 60 && w.state === 'play'; i++) {
@@ -98,6 +99,7 @@ for (let i = 0; i < 60 * 60 && w.state === 'play'; i++) {
   for (const p of w.heroes) { if (!isFinite(p.x) || !isFinite(p.y)) nan++; else if (!p.dead && !inRoom(R, p.x, p.y, C.HERO_BODY)) out++; }
   for (const e of w.foes) if (!e.dead && (!isFinite(e.x) || !inRoom(R, e.x, e.y, 0))) out++;
 }
+w.cheats.god = false;
 ok(nan === 0 && out === 0, 'a bot fights 60 s inside the room: no NaN, nobody outside (' + nan + ' / ' + out + ')');
 
 // 7. boss death
