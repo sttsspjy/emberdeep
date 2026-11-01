@@ -59,16 +59,16 @@ Single-target numbers of these four stay below 15-30: the yardstick's lone foe a
 
 ## War Axe
 Control. Axes thrown upward toward the cursor's side fall with gravity across the screen, pierce, and knock every foe hit away from the hero (bosses and knockback-immune brutes ignore it).
-Base: 20 dmg, cd 1.5 s, 2 axes, pierce 4, knock 260 (about 26 px), radius 7. dps.js base crowd 115, single 13.
+Base: 20 dmg, cd 1.5 s, 2 axes, pierce 4, knock 260 (about 26 px), radius 7. dps.js base crowd 124, single 13.
 
 | Path | Rank 1 | Rank 2 | Rank 3 |
 |---|---|---|---|
 | Count | +1 axe | axes fly to both sides | +15% dmg, +1 axe |
 | Heft | axes 30% bigger, knock +30% | hits stagger (0.35 s stun) | pierce +2, knock +30% |
-| Return | 1 bounce on landing (24 px below the throw) | the bounce flies back toward you | +15% dmg, +1 bounce |
+| Fling | arc 30% higher and farther | cd -20% | +20% dmg, pierce +1 |
 
-Form **Avalanche** (base 18 dmg, 2 axes, pierce 4, area 1.1, knock 300): a landing axe thuds (knockback ring, no damage) and splits into 3 small axes (30% dmg, 1 pierce). Refines: +1 axe · +20% dmg, splits into 5.
-dps.js: t5 188 / 20 · p0 631 / 31 · p1 332 / 26 · p2 312 / 151 · f00 787 / 65 · f10 617 / 61 · f20 476 / 397.
+Form **Headsman** (base 12 dmg, cd 1.6 s, 2 axes, speed 380, range 200, knock 220 sideways, grind 1.2 s): giant axes fly straight along the aim (12° apart), pierce every foe and knock it off the path; each embeds at the cursor distance (40 px to range; Fling's reach scales range) or at an obstacle and grinds: a 26 px x area zone hitting every 0.25 s for 50% dmg (x2.5 on bosses, elites and knockback-immune foes) and pushing foes 20 px out. One volley's grinders hit a foe at most once per 0.25 s together. No bounce, no return; Count's both-sides rank does not split the volley. Refines: +1 axe · +20% dmg, grind +50% (1.8 s).
+dps.js (crowd / single / boss): t5 188 / 20 · p0 512 / 31 · p1 375 / 26 · p2 500 / 0 / 39 (the farther arc flies over the yardstick foe) · f00 1,563 / 331 / 331 · f10 1,467 / 249 / 249 · f20 1,526 / 366 / 366.
 
 ## Bramble Trail
 Control. Thorn patches root foes (0.5 s stun, then 0.8 s immune; bosses never, elites half) and prick them (8 per s, one hit per second). Walking drops a patch every 22 px; each cooldown a ring erupts around you, starting on the cursor side.

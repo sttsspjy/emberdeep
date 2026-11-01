@@ -399,7 +399,7 @@
   const WKEY = [['bone storm', 'boneshard'], ['bonestorm', 'boneshard'], ['shadow fan', 'daggers'], ['shadowfan', 'daggers'], ['spear', 'bonespear'], ['impal', 'bonespear'], ['shard', 'boneshard'],
     ['lantern', 'lanterns'], ['sun wheel', 'lanterns'], ['sunwheel', 'lanterns'], ['chain', 'chainspark'], ['spark', 'chainspark'], ['storm', 'chainspark'], ['frost', 'frostring'], ['glacier', 'frostring'],
     ['bramble', 'bramble'], ['thorn', 'bramble'], ['glaive', 'glaive'], ['moon', 'glaive'], ['meteor', 'meteorcall'], ['star', 'meteorcall'], ['blight', 'blight'], ['plague', 'blight'], ['wisp', 'wisp'],
-    ['mortar', 'mortar'], ['barrage', 'mortar'], ['censer', 'censer'], ['ricochet', 'ricochet'], ['avalanche', 'ricochet'], ['cleave', 'cleave'], ['whirl', 'cleave'], ['bow', 'longbow'], ['hail', 'longbow'],
+    ['mortar', 'mortar'], ['barrage', 'mortar'], ['censer', 'censer'], ['ricochet', 'ricochet'], ['cleave', 'cleave'], ['whirl', 'cleave'], ['bow', 'longbow'], ['hail', 'longbow'],
     ['arrow', 'longbow'], ['fire', 'firebolt'], ['inferno', 'firebolt'], ['bone', 'boneshard'], ['smite', 'smite'], ['wrath', 'smite'], ['dagger', 'daggers'], ['knife', 'daggers'], ['toll', 'toll'],
     ['cathedral', 'toll'], ['bell', 'toll']];
   const WC = {};
