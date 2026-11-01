@@ -4,6 +4,7 @@
 // 7. Meta ranks reach ED.Stats and the run's reroll / skip / banish counts. 8. seen: back-fill, run record (view rect, boss), merge, save code round trip, old / future codes.
 // 9. Settings: old LMB / RMB skill binds cleared once, other mouse binds kept. 10. Achievements: data, earn once, applyRun news, save code, Camp-full / every-hero rules.
 // 11. Economy: price table total, run-end gold of World.end per stage. 12. Cosmetics: data, buy / wear / take off, save code, old codes, peer bundles, achievement rewards.
+// 13. WK2 code: frozen tables, Hangul name alphabet (vs TextDecoder euc-kr), WK1 fixtures, 600 seeded random round trips, typo detection rates, lengths, future / older WK2 codes.
 'use strict';
 const store = new Map();
 globalThis.localStorage = { getItem: (k) => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)), removeItem: (k) => store.delete(k) };
@@ -54,17 +55,17 @@ rich.best = { [ED.STAGE_IDS[0]]: { time: 912, kills: 15000, level: 61, won: true
 rich.stats = { runs: 77, wins: 3, kills: 400000, bestLevel: 61, bestKills: 15000, bestTime: 912 };
 const code = S.encode(rich), back = S.decode(code);
 ok(eq(back, S.normalize(rich)), 'rich profile round trip (' + code.length + ' chars)');
-ok(code.length <= 200, 'code stays short: ' + code.length + ' chars');
+ok(code.startsWith('WK2-') && code.length <= 95, 'WK2 code stays short: ' + code.length + ' chars');
 ok(eq(S.decode(code.toLowerCase().replace(/-/g, ' ')), back), 'lowercase and spaces accepted');
 const typo = code.replace(/0/g, 'O').replace(/1/g, 'I');
 ok(eq(S.decode(typo), back), 'O/0 and I/1 confusions accepted');
 const flip = code.slice(0, 10) + (code[10] === 'A' ? 'B' : 'A') + code.slice(11);
 ok(/checksum/.test(throwsMsg(() => S.decode(flip))), 'one wrong character fails the checksum');
-ok(/begin with WK1/.test(throwsMsg(() => S.decode('XX1-ABCDE'))), 'wrong prefix rejected');
-ok(/never uses/.test(throwsMsg(() => S.decode('WK1-AB#DE'))), 'foreign characters rejected');
-ok(/fails its checksum|damaged/.test(throwsMsg(() => S.decode('WK1-AAAAA-AAAAA'))), 'random code rejected');
-const wNew = S._writer(); wNew.u8(S.CODE_VERSION + 1); wNew.vu(0);
-ok(/newer/.test(throwsMsg(() => S.decode(S._pack(wNew.b)))), 'a newer code version asks for a reload');
+ok(/begin with WK2/.test(throwsMsg(() => S.decode('XX1-ABCDE'))) && /begin with WK2/.test(throwsMsg(() => S.decode(''))), 'wrong prefix rejected');
+ok(/never uses/.test(throwsMsg(() => S.decode('WK1-AB#DE'))) && /never uses/.test(throwsMsg(() => S.decode('WK2-AB#DE'))), 'foreign characters rejected');
+ok(/fails its checksum|damaged/.test(throwsMsg(() => S.decode('WK1-AAAAA-AAAAA'))) && /fails its checksum|damaged/.test(throwsMsg(() => S.decode('WK2-AAAAA-AAAAA'))), 'random code rejected');
+const wNew = S._writer(); wNew.u8(2); wNew.vu(0);
+ok(/newer/.test(throwsMsg(() => S.decode(S._pack(wNew.b)))) && /newer/.test(throwsMsg(() => S.decode('WK3-' + code.slice(4)))), 'a newer code version (WK1 version byte, WK3 prefix) asks for a reload');
 const wTrunc = S._writer(); wTrunc.u8(1); wTrunc.vu(3); wTrunc.u8(0);
 ok(/damaged/.test(throwsMsg(() => S.decode(S._pack(wTrunc.b)))), 'a truncated body is reported as damaged');
 // A code from a future build with longer lists (extra shop rank, hero, stage, stat) decodes; extras are dropped.
@@ -302,6 +303,117 @@ const achBits = (ids) => { const m = ED.ACH_IDS.indexOf(ids[ids.length - 1]) + 1
 achBits(['beat2']); wp.vu(77);
 const pc = S.decode(S._pack(wp.b));
 ok(pc.gold === 500 && pc.spent === 77 && eq(pc.ach, ['beat2']) && eq(pc.cos, ['tint.abyss']) && eq(pc.wear, []), 'a pre-Wardrobe code: gold and spent kept, nothing worn, the Abyss tint from its achievement');
+
+// 13. WK2 save code: frozen tables, name alphabet, v1 fixtures, randomized round trip, typo detection, lengths, future / older v2 codes
+const V = S._v2;
+ok(V.SHOP_FULL.length === ED.SHOP.length && V.SHOP_COST.length === V.V2N.shop && ED.SHOP.every((s, i) => s.max < 2 ** V.shopW(i)) && V.HERO_BUY.length === V.V2N.heroes && V.COS_PRICE.length === V.V2N.cos,
+  'frozen WK2 tables: one SHOP_FULL entry per shop row (append its max with a new row), every max fits its rank width');
+ok(V.SEEN_DEAD.every(id => !ED.WEAPONS[id]) && V.LIVE_WEAPONS.length === V.V2N.seenL[1] && ED.HERO_IDS.length >= V.V2N.heroes && ED.STAGE_IDS.length >= V.V2N.stages && ED.ACH_IDS.length >= V.V2N.ach
+  && ED.COS_IDS.length >= V.V2N.cos && ED.PASSIVE_IDS.length >= V.V2N.seenL[2] && ED.FOE_IDS.length >= V.V2N.seenL[3] && S.STAT_KEYS.length >= V.V2N.stats, 'WK2 count bases never exceed the lists; retired weapon ids stay unregistered');
+// name alphabet: the 2,350 KS X 1001 syllables in code point order (the Hangul font subset)
+const ksList = (() => { const dec = new TextDecoder('euc-kr'), L = []; for (let hi = 0xb0; hi <= 0xc8; hi++) for (let lo = 0xa1; lo <= 0xfe; lo++) { const s = dec.decode(Buffer.from([hi, lo])); if (s.length === 1 && s !== '�') L.push(s); } return L; })();
+const ksOk = eq(S.hangulNames(), ksList);
+if (!ksOk) { // prints the HANGUL_KS string for src/save.js
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/', bits = []; let prev = 0xabff;
+  for (const ch of ksList) { const c = ch.charCodeAt(0), g = c - prev - 1; prev = c; for (let q = g >> 2; q > 0; q--) bits.push(1); bits.push(0, (g >> 1) & 1, g & 1); }
+  while (bits.length % 6) bits.push(0);
+  let s = ''; for (let i = 0; i < bits.length; i += 6) s += A[bits.slice(i, i + 6).reduce((v, b) => v * 2 + b, 0)];
+  console.log('HANGUL_KS should be: ' + s);
+}
+ok(ksOk && ksList.length === 2350, 'name alphabet Hangul = the 2,350 KS X 1001 syllables (TextDecoder euc-kr)');
+ok(S.sanitizeName('김재영') === '김재영' && S.sanitizeName('가 Kim') === '가 Kim' && S.sanitizeName('ㄱㅏ똠') === 'Wanderer' && S.sanitizeName('똠방각하') === '방각하'
+  && S.sanitizeName('가나다라마바사아자차카타파하') === '가나다라마바사아자차카타' && S.sanitizeName('abcdefghijk lmn') === 'abcdefghijk' && S.sanitizeName('  ') === 'Wanderer',
+  'sanitizeName: Hangul syllables kept (NFC), jamo / non-KS dropped, 12 chars, no trailing space');
+// v1 codes made by the previous build decode to the same profile
+const fr1 = S.normalize(rich); fr1.won = ['knight', 'bell']; fr1.formed = ['necro']; fr1.pure = [2]; fr1.ach = ['coop', 'beat0', 'camp']; fr1.stats.coopWins = 3; fr1.spent = 12345;
+fr1.seen.foes = ['bat', 'slime']; fr1.seen.passives = ED.PASSIVE_IDS.slice(0, 3); fr1.cos = ['tint.crimson', 'skin.knight.verdigris']; fr1.wear = ['tint.crimson'];
+const V1A = 'WK1-EVWQN-NX08D-X7QHX-BPZD3-2CMQY-ZQ5AW-7H5MK-MTPN9-M5JQN-XRWPD-N6Q5N-4Q17P-G541F-36F3S-P2SNS-KGGPP-17A74-129WM-QHZMC-HRF5Z-9VH6N-5BQ5D-V8FQK-RJN68-C010T-BHAS1-DMVD9-85Y42-XTRAR-JAS12-P4WMQ-CJDJF';
+const V1B = 'WK1-EVWQN-NX08D-X7QHX-BPZD3-2CMQY-ZQ5AW-7H5MK-MTPN9-M5JQN-XRWPD-N6Q5N-4Q17P-G541F-36FBS-P2RNS-KGHPP-17A74-129WM-QHZMC-HRF5Z-SVH6N-5BQ5D-V8FQK-RJN68-C010T-BHAS1-C4VD9-85Y42-XTRAR-Y9933-66WRS-WP4KX-4HGZJ-6VQGK-X9XP9-Z9RHB-DQX6C-EYG';
+ok(eq(S.decode(V1A), S.normalize(rich)) && eq(S.decode(V1B), S.normalize(fr1)) && eq(S.decode(V1B.toLowerCase().replace(/^wk1/, 'wkl')), S.normalize(fr1)), 'WK1 codes from the previous build decode unchanged (also as wkl-...)');
+ok(eq(S.decode(S.encode(S.decode(V1B))), S.normalize(fr1)), 'a WK1 profile re-encodes as WK2 without loss');
+// randomized round trip (seeded): names (ASCII, Hangul, mixed), extremes, empty / full / random lists, derived and free fields
+const R = ED.U.RNG(20261101), ri = (n) => Math.floor(R.next() * n), pick = (a) => a[ri(a.length)];
+const sub = (a) => { const m = ri(4); return m === 0 ? [] : m === 1 ? a.slice() : a.filter(() => R.next() < 0.5); };
+const bigNum = () => [0, 1, ri(10), ri(1000), ri(1e5), ri(1e7), ri(1e9), 1e12, 2 ** 40, ri(2 ** 31)][ri(10)];
+const NAMEC = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -';
+const rName = () => { const m = ri(5), n = ri(15); let s = ''; for (let i = 0; i < n; i++) s += m === 0 ? NAMEC[ri(64)] : m === 1 ? pick(ksList) : m === 2 ? (R.next() < 0.5 ? NAMEC[ri(64)] : pick(ksList)) : m === 3 ? '!' : 'Wanderer'[i % 8]; return s; };
+const randProfile = () => {
+  const p = { name: rName(), gold: bigNum(), shop: {}, heroes: sub(ED.HERO_IDS), played: sub(ED.HERO_IDS), won: sub(ED.HERO_IDS), formed: sub(ED.HERO_IDS), beat: sub([0, 1, 2, 3]), pure: sub([0, 1, 2, 3]),
+    ach: sub(ED.ACH_IDS), best: {}, stats: {}, seen: {}, cos: sub(ED.COS_IDS), wear: sub(ED.COS_IDS) };
+  const sm = ri(4); for (const s of ED.SHOP) p.shop[s.id] = sm === 0 ? 0 : sm === 1 ? s.max : sm === 2 ? ri(s.max + 1) : ri(s.max + 3);
+  for (const id of sub(ED.STAGE_IDS)) p.best[id] = { time: R.next() < 0.1 ? bigNum() : ri(2000), kills: R.next() < 0.1 ? bigNum() : ri(80000), level: R.next() < 0.1 ? bigNum() : ri(130), won: R.next() < 0.5 };
+  const bv = Object.values(p.best), mx = (k) => bv.reduce((t, b) => Math.max(t, b[k]), 0);
+  for (const k of S.STAT_KEYS) p.stats[k] = R.next() < 0.3 ? 0 : bigNum();
+  if (R.next() < 0.5) { p.stats.bestLevel = mx('level'); p.stats.bestKills = mx('kills'); p.stats.bestTime = mx('time'); }
+  for (const k of S.SEEN_KEYS) p.seen[k] = sub(S.seenOrder(k).concat(k === 'weapons' ? V.SEEN_DEAD : []));
+  const q = S.normalize(p);
+  q.spent = R.next() < 0.5 ? bigNum() : ED.SHOP.reduce((t, s, i) => { const r = q.shop[s.id] | 0; return t + V.SHOP_COST[i] * r * (r + 1) * (2 * r + 1) / 6; }, 0);
+  q.lifetime = R.next() < 0.5 ? bigNum() : q.gold + q.spent + q.cos.reduce((t, id) => t + V.COS_PRICE[ED.COS_IDS.indexOf(id)], 0) + q.heroes.reduce((t, c) => t + V.HERO_BUY[ED.HERO_IDS.indexOf(c)], 0);
+  return q;
+};
+let rtBad = 0, stableBad = 0, maxLen = 0;
+for (let i = 0; i < 600; i++) {
+  const p = randProfile(), c = S.encode(p);
+  let d = null; try { d = S.decode(c); } catch (e) { d = null; }
+  if (!d || !eq(d, S.normalize(p))) { rtBad++; if (rtBad < 3) console.log('  round trip mismatch: ' + JSON.stringify(p).slice(0, 300)); continue; }
+  if (S.encode(d) !== c) stableBad++;
+  maxLen = Math.max(maxLen, c.length);
+}
+ok(rtBad === 0 && stableBad === 0, '600 random profiles: WK2 round trip exact and re-encode stable (longest ' + maxLen + ' chars)');
+// typo detection: every single-character substitution and every adjacent swap fails; insertions / deletions almost always fail
+const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+let subN = 0, subMiss = 0, swN = 0, swMiss = 0, idN = 0, idMiss = 0;
+const accepted = (c) => { try { S.decode(c); return true; } catch (e) { return false; } };
+for (let i = 0; i < 16; i++) {
+  const body = S.encode(randProfile()).slice(4).replace(/-/g, '');
+  for (let k = 0; k < body.length; k++) {
+    for (const ch of B32) if (ch !== body[k]) { subN++; if (accepted('WK2-' + body.slice(0, k) + ch + body.slice(k + 1))) subMiss++; }
+    if (k + 1 < body.length && body[k] !== body[k + 1]) { swN++; if (accepted('WK2-' + body.slice(0, k) + body[k + 1] + body[k] + body.slice(k + 2))) swMiss++; }
+    idN += 2; if (accepted('WK2-' + body.slice(0, k) + body.slice(k + 1))) idMiss++; if (accepted('WK2-' + body.slice(0, k) + B32[ri(32)] + body.slice(k))) idMiss++;
+  }
+}
+ok(subMiss === 0 && swMiss === 0, 'CRC-15: all ' + subN + ' single-character substitutions and ' + swN + ' adjacent swaps detected');
+ok(idMiss / idN < 0.001, 'insertions / deletions accepted: ' + idMiss + ' of ' + idN + ' (CRC-15: about 1 in 32768)');
+// lengths: fresh, the late-game reference profile, a maxed profile
+const lateRef = S.normalize({ name: 'Wanderer', gold: 123456, lifetime: 2345678, heroes: ED.HERO_IDS.slice(), played: ED.HERO_IDS.slice(), won: ED.HERO_IDS.slice(0, 5), formed: ED.HERO_IDS.slice(), beat: [0, 1, 2, 3], pure: [0],
+  best: Object.fromEntries(ED.STAGE_IDS.map(id => [id, { time: 1250, kills: 23456, level: 61, won: true }])), stats: { runs: 312, wins: 120, kills: 5123456, bestLevel: 70, bestKills: 34567, bestTime: 1320, coopWins: 12 },
+  seen: { heroes: ED.HERO_IDS.slice(), weapons: Object.keys(ED.WEAPONS), passives: ED.PASSIVE_IDS.slice(), foes: Object.keys(ED.FOES), stages: ED.STAGE_IDS.slice() }, ach: ED.ACH_IDS.slice(), spent: 99999,
+  cos: ED.COS_IDS.slice(0, 30), wear: [ED.COS_IDS[3], ED.COS_IDS[10]], shop: Object.fromEntries(ED.SHOP.map(s => [s.id, s.max])) });
+const maxed = S.normalize({ name: '김재영', gold: 9876543, heroes: ED.HERO_IDS, played: ED.HERO_IDS, won: ED.HERO_IDS, formed: ED.HERO_IDS, beat: [0, 1, 2, 3], pure: [0, 1, 2, 3], ach: ED.ACH_IDS, cos: ED.COS_IDS,
+  best: Object.fromEntries(ED.STAGE_IDS.map((id, i) => [id, { time: 1300 + i * 17, kills: 41000 + i * 5311, level: 88 + i, won: true }])), seen: Object.fromEntries(S.SEEN_KEYS.map(k => [k, S.seenOrder(k)])),
+  stats: { runs: 1500, wins: 900, kills: 31234567, bestLevel: 91, bestKills: 56933, bestTime: 1351, coopWins: 140 }, shop: Object.fromEntries(ED.SHOP.map(s => [s.id, s.max])),
+  wear: ['skin.knight.gilded', 'skin.ranger.frost', 'skin.pyro.azure', 'skin.necro.bloodbound', 'skin.cleric.dawn', 'skin.shade.ghost', 'skin.bell.golden', 'tint.abyss', 'kill.supernova', 'lvl.ascension', 'title.paragon', 'ncol.prism'] });
+maxed.spent = 41160; maxed.lifetime = maxed.gold + maxed.spent + 31200 + 4000;
+const lenF = S.encode(S.defaultProfile()).length, lenL = S.encode(lateRef).length, lenM = S.encode(maxed).length;
+ok(lenF <= 25 && lenL <= 110 && lenM <= 110 && eq(S.decode(S.encode(maxed)), maxed), 'code length: fresh ' + lenF + ', late-game ' + lenL + ', maxed (Hangul name, 12 worn) ' + lenM + ' chars');
+ok(/^WK2(-[0-9A-Z]{1,5})+$/.test(S.encode(maxed)) && S.encode(maxed).split('-').slice(1, -1).every(g => g.length === 5), 'WK2 codes are WK2- + groups of 5');
+// a future v2 code (more sections, longer lists) decodes, extras dropped; an older v2 code (fewer sections) decodes with spent / lifetime at the frozen prices
+const futV2 = (secs) => {
+  const o = V.bitW(), N = V.V2N, ones = (n) => new Array(n).fill(1);
+  V.wCnt(o, secs, N.sections);
+  o.u(3, 4); o.bit(0); for (const ch of 'Bob') o.u(NAMEC.indexOf(ch), 6);
+  V.wNum(o, 500, V.NP.gold);
+  o.u(3, 2); V.wCnt(o, N.shop + 2, N.shop); for (let i = 0; i < N.shop + 2; i++) o.u(i === 0 ? 4 : 1, V.shopW(i));
+  V.wSet(o, ones(N.heroes + 1), N.heroes); V.wSet(o, ones(N.heroes + 1), N.heroes); V.wSet(o, [], N.heroes); V.wSet(o, [], N.heroes);
+  V.wCnt(o, N.stages + 1, N.stages); for (let i = 0; i <= N.stages; i++) o.u(2, 2);
+  V.wNum(o, 300, V.NP.time); V.wNum(o, 3, V.NP.level); for (let i = 0; i <= N.stages; i++) { V.wEG(o, 300 - 60 * (i + 1), 4); V.wNum(o, 10, V.NP.bkills); V.wEG(o, 0, 2); }
+  const P = V.NP, SP = [P.runs, P.wins, P.kills, P.level, P.bkills, P.time, P.coop, P.any, P.any];
+  V.wCnt(o, N.stats + 2, N.stats); for (let i = 0; i < N.stats + 2; i++) { if (i >= 3 && i <= 5) o.bit(1); V.wNum(o, i + 1, SP[i]); }
+  V.wCnt(o, N.seen + 1, N.seen); for (let k = 0; k <= N.seen; k++) V.wSet(o, ones(k < N.seen ? N.seenL[k] + 3 : 3), k < N.seen ? N.seenL[k] : 1);
+  V.wSet(o, ones(N.ach + 3), N.ach);
+  if (secs > 11) V.wSet(o, ones(N.cos + 2), N.cos);
+  if (secs > 12) V.wSet(o, [], N.cos + 2);
+  if (secs > 13) { o.bit(1); V.wNum(o, 77, V.NP.spent); }
+  if (secs > 14) { o.bit(1); V.wNum(o, 400, V.NP.gold); }
+  if (secs > 15) o.u(21, 7);
+  return V.pack2(o.b);
+};
+const fv = S.decode(futV2(17));
+ok(fv.name === 'Bob' && fv.gold === 500 && fv.lifetime === 900 && fv.spent === 77 && fv.shop.might === 4 && fv.shop.banish === 1 && eq(fv.heroes, ED.HERO_IDS) && eq(fv.played, ED.HERO_IDS) && eq(fv.beat, [0, 1, 2, 3])
+  && fv.best[ED.STAGE_IDS[2]].time === 180 && fv.best[ED.STAGE_IDS[2]].won && fv.stats.bestTime === 6 && fv.stats.coopWins === 7 && S.SEEN_KEYS.every(k => eq(fv.seen[k], S.seenOrder(k))) && eq(fv.ach, ED.ACH_IDS)
+  && eq(fv.cos, ED.COS_IDS) && eq(fv.wear, []), 'future WK2 code (2 more sections, longer lists) decodes, extras dropped');
+const ov = S.decode(futV2(12)), ovPaid = ED.SHOP.reduce((t, s, i) => t + V.SHOP_COST[i] * ((i === 0 ? 4 : 1) === 4 ? 30 : 1), 0);
+ok(ov.spent === ovPaid && ov.lifetime === 500 + ovPaid + 4000 + ED.COS_IDS.reduce((t, id, i) => t + V.COS_PRICE[i], 0) && eq(ov.wear, []), 'older WK2 code (no wear / spent / lifetime) decodes; spent and lifetime from the frozen prices');
 
 console.log(`check-save: ${fails ? fails + ' failure(s)' : 'all passed'}`);
 process.exitCode = fails ? 1 : 0;

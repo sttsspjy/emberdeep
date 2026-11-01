@@ -210,7 +210,8 @@ Each boss: 2–3 telegraphed patterns, a health bar at the top, HP 5,000 / 9,000
   | Level-up effects | Pillar of Light 600, Rune Circle 1,000, Fireworks 1,500, Ascension R | 3,100 |
   | Titles | Lamplighter 200, Gravewalker 400, The Unbroken 800, Hordebreaker 1,200, Reaper R, Blender R, Veteran R, Purist R, Companion R, Paragon R | 2,600 |
   | Name colours | Ember 200, Frost 200, Venom 300, Rose 300, Royal 400, Blood 400, Gold 600, Prism R (cycles) | 2,400 |
-- Profile autosaves in localStorage, plus a portable save code.
+- Profile autosaves in localStorage, plus a portable save code (WK2: about 15 characters fresh, about 100–115 late game; older WK1 codes still load).
+- Player name: up to 12 characters (letters, digits, space, '-', Korean syllables), set and changed any time in the title screen's name field; blank = Wanderer.
 - **Encyclopedia** reveals only what the player met: heroes and stages a run started with, weapons (Forms included) and passives the own hero owned, foes in the own view, bosses fought. Recorded on every client from its own view, merged at run end (win, defeat or quit); bot runs never save. Unmet entries list as a "???" silhouette (detail: "Not discovered yet"; locked heroes and stages keep their unlock rule and progress).
 
 ## 12. Feel (juice)

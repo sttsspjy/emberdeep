@@ -1,37 +1,44 @@
-// Profile persistence (localStorage autosave + portable checksummed save code, format version 1), meta rules (shop, unlocks, records) and the ED.Meta API for the UI.
+// Profile persistence (localStorage autosave + portable checksummed save code), meta rules (shop, unlocks, records) and the ED.Meta API for the UI.
 // Profile: { v, name, gold, lifetime, shop: { shopId: rank }, spent (gold paid for the owned ranks; Refund All returns it), heroes: [unlocked cls], played: [cls with a finished run],
 //   won: [cls with a win], formed: [cls whose hero weapon reached a Form], beat: [stage indices beaten], pure: [stage indices won with 0 Camp ranks], ach: [achievement ids earned],
 //   best: { stageId: { time, kills, level, won } }, stats: { runs, wins, kills (lifetime), bestLevel, bestKills (one run, own hero), bestTime (one run, s), coopWins },
 //   seen: { heroes: [cls], weapons: [wid, evolved included], passives: [id], foes: [foe id, bosses included], stages: [stage id] } (Encyclopedia reveals),
 //   cos: [owned cosmetic ids], wear: [worn cosmetic ids: one per ED.COS_KINDS slot, skins one per hero] (both in ED.COS_IDS order) }. Settings live under their own key.
-// Save code: 'WK1-' + base32(scramble(positional bytes + CRC16)) in groups of 5. Positional lists (SHOP order, hero order ED.HERO_IDS, stage order, STAT_KEYS, SEEN_KEYS and each
-// seen list's order, ED.ACH_IDS, ED.COS_IDS) carry a count prefix: append only; a reorder or removal bumps CODE_VERSION. Rules: ED.UNLOCKS, ED.ACHIEVEMENTS (src/data/meta.js).
+// Save code: 'WK2-' + base32(scramble(bit-packed fields + CRC-15)) in groups of 5 (encode); decode also reads 'WK1-' (byte-packed v1). Positional lists (SHOP order, hero order
+// ED.HERO_IDS, stage order, STAT_KEYS, SEEN_KEYS and each seen list's order, ED.ACH_IDS, ED.COS_IDS) carry a count: append only; a reorder or removal needs a new prefix (WK3).
+// Rules: ED.UNLOCKS, ED.ACHIEVEMENTS (src/data/meta.js).
 (function (ED) {
   'use strict';
   const U = ED.U;
   // ?slot=2 keeps a second profile in the same browser (two local tabs playing together).
   const SLOT = (() => { try { const v = new URLSearchParams(location.search).get('slot'); return v ? '.' + v.replace(/[^a-z0-9]/gi, '').slice(0, 8) : ''; } catch (e) { return ''; } })();
   const LS_KEY = 'wickdeep.survivors.v1' + SLOT, LS_SETTINGS = 'wickdeep.survivors.settings.v1';
+  // Name alphabet: NAME_CHARS (index 0..63), then the 2,350 KS X 1001 Hangul syllables in code point order (index 64..2413; the Hangul font subset covers exactly these).
   const NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -';
-  const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ', PREFIX = 'WK1', CODE_VERSION = 1;
+  // KS X 1001 syllables as Rice(k = 2) coded gaps (c - previous - 1, from U+ABFF), MSB first in base64; tools/check-save.js rebuilds it from TextDecoder('euc-kr').
+  const HANGUL_KS = 'ASAEgAAAgAJ2CBQT0ab9hIGQQAgA3YIFAFCwQGm8HASBKAJEhMyCabwhQTsE03g4CQAgAkSE9ivWAnYOG/YSAoE1+wkDIJDIBZkEBoJ2CBQr/7ALsECgto03oQv2ETYJAgVsUPdN2HX7CdAEib2KCdhW3Y1+wiTABL/oJ2CaAKAEggAEgJ2CBQTuP9AhkQCBICdggUE7CCb+wmZBMAN7/23YOAngmgkLBNe7/bdjQqw6CYEgkMt+wmZBMEAoABgEABgJ2CBX/9gFAiASUQnYIFN7FP7CQJYJJTfv3bdg4/YTsE17v4pvBNN3FBIGQTX7CQsEASE7BAkBOwQP/+gmRAIEgJ2CBXv/YT4q/f7f/7CdCP9ftuw/9BIWDhuxpuwTQTsEAMAJ2CBQXR/0E7BAkBOwTQTsECnwcBOwTT8fq27BNN4JoJ2Ca93+wnaNBOwTQTsEhD+QnYJoIgASCQiAnYIAkVx/oJmQSIATsECgnoAx+wQzIJp9j/TeCabwcAFACQSyG8HH7b9t2sN2v+AkDIIBKAAQAEAloJ2CA0Fx/0EgZBIkJCwQKCeCA0/sAuwTT7v3YTsaf2EgBIJYN7v9hPim7RoJ2D/wEzIJAgJmQQJATsECh1/2EhaAr4odAgf6Cdh//9fv4oJ2j///6+Kbsf9BOwTQIQAkEBoJ2CBQTsE03cUAAgRAIEEJ2CBQTsECm+KALMgloJ8U3aFt2DgJ2CaCQsEkg+7CdxQTsE0KtGgmKBP+gkKAJggh2EJATsIfv/QTMhCm//39hIGQ6C7v3bdjX7Cdh17v9v/4oJmANN3sJ2CaCAIEAEBghOwQKCagEshvGggQBIAABJCdgmgCyIAADADdgiwmAUASYCdggUFtGgnYJoJ2CaCYEgmgnYQoJ2HQTsE0E7BJgJyQSAAAG7WAmBABADIRAMggCQnYIFBE3FN+wmZBIkJ2CabsIV+wmZBIDArBNexTdgmgvFBMCQTXu/2E7Bw3ewnYJ/0EgZBIQIRKgECgnYIFPx/oJ2CBXxXv/YTsEmBW7923Y/ugnYdex/r9/vtH/QTsMQAibBAEhOwQKZNx/oJ2CBQTsE0+7fignYJpvj/Tdgmu9hOwTXu39t2CabuKCdgn/QSAoE0E7BNBOwQKHv/QSFggUE7BNN2CBX7CdgmgncV8Vfv9hOwTTfFfFBOwTTd7Cdh/6CdgmgmKBAoJ2CBXx/oJmQQKCdgmn3b+wnYJgv7/b6NfsJ2Ca93+wnYdN3FBIGQcN2NBOwTQBZkEBoJ2CBQ//oJ2CBQTsE03YQq8HATsE18f6f23g4CQMgmvj/TdrDdo03YP/ATsE0E4QJoJ2CBXx/oJmQTQTsE0E7BApvGgnCBLQT0aC6NBPBNN4OAnCRpu4oJ8UE7BNBO0aCIAoEtN2HQTsEg';
+  const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ', PREFIX = 'WK2', CODE_VERSION = 2;
   const STAT_KEYS = ['runs', 'wins', 'kills', 'bestLevel', 'bestKills', 'bestTime', 'coopWins']; // save code order: append only
   const SEEN_KEYS = ['heroes', 'weapons', 'passives', 'foes', 'stages']; // save code order: append only
-  // Weapon order of the seen bitset: append only (ED.WEAPON_IDS is load order). The first 24 ids are the old general weapons: supports reuse their ids (bonespear, impaler, blight,
-// plague, wisp, choir, mortar, barrage, ricochet, avalanche stay dead bits); supports new since then append at the end.
+  // Weapon order of the seen list: append only (ED.WEAPON_IDS is load order). The first 24 ids are the old general weapons: supports reuse their ids; SEEN_DEAD ids are retired
+  // (never registered again: dropped from profiles, skipped by WK2 codes, dead bits in WK1 codes); supports new since then append at the end.
   const SEEN_WEAPONS = ['lanterns', 'sunwheel', 'chainspark', 'stormcrown', 'frostring', 'glacier', 'bramble', 'thornwood', 'glaive', 'twinmoons', 'meteorcall', 'starfall', 'bonespear', 'impaler',
     'blight', 'plague', 'wisp', 'choir', 'mortar', 'barrage', 'censer', 'holycenser', 'ricochet', 'avalanche', 'cleave', 'whirlwind', 'longbow', 'hail', 'firebolt', 'inferno', 'boneshard', 'bonestorm',
     'smite', 'wrath', 'daggers', 'shadowfan', 'toll', 'cathedral',
     'colossus', 'gale', 'earthsplitter', 'tempest', 'ballista', 'seeker', 'galeshot', 'rebound', 'firestorm', 'wildfire', 'pyre', 'napalm', 'bonelord', 'plaguefield',
     'lich', 'ossuary', 'halo', 'jray', 'consecration', 'verdict', 'thousand', 'assassinate', 'lotus', 'reaper', 'glaciertoll', 'carillon', 'undertow', 'windchime',
     'waraxe', 'headsman'];
+  const SEEN_DEAD = ['bonespear', 'impaler', 'blight', 'plague', 'wisp', 'choir', 'mortar', 'barrage', 'ricochet', 'avalanche'];
   const S = ED.Save = { KEY: LS_KEY, CODE_VERSION, STAT_KEYS, SEEN_KEYS, SEEN_WEAPONS };
   const ls = () => (typeof localStorage !== 'undefined' ? localStorage : null);
   const heroOrder = () => ED.HERO_IDS || Object.keys(ED.UNLOCKS.heroes);
-  // Id order of seen list k (save code bit order): heroes ED.HERO_IDS, weapons SEEN_WEAPONS (+ registered weapons missing from it, profile only), passives ED.PASSIVE_IDS,
-  // foes ED.FOE_IDS (bosses included), stages ED.STAGE_IDS.
-  const seenOrder = S.seenOrder = (k) => k === 'heroes' ? heroOrder() : k === 'weapons' ? SEEN_WEAPONS.concat((ED.WEAPON_IDS || []).filter(id => SEEN_WEAPONS.indexOf(id) < 0))
+  // Id order of seen list k (WK2 save code order): heroes ED.HERO_IDS, weapons SEEN_WEAPONS without SEEN_DEAD (+ registered weapons missing from it, profile only),
+  // passives ED.PASSIVE_IDS, foes ED.FOE_IDS (bosses included), stages ED.STAGE_IDS.
+  const LIVE_WEAPONS = SEEN_WEAPONS.filter(id => SEEN_DEAD.indexOf(id) < 0);
+  const seenOrder = S.seenOrder = (k) => k === 'heroes' ? heroOrder() : k === 'weapons' ? LIVE_WEAPONS.concat((ED.WEAPON_IDS || []).filter(id => SEEN_WEAPONS.indexOf(id) < 0))
     : k === 'passives' ? ED.PASSIVE_IDS || [] : k === 'foes' ? ED.FOE_IDS || [] : k === 'stages' ? ED.STAGE_IDS || [] : [];
-  const codeOrder = (k) => (k === 'weapons' ? SEEN_WEAPONS : seenOrder(k)); // save code bit order (append only)
+  const codeOrder = (k) => (k === 'weapons' ? SEEN_WEAPONS : seenOrder(k)); // WK1 bit order
+  const codeOrder2 = (k) => (k === 'weapons' ? LIVE_WEAPONS : seenOrder(k)); // WK2 order (append only)
 
   S.defaultProfile = () => {
     const stats = {}; for (const k of STAT_KEYS) stats[k] = 0;
@@ -39,7 +46,28 @@
     return { v: 1, name: 'Wanderer', gold: 0, lifetime: 0, shop: {}, spent: 0, heroes: startHeroes(), played: [], won: [], formed: [], beat: [], pure: [], ach: [], best: {}, stats, seen, cos: [], wear: [] };
   };
   const startHeroes = () => Object.keys(ED.UNLOCKS.heroes).filter(c => ED.UNLOCKS.heroes[c].start);
-  S.sanitizeName = (n) => { n = String(n || '').split('').filter(ch => NAME_CHARS.indexOf(ch) >= 0).join('').trim().slice(0, 12); return n || 'Wanderer'; };
+  // Name alphabet map char -> index, and the Hangul list (built once from HANGUL_KS). S.hangulNames() -> a copy of that list.
+  let HANGUL = null, NAME_IDX = null;
+  const nameIdx = () => {
+    if (NAME_IDX) return NAME_IDX;
+    const A64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+    let i = 0, c = 0xabff; const bit = () => { const b = (A64.indexOf(HANGUL_KS[Math.floor(i / 6)]) >> (5 - i % 6)) & 1; i++; return b; };
+    HANGUL = [];
+    while (HANGUL.length < 2350) { let q = 0; while (bit()) q++; const g = q * 4 + bit() * 2 + bit(); c += g + 1; HANGUL.push(String.fromCharCode(c)); }
+    NAME_IDX = new Map();
+    for (let k = 0; k < NAME_CHARS.length; k++) NAME_IDX.set(NAME_CHARS[k], k);
+    HANGUL.forEach((ch, k) => NAME_IDX.set(ch, 64 + k));
+    return NAME_IDX;
+  };
+  S.hangulNames = () => (nameIdx(), HANGUL.slice());
+  // Name: NFC, characters outside the name alphabet dropped, trimmed, at most 12 characters; '' -> 'Wanderer'.
+  S.sanitizeName = (n) => {
+    n = String(n || ''); if (n.normalize) n = n.normalize('NFC');
+    const M = nameIdx(); let out = '';
+    for (const ch of n) if (M.has(ch)) out += ch;
+    out = out.trim().slice(0, 12).trim();
+    return out || 'Wanderer';
+  };
   const num = (v) => { v = Math.floor(+v || 0); return v > 0 && isFinite(v) ? Math.min(v, 1e12) : 0; };
 
   // Any parsed object -> a valid profile (unknown fields dropped, numbers clamped, start heroes always unlocked, hero / stage lists in save order).
@@ -332,13 +360,13 @@
     return { u8, left: () => b.length - i, vu: () => { let v = 0, m = 1, x; do { x = u8(); v += (x & 127) * m; m *= 128; } while (x & 128 && m < 2 ** 56); return v; } };
   };
 
-  // Body bytes -> code string (CRC16 appended, scrambled, base32 in groups of 5).
+  // v1 body bytes -> 'WK1-' code string (CRC16 appended, scrambled, base32 in groups of 5).
   const pack = (body) => {
     const crc = crc16(body), all = new Uint8Array(body.length + 2);
     all.set(body); all[body.length] = crc >> 8; all[body.length + 1] = crc & 255;
-    return PREFIX + '-' + toB32(scramble(all)).match(/.{1,5}/g).join('-');
+    return 'WK1-' + toB32(scramble(all)).match(/.{1,5}/g).join('-');
   };
-  S._pack = pack; S._writer = writer; // tools/check-save.js builds hand-made codes with these
+  S._pack = pack; S._writer = writer; // tools/check-save.js builds hand-made v1 codes with these
   // Bit list: n (ids of ord up to the last set one), ceil(n / 8) bytes, bit (i & 7) of byte (i >> 3) = ord[i] is in `has` (a Set).
   const writeBits = (o, ord, has) => {
     let m = ord.length; while (m > 0 && !has.has(ord[m - 1])) m--;
@@ -351,43 +379,19 @@
     return ids;
   };
   S._writeBits = writeBits;
-  // Layout v1: version, name (len + NAME_CHARS indices), gold, lifetime, [n shop ranks], [n heroes: flags bit0 unlocked, bit1 played, bit2 won, bit3 formed],
+  // Layout v1 (decode only): version, name (len + NAME_CHARS indices), gold, lifetime, [n shop ranks], [n heroes: flags bit0 unlocked, bit1 played, bit2 won, bit3 formed],
   // [n stages: flags bit0 beat, bit1 best won, bit2 has best, bit3 pure win; best time, kills, level], [n stats], then sections absent in older codes, in this order:
   // [n seen lists in SEEN_KEYS order: each a bit list], achievements (bit list over ED.ACH_IDS), spent, owned cosmetics, worn cosmetics (bit lists over ED.COS_IDS).
-  // Every [list] starts with its count; new sections append after the worn cosmetics;
-  // bytes past what a decoder knows are ignored.
-  S.encode = (p) => {
-    const q = S.normalize(p), o = writer(), heroes = heroOrder();
-    o.u8(CODE_VERSION);
-    o.vu(q.name.length); for (const ch of q.name) o.u8(NAME_CHARS.indexOf(ch));
-    o.vu(q.gold); o.vu(q.lifetime);
-    o.vu(ED.SHOP.length); for (const s of ED.SHOP) o.u8(S.rank(q, s.id));
-    const inL = (l, v) => (l.indexOf(v) >= 0 ? 1 : 0);
-    o.vu(heroes.length); for (const c of heroes) o.u8(inL(q.heroes, c) | inL(q.played, c) << 1 | inL(q.won, c) << 2 | inL(q.formed, c) << 3);
-    o.vu(ED.STAGE_IDS.length);
-    ED.STAGE_IDS.forEach((id, i) => { const b = q.best[id]; o.u8(inL(q.beat, i) | (b && b.won ? 2 : 0) | (b ? 4 : 0) | inL(q.pure, i) << 3); o.vu(b ? b.time : 0); o.vu(b ? b.kills : 0); o.vu(b ? b.level : 0); });
-    o.vu(STAT_KEYS.length); for (const k of STAT_KEYS) o.vu(q.stats[k]);
-    o.vu(SEEN_KEYS.length);
-    for (const k of SEEN_KEYS) writeBits(o, codeOrder(k), new Set(q.seen[k]));
-    writeBits(o, ED.ACH_IDS, new Set(q.ach));
-    o.vu(q.spent);
-    writeBits(o, cosIds(), new Set(q.cos));
-    writeBits(o, cosIds(), new Set(q.wear));
-    return pack(o.b);
-  };
-  // Returns a normalized profile or throws an Error with a readable message. Entries beyond the lists this build knows are read and dropped.
-  S.decode = (code) => {
-    let s = String(code || '').toUpperCase().replace(/\s+/g, '').replace(/^WK[IL]/, 'WK1');
-    if (!s.startsWith(PREFIX)) throw new Error('Wickdeep save codes begin with ' + PREFIX + '-.');
-    s = s.slice(PREFIX.length).replace(/-/g, '').replace(/[IL]/g, '1').replace(/O/g, '0');
+  // Every [list] starts with its count; bytes past what a decoder knows are ignored.
+  const decodeV1 = (s) => {
     let all;
-    try { all = scramble(fromB32(s)); } catch (e) { throw new Error('That code contains characters a save code never uses.'); }
+    try { all = scramble(fromB32(s)); } catch (e) { throw new Error(E_CHAR); }
     let body = null;
     for (const len of [all.length, all.length - 1]) { if (len < 3) continue; const b = all.slice(0, len - 2); if (crc16(b) === ((all[len - 2] << 8) | all[len - 1])) { body = b; break; } }
-    if (!body) throw new Error('That code fails its checksum. A character is probably mistyped or missing.');
+    if (!body) throw new Error(E_SUM);
     const r = reader(body), o = { shop: {}, heroes: [], played: [], won: [], formed: [], beat: [], pure: [], best: {}, stats: {}, seen: {} };
     try {
-      if (r.u8() > CODE_VERSION) throw new Error('newer');
+      if (r.u8() > 1) throw new Error('newer');
       let n = r.vu(), name = '';
       for (let i = 0; i < n; i++) name += NAME_CHARS[r.u8()] || '';
       o.name = name; o.gold = r.vu(); o.lifetime = r.vu();
@@ -410,10 +414,259 @@
       if (r.left()) o.cos = readBits(r, cosIds());
       if (r.left()) o.wear = readBits(r, cosIds());
     } catch (e) {
-      if (e.message === 'newer') throw new Error('That code was made by a newer Wickdeep. Reload the page.');
-      throw new Error('That code is damaged.');
+      if (e.message === 'newer') throw new Error(E_NEW);
+      throw new Error(E_DMG);
     }
     return S.normalize(o);
+  };
+
+  // ---------------- save code v2 (WK2): bit-packed ----------------
+  // Frozen WK2 tables (never edited; changing one needs a new prefix): SEEN_DEAD, V2N (count bases), shop rank widths (bit length of SHOP_FULL[i] for the first V2N.shop rows,
+  // 4 bits after), SHOP_FULL (the ranks of the 'all bought' shop form), SHOP_COST / COS_PRICE / HERO_BUY (the prices spent and lifetime are checked against; live prices may differ).
+  const SHOP_FULL = [5, 5, 3, 5, 3, 3, 5, 5, 5, 1, 5, 3, 3, 5, 5, 5, 5, 1, 5];
+  const SHOP_COST = [65, 35, 120, 40, 80, 40, 55, 45, 45, 550, 35, 35, 65, 65, 55, 40, 35, 4500, 55];
+  const COS_PRICE = [500, 1200, 0, 500, 1200, 0, 500, 1200, 0, 500, 1200, 0, 500, 1200, 0, 500, 1200, 0, 500, 1200, 0, 800, 800, 800, 1500, 2500, 0, 600, 900, 1400, 2000, 0,
+    600, 1000, 1500, 0, 200, 400, 800, 1200, 0, 0, 0, 0, 0, 0, 200, 200, 300, 300, 400, 400, 600, 0];
+  const HERO_BUY = [0, 0, 0, 0, 0, 4000, 0];
+  const V2N = { sections: 15, shop: 19, heroes: 7, stages: 4, stats: 7, seen: 5, seenL: [7, 58, 12, 51, 4], ach: 30, cos: 54 };
+  // Number forms [lo, wl] (wNum): gold, spent, runs, wins, lifetime kills, stage best time (s) / kills / level, co-op wins, stats past STAT_KEYS' first 7.
+  const NP = { gold: [7, 5], spent: [7, 4], runs: [4, 4], wins: [3, 4], kills: [12, 4], time: [10, 2], bkills: [12, 3], level: [6, 2], coop: [3, 4], any: [8, 5] };
+  const STAT_NP = [NP.runs, NP.wins, NP.kills, NP.level, NP.bkills, NP.time, NP.coop];
+  const STAT_TOP = [null, null, null, 'level', 'kills', 'time', null]; // stat equal to the max of that stage-best field: one 0 bit
+  const EG_TIME = 4, EG_LEVEL = 2; // exp-Golomb orders of a stage best's time / level below the stage maximum
+  const SEED2 = 0x2b1d5eed, GROUP = 5;
+  const E_CHAR = 'That code contains characters a save code never uses.', E_SUM = 'That code fails its checksum. A character is probably mistyped or missing.';
+  const E_DMG = 'That code is damaged.', E_NEW = 'That code was made by a newer Wickdeep. Reload the page.';
+  const bl = (v) => { let n = 0; while (v >= 1) { v = Math.floor(v / 2); n++; } return n; }; // bit length (0 for v < 1)
+  const shopW = (i) => (i < V2N.shop ? bl(SHOP_FULL[i]) : 4);
+  // CRC-15/CAN (poly 0x4599, init 0) over bits b[0..end).
+  const crc15 = (b, end) => { let c = 0; for (let i = 0; i < end; i++) { const f = ((c >> 14) & 1) ^ b[i]; c = (c << 1) & 0x7fff; if (f) c ^= 0x4599; } return c; };
+  // Bit writer / reader, MSB first: u(v, n) n-bit unsigned (exact up to 2^53), gam(v >= 1) Elias gamma.
+  const bitW = () => {
+    const b = [], u = (v, n) => { for (let i = n - 1; i >= 0; i--) b.push(Math.floor(v / 2 ** i) % 2); };
+    return { b, u, bit: (v) => b.push(v ? 1 : 0), gam: (v) => { const n = bl(v); for (let i = 1; i < n; i++) b.push(0); u(v, n); } };
+  };
+  const bitR = (b, end) => {
+    let i = 0;
+    const bit = () => { if (i >= end) throw new Error('short'); return b[i++]; };
+    const u = (n) => { let v = 0; for (let k = 0; k < n; k++) v = v * 2 + bit(); return v; };
+    return { bit, u, gam: () => { let z = 0; while (!bit()) if (++z > 40) throw new Error('bad'); return 2 ** z + u(z); } };
+  };
+  const gamCost = (v) => 2 * bl(v) - 1;
+  // Number v >= 0: wl-bit slot s; s = 0: 0; s = 1: lo bits; 1 < s < 2^wl - 1: bit length lo + s - 1; s = 2^wl - 1: 6-bit bit length. A bit length L is followed by v's L - 1 bits
+  // under its leading 1.
+  const wNum = (o, v, P) => {
+    v = num(v); const lo = P[0], wl = P[1], esc = 2 ** wl - 1, L = bl(v);
+    if (!L) o.u(0, wl);
+    else if (L <= lo) { o.u(1, wl); o.u(v, lo); }
+    else { const s = L - lo + 1; if (s < esc) o.u(s, wl); else { o.u(esc, wl); o.u(L, 6); } o.u(v - 2 ** (L - 1), L - 1); }
+  };
+  const rNum = (r, P) => {
+    const lo = P[0], wl = P[1], esc = 2 ** wl - 1, s = r.u(wl);
+    if (!s) return 0;
+    if (s === 1) return r.u(lo);
+    const L = s < esc ? lo + s - 1 : r.u(6);
+    if (L < 1 || L > 41) throw new Error('bad');
+    return 2 ** (L - 1) + r.u(L - 1);
+  };
+  // Count m against base N: '0' m = 0, '10' m = N, '11' + bl(N - 1) bits: m (1..N-1), or 0 then gamma(m - N) for m > N.
+  const wCnt = (o, m, N) => {
+    if (!m) { o.bit(0); return; }
+    o.bit(1); if (m === N) { o.bit(0); return; }
+    o.bit(1); const w = bl(N - 1);
+    if (m < N) o.u(m, w); else { o.u(0, w); o.gam(m - N); }
+  };
+  const rCnt = (r, N) => {
+    if (!r.bit()) return 0;
+    if (!r.bit()) return N;
+    const v = r.u(bl(N - 1)); if (v && v >= N) throw new Error('bad');
+    const m = v || N + r.gam(); if (m > 4096) throw new Error('bad');
+    return m;
+  };
+  const cntCost = (m, N) => (!m ? 1 : m === N ? 2 : m < N ? 2 + bl(N - 1) : 2 + bl(N - 1) + gamCost(m - N));
+  // Set over positions of st (1 in, 0 out, -1 free: normalize re-derives it): count m (last 'in' position + 1, or N when that is cheaper; position m - 1 is in), then a 2-bit form:
+  // 0 every position < m; 1 bitmap of positions < m - 1; 2 gamma(n + 1) + n listed 'in' positions < m - 1 in bl(m - 2) bits each; 3 the same listing the 'out' positions.
+  // The cheapest form is written. Both return the 'in' positions as the decoder reads them (free positions resolved).
+  const wSet = (o, st, N) => {
+    let m0 = 0; for (let i = st.length - 1; i >= 0; i--) if (st[i] === 1) { m0 = i + 1; break; }
+    const cands = [m0]; if (N > m0 && st[N - 1] === -1) cands.push(N);
+    let best = null;
+    for (const m of cands) {
+      if (!m) { best = { m: 0 }; break; }
+      const iw = bl(m - 2); let nin = 0, nout = 0;
+      for (let i = 0; i < m - 1; i++) { if (st[i] === 1) nin++; else if (st[i] === 0) nout++; }
+      const cost = [nout ? Infinity : 0, m - 1, gamCost(nin + 1) + nin * iw, gamCost(nout + 1) + nout * iw];
+      for (let k = 0; k < 4; k++) { const c = cntCost(m, N) + 2 + cost[k]; if (!best || c < best.c) best = { m, k, c }; }
+    }
+    wCnt(o, best.m, N);
+    if (!best.m) return [];
+    const m = best.m, k = best.k, iw = bl(m - 2), out = [];
+    o.u(k, 2);
+    if (k === 1) for (let i = 0; i < m - 1; i++) o.bit(st[i] === 1);
+    else if (k >= 2) {
+      const want = k === 2 ? 1 : 0, list = [];
+      for (let i = 0; i < m - 1; i++) if (st[i] === want) list.push(i);
+      o.gam(list.length + 1); for (const i of list) o.u(i, iw);
+    }
+    for (let i = 0; i < m - 1; i++) if (k === 0 || (k === 3 ? st[i] !== 0 : st[i] === 1)) out.push(i);
+    out.push(m - 1);
+    return out;
+  };
+  // Exp-Golomb order k: gamma(floor(v / 2^k) + 1), then the k low bits.
+  const wEG = (o, v, k) => { const d = 2 ** k; o.gam(Math.floor(v / d) + 1); o.u(v % d, k); };
+  const rEG = (r, k) => (r.gam() - 1) * 2 ** k + r.u(k);
+  const rSet = (r, N) => {
+    const m = rCnt(r, N); if (!m) return [];
+    const k = r.u(2), iw = bl(m - 2), inn = new Array(m).fill(k === 0 || k === 3 ? 1 : 0);
+    inn[m - 1] = 1;
+    if (k === 1) for (let i = 0; i < m - 1; i++) inn[i] = r.bit();
+    else if (k >= 2) {
+      const n = r.gam() - 1; if (n >= m) throw new Error('bad');
+      for (let j = 0; j < n; j++) { const i = r.u(iw); if (i >= m - 1) throw new Error('bad'); inn[i] = k === 2 ? 1 : 0; }
+    }
+    const out = []; for (let i = 0; i < m; i++) if (inn[i]) out.push(i);
+    return out;
+  };
+  // Body bits -> code string: zero pad to 5n - 15 bits, CRC-15, each 5-bit symbol XOR a seeded keystream, base32 in groups of GROUP.
+  const pack2 = (bits) => {
+    const b = bits.slice(); while ((b.length + 15) % 5) b.push(0);
+    const c = crc15(b, b.length); for (let k = 14; k >= 0; k--) b.push((c >> k) & 1);
+    const r = U.RNG(SEED2); let s = '';
+    for (let i = 0; i < b.length; i += 5) { let v = 0; for (let k = 0; k < 5; k++) v = v * 2 + b[i + k]; s += B32[v ^ Math.floor(r.next() * 32)]; }
+    return PREFIX + '-' + s.match(new RegExp('.{1,' + GROUP + '}', 'g')).join('-');
+  };
+  // tools/check-save.js builds hand-made v2 codes and checks the frozen tables with these
+  S._v2 = { bitW, wNum, wCnt, wSet, wEG, pack2, shopW, NP, V2N, SHOP_FULL, SHOP_COST, COS_PRICE, HERO_BUY, SEEN_DEAD, LIVE_WEAPONS };
+  // Gold paid for what the written fields hold, at the frozen WK2 prices (positions past the tables count 0): shop ranks (cost x rank^2 per rank), owned cosmetics, unlocked heroes.
+  const paidShop = (rk) => { let t = 0; for (let i = 0; i < SHOP_COST.length && i < rk.length; i++) { const r = rk[i]; t += SHOP_COST[i] * r * (r + 1) * (2 * r + 1) / 6; } return t; };
+  const paidAt = (pos, table) => pos.reduce((t, i) => t + (table[i] || 0), 0);
+  // Layout v2: section count (base V2N.sections), then sections in this order (a decoder reads the first min(count, known) and ignores the rest):
+  //  0 name: 4-bit length (0 = 'Wanderer'), 1 bit wide, then per char a 6-bit (NAME_CHARS) or, wide, a 12-bit name alphabet index; 1 gold;
+  //  2 shop: '0' none, '10' + count: SHOP_FULL ranks, '11' + count + ranks (shopW bits); 3-6 sets over ED.HERO_IDS: unlocked (start heroes free), played, won, formed;
+  //  7 stages: count, per stage a flag symbol ('00' none, '01' best, '10' best won + beat, '11' + 4 bits: beat, pure, best, won), then with 2+ bests the max time and level;
+  //    per best: time (2+ bests: exp-Golomb below the max), kills, level (the same); 8 stats: count, values in STAT_KEYS order (STAT_TOP ones: bit 0 = the stage-best max);
+  //  9 seen: count, sets in SEEN_KEYS order over codeOrder2 (base V2N.seenL, 1 past it; played heroes, their signature weapons and played stages free);
+  //  10 achievements over ED.ACH_IDS; 11 owned cosmetics over ED.COS_IDS (price-0 rewards free, worn ones in); 12 worn cosmetics: a set over the owned positions as written;
+  //  13 spent: bit 0 = paidShop of the written ranks, else 1 + number; 14 lifetime: bit 0 = gold + spent + written cosmetics and heroes at frozen prices, else 1 + lifetime - gold.
+  //  Counts, sets and numbers: wCnt, wSet, wNum. Trailing all-zero lists are cut by their count.
+  S.encode = (p) => {
+    const q = S.normalize(p), o = bitW(), heroes = heroOrder(), NM = nameIdx(), inL = (l, v) => l.indexOf(v) >= 0;
+    wCnt(o, V2N.sections, V2N.sections);
+    const nm = q.name === 'Wanderer' ? [] : Array.from(q.name, ch => NM.get(ch));
+    o.u(nm.length, 4);
+    if (nm.length) { const wide = nm.some(i => i >= 64); o.bit(wide); for (const i of nm) o.u(i, wide ? 12 : 6); }
+    wNum(o, q.gold, NP.gold);
+    const rk = ED.SHOP.map((s, i) => Math.min(S.rank(q, s.id), 2 ** shopW(i) - 1));
+    let n = rk.length; while (n && !rk[n - 1]) n--;
+    if (!n) o.bit(0);
+    else if (rk.length === SHOP_FULL.length && rk.every((r, i) => r === SHOP_FULL[i])) { o.u(2, 2); wCnt(o, rk.length, V2N.shop); }
+    else { o.u(3, 2); wCnt(o, n, V2N.shop); for (let i = 0; i < n; i++) o.u(rk[i], shopW(i)); }
+    const start = startHeroes();
+    const unl = wSet(o, heroes.map(c => (inL(q.heroes, c) ? (inL(start, c) ? -1 : 1) : 0)), V2N.heroes);
+    for (const l of [q.played, q.won, q.formed]) wSet(o, heroes.map(c => (inL(l, c) ? 1 : 0)), V2N.heroes);
+    const sf = ED.STAGE_IDS.map((id, i) => { const b = q.best[id]; return (inL(q.beat, i) ? 1 : 0) | (inL(q.pure, i) ? 2 : 0) | (b ? 4 : 0) | (b && b.won ? 8 : 0); });
+    n = sf.length; while (n && !sf[n - 1]) n--;
+    wCnt(o, n, V2N.stages);
+    for (let i = 0; i < n; i++) { const f = sf[i]; if (f === 0) o.u(0, 2); else if (f === 4) o.u(1, 2); else if (f === 13) o.u(2, 2); else { o.u(3, 2); o.u(f, 4); } }
+    const bs = ED.STAGE_IDS.slice(0, n).map(id => q.best[id]).filter(Boolean), top = { time: 0, kills: 0, level: 0 };
+    for (const b of bs) for (const k in top) top[k] = Math.max(top[k], b[k]);
+    if (bs.length > 1) { wNum(o, top.time, NP.time); wNum(o, top.level, NP.level); }
+    for (const b of bs) {
+      if (bs.length > 1) wEG(o, top.time - b.time, EG_TIME); else wNum(o, b.time, NP.time);
+      wNum(o, b.kills, NP.bkills);
+      if (bs.length > 1) wEG(o, top.level - b.level, EG_LEVEL); else wNum(o, b.level, NP.level);
+    }
+    const sv = STAT_KEYS.map(k => q.stats[k]);
+    n = sv.length; while (n && !sv[n - 1]) n--;
+    wCnt(o, n, V2N.stats);
+    for (let i = 0; i < n; i++) { const t = STAT_TOP[i]; if (t) { o.bit(sv[i] !== top[t]); if (sv[i] === top[t]) continue; } wNum(o, sv[i], STAT_NP[i] || NP.any); }
+    const free = { heroes: new Set(q.played), weapons: new Set(q.played.map(c => ED.HEROES && ED.HEROES[c] && ED.HEROES[c].sig).filter(Boolean)),
+      stages: new Set(Object.keys(q.best).concat(q.beat.map(i => ED.STAGE_IDS[i]))) };
+    const ss = SEEN_KEYS.map(k => { const has = new Set(q.seen[k]), f = free[k]; return codeOrder2(k).map(id => (has.has(id) ? (f && f.has(id) ? -1 : 1) : 0)); });
+    n = ss.length; while (n && ss[n - 1].indexOf(1) < 0) n--;
+    wCnt(o, n, V2N.seen);
+    for (let k = 0; k < n; k++) wSet(o, ss[k], V2N.seenL[k] || 1);
+    wSet(o, ED.ACH_IDS.map(id => (inL(q.ach, id) ? 1 : 0)), V2N.ach);
+    const CI = cosIds(), own = wSet(o, CI.map(id => { const d = cosDef(id); return inL(q.wear, id) ? 1 : d && !d.price ? -1 : inL(q.cos, id) ? 1 : 0; }), V2N.cos);
+    wSet(o, own.map(i => (inL(q.wear, CI[i]) ? 1 : 0)), own.length);
+    const ps = paidShop(rk);
+    o.bit(q.spent !== ps); if (q.spent !== ps) wNum(o, q.spent, NP.spent);
+    const pl = q.gold + q.spent + paidAt(own, COS_PRICE) + paidAt(unl, HERO_BUY);
+    o.bit(q.lifetime !== pl); if (q.lifetime !== pl) wNum(o, q.lifetime - q.gold, NP.gold);
+    return pack2(o.b);
+  };
+  const decodeV2 = (s) => {
+    const r0 = U.RNG(SEED2), b = [];
+    for (const ch of s) { const v = B32.indexOf(ch); if (v < 0) throw new Error(E_CHAR); const x = v ^ Math.floor(r0.next() * 32); for (let k = 4; k >= 0; k--) b.push((x >> k) & 1); }
+    const end = b.length - 15;
+    let c = 0; for (let i = Math.max(0, end); i < b.length; i++) c = c * 2 + b[i];
+    if (end < 5 || crc15(b, end) !== c) throw new Error(E_SUM);
+    const r = bitR(b, end), o = { shop: {}, heroes: [], played: [], won: [], formed: [], beat: [], pure: [], best: {}, stats: {}, seen: {} };
+    try {
+      const n = rCnt(r, V2N.sections), has = (k) => k < n, heroes = heroOrder(), ids = (ord, idx) => idx.map(i => ord[i]).filter(Boolean);
+      if (has(0)) {
+        const len = r.u(4);
+        if (len) { const wide = r.bit(); nameIdx(); let nm = ''; for (let i = 0; i < len; i++) { const x = r.u(wide ? 12 : 6); nm += x < 64 ? NAME_CHARS[x] : HANGUL[x - 64] || ''; } o.name = nm; }
+      }
+      o.gold = has(1) ? rNum(r, NP.gold) : 0;
+      const rk = [];
+      if (has(2) && r.bit()) {
+        const full = !r.bit(), m = rCnt(r, V2N.shop);
+        for (let i = 0; i < m; i++) { const v = full ? SHOP_FULL[i] || 0 : r.u(shopW(i)); rk.push(v); if (ED.SHOP[i]) o.shop[ED.SHOP[i].id] = v; }
+      }
+      const unl = has(3) ? rSet(r, V2N.heroes) : [];
+      o.heroes = ids(heroes, unl);
+      if (has(4)) o.played = ids(heroes, rSet(r, V2N.heroes));
+      if (has(5)) o.won = ids(heroes, rSet(r, V2N.heroes));
+      if (has(6)) o.formed = ids(heroes, rSet(r, V2N.heroes));
+      const top = { time: 0, kills: 0, level: 0 };
+      if (has(7)) {
+        const m = rCnt(r, V2N.stages), fl = [];
+        for (let i = 0; i < m; i++) { const sym = r.u(2); fl.push(sym === 0 ? 0 : sym === 1 ? 4 : sym === 2 ? 13 : r.u(4)); }
+        const nb = fl.filter(f => f & 4).length;
+        if (nb > 1) { top.time = rNum(r, NP.time); top.level = rNum(r, NP.level); }
+        fl.forEach((f, i) => {
+          let bst = null;
+          if (f & 4) {
+            bst = { time: nb > 1 ? top.time - rEG(r, EG_TIME) : rNum(r, NP.time), kills: rNum(r, NP.bkills), level: 0, won: !!(f & 8) };
+            bst.level = nb > 1 ? top.level - rEG(r, EG_LEVEL) : rNum(r, NP.level);
+            if (bst.time < 0 || bst.level < 0) throw new Error('bad');
+            if (nb < 2) { top.time = bst.time; top.level = bst.level; }
+            top.kills = Math.max(top.kills, bst.kills);
+          }
+          const id = ED.STAGE_IDS[i];
+          if (!id) return;
+          if (f & 1) o.beat.push(i);
+          if (f & 2) o.pure.push(i);
+          if (bst) o.best[id] = bst;
+        });
+      }
+      if (has(8)) {
+        const m = rCnt(r, V2N.stats);
+        for (let i = 0; i < m; i++) { const t = STAT_TOP[i], v = t && !r.bit() ? top[t] : rNum(r, STAT_NP[i] || NP.any); if (STAT_KEYS[i]) o.stats[STAT_KEYS[i]] = v; }
+      }
+      if (has(9)) {
+        const m = rCnt(r, V2N.seen);
+        for (let k = 0; k < m; k++) { const idx = rSet(r, V2N.seenL[k] || 1), key = SEEN_KEYS[k]; if (key) o.seen[key] = ids(codeOrder2(key), idx); }
+      }
+      if (has(10)) o.ach = ids(ED.ACH_IDS, rSet(r, V2N.ach));
+      const own = has(11) ? rSet(r, V2N.cos) : [];
+      o.cos = ids(cosIds(), own);
+      if (has(12)) o.wear = ids(cosIds(), rSet(r, own.length).filter(j => j < own.length).map(j => own[j]));
+      o.spent = has(13) && r.bit() ? rNum(r, NP.spent) : paidShop(rk);
+      o.lifetime = has(14) && r.bit() ? o.gold + rNum(r, NP.gold) : o.gold + o.spent + paidAt(own, COS_PRICE) + paidAt(unl, HERO_BUY);
+    } catch (e) { throw new Error(E_DMG); }
+    return S.normalize(o);
+  };
+  // Returns a normalized profile or throws an Error with a readable message (English source; the UI translates it). Prefix WK1 (also WKI / WKL) or WK2; dashes and spaces
+  // ignored, lowercase accepted, I / L read as 1, O as 0. Entries beyond the lists this build knows are read and dropped.
+  S.decode = (code) => {
+    let s = String(code || '').toUpperCase().replace(/\s+/g, '');
+    const mt = /^WK([0-9IL])/.exec(s), v = mt ? (/[IL]/.test(mt[1]) ? 1 : +mt[1]) : 0;
+    if (v > CODE_VERSION) throw new Error(E_NEW);
+    if (v < 1) throw new Error('Wickdeep save codes begin with ' + PREFIX + '-.');
+    s = s.slice(3).replace(/-/g, '').replace(/[IL]/g, '1').replace(/O/g, '0');
+    return v === 1 ? decodeV1(s) : decodeV2(s);
   };
 
   // ---------------- ED.Meta: profile-bound API for the UI ----------------
