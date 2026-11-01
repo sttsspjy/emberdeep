@@ -13,7 +13,7 @@
   // slam (directional: blast at each strike tip; 360 Forms: ring around the hero on the string's last strike), stag (stun s on strike hits).
   // Form keys: cracks (Colossus: crack lines across the first front sweep of a string), cutT (Gale: cut line life s), quake + fiss (Earthsplitter: every quake-th attack, fiss radial fissures), orbit (Tempest: spiral blades).
   // FORM[wid]: full (strikes are 360 spins), spin (honours S.spin; Forms ignore it), gap (s between strikes), one (a single strike per attack; each S.n above 1 adds 2 cracks instead), heart (foes within half reach take that much extra), crack, swirl (spin hits push foes around the hero), gale (big crescents + cut lines), spiral (spiral blades per attack),
-  // quake (fissure ring every S.quake attacks), move (cooldown runs this much faster while moving), big (big foes take that many x from sweeps and crescents; bigAll: from waves and slams too),
+  // quake (fissure ring every S.quake attacks), move (cooldown runs this much faster while moving), big (big foes take that many x from sweeps and Gale crescents; bigAll: from slams too; never from Edge Wave crescents),
   // cone (half-angle rad: the swing arc is at most 2 x cone, no back swing, follow-up strikes on the aim line, crescents and cut lines fan within +-0.6 x cone).
   const FORM = {
     cleave: { gap: 0.15, spin: true, big: 1.6, bigAll: true },
@@ -43,20 +43,35 @@
   const swirl = (w, e) => { const dx = e.x - SX, dy = e.y - SY; w.knock(e, -dy + dx * 0.5, dx + dy * 0.5, SWF * (e.elite ? 0.5 : 1)); };
   const ARC = { knock: 0, look: 'slash', stun: 0, onHit: null, noEv: false };
   const SLAM = { knock: 0, look: 'quake', stun: 0, onHit: null };
-  // Crescent wave: piercing; ret doubles its life so the outbound leg keeps its reach.
-  const WAVE = { look: 'crescent', speed: 250, dmg: 0, pierce: 999, r: 12, life: 0.5, knock: 0, ret: false, onHit: null };
-  const wave = (w, p, ws, S, a, k) => {
-    WAVE.dmg = S.dmg * k * DK; WAVE.onHit = FORM[ws.id].bigAll ? projBig : null; WAVE.r = 10 * S.area; WAVE.knock = S.knock * 0.4; WAVE.ret = !!S.ret;
+  // Leg cap: the crescents of one strike hit one foe at most cap times per leg (out / back; Edge Wave WAVE_CAP, Gale GALE_CAP). Each strike takes a record of a per-slot ring
+  // (WSET records, lazily built in ws.st.wr) holding per leg the foe ids hit and their counts (WIDS foes each; past that, no limit).
+  const WSET = 16, WIDS = 64, WAVE_CAP = 1, GALE_CAP = 7;
+  const legOk = (L, id, cap) => {
+    for (let i = 0; i < L.n; i++) if (L.ids[i] === id) { if (L.c[i] >= cap) return false; L.c[i]++; return true; }
+    if (L.n < WIDS) { L.ids[L.n] = id; L.c[L.n++] = 1; }
+    return true;
+  };
+  const leg = () => ({ ids: new Int32Array(WIDS), c: new Uint8Array(WIDS), n: 0 });
+  const waveSkip = (w, pr, e) => !legOk(pr.back ? pr.st.b : pr.st.o, e.id, WAVE_CAP);
+  const galeSkip = (w, pr, e) => !legOk(pr.back ? pr.st.b : pr.st.o, e.id, GALE_CAP);
+  const strikeSet = (st) => {
+    if (!st.wr) { st.wr = []; for (let i = 0; i < WSET; i++) st.wr.push({ o: leg(), b: leg() }); st.wi = 0; }
+    const R = st.wr[st.wi = (st.wi + 1) % WSET]; R.o.n = 0; R.b.n = 0;
+    return R;
+  };
+  const WAVE = { look: 'crescent', speed: 250, dmg: 0, pierce: 999, r: 12, life: 0.5, knock: 0, ret: false, onHit: null, skip: waveSkip, st: null };
+  const wave = (w, p, ws, S, a, k, R) => {
+    WAVE.st = R; WAVE.dmg = S.dmg * k * DK; WAVE.r = 10 * S.area; WAVE.knock = S.knock * 0.4; WAVE.ret = !!S.ret;
     WAVE.life = Math.min(0.72, 0.5 * Math.sqrt(S.area)) * (S.ret ? 2 : 1);
     w.shoot(p, ws.id, p.x + Math.cos(a) * 14, p.y - 4 + Math.sin(a) * 14, a, S, WAVE);
   };
   // Gale crescent: big, piercing, starts 2 x its radius out (its body inside the cone), leaves a cut line (dps zone along its whole flight, ticking once the crescent has passed its start);
   // a returning crescent ends back at its start distance (2 x radius + one step), so its body never sweeps around the hero.
   const galeTick = (w, pr) => { const p = pr.p; if (pr.back && p && Math.hypot(p.x - pr.x, p.y - pr.y) < pr.r * 2 + 8) pr.dead = true; };
-  const GALE = { look: 'gale', speed: 260, dmg: 0, pierce: 999, r: 16, life: 0.7, knock: 0, ret: false, onHit: projBig, tick: galeTick };
+  const GALE = { look: 'gale', speed: 260, dmg: 0, pierce: 999, r: 16, life: 0.7, knock: 0, ret: false, onHit: projBig, tick: galeTick, skip: galeSkip, st: null };
   const CUT = { team: 0, p: null, wid: '', look: 'cut', x: 0, y: 0, a: 0, len: 1, w: 12, dur: 1, tick: 0.25, tickDelay: 0.3, dps: 0, stun: 0 };
-  const gale = (w, p, ws, S, a) => {
-    GALE.dmg = S.dmg * 0.4 * DK; GALE.r = 15 * S.area; GALE.knock = S.knock * 0.3; GALE.ret = !!S.ret; GALE.life = 0.9 * (S.ret ? 2 : 1);
+  const gale = (w, p, ws, S, a, R) => {
+    GALE.st = R; GALE.dmg = S.dmg * 0.4 * DK; GALE.r = 15 * S.area; GALE.knock = S.knock * 0.3; GALE.ret = !!S.ret; GALE.life = 0.9 * (S.ret ? 2 : 1);
     const o = GALE.r * 2, x = p.x + Math.cos(a) * o, y = p.y - 4 + Math.sin(a) * o;
     w.shoot(p, ws.id, x, y, a, S, GALE);
     CUT.p = p; CUT.wid = ws.id; CUT.x = x; CUT.y = y; CUT.a = a; CUT.len = Math.min(CRACK_MAX, GALE.speed * 0.9); CUT.w = 12 * Math.sqrt(S.area);
@@ -106,13 +121,13 @@
       w.arc(p, ws.id, cx, cy, b, R, arc, S.dmg * DK, ARC);
       if (F.heart) { ARC.noEv = true; w.arc(p, ws.id, cx, cy, b, R * 0.5, arc, S.dmg * DK * F.heart, ARC); ARC.noEv = false; }
       if (full) continue;
-      if (F.gale && !s) for (let i = 0; i < nw; i++) gale(w, p, ws, S, b + (nw > 1 ? (i / (nw - 1) * 2 - 1) * F.cone * 0.6 : 0));
-      else if (!s) for (let i = 0; i < nw; i++) wave(w, p, ws, S, b + (i - (nw - 1) / 2) * 0.35, 0.7);
+      if (F.gale && !s && nw > 0) { const R = strikeSet(ws.st); for (let i = 0; i < nw; i++) gale(w, p, ws, S, b + (nw > 1 ? (i / (nw - 1) * 2 - 1) * F.cone * 0.6 : 0), R); }
+      else if (!s && nw > 0) { const R = strikeSet(ws.st); for (let i = 0; i < nw; i++) wave(w, p, ws, S, b + (i - (nw - 1) / 2) * 0.35, 0.7, R); }
       if (F.crack && k === 0 && s === 0) { const c = (S.cracks | 0) + (F.one ? 2 * ((S.n | 0) - 1) : 0); for (let i = 0; i < c; i++) crack(w, p, ws, S, b + (c > 1 ? (i / (c - 1) - 0.5) * S.arc * 0.85 : 0), R * 1.9, 0.7, 0.3 + 0.05 * i); }
       if (S.slam && !s) slam(w, p, ws, S, cx + Math.cos(b) * R * 0.8, cy + Math.sin(b) * R * 0.8, 24 * S.area, 0.8);
     }
     ARC.onHit = null; DK = k ? 0.8 : 1;
-    if (full && !F.spiral) for (let i = 0; i < nw; i++) wave(w, p, ws, S, (i + 0.5 * (k & 1)) / nw * TAU, 0.5);
+    if (full && !F.spiral && nw > 0) { const R = strikeSet(ws.st); for (let i = 0; i < nw; i++) wave(w, p, ws, S, (i + 0.5 * (k & 1)) / nw * TAU, 0.5, R); }
     if (F.full && S.slam && last) slam(w, p, ws, S, cx, cy, R * 1.35, 0.8);
     DK = 1;
   };

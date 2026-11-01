@@ -43,17 +43,17 @@ Zero damage. cd 10 s. A flash at the pyro: every foe within 140 px (r, scales wi
 
 ## dps.js (`node tools/dps.js pyro`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 
-| build | form | kind | crowd wpn | kills/s | single wpn |
-|---|---|---|---|---|---|
-| base | - |  | 447 | 6.2 | 38 |
-| t5 | - |  | 734 | 10.2 | 59 |
-| p0 | - |  | 1,496 | 21.1 | 132 |
-| p1 | - |  | 1,632 | 22.4 | 144 |
-| p2 | - |  | 1,513 | 21.3 | 90 |
-| f00 | inferno | dir | 2,974 | 41.4 | 196 |
-| f10 | firestorm | dir | 3,557 | 49.8 | 190 |
-| f11 | napalm | dir | 2,593 | 34.6 | 201 |
-| f20 | wildfire | dir | 3,345 | 46.9 | 186 |
-| f21 | pyre | dir | 2,472 | 34.4 | 150 |
+| build | form | kind | crowd wpn | kills/s | single wpn | boss wpn |
+|---|---|---|---|---|---|---|
+| base | - |  | 447 | 6.2 | 38 | 38 |
+| t5 | - |  | 734 | 10.2 | 59 | 59 |
+| p0 | - |  | 1,496 | 21.1 | 132 | 132 |
+| p1 | - |  | 1,632 | 22.4 | 144 | 179 |
+| p2 | - |  | 1,513 | 21.3 | 90 | 90 |
+| f00 | inferno | dir | 2,974 | 41.4 | 196 | 196 |
+| f10 | firestorm | dir | 3,557 | 49.8 | 190 | 231 |
+| f11 | napalm | dir | 2,593 | 34.6 | 201 | 234 |
+| f20 | wildfire | dir | 3,345 | 46.9 | 186 | 200 |
+| f21 | pyre | dir | 2,472 | 34.4 | 150 | 224 |
 
 All Forms directional; f rows within ±25% of their mean (2,988).

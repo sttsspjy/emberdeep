@@ -37,17 +37,17 @@ Tables give the 3 shape ranks at path ranks 1 / 3 / 5; path ranks 2 and 4 are ge
 
 ## dps.js (`node tools/dps.js cleric`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 
-| build | form | kind | crowd wpn | kills/s | single wpn |
-|---|---|---|---|---|---|
-| base | - |  | 440 | 4.4 | 23 |
-| t5 | - |  | 614 | 6.8 | 36 |
-| p0 | - |  | 1,266 | 15.7 | 174 |
-| p1 | - |  | 1,334 | 17.3 | 71 |
-| p2 | - |  | 1,395 | 18.0 | 62 |
-| f00 | wrath | dir | 4,507 | 62.9 | 387 |
-| f10 | halo | 360° | 1,981 | 26.9 | 135 |
-| f11 | consecration | dir | 3,808 | 52.5 | 402 |
-| f20 | jray | 360° | 1,938 | 25.6 | 148 |
-| f21 | verdict | dir | 4,052 | 56.0 | 305 |
+| build | form | kind | crowd wpn | kills/s | single wpn | boss wpn |
+|---|---|---|---|---|---|---|
+| base | - |  | 440 | 4.4 | 23 | 23 |
+| t5 | - |  | 614 | 6.8 | 36 | 36 |
+| p0 | - |  | 1,266 | 15.7 | 174 | 174 |
+| p1 | - |  | 1,334 | 17.3 | 71 | 74 |
+| p2 | - |  | 1,395 | 18.0 | 62 | 62 |
+| f00 | wrath | dir | 4,507 | 62.9 | 387 | 387 |
+| f10 | halo | 360째 | 1,981 | 26.9 | 135 | 213 |
+| f11 | consecration | dir | 3,808 | 52.5 | 402 | 408 |
+| f20 | jray | 360째 | 1,938 | 25.6 | 148 | 148 |
+| f21 | verdict | dir | 4,052 | 56.0 | 305 | 328 |
 
 Role rule (f rows): 360° Forms (Halo, Judgment Ray) crowd ≤ 0.6 × directional mean (4,122 → ≤ 2,473): met; directional single ≥ 2 × the 360° best (148 → ≥ 296): met (Verdict 305 lowest); each kind within ±25% of its mean.

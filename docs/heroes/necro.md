@@ -41,17 +41,17 @@ Zero damage. A curved bone wall at the cursor for 5 s (scales with duration): a 
 
 ## dps.js (`node tools/dps.js necro`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 
-| build | form | kind | crowd wpn | kills/s | single wpn |
-|---|---|---|---|---|---|
-| base | - |  | 643 | 8.8 | 61 |
-| t5 | - |  | 770 | 10.8 | 85 |
-| p0 | - |  | 1,521 | 21.4 | 187 |
-| p1 | - |  | 1,321 | 18.8 | 246 |
-| p2 | - |  | 1,648 | 22.6 | 140 |
-| f00 | bonelord | dir | 2,798 | 38.4 | 379 |
-| f01 | ossuary | dir | 2,555 | 34.3 | 374 |
-| f10 | bonestorm | 360° | 1,488 | 19.7 | 152 |
-| f20 | plaguefield | dir | 3,154 | 44.4 | 556 |
-| f21 | lich | dir | 2,463 | 34.3 | 452 |
+| build | form | kind | crowd wpn | kills/s | single wpn | boss wpn |
+|---|---|---|---|---|---|---|
+| base | - |  | 643 | 8.8 | 61 | 61 |
+| t5 | - |  | 770 | 10.8 | 85 | 85 |
+| p0 | - |  | 1,521 | 21.4 | 187 | 187 |
+| p1 | - |  | 1,321 | 18.8 | 246 | 247 |
+| p2 | - |  | 1,648 | 22.6 | 140 | 140 |
+| f00 | bonelord | dir | 2,798 | 38.4 | 379 | 380 |
+| f01 | ossuary | dir | 2,555 | 34.3 | 374 | 374 |
+| f10 | bonestorm | 360째 | 1,488 | 19.7 | 152 | 207 |
+| f20 | plaguefield | dir | 3,154 | 44.4 | 556 | 632 |
+| f21 | lich | dir | 2,463 | 34.3 | 452 | 452 |
 
 Role rule (f rows): Bone Storm (360° orbit) crowd ≤ 0.6 × directional mean (2,742 → ≤ 1,645): met; directional single ≥ 2 × Bone Storm (152 → ≥ 304): met; each kind within ±25% of its mean.

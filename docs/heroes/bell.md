@@ -37,17 +37,17 @@ Zero damage. Cooldown 16 s at every level. A ring from the hero to 370 px (about
 
 ## dps.js (`node tools/dps.js bell`: weapon only, no Q casts, build fixed, no level-ups; builds: GAME-DESIGN §4 Power yardstick)
 
-| build | form | kind | crowd wpn | kills/s | single wpn |
-|---|---|---|---|---|---|
-| base | - |  | 579 | 6.1 | 19 |
-| t5 | - |  | 896 | 10.5 | 33 |
-| p0 | - |  | 1,541 | 19.3 | 77 |
-| p1 | - |  | 1,545 | 20.7 | 65 |
-| p2 | - |  | 1,646 | 21.6 | 77 |
-| f00 | cathedral | 360° | 1,265 | 13.4 | 63 |
-| f01 | undertow | 360° | 1,368 | 16.2 | 94 |
-| f10 | glaciertoll | 360° | 1,409 | 17.4 | 74 |
-| f11 | windchime | 360° | 1,648 | 22.4 | 179 |
-| f20 | carillon | 360° | 1,569 | 19.6 | 92 |
+| build | form | kind | crowd wpn | kills/s | single wpn | boss wpn |
+|---|---|---|---|---|---|---|
+| base | - |  | 579 | 6.1 | 19 | 21 |
+| t5 | - |  | 896 | 10.5 | 33 | 33 |
+| p0 | - |  | 1,541 | 19.3 | 77 | 78 |
+| p1 | - |  | 1,545 | 20.7 | 65 | 61 |
+| p2 | - |  | 1,646 | 21.6 | 77 | 106 |
+| f00 | cathedral | 360째 | 1,265 | 13.4 | 63 | 79 |
+| f01 | undertow | 360째 | 1,368 | 16.2 | 94 | 96 |
+| f10 | glaciertoll | 360째 | 1,409 | 17.4 | 74 | 71 |
+| f11 | windchime | 360째 | 1,648 | 22.4 | 179 | 201 |
+| f20 | carillon | 360째 | 1,569 | 19.6 | 92 | 121 |
 
 Role rule: every Bell Form is 360°; crowd ceiling 0.6 × the cross-hero directional f mean (2,978 → ≤ 1,787): met (1,265–1,648); each Form within ±25% of the Bell mean (1,452). Crowd damage drops when pushes hold the horde at the rings' rims; that is the role's trade.

@@ -2,6 +2,7 @@
 // Shadow Fan + Reaper's Return (Return); Q Shadow Step.
 // Stab: a segment from the hero's hand along the aim, S.len x area long, S.wid x area wide; every foe touching it is hit. Crit is rolled once per stab (a crit stab forces a crit on
 // every foe it touches, others never crit). A strike of S.n stabs is spread evenly over the cooldown (ws.st queue), each stab re-aimed. Visual: one line zone per stab.
+// S.scap > 0: one foe takes at most S.scap stabs of one strike (later stabs pass through it).
 // Zone looks: stab / stabx (crit) / tcut (storm stab) line zones 0.12 s; smark (mark on a foe), mcut (shadow X cut, w = cut length), petal (bloom, w = blade count), sexec (execute pop,
 // w = 1 with a burst), stepcut (blink slash), afterimg (Shadow Step decoy). Projectile looks: rknife (returning dagger), sknife (Shadow Fan), pknife (pinning dagger).
 (function (ED) {
@@ -39,13 +40,22 @@
     vis(w, p, ws.id, 'sexec', e.x, e.y, 0, 0, S.burst ? 1 : 0, S.burst ? 26 : e.r + 4, 0.3);
     if (S.burst) w.blast(p, ws.id, e.x, e.y, 26, S.dmg * S.burst, BURST);
   }
-  // Segment hit from (x0, y0) along a for L px, half width hw: strike on every foe touching it. Returns the foe nearest the start (it may be dead) or null.
-  function seg(w, p, ws, S, x0, y0, a, L, hw, dmg, crit) {
+  // Stab cap (S.scap): per-strike stab counts per foe id in slot state (st.cid / st.cn, st.cl used; reset by fire). True when foe id may take one more stab (counted).
+  const CAP_N = 96;
+  function capOk(st, id, cap) {
+    const I = st.cid, N = st.cn;
+    for (let i = 0; i < st.cl; i++) if (I[i] === id) { if (N[i] >= cap) return false; N[i]++; return true; }
+    if (st.cl < CAP_N) { I[st.cl] = id; N[st.cl++] = 1; }
+    return true;
+  }
+  // Segment hit from (x0, y0) along a for L px, half width hw: strike on every foe touching it (cap: S.scap per strike). Returns the foe nearest the start (it may be dead) or null.
+  function seg(w, p, ws, S, x0, y0, a, L, hw, dmg, crit, cap) {
     const c = Math.cos(a), s = Math.sin(a), x1 = x0 + c * L, y1 = y0 + s * L, q = w.foeScan((x0 + x1) / 2, (y0 + y1) / 2, L / 2 + hw + 24);
     let first = null, fd = Infinity;
     for (let k = 0; k < q.length; k++) {
       const e = q[k]; if (e.dead) continue;
       const m = hw + e.r; if (U.segDist2(e.x, e.y, x0, y0, x1, y1) > m * m) continue;
+      if (cap && !capOk(ws.st, e.id, S.scap)) continue;
       const d = (e.x - x0) * c + (e.y - y0) * s; if (d < fd) { fd = d; first = e; }
       strike(w, p, ws, S, e, dmg, crit, c, s);
     }
@@ -70,7 +80,7 @@
     if (S.cone > 0) { a += (w.rng.next() * 2 - 1) * S.cone; L *= 0.8 + w.rng.next() * 0.35; look = 'tcut'; }
     if (crit) { look = 'stabx'; if (S.lunge > 0) { L *= 1 + S.lunge; hw *= 1.4; } }
     const x0 = p.x + Math.cos(a) * 4, y0 = p.y - HAND + Math.sin(a) * 4;
-    const first = seg(w, p, ws, S, x0, y0, a, L, hw, S.dmg, crit);
+    const first = seg(w, p, ws, S, x0, y0, a, L, hw, S.dmg, crit, S.scap > 0);
     vis(w, p, ws.id, look, x0, y0, a, L, hw * 2, 0, VIS);
     if (crit && S.bloom > 0 && first) bloom(w, p, ws, S, first.x, first.y, first.r, a);
   }
@@ -131,7 +141,7 @@
   // ---------------- Twin Daggers and the stab Forms ----------------
   // fire: one stab now and S.n - 1 queued at S.cd / S.n gaps (tick); thrown daggers on their own S.tcd timer; Assassinate: mark upkeep and shadow cuts (tick).
   const stabImpl = {
-    init(w, p, ws) { const st = ws.st; st.q = 0; st.qt = 0; st.gap = 0; st.tt = 0.3; st.mark = null; st.mid = 0; st.mx = 0; st.my = 0; st.mt = 0; st.mz = null; st.mzId = 0; st.ct = 0.3; st.pins = []; },
+    init(w, p, ws) { const st = ws.st; st.cid = new Int32Array(CAP_N); st.cn = new Uint8Array(CAP_N); st.cl = 0; st.q = 0; st.qt = 0; st.gap = 0; st.tt = 0.3; st.mark = null; st.mid = 0; st.mx = 0; st.my = 0; st.mt = 0; st.mz = null; st.mzId = 0; st.ct = 0.3; st.pins = []; },
     tick(w, p, ws, S, dt) {
       const st = ws.st;
       if (st.q > 0 && (st.qt -= dt) <= 0) { st.q--; st.qt += st.gap; stabOnce(w, p, ws, S); }
@@ -141,6 +151,7 @@
     fire(w, p, ws, S) {
       const st = ws.st, n = Math.max(1, S.n | 0);
       while (st.q > 0) { st.q--; stabOnce(w, p, ws, S); }
+      st.cl = 0;
       st.gap = S.cd / n; st.q = n - 1; st.qt = st.gap;
       stabOnce(w, p, ws, S);
       return true;
@@ -187,9 +198,9 @@
   }
 
   // Custom weapon keys (defaults below): len / wid (stab px), exec (execute HP fraction), burst (execute cut dmg factor), lunge (crit stab extra length), thrown (returning daggers),
-  // tcd (throw cooldown s), trange (throw distance px), tdm (thrown dmg factor), hover; Forms: fan, cone (storm jitter rad), mark, mk (mark dmg factor), mcd / mlen (shadow cut),
+  // tcd (throw cooldown s), trange (throw distance px), tdm (thrown dmg factor), hover, scap (stabs one foe takes per strike, 0 = all); Forms: fan, cone (storm jitter rad), mark, mk (mark dmg factor), mcd / mlen (shadow cut),
   // bloom / petals / plen, pin / pdur.
-  const KEYS = { len: 52, wid: 10, exec: 0, burst: 0, lunge: 0, thrown: 0, tcd: 1.2, trange: 100, tdm: 0.6, hover: false, fan: 0, cone: 0, mark: false, mk: 1, mcd: 0.5, mlen: 40,
+  const KEYS = { len: 52, wid: 10, exec: 0, burst: 0, lunge: 0, thrown: 0, tcd: 1.2, trange: 100, tdm: 0.6, hover: false, scap: 0, fan: 0, cone: 0, mark: false, mk: 1, mcd: 0.5, mlen: 40,
     bloom: 0, petals: 6, plen: 0.6, pin: false, pdur: 1.2 };
   const base = (o) => Object.assign({}, KEYS, o);
   ED.addWeapon({
@@ -199,7 +210,7 @@
       { id: 'flurry', name: 'Flurry', forms: ['thousand'], ranks: [
         { mods: { n: 1 }, txt: '+1 stab per flurry' },
         { mods: { len: 26 }, txt: 'Stabs lunge much farther' },
-        { mods: { n: 1, cd: -0.15 }, txt: '+1 stab, flurries come faster' }] },
+        { mods: { n: 1, cd: -0.05, scap: 3 }, txt: '+1 stab, flurries come faster' }] },
       { id: 'lethality', name: 'Lethality', forms: ['assassinate', 'lotus'], ranks: [
         { mods: { exec: 0.1 }, txt: 'Stabs execute foes under 10% HP' },
         { mods: { crit: 0.1, lunge: 0.8 }, txt: '+10% crit, crits stab much farther' },
@@ -223,7 +234,7 @@
   // Thousand Cuts (Flurry): the stab storm, each stab jittered within +-S.cone of the aim.
   ED.addWeapon({
     id: 'thousand', name: 'Thousand Cuts', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A storm of stabs in a narrow cone',
-    base: base({ dmg: 14, cd: 0.4, n: 6, pierce: 0, area: 1, speed: 0, dur: 0, knock: 2, range: 0, crit: 0.1, len: 68, wid: 12, cone: 0.36 }),
+    base: base({ dmg: 15, cd: 0.4, n: 6, pierce: 0, area: 1, speed: 0, dur: 0, knock: 2, range: 0, crit: 0.1, len: 68, wid: 12, cone: 0.36, scap: 4 }),
     refine: [
       { mods: { n: 2 }, txt: '+2 stabs per storm' },
       { mods: { cone: 0.12, len: 14 }, txt: 'Storm widens, stabs reach farther' },

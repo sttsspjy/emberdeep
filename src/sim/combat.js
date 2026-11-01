@@ -258,7 +258,7 @@
 
   // ---------------- projectiles ----------------
   // Hero projectile from weapon wid at (x, y) along a. S = effective numbers (speed, dmg, pierce, range, area, knock, crit). opt: { look, speed, dmg, pierce, r, life, homing (turn rad/s),
-  // hskip (homing: foes for which hskip(e) is true are chased only while no other foe is inside the owner's view), ret (boomerang back to the hero), rehit (s: the same foe can be hit again after this), knock, solid (stops at obstacles), onHit(w, pr, e, dealt), onEnd(w, pr), tick(w, pr, dt), st (custom state) }.
+  // hskip (homing: foes for which hskip(e) is true are chased only while no other foe is inside the owner's view), ret (boomerang back to the hero), rehit (s: the same foe can be hit again after this), knock, solid (stops at obstacles), skip(w, pr, e) (true: no hit on e, called once per new touch), onHit(w, pr, e, dealt), onEnd(w, pr), tick(w, pr, dt), st (custom state) }.
   W.shoot = function (p, wid, x, y, a, S, opt) {
     opt = opt || NO; S = S || NO;
     const pr = this.projPool.pop() || { hits: [] }, sp = opt.speed !== undefined ? opt.speed : (S.speed || 200), def = ED.WEAPONS[wid];
@@ -271,7 +271,7 @@
     pr.homing = opt.homing || 0; pr.hskip = opt.hskip || null; pr.tgt = null; pr.tgtId = 0;
     pr.ret = !!opt.ret; pr.out = pr.life / 2; pr.back = false;
     pr.rehit = opt.rehit || 0; pr.hitClr = 0; pr.hits.length = 0; pr.solid = !!opt.solid;
-    pr.onHit = opt.onHit || null; pr.onEnd = opt.onEnd || null; pr.tick = opt.tick || null; pr.st = opt.st || null; pr.dead = false;
+    pr.skip = opt.skip || null; pr.onHit = opt.onHit || null; pr.onEnd = opt.onEnd || null; pr.tick = opt.tick || null; pr.st = opt.st || null; pr.dead = false;
     this.projs.push(pr);
     return pr;
   };
@@ -311,7 +311,7 @@
     pr.id = this.nextId(); pr.k = look || 'bolt'; pr.team = 1; pr.owner = e.id; pr.p = null; pr.e = e; pr.wid = '';
     pr.x = e.x; pr.y = e.y - e.r * 0.5; pr.vx = Math.cos(a) * speed; pr.vy = Math.sin(a) * speed; pr.a = a; pr.sp = speed;
     pr.r = r || 4; pr.dmg = dmg; pr.pierce = 0; pr.life = 4; pr.t = 0; pr.knock = 0; pr.critC = -1; pr.homing = 0; pr.hskip = null; pr.tgt = null; pr.tgtId = 0;
-    pr.ret = false; pr.out = 0; pr.back = false; pr.rehit = 0; pr.hitClr = 0; pr.hits.length = 0; pr.solid = true; pr.onHit = null; pr.onEnd = null; pr.tick = null; pr.st = null; pr.dead = false;
+    pr.ret = false; pr.out = 0; pr.back = false; pr.rehit = 0; pr.hitClr = 0; pr.hits.length = 0; pr.solid = true; pr.skip = null; pr.onHit = null; pr.onEnd = null; pr.tick = null; pr.st = null; pr.dead = false;
     this.projs.push(pr);
     this.emit({ t: 'eshoot', id: e.id, x: Math.round(pr.x), y: Math.round(pr.y), look: pr.k });
     return pr;
@@ -361,6 +361,7 @@
             const rr = pr.r + e.r; if (U.dist2(pr.x, pr.y, e.x, e.y) > rr * rr) continue;
             if (pr.hits.indexOf(e.id) >= 0) continue;
             pr.hits.push(e.id);
+            if (pr.skip !== null && pr.skip(this, pr, e)) continue;
             const s = this.src(pr.p, pr.wid, 'proj', pr.knock); s.x = pr.x; s.y = pr.y; s.critC = pr.critC;
             const dealt = this.hitFoe(e, pr.dmg, s);
             if (pr.onHit) pr.onHit(this, pr, e, dealt);
