@@ -5,7 +5,7 @@
   const U = ED.U, TAU = U.TAU, PI = Math.PI;
 
   ED.regLook('crescent', 'shove', 'bulwark', 'slash', 'whirl', 'crack', 'cut', 'gale');
-  ED.addHero({ id: 'knight', name: 'Knight', hp: 130, speed: 78, crit: 0.05, sig: 'cleave', skills: ['shove'], icon: 'hero.knight.idle', col: '#c9d4e8', txt: 'Sword and shield. Holds the line.' });
+  ED.addHero({ id: 'knight', name: 'Knight', role: 'Brawler', hp: 130, speed: 78, crit: 0.05, sig: 'cleave', skills: ['shove'], icon: 'hero.knight.idle', col: '#c9d4e8', txt: 'Sword and shield. Holds the line.' });
 
   // ---------------- shared strike ----------------
   // Every knight weapon attacks in strings: fire() strikes at once, then S.n - 1 more strikes FORM.gap s apart (directional strikes alternate +-0.3 rad).

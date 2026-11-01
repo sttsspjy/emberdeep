@@ -1,5 +1,5 @@
 // Hero skill (Q, one per hero) and the hero registries. Cooldowns are host-side (sim state). The E input is unbound (ignored).
-// ED.addHero(def) registers ED.HEROES[cls] (def: { id, name, hp, speed, crit, sig (signature weapon id), skills: [qId], icon, col, txt }). ED.HERO_IDS order is the save / wire index: append only.
+// ED.addHero(def) registers ED.HEROES[cls] (def: { id, name, role (hero select role line), hp, speed, crit, sig (signature weapon id), skills: [qId], icon, col, txt }). ED.HERO_IDS order is the save / wire index: append only.
 // ED.addSkill(def, cast): ED.SKILLS[id] = { id, name, icon, cd, txt, base: { r, dur, charges, ... }, levels: [{ mods, txt }] x 4 (levels 2-5; level 5 is a capstone that changes the skill's shape) }, ED.CAST[id] = cast(w, p, x, y, N, sk) where (x, y) is the
 // aim point (world px), N = ED.Stats.skill numbers, sk the slot { id, lvl, cd, cdMax }. A cast returns false to refuse (no cooldown), else an object merged into the 'skill' event or nothing.
 // Hero skills are utility: they deal no damage (push, stun, slow, flee, lure, block, heal, gem pull).

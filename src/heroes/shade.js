@@ -10,7 +10,7 @@
   const U = ED.U, TAU = U.TAU;
   ED.regLook('stepcut', 'afterimg', 'sknife', 'stab', 'stabx', 'tcut', 'smark', 'mcut', 'petal', 'sexec', 'rknife', 'pknife');
 
-  ED.addHero({ id: 'shade', name: 'Shade', hp: 80, speed: 84, crit: 0.15, sig: 'daggers', skills: ['step'], icon: 'hero.shade.idle', col: '#8a9bd6', txt: 'Rapid stabs, deadly crits.' });
+  ED.addHero({ id: 'shade', name: 'Shade', role: 'Assassin', hp: 80, speed: 84, crit: 0.15, sig: 'daggers', skills: ['step'], icon: 'hero.shade.idle', col: '#8a9bd6', txt: 'Rapid stabs, deadly crits.' });
 
   const AIM_CONE = 0.9, HAND = 6, VIS = 0.12;
   const ZO = { team: 0, p: null, wid: '', x: 0, y: 0, a: 0, len: 0, w: 0, r: 0, dur: VIS, look: '' };

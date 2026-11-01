@@ -78,6 +78,7 @@
       const cv = anims[i];
       if (!cv.isConnected) { anims.splice(i, 1); continue; }
       if (!A || !A.ok || cv.offsetParent === null) continue;
+      if (cv._scene) { cv._scene(t); continue; }
       const f = A.frameAt(cv._anim, t + (cv._off || 0));
       if (f !== cv._f) { cv._f = f; paint(cv, cv._anim, f, cv._var); }
     }
@@ -122,60 +123,81 @@
   };
 
   // ---------------- hero select ----------------
+  // Roster tiles (locked: silhouette + the rule's short line); picking a tile only moves the selection (markHero), so focus and hover stay put.
   UI.renderHeroes = () => {
     const A = App(), list = $('hero-list');
     list.textContent = '';
     for (const cls of ED.HERO_IDS) {
       const h = ED.HEROES[cls]; if (!h) continue;
-      const open = M.heroOpen(A.profile, cls), on = A.sel.cls === cls, rule = ED.UNLOCKS.heroes[cls] || {};
+      const open = M.heroOpen(A.profile, cls), rule = ED.UNLOCKS.heroes[cls] || {};
       const b = document.createElement('button');
-      b.className = 'hero-tile' + (on ? ' on' : '') + (open ? '' : ' locked');
-      b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', on ? 'true' : 'false'); b.dataset.cls = cls;
+      b.className = 'hero-tile' + (open ? '' : ' locked');
+      b.setAttribute('role', 'radio'); b.dataset.cls = cls; b.style.setProperty('--hc', h.col || '#ff8a3d');
       b.appendChild(animCanvas(heroIcon(cls), 96, '', heroVar(cls)));
-      b.insertAdjacentHTML('beforeend', `<span class="t-name">${esc(h.name)}</span><span class="t-lock">${open ? '' : 'Locked'}</span>`);
+      b.insertAdjacentHTML('beforeend', `<span class="t-name">${esc(h.name)}</span>` + (open ? '' : `<span class="lock-ico"></span><span class="t-lock">${esc(rule.short || rule.txt || '')}</span>`));
       b.setAttribute('aria-label', h.name + (open ? '' : ', locked: ' + (rule.txt || '')));
       b.onclick = (e) => {
         if (A.sel.cls === cls && open && e.detail === 0) { $('btn-hero-next').click(); return; } // Enter on the chosen hero continues
-        A.sel.cls = cls; A.saveSel(); UI.renderHeroes(); const t = list.querySelector('[data-cls="' + cls + '"]'); if (t) t.focus();
+        A.sel.cls = cls; A.saveSel(); markHero(); b.focus();
       };
       b.ondblclick = () => { if (open) $('btn-hero-next').click(); };
       list.appendChild(b);
     }
-    renderHeroDetail();
+    markHero();
   };
+  function markHero() {
+    const A = App();
+    for (const t of $('hero-list').children) { const on = t.dataset.cls === A.sel.cls; t.classList.toggle('on', on); t.setAttribute('aria-checked', on ? 'true' : 'false'); }
+    renderHeroDetail();
+  }
   const kitRow = (icon, key, name, txt) => {
     const d = document.createElement('div'); d.className = 'kit';
     d.appendChild(UI.iconCanvas(icon, 48));
     d.insertAdjacentHTML('beforeend', `<b>${key ? `<span class="key">${esc(key)}</span>` : ''}${esc(name)}</b><span>${esc(txt || '')}</span>`);
     return d;
   };
+  const meterRow = (label, k, col, val) => `<span>${esc(label)}</span><span class="meter"><i style="width:${(U.clamp(k, 0, 1) * 100).toFixed(0)}%;background:${col}"></i></span><b>${esc(val)}</b>`;
+  // Detail plate: portrait column (bobbing idle sprite, records), identity column (role, name, line, HP / Speed / Crit), kit column (weapon, Q, the weapon's 3 paths
+  //   by name and rank-1 line; Form names stay hidden). Locked: the kit column becomes the unlock panel (rule, progress, buy button).
   function renderHeroDetail() {
-    const A = App(), cls = A.sel.cls, h = ED.HEROES[cls], box = $('hero-detail');
+    const A = App(), p = A.profile, cls = A.sel.cls, h = ED.HEROES[cls], box = $('hero-detail');
     box.textContent = '';
     if (!h) return;
-    const open = M.heroOpen(A.profile, cls), rule = ED.UNLOCKS.heroes[cls] || {};
-    box.classList.toggle('locked', !open);
-    const big = animCanvas(heroIcon(cls), 192, 'big', heroVar(cls)); big._off = 0.3; box.appendChild(big);
+    const open = M.heroOpen(p, cls), rule = ED.UNLOCKS.heroes[cls] || {};
+    box.classList.toggle('locked', !open); box.style.setProperty('--hc', h.col || '#ff8a3d');
+    const pt = document.createElement('div'); pt.className = 'hd-portrait';
+    const big = animCanvas(heroIcon(cls), 192, 'big', heroVar(cls)); big._off = 0.3; pt.appendChild(big);
+    if (open) {
+      const rec = (p.won.indexOf(cls) >= 0 ? '<span class="rtag ok">Won a run</span>' : '') + (p.formed.indexOf(cls) >= 0 ? '<span class="rtag form">Reached a Form</span>' : '');
+      if (rec) pt.insertAdjacentHTML('beforeend', `<div class="hd-recs">${rec}</div>`);
+    }
+    box.appendChild(pt);
     const head = document.createElement('div'); head.className = 'hd-head';
-    const hpK = U.clamp(h.hp / 130, 0, 1), spK = U.clamp((h.speed - 70) / 30, 0.1, 1);
-    head.innerHTML = `<span class="hd-name">${esc(h.name)}</span><span class="hd-txt">${esc(h.txt || '')}</span>` +
-      `<div class="hd-stats"><span>HP</span><span class="meter"><i style="width:${(hpK * 100).toFixed(0)}%;background:var(--red)"></i></span><b>${h.hp}</b>` +
-      `<span>Speed</span><span class="meter"><i style="width:${(spK * 100).toFixed(0)}%;background:var(--blue)"></i></span><b>${h.speed}</b></div>`;
+    head.innerHTML = `<span class="hd-role">${esc(h.role || '')}</span><span class="hd-name">${esc(h.name)}</span><span class="hd-txt">${esc(h.txt || '')}</span>` +
+      (open ? '<div class="hd-stats">' + meterRow('HP', h.hp / 130, 'var(--red)', h.hp) + meterRow('Speed', U.clamp((h.speed - 70) / 30, 0.1, 1), 'var(--blue)', h.speed) +
+        meterRow('Crit', (h.crit || 0) / 0.15, 'var(--gold)', Math.round((h.crit || 0) * 100) + '%') + '</div>' : '');
     box.appendChild(head);
     if (open) {
       const kit = document.createElement('div'); kit.className = 'hd-kit';
       const sig = ED.WEAPONS[h.sig], q = ED.SKILLS[h.skills[0]];
       if (sig) kit.appendChild(kitRow(sig.icon, '', sig.name, sig.txt));
       if (q) kit.appendChild(kitRow(q.icon, keyOf('skill1', 'Q'), q.name, q.txt));
+      if (sig && sig.paths && sig.paths.length) {
+        const ps = document.createElement('div'); ps.className = 'hd-paths';
+        ps.innerHTML = '<div class="hd-ph"><span>Paths</span><span class="mut">Each path hides a Form</span></div>' +
+          sig.paths.map(pa => `<div class="path"><b>${esc(pa.name)}</b><span>${esc(pa.ranks && pa.ranks[0] ? pa.ranks[0].txt : '')}</span></div>`).join('');
+        kit.appendChild(ps);
+      }
       box.appendChild(kit);
     } else {
-      const pr = unlockProgress(A.profile, rule), lk = document.createElement('div'); lk.className = 'lock-box';
-      lk.innerHTML = `<span>Locked: ${esc(rule.txt || 'not yet available')}</span>` + (pr.txt ? `<span class="hd-stats"><span class="meter" style="width:16em"><i style="width:${(U.clamp(pr.k, 0, 1) * 100).toFixed(0)}%"></i></span><span class="mut">${esc(pr.txt)}</span></span>` : '');
-      const cost = M.heroCost(A.profile, cls);
+      const pr = unlockProgress(p, rule), lk = document.createElement('div'); lk.className = 'lock-box';
+      lk.innerHTML = '<div class="lk-head"><span class="lock-ico"></span><span class="lk-title">Locked</span></div>' + `<span class="lk-rule">${esc(rule.txt || 'Not yet available')}</span>` +
+        (pr.txt ? `<span class="lk-prog"><span class="meter"><i style="width:${(U.clamp(pr.k, 0, 1) * 100).toFixed(0)}%"></i></span><span class="mut">${esc(pr.txt)}</span></span>` : '');
+      const cost = M.heroCost(p, cls);
       if (cost) {
         const b = document.createElement('button'); b.className = 'btn btn-sm'; b.id = 'btn-hero-buy';
-        b.textContent = 'Unlock for ' + cost + ' gold'; b.disabled = A.profile.gold < cost;
-        b.onclick = () => { if (M.buyHero(A.profile, cls)) { UI.evalAch(); A.persist(); UI.renderHeroes(); $('btn-hero-next').focus(); } };
+        b.textContent = 'Unlock for ' + cost + ' gold'; b.disabled = p.gold < cost;
+        b.onclick = () => { if (M.buyHero(p, cls)) { UI.evalAch(); A.persist(); UI.renderHeroes(); $('btn-hero-next').focus(); } };
         lk.appendChild(b);
       }
       box.appendChild(lk);
@@ -185,60 +207,137 @@
   }
 
   // ---------------- stage select ----------------
-  const stagePrev = new Map();
-  // Stage card art: floor tiles, deco and the final boss (cached per stage once the atlas is ready); stagePreview returns a fresh canvas.
-  const stagePreview = UI.stagePreview = (i) => {
-    const out = document.createElement('canvas'); out.width = 256; out.height = 128; out.className = 'prev';
-    out.getContext('2d').drawImage(stageArt(i), 0, 0);
-    return out;
-  };
-  function stageArt(i) {
-    if (stagePrev.has(i)) return stagePrev.get(i);
-    const sd = ED.STAGES[i], cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
-    const g = cv.getContext('2d'), A = ED.Atlas, th = sd.theme;
-    g.imageSmoothingEnabled = false; g.fillStyle = th.pal.bg; g.fillRect(0, 0, 256, 128);
-    if (A && A.ok) {
-      let tot = 0; for (const f of th.floor) tot += f[1];
-      for (let ty = 0; ty < 8; ty++) for (let tx = 0; tx < 16; tx++) {
-        let r = U.hash3(tx, ty, 77 + i) % tot, id = th.floor[0][0];
-        for (const f of th.floor) { r -= f[1]; if (r < 0) { id = f[0]; break; } }
-        A.draw(g, id, 0, tx * 16, ty * 16);
-      }
-      for (let k = 0; k < 7; k++) { const d = th.deco[U.hash3(k, i, 5) % th.deco.length]; A.draw(g, d, 0, 12 + (U.hash3(k, 1, i) % 232), 14 + (U.hash3(k, 2, i) % 104)); }
-      const fin = (sd.bosses || []).find(b => b.final) || (sd.bosses || [])[0], fd = fin && ED.FOES[fin.id];
-      if (fd) {
-        const id = A.has(fd.look + '.idle') ? fd.look + '.idle' : fd.look;
-        g.save(); g.translate(128, 112); g.scale(2, 2); A.draw(g, id, 0, 0, 0); g.restore();
-      }
+  // Stage scene (no bosses): floor tiles and deco (cached per stage, SCENE_W x SCENE_H art px, cropped centred), a ring of the stage's roster foes idling
+  //   around an accent-coloured light pool, then a dark vignette. Drawn at integer scales only.
+  const SCENE_W = 320, SCENE_H = 192;
+  const sceneBg = new Map(), sceneFoes = new Map();
+  // Foe slots: [x, y] as fractions of the scene, flip (faces left); the 5th slot (back centre) holds the brute.
+  const SLOTS = [[0.25, 0.62, 0], [0.38, 0.84, 0], [0.64, 0.82, 1], [0.76, 0.6, 1], [0.5, 0.46, 0]];
+  const FLIP = { flip: true }, NOFLIP = { flip: false };
+  const foeAnim = (id) => { const A = ED.Atlas, look = ED.FOES[id] ? ED.FOES[id].look : ''; for (const s of ['.idle', '.walk', '.walk.d', '.walk.0', '']) if (look && A.has(look + s)) return look + s; return ''; };
+  const rgba = (hex, a) => { const n = parseInt(String(hex).slice(1), 16) || 0; return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
+  function stageBg(i) {
+    if (sceneBg.has(i)) return sceneBg.get(i);
+    const th = ED.STAGES[i].theme, A = ED.Atlas, cv = document.createElement('canvas'), g = cv.getContext('2d');
+    cv.width = SCENE_W; cv.height = SCENE_H; g.imageSmoothingEnabled = false;
+    g.fillStyle = th.pal.bg; g.fillRect(0, 0, SCENE_W, SCENE_H);
+    if (!A || !A.ok) return cv;
+    let tot = 0; for (const f of th.floor) tot += f[1];
+    for (let ty = 0; ty < SCENE_H / 16; ty++) for (let tx = 0; tx < SCENE_W / 16; tx++) {
+      let r = U.hash3(tx, ty, 77 + i) % tot, id = th.floor[0][0];
+      for (const f of th.floor) { r -= f[1]; if (r < 0) { id = f[0]; break; } }
+      A.draw(g, id, 0, tx * 16, ty * 16);
     }
-    const vg = g.createRadialGradient(128, 64, 30, 128, 64, 150); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.75)');
-    g.fillStyle = vg; g.fillRect(0, 0, 256, 128);
-    if (A && A.ok) stagePrev.set(i, cv);
+    for (let k = 0; k < 16; k++) { const d = th.deco[U.hash3(k, i, 5) % th.deco.length]; A.draw(g, d, 0, 8 + (U.hash3(k, 1, i) % (SCENE_W - 16)), 12 + (U.hash3(k, 2, i) % (SCENE_H - 16))); }
+    sceneBg.set(i, cv);
     return cv;
   }
+  // Up to 4 roster kinds in order of first appearance plus the first brute (rosters hold no bosses, elites or swarmers).
+  function stageFoes(i) {
+    if (sceneFoes.has(i)) return sceneFoes.get(i);
+    const small = [], big = [];
+    for (const row of ED.STAGES[i].timeline) for (const [id, wt] of row.roster) {
+      const d = ED.FOES[id]; if (!(wt > 0) || !d || d.boss || small.indexOf(id) >= 0 || big.indexOf(id) >= 0) continue;
+      (d.brute ? big : small).push(id);
+    }
+    const out = small.slice(0, 4).concat(big.slice(0, 1));
+    sceneFoes.set(i, out);
+    return out;
+  }
+  // Draws stage i's scene into g (already scaled: 1 unit = 1 art px), w x h art px, foe frames at time t (s).
+  function drawScene(g, i, w, h, t) {
+    const A = ED.Atlas, pal = ED.STAGES[i].theme.pal;
+    g.imageSmoothingEnabled = false;
+    g.drawImage(stageBg(i), (SCENE_W - w) >> 1, (SCENE_H - h) >> 1, w, h, 0, 0, w, h);
+    const lx = w * 0.5, ly = h * 0.68, lg = g.createRadialGradient(lx, ly, 0, lx, ly, h * 0.62);
+    lg.addColorStop(0, rgba(pal.accent, 0.34)); lg.addColorStop(0.55, rgba(pal.accent, 0.1)); lg.addColorStop(1, rgba(pal.accent, 0));
+    g.globalCompositeOperation = 'lighter'; g.fillStyle = lg; g.fillRect(0, 0, w, h); g.globalCompositeOperation = 'source-over';
+    if (A && A.ok) {
+      const ids = stageFoes(i), n = ids.length;
+      for (const k of [4, 0, 3, 1, 2]) { // back to front
+        const id = k === 4 ? (n > 4 ? ids[4] : '') : ids[k]; if (!id) continue;
+        const an = foeAnim(id), s = SLOTS[k]; if (!an) continue;
+        A.draw(g, an, A.frameAt(an, t + k * 0.29), Math.round(s[0] * w), Math.round(s[1] * h), s[2] ? FLIP : NOFLIP);
+      }
+    }
+    const vg = g.createRadialGradient(w / 2, h * 0.58, h * 0.3, w / 2, h * 0.58, Math.max(w, h) * 0.72);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.82)');
+    g.fillStyle = vg; g.fillRect(0, 0, w, h);
+  }
+  // Fixed 256 x 128 scene (Encyclopedia stage page).
+  UI.stagePreview = (i) => {
+    const out = document.createElement('canvas'); out.width = 256; out.height = 128; out.className = 'prev';
+    drawScene(out.getContext('2d'), i, 256, 128, 0);
+    return out;
+  };
+  // Stage card scene: the canvas matches its CSS box in device px (ResizeObserver) and draws art px at an integer scale (>= 2); redrawn by the menu anim loop at 10 fps.
+  const sceneRO = typeof ResizeObserver === 'function' ? new ResizeObserver((es) => { for (const e of es) fitScene(e.target); }) : null;
+  function fitScene(cv) {
+    const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1, W = Math.round(r.width * d), H = Math.round(r.height * d);
+    if (!W || !H) return;
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+    cv._k = Math.max(2, Math.floor(W / 140)); cv._tick = -1; cv._scene(performance.now() / 1000);
+  }
+  const scenePreview = (i) => {
+    const cv = document.createElement('canvas'); cv.className = 'prev'; cv.width = 320; cv.height = 200; cv._k = 0; cv._tick = -1;
+    cv._scene = (t) => {
+      const tick = Math.floor(t * 10); if (tick === cv._tick) return; cv._tick = tick;
+      const k = cv._k || 2, g = cv.getContext('2d');
+      g.setTransform(k, 0, 0, k, 0, 0);
+      drawScene(g, i, Math.min(SCENE_W, Math.ceil(cv.width / k)), Math.min(SCENE_H, Math.ceil(cv.height / k)), t);
+      g.setTransform(1, 0, 0, 1, 0, 0);
+    };
+    if (sceneRO) sceneRO.observe(cv);
+    anims.push(cv); kick();
+    return cv;
+  };
+  const flamePips = (n, max) => {
+    const d = document.createElement('span'); d.className = 'sc-pips';
+    for (let k = 0; k < max; k++) { const cv = animCanvas('fx.flame', 32, 'pip' + (k < n ? '' : ' off')); cv._off = k * 0.21; d.appendChild(cv); }
+    return d;
+  };
   UI.renderStages = () => {
-    const A = App(), list = $('stage-list');
+    const A = App(), p = A.profile, list = $('stage-list');
+    if (sceneRO) for (const c of list.querySelectorAll('canvas.prev')) sceneRO.unobserve(c);
     list.textContent = '';
     ED.STAGES.forEach((sd, i) => {
-      if (M.stageHidden(A.profile, i)) return; // a hidden stage shows no card until it unlocks
-      const open = M.stageOpen(A.profile, i), best = A.profile.best[sd.id], rule = ED.UNLOCKS.stages[i] || {}, on = A.sel.stage === i;
+      if (M.stageHidden(p, i)) return; // a hidden stage shows no card until it unlocks
+      const open = M.stageOpen(p, i), best = p.best[sd.id], rule = ED.UNLOCKS.stages[i] || {};
       const b = document.createElement('button');
-      b.className = 'stage-card' + (on ? ' on' : '') + (open ? '' : ' locked');
-      b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', on ? 'true' : 'false'); b.setAttribute('aria-disabled', open ? 'false' : 'true');
-      b.appendChild(stagePreview(i));
-      const bosses = (sd.bosses || []).map(x => (ED.FOES[x.id] ? ED.FOES[x.id].name : x.id)).join(', ');
-      b.insertAdjacentHTML('beforeend', `<span class="sc-num">${i + 1}</span><div class="sc-body"><span class="sc-name">${esc(sd.name)}</span><span class="sc-line">${esc(bosses)}</span>` +
-        (open ? (best ? `<span class="sc-best">Best ${U.fmtTime(best.time)}${best.won ? '  Beaten' : ''}</span>` : '<span class="sc-line">Not played yet</span>') : `<span class="sc-lock">Locked: ${esc(rule.txt || '')}</span>`) + '</div>');
+      b.className = 'stage-card' + (open ? '' : ' locked') + (rule.hidden ? ' deep' : '');
+      b.dataset.stage = i; b.style.setProperty('--sc', sd.theme.pal.accent);
+      b.setAttribute('role', 'radio'); b.setAttribute('aria-disabled', open ? 'false' : 'true');
+      const art = document.createElement('div'); art.className = 'sc-art';
+      art.appendChild(scenePreview(i));
+      art.insertAdjacentHTML('beforeend', `<span class="sc-num">${i + 1}</span>` + (open ? '' : '<span class="lock-ico"></span>'));
+      b.appendChild(art);
+      const body = document.createElement('div'); body.className = 'sc-body';
+      body.insertAdjacentHTML('beforeend', `<span class="sc-name">${esc(sd.name)}</span><span class="sc-blurb">${esc(sd.blurb || '')}</span>`);
+      const dg = document.createElement('div'); dg.className = 'sc-danger';
+      dg.insertAdjacentHTML('beforeend', '<span>Danger</span>'); dg.appendChild(flamePips(i + 1, 4));
+      body.appendChild(dg);
+      let rec;
+      if (!open) rec = `<span class="sc-rec sc-lock">${esc(rule.txt || '')}</span>`;
+      else if (best) rec = '<span class="sc-rec">' + (best.won ? '<span class="rtag ok">Cleared</span>' : '') +
+        `<span class="kv"><span>Best</span><b>${U.fmtTime(best.time)}</b></span><span class="kv"><span>Kills</span><b>${U.fmtNum(best.kills)}</b></span></span>`;
+      else rec = '<span class="sc-rec mut">Not played yet</span>';
+      body.insertAdjacentHTML('beforeend', rec);
+      b.appendChild(body);
       b.onclick = (e) => {
         if (!open) return;
         if (A.sel.stage === i && e.detail === 0) { $('btn-start').click(); return; }
-        A.sel.stage = i; A.saveSel(); UI.renderStages(); const c = list.children[i]; if (c) c.focus();
+        A.sel.stage = i; A.saveSel(); markStage(); b.focus();
       };
       b.ondblclick = () => { if (open) $('btn-start').click(); };
       list.appendChild(b);
     });
-    $('btn-start').disabled = !M.stageOpen(A.profile, A.sel.stage) || !M.heroOpen(A.profile, A.sel.cls);
+    markStage();
   };
+  function markStage() {
+    const A = App();
+    for (const c of $('stage-list').children) { const on = +c.dataset.stage === A.sel.stage; c.classList.toggle('on', on); c.setAttribute('aria-checked', on ? 'true' : 'false'); }
+    $('btn-start').disabled = !M.stageOpen(A.profile, A.sel.stage) || !M.heroOpen(A.profile, A.sel.cls);
+  }
 
   // ---------------- camp ----------------
   const shopIcon = (s) => s.icon || (ED.PASSIVES[s.id] && ED.PASSIVES[s.id].icon) || 'pickup.coin';
