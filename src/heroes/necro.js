@@ -13,7 +13,7 @@
   const KLOOK = ['minion', 'boneknight', 'bonearcher', 'ghoul'];
 
   ED.regLook('minion', 'boneknight', 'corpse', 'bonewall', 'blight', 'plague', 'bonearcher', 'ghoul', 'glob', 'boneslam');
-  ED.addHero({ id: 'necro', name: 'Necro', hp: 105, speed: 78, crit: 0.05, sig: 'boneshard', skills: ['bonewall'], icon: 'hero.necro.idle', col: '#b7a6e0', txt: 'Raises an army. The dead are fuel.' });
+  ED.addHero({ id: 'necro', name: 'Necro', role: 'Summoner', hp: 105, speed: 78, crit: 0.05, sig: 'boneshard', skills: ['bonewall'], icon: 'hero.necro.idle', col: '#b7a6e0', txt: 'Raises an army. The dead are fuel.' });
 
   // ---------------- corpses ----------------
   const corpses = (p) => { if (!p.corpse) { p.corpse = new Float64Array(CORPSES * 3).fill(-1); p.corpI = 0; } return p.corpse; };

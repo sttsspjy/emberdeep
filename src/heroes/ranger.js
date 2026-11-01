@@ -5,7 +5,7 @@
   const U = ED.U, TAU = U.TAU;
 
   ED.regLook('vault', 'vland', 'caltrops', 'shock');
-  ED.addHero({ id: 'ranger', name: 'Ranger', hp: 90, speed: 84, crit: 0.08, sig: 'longbow', skills: ['vault'], icon: 'hero.ranger.idle', col: '#9fd38a', txt: 'Piercing arrows down long lines.' });
+  ED.addHero({ id: 'ranger', name: 'Ranger', role: 'Marksman', hp: 90, speed: 84, crit: 0.08, sig: 'longbow', skills: ['vault'], icon: 'hero.ranger.idle', col: '#9fd38a', txt: 'Piercing arrows down long lines.' });
 
   // ---------------- shared arrow mechanics ----------------
   // Projectile fields used here: pr.st = bounces left (number), pr.rk = per-arrow counter (Seeker kill refreshes, Rebound segment pierce); pr.dmg drops from x FIRST to x1 after the first hit

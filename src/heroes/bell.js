@@ -10,7 +10,7 @@
   const U = ED.U, TAU = U.TAU;
   ED.regLook('tollb', 'tollw', 'cathb', 'cathw', 'pealw', 'tollf', 'rime', 'glacb', 'glacw', 'carb', 'underw', 'chime', 'chimew');
 
-  ED.addHero({ id: 'bell', name: 'Bellwarden', hp: 115, speed: 78, crit: 0.05, sig: 'toll', skills: ['peal'], icon: 'hero.bell.idle', col: '#e6c27a', txt: 'Peals that push the horde back.' });
+  ED.addHero({ id: 'bell', name: 'Bellwarden', role: 'Controller', hp: 115, speed: 78, crit: 0.05, sig: 'toll', skills: ['peal'], icon: 'hero.bell.idle', col: '#e6c27a', txt: 'Peals that push the horde back.' });
 
   // Zone options (scratch, reset by zopt; w.zone copies them).
   const ZO = { team: 0, p: null, wid: '', x: 0, y: 0, r: 0, dur: 0, dps: 0, tick: 0.5, knock: 0, slow: null, look: '', st: null, onTick: null, onEnd: null };
