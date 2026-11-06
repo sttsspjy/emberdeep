@@ -51,3 +51,10 @@ North-star: a co-op browser survivors-like (solo or up to 4 friends, zero instal
 - [x] Hidden 4th stage (The Wickdeep) with a Sanctum final fight against The Wickmother
 - [ ] Waves mode (planned): second game mode; rules to be decided with you
 - [ ] Publish on GitHub Pages
+
+## Mobile ([MOBILE-PLAN.md](MOBILE-PLAN.md))
+- [ ] Auto-aim per weapon (facing / nearest foe or brazier / random), Settings toggle
+- [ ] Touch controls: one move stick, Q, dash and pause buttons, tap cards
+- [ ] Landscape fullscreen, layout fits phones
+- [ ] Speed check on a real phone
+- [ ] Install to home screen (PWA); optional Play Store APK
