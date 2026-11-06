@@ -3,6 +3,7 @@
 Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with the code). Legacy: tag `legacy-wickdeep`.
 
 ## Todo
+- mobile: docs/MOBILE-PLAN.md checklist 1-9 (auto-aim per weapon first); ask its 4 user questions before starting.
 - playtest: Last Light lap length / gold (60 s, 1 coin per 8 kills), Form x0.7 + late boss HP x2 feel, Ranger/Knight parity.
 - sim: check-sim --quick fails 7 'reaches a Form by 420 s' (pre-existing at bedbe5b; full run passes).
 - ranger: Seeker kill shots ignore the boss/elite skip.
