@@ -11,6 +11,7 @@
   const U = ED.U, T = ED.t, L = ED.tr;
   const $ = (id) => document.getElementById(id);
   const UI = ED.UI = { offerSig: '', lastMode: 'solo', banishOn: false };
+  const OFFER_ARM = 450; // ms: a touch tap on a level-up card this soon after it appears is ignored (stray stick thumb)
   const SCREENS = ['title', 'hero', 'stage', 'camp', 'wardrobe', 'achieve', 'codex', 'join', 'lobby', 'results'];
   const LAYERS = ['ov-settings', 'ov-credits', 'ov-pause', 'ov-offer']; // top-most first
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -518,6 +519,7 @@
     const sig = offer ? offer.map(c => c.kind + c.id + (c.path | 0) + ':' + (c.tk | 0) + c.lvl).join('|') + '|' + me.rerolls + me.skips + (me.banishes | 0) + (UI.banishOn ? 'b' : '') + (solo ? 's' : 'c') + (touch ? 't' : '') : '';
     if (sig === UI.offerSig) return;
     UI.offerSig = sig;
+    if (offer && ov.hidden) UI.offerAt = performance.now(); // touch picks arm OFFER_ARM ms after the cards appear
     ov.hidden = !offer;
     ov.classList.toggle('strip', !solo);
     if (!offer) return;
@@ -534,7 +536,7 @@
       b.appendChild(UI.iconCanvas(c.kind === 'form' && f.name === '???' ? 'fx.spark.magic' : c.icon, 64, 'ic'));
       b.insertAdjacentHTML('beforeend', `<b class="card-name">${esc(f.name)}</b>` + (f.badge ? `<span class="badge ${f.bcls}">${esc(f.badge)}</span>` : '') +
         `<span class="card-txt">${esc(f.txt)}</span>` + (f.max > 1 ? pips(f.lvl, f.max, false) : ''));
-      b.onclick = () => { if (!UI.banishOn) ED.Game.pick(i); else if (banOk) { UI.banishOn = false; ED.Game.banish(i); } };
+      b.onclick = () => { if (ED.Input.device === 'touch' && performance.now() - (UI.offerAt || 0) < OFFER_ARM) return; if (!UI.banishOn) ED.Game.pick(i); else if (banOk) { UI.banishOn = false; ED.Game.banish(i); } };
       box.appendChild(b);
     });
     const rr = $('btn-reroll'), sk = $('btn-skip');

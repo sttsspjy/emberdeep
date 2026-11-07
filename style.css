@@ -648,3 +648,14 @@ html:not(.can-touch) .tc-only { display: none; }
   .settings > .row { position: sticky; bottom: calc(var(--u) * -0.5); align-self: stretch; padding: 6px 0; background: var(--plate2); }
   .set-grid { gap: 8px calc(var(--u) * 0.8); }
 }
+/* touch: level-up cards in a compact 2x2 grid clear of the stick thumb; the co-op strip sits on the right (the left half stays the stick) */
+html[data-dev="touch"] .offer-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; width: min(64vw, calc(var(--u) * 28)); }
+html[data-dev="touch"] .offer-card { width: auto; max-width: none; min-height: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; align-content: start; column-gap: 0.35em; row-gap: 0.1em; padding: 0.3em 0.45em; text-align: left; }
+html[data-dev="touch"] .offer-card .ic { width: calc(var(--u) * 1.5); height: calc(var(--u) * 1.5); }
+html[data-dev="touch"] .offer-card .card-name { font-size: var(--u); }
+html[data-dev="touch"] .offer-card .badge { grid-column: 1 / -1; justify-self: start; padding: 0 0.3em; }
+html[data-dev="touch"] .offer-card .card-txt { grid-column: 1 / -1; font-size: var(--u); line-height: 1.1; }
+html[data-dev="touch"] .offer-card .pips { display: none; }
+html[data-dev="touch"] #ui > .overlay.offer.strip { align-items: flex-end; padding-right: calc(env(safe-area-inset-right) + 10px); }
+html[data-dev="touch"] .overlay.offer.strip .offer-cards { width: min(48vw, calc(var(--u) * 24)); }
+html[data-dev="touch"] .overlay.offer.strip .offer-card .badge { display: none; }

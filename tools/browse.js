@@ -921,7 +921,7 @@ async function scenCards() {
       const [w, h] = sz.split('x').map(Number);
       await page.setViewportSize({ width: w, height: h });
       await call(page, 'start', 'knight', 0, { god: true });
-      await page.evaluate(() => { const B = window.__BR, p = window.ED.Game.w.heroes[0]; B.drive = false; B.autoPick = false; p.rerolls = 2; p.skips = 2; }); // reroll / skip shown
+      await page.evaluate(() => { const B = window.__BR, p = window.ED.Game.w.heroes[0]; B.drive = false; B.autoPick = false; p.rerolls = 2; p.skips = 2; window.ED.Input.device = 'touch'; }); // reroll / skip shown
       await wait(600);
       const shown = await levelUpCards(page, 4);
       const m = await page.evaluate(() => {
