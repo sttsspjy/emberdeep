@@ -187,7 +187,7 @@
     return true;
   };
   ED.addWeapon({
-    id: 'firebolt', name: 'Fire Bolt', icon: 'weapon.firestaff', look: 'fireball', sig: 'pyro', mode: 'cursor', txt: 'Bolt that leaves a fire pool',
+    id: 'firebolt', name: 'Fire Bolt', icon: 'weapon.firestaff', look: 'fireball', sig: 'pyro', mode: 'cursor', autoAim: 'nearest', txt: 'Bolt that leaves a fire pool',
     base: { dmg: 15, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 230, dur: 2.5, knock: 20, range: RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     paths: [
       { id: 'blaze', name: 'Blaze', forms: ['inferno'], ranks: [
@@ -234,7 +234,7 @@
   const infEnd = (w, pr) => { if (!pr.lit) { const ws = pr.st, S = ws && ws.S; if (S) { pr.lit = true; pool(w, pr.p, ws, S, pr.x, pr.y, 24 * S.area, S.dmg * 0.5, { p: pr.p, ws, gen: 0, spread: false }, infTick); } } };
   const IBOLT = { look: 'fireball', onHit: infHit, onEnd: infEnd, st: null };
   ED.addWeapon({
-    id: 'inferno', name: 'Inferno', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'cursor', evolved: true, form: true, from: 'firebolt', txt: 'Pools merge and spread',
+    id: 'inferno', name: 'Inferno', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'cursor', autoAim: 'nearest', evolved: true, form: true, from: 'firebolt', txt: 'Pools merge and spread',
     base: { dmg: 11.2, cd: 1.0, n: 3, pierce: 1, area: 1.5, speed: 250, dur: 3.5, knock: 30, range: RANGE, pools: 8, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 1 }, txt: '+1 bolt' },
@@ -246,7 +246,7 @@
   // A walking salvo: S.n + S.shells shells land in a line across shellAim within SHELL_RANGE along the line of fire (26 px x area apart, 0.08 s apart);
   // each blasts, leaves a fire pool and scatters S.cluster bomblets. No foe: the salvo walks 120 px out along the cursor dir.
   ED.addWeapon({
-    id: 'firestorm', name: 'Firestorm', icon: 'weapon.inferno', look: 'shell', sig: 'pyro', mode: 'densest', evolved: true, form: true, from: 'firebolt', shellForm: true, txt: 'A walking salvo of shells',
+    id: 'firestorm', name: 'Firestorm', icon: 'weapon.inferno', look: 'shell', sig: 'pyro', mode: 'densest', autoAim: 'nearest', evolved: true, form: true, from: 'firebolt', shellForm: true, txt: 'A walking salvo of shells',
     base: { dmg: 16, cd: 1.6, n: 3, pierce: 0, area: 1.2, speed: 0, dur: 2.5, knock: 100, range: SHELL_RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 2 }, txt: '+2 shells per salvo' },
@@ -278,7 +278,7 @@
   };
   const SEED = { look: 'seed', homing: 4, onHit: seedHit, st: null };
   ED.addWeapon({
-    id: 'wildfire', name: 'Wildfire', icon: 'weapon.inferno', look: 'seed', sig: 'pyro', mode: 'cursor', evolved: true, form: true, from: 'firebolt', txt: 'Fire that jumps from foe to foe',
+    id: 'wildfire', name: 'Wildfire', icon: 'weapon.inferno', look: 'seed', sig: 'pyro', mode: 'cursor', autoAim: 'random', evolved: true, form: true, from: 'firebolt', txt: 'Fire that jumps from foe to foe',
     base: { dmg: 11.2, cd: 1.0, n: 3, pierce: 0, area: 1.2, speed: 240, dur: 2.5, knock: 20, range: RANGE, pools: 0, flare: 0, shells: 0, cluster: 0, combust: 5, cemb: 2, spread: 0, cgen: 3, bmul: 1.4 },
     refine: [
       { mods: { n: 1, cemb: 1 }, txt: '+1 seed, +1 ember per blast' },
@@ -304,7 +304,7 @@
   };
   const PBOLT = { look: 'fireball', onHit: (w, pr, e) => plant(w, pr, e.x, e.y), onEnd: (w, pr) => plant(w, pr, pr.x, pr.y), st: null };
   ED.addWeapon({
-    id: 'pyre', name: 'Pyre', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'cursor', evolved: true, form: true, from: 'firebolt', txt: 'Fire that gathers, then erupts',
+    id: 'pyre', name: 'Pyre', icon: 'weapon.inferno', look: 'fireball', sig: 'pyro', mode: 'cursor', autoAim: 'nearest', evolved: true, form: true, from: 'firebolt', txt: 'Fire that gathers, then erupts',
     base: { dmg: 9.8, cd: 1.1, n: 2, pierce: 0, area: 1.3, speed: 230, dur: 2.5, knock: 20, range: RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 1 }, txt: '+1 bolt' },
@@ -328,7 +328,7 @@
     bomblets(w, p, z.wid, S, z.x, z.y, 26 * S.area, z.st);
   };
   ED.addWeapon({
-    id: 'napalm', name: 'Napalm', icon: 'weapon.inferno', look: 'shell', sig: 'pyro', mode: 'densest', evolved: true, form: true, from: 'firebolt', shellForm: true, txt: 'Shells that leave walls of fire',
+    id: 'napalm', name: 'Napalm', icon: 'weapon.inferno', look: 'shell', sig: 'pyro', mode: 'densest', autoAim: 'nearest', evolved: true, form: true, from: 'firebolt', shellForm: true, txt: 'Shells that leave walls of fire',
     base: { dmg: 12.6, cd: 1.4, n: 2, pierce: 0, area: 1.2, speed: 0, dur: 3, knock: 60, range: SHELL_RANGE, pools: 6, flare: 0, shells: 0, cluster: 0, combust: 0, cemb: 0, spread: 0, cgen: 1 },
     refine: [
       { mods: { n: 1 }, txt: '+1 canister' },
@@ -368,7 +368,7 @@
     return n;
   };
   ED.addSkill({
-    id: 'flashpoint', name: 'Flashpoint', icon: 'fx.blast.red', cd: 10, txt: 'A flash that sends the horde fleeing',
+    id: 'flashpoint', name: 'Flashpoint', icon: 'fx.blast.red', cd: 10, autoAim: { k: 'self' }, txt: 'A flash that sends the horde fleeing',
     base: { r: 140, push: 120, flee: 2, gem: 0, again: false },
     levels: [
       { mods: { r: 0.3 }, txt: '+30% flash radius' },

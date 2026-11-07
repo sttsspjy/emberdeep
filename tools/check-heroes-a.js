@@ -3,6 +3,8 @@
 // Q is held every tick (cast on cooldown), aimed at the nearest foe; fodder rings keep targets near the hero. Each phase: no exception, the skill casts, the weapon deals damage, the skill none.
 // Extras: Bone Shard / Bone Storm on other heroes (the slain rise for them too), Cleave aims inside the facing cone (no foe: along it), each path's shape flags reach the effective numbers,
 // skills carry no damage, necro minions rise / obey the cap, same seed -> same digest, no NaN positions.
+// Auto aim: every cursor-mode def has a style; nearest (elites / bosses within 300 px first, braziers too), facing, random (seeded), crowd (Cleave) and their no-target fallbacks; face / stick-less dash / Q points
+// (self, facing, densest) in auto; every path at rank 5 and every Form in auto: damage, Q casts, same digest twice.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
@@ -11,10 +13,11 @@ const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } 
 const t0 = Date.now();
 const HEROES = ['knight', 'ranger', 'pyro', 'necro'];
 
+let AUTO = false; // drive in auto aim (the aim point is still sent: ignored by the sim)
 function drive(w, p, tick) {
   const e = w.nearestFoe(p.x, p.y, 300), a = tick / 60 * 0.6;
   p.offer = null; p.pend = 0; // no card picks: the phase setup owns the build
-  w.input(p.pid, { mx: Math.cos(a) * 0.6, my: Math.sin(a) * 0.6, ax: e ? e.x : p.x + 80, ay: e ? e.y : p.y, q: true });
+  w.input(p.pid, { mx: Math.cos(a) * 0.6, my: Math.sin(a) * 0.6, ax: e ? e.x : p.x + 80, ay: e ? e.y : p.y, q: true, auto: AUTO });
 }
 // Sets skill levels to L (cooldown ready) and path 0 to rank `rank` (tune full; 0: no change); form: takes path 0's first Form and refines it twice.
 function setup(w, p, L, rank, form) {
@@ -159,5 +162,112 @@ for (const [cls, wid] of [['ranger', 'longbow'], ['pyro', 'firebolt'], ['necro',
   for (let i = 0; i < 30; i++) ED.Necro.raise(w, nn, 1600, 1600, 'boneshard', false, 15);
   ok(ED.Necro.liveMinions(nn) === 24, 'necro: minion hard cap 24 (oldest fall)');
 }
+// ---------------- auto aim ----------------
+// Scene: spawner silenced, every brazier broken, hero at the arena centre in auto aim; foes placed by hand.
+function scene(cls, seed) {
+  const w = new ED.World({ seed: seed || 9, stage: 0, players: [{ pid: 'p1', name: 'A', slot: 0, cls, meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
+  w.updateSpawner = function () {}; w.addXp = function () {};
+  for (const b of w.arena.braziers) b.broken = true;
+  w.input('p1', { auto: true }); w.update(C.TICK); w.events.length = 0;
+  return { w, p: w.heroes[0] };
+}
+const clear = (w) => { for (const e of w.foes) if (!e.dead) w.despawnFoe(e); w.compact(); w.foeGrid(); };
+const near = (a, b, e) => Math.abs(U.angDiff(a, b)) < (e || 0.05);
+{
+  const STY = new Set(['nearest', 'facing', 'random', 'crowd']);
+  const dir = ED.WEAPON_IDS.filter(id => ED.WEAPONS[id].mode === 'cursor');
+  ok(dir.every(id => STY.has(ED.WEAPONS[id].autoAim)) && ED.WEAPON_IDS.every(id => !ED.WEAPONS[id].autoAim || STY.has(ED.WEAPONS[id].autoAim)),
+    `auto aim: every cursor-mode weapon / Form (${dir.length}) has an autoAim style; every style is valid`);
+  const { w, p } = scene('knight');
+  clear(w); p.mdir = 1.1;
+  w.spawnFoe(FODDER, p.x + 100, p.y); w.spawnFoe(FODDER, p.x - 60, p.y + 30);
+  ok(near(w.aimDir(p), Math.atan2(30, -60)) && Math.abs(w.aimD - Math.hypot(60, 30)) < 0.5, 'auto nearest (default style): toward the nearest foe in view, aimD its distance');
+  const b = w.arena.braziers[0], bx = b.x, by = b.y; b.x = p.x; b.y = p.y - 40; b.broken = false;
+  ok(near(w.aimDir(p), -Math.PI / 2), 'auto nearest: an intact brazier nearer than every foe is the target');
+  b.broken = true; b.x = bx; b.y = by;
+  ok(near(w.autoDir(p, { autoAim: 'facing' }, false), 1.1), 'auto facing: the heading (p.mdir), foes or not');
+  const el = w.spawnFoe(FODDER, p.x + 200, p.y - 100, { elite: true });
+  ok(el.elite && near(w.aimDir(p), Math.atan2(-100, 200)), 'auto nearest: an elite within 300 px comes before nearer foes');
+  w.despawnFoe(el);
+  clear(w); w.spawnFoe(FODDER, p.x + 400, p.y);
+  ok(w.aimDir(p) === 1.1 && w.aimD === 0, 'auto nearest: no foe in view -> p.mdir');
+  // random: same seed, same picks; every pick is a foe in view; picks vary
+  const picks = (seed) => {
+    const S = scene('knight', seed); clear(S.w);
+    for (let i = 0; i < 6; i++) S.w.spawnFoe(FODDER, S.p.x - 150 + i * 60, S.p.y + (i % 2 ? 50 : -50));
+    S.w.spawnFoe(FODDER, S.p.x + 500, S.p.y);
+    const out = [];
+    for (let i = 0; i < 24; i++) out.push(S.w.autoDir(S.p, { autoAim: 'random' }, false).toFixed(6));
+    const legal = S.w.foes.filter(e => !e.dead && ED.inView(S.p, e.x, e.y, 0)).map(e => Math.atan2(e.y - S.p.y, e.x - S.p.x));
+    return { out, ok: out.every(a => legal.some(l => near(+a, l, 1e-5))) };
+  };
+  const r1 = picks(31), r2 = picks(31);
+  ok(r1.ok && r1.out.join() === r2.out.join() && new Set(r1.out).size >= 3, `auto random: picks foes in view (${new Set(r1.out).size} distinct of 6), same seed -> same picks`);
+  clear(w); p.mdir = 0.3;
+  ok(w.autoDir(p, { autoAim: 'random' }, false) === 0.3, 'auto random: no foe -> p.mdir');
+  // crowd (Cleave): one foe east, six west, all in reach -> west; none in reach -> the nearest in view; none -> p.mdir
+  w.aimWs = p.weapons[0]; w.aimS = w.weaponS(p, 0);
+  w.spawnFoe(FODDER, p.x + 38, p.y - 4);
+  for (let i = 0; i < 6; i++) w.spawnFoe(FODDER, p.x - 44, p.y - 4 + (i - 2.5) * 9);
+  const cw = w.aimDir(p);
+  ok(Math.abs(U.angDiff(cw, Math.PI)) < 0.3, `auto crowd: Cleave turns to the six foes west over the one east (${cw.toFixed(2)} rad)`);
+  clear(w); w.spawnFoe(FODDER, p.x, p.y + 150);
+  ok(near(w.aimDir(p), Math.PI / 2), 'auto crowd: none in reach -> the nearest foe in view');
+  clear(w);
+  ok(w.aimDir(p) === 0.3, 'auto crowd: none in view -> p.mdir');
+  w.aimWs = null; w.aimS = null;
+}
+// face, dash and Q in auto
+{
+  const { w, p } = scene('knight');
+  clear(w); p.mdir = Math.PI / 2;
+  w.spawnFoe(FODDER, p.x - 40, p.y - 4, { hpMul: 50 });
+  for (let i = 0; i < 90 && !(w.time - p.aimT < 0.5); i++) { w.input('p1', { auto: true, mx: 0, my: 0, ax: p.x + 100, ay: p.y }); w.update(C.TICK); w.events.length = 0; }
+  w.update(C.TICK); w.events.length = 0;
+  ok(near(p.face, Math.PI, 0.3), `auto face: the hero faces its weapon's target (${p.face.toFixed(2)} rad), not the cursor`);
+  clear(w);
+  for (let i = 0; i < 60; i++) { w.update(C.TICK); w.events.length = 0; }
+  ok(p.face === p.mdir, 'auto face: no target for 0.6 s -> the heading');
+  p.dashCd = 0; p.mdir = Math.PI / 2;
+  w.input('p1', { auto: true, mx: 0, my: 0, ax: p.x + 100, ay: p.y, dash: true }); w.update(C.TICK); w.events.length = 0;
+  ok(p.dashT > 0 && p.dashDy > 0.99, 'auto dash without a stick: along the heading, not the cursor');
+  const cast = (cls, setup) => {
+    const S = scene(cls); clear(S.w); S.p.skills[0].cd = 0; if (setup) setup(S.w, S.p);
+    S.w.input('p1', { auto: true, q: true, ax: S.p.x + 100, ay: S.p.y }); S.w.update(C.TICK);
+    const ev = S.w.events.find(e => e.t === 'skill'); S.w.events.length = 0;
+    return { ev, w: S.w, p: S.p };
+  };
+  let c = cast('knight');
+  ok(c.ev && c.ev.x === Math.round(c.p.x) && c.ev.y === Math.round(c.p.y), 'auto Q self (Aegis Ward): cast at the hero');
+  c = cast('ranger', (w2, p2) => { p2.mdir = Math.PI; });
+  ok(c.ev && c.p.vault && c.p.vault.x1 < c.p.vault.x0 - 100 && Math.abs(c.p.vault.y1 - c.p.vault.y0) < 1, 'auto Q facing (Vault): leaps along the heading, not toward the cursor');
+  c = cast('necro', (w2, p2) => { for (let i = 0; i < 8; i++) w2.spawnFoe(FODDER, p2.x - 150 + (i % 4) * 8, p2.y + 40 + (i >> 2) * 8); w2.spawnFoe(FODDER, p2.x + 60, p2.y); });
+  ok(c.ev && Math.hypot(c.ev.x - (c.p.x - 138), c.ev.y - (c.p.y + 44)) < 20, `auto Q densest (Bone Wall): on the cluster (${c.ev && (c.ev.x - Math.round(c.p.x))}, ${c.ev && (c.ev.y - Math.round(c.p.y))})`);
+}
+// auto runs: every path at rank 5 and every Form (refine 2), 8 s each in a foe ring with Q held: no exception, damage, Q casts; run again silently: same digest
+function quiet(w, p, secs, out) {
+  for (let i = 0; i < secs * 60 && w.state === 'play'; i++) {
+    drive(w, p, w.tick);
+    if (i % 60 === 0) feed(w, p);
+    w.update(C.TICK); w.events.length = 0;
+    out.digest = (Math.imul(out.digest, 31) + U.hashStr(w.kills + '|' + p.x.toFixed(2) + ',' + p.y.toFixed(2) + '|' + w.foes.length + '|' + w.zones.length)) >>> 0;
+  }
+}
+AUTO = true;
+for (const cls of HEROES) {
+  const sig = ED.HEROES[cls].sig, builds = [0, 1, 2].map(i => ({ path: i })).concat(ED.weaponForms(sig).map(f => ({ form: f.id })));
+  const dig = [0, 0];
+  for (let pass = 0; pass < 2; pass++) for (const b of builds) {
+    const w = new ED.World({ seed: 600, stage: 0, players: [{ pid: 'p1', name: 'T', slot: 0, cls, meta: { shop: {}, sigs: [] } }], cheats: { god: true } });
+    w.time = 240;
+    const p = w.heroes[0], ws = p.weapons[0], out = { digest: 0, maxMin: 0 };
+    if (b.form) w.setForm(p, ws, b.form, 2); else w.setRanks(p, ws, ED.TUNE_MAX, b.path, ED.PATH_MAX);
+    if (pass) quiet(w, p, 8, out);
+    else { phase(w, p, 8, `auto ${ws.id}${b.form ? ' refine 2' : ' path ' + b.path + ' rank 5'}`, out); ok(p.in.auto, `${cls} auto ${ws.id}: runs in auto aim`); }
+    dig[pass] = (Math.imul(dig[pass], 31) + out.digest) >>> 0;
+  }
+  ok(dig[0] === dig[1], `${cls} auto: same seed -> same digest (${dig[0]})`);
+}
+AUTO = false;
 console.log(`check-heroes-a: ${fails ? fails + ' failure(s)' : 'all passed'} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 process.exitCode = fails ? 1 : 0;

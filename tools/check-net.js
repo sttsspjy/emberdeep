@@ -3,6 +3,7 @@
 // 1. Lobby: host, join, hero change, ready, stage; start builds the run on both peers; worn cosmetics (profile bundles) reach every lobby and both run sessions.
 // 2. 60 s co-op run (god cheat), scripted inputs on both heroes (walk, dash, Q, card picks by key): client foes match the host's within tolerance at render time,
 //    nearly every host foe inside the client's view is shown, own-hero prediction corrections stay small, vitals / weapon (id, path ranks, refine) / one skill / level match, offers resolve.
+//    The client's auto aim bit (input ed bit 11) round-trips the codec, reaches the host as a level (on for 18 s, then off), and a stick-less dash in auto is predicted exactly.
 // 3. Downed / revive reach the client. 4. A late join is refused. 5. The host leaving ends the client's run with a note; a client quitting drops its hero on the host.
 // 6. Snapshot bytes at 300 / 900 foes (+600 projectiles, 400 gems, a busy event window): reported; gate <= 12 KB at 900 (ARCHITECTURE §11); decode round trip exact to 0.25 px;
 //    all 3 weapon slots (hero weapon + 2 supports, Forms refined) decode; braziers and the Last Light lap state decode.
@@ -30,7 +31,7 @@ const N = ED.Net;
 { const r = U.RNG(4242); Math.random = r.next; } // party codes and pids: same every run
 const GATE = 12 * 1024;
 let fails = 0;
-const okV = N.VERSION === 14 && ED.NET_VERSION === 14;
+const okV = N.VERSION === 15 && ED.NET_VERSION === 15;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
 const t0 = Date.now();
 
@@ -131,7 +132,7 @@ const fr = U.RNG(5);
 let cliDebt = 0;
 const runFor = (sec, opt) => {
   opt = opt || {};
-  const end = simMs + sec * 1000;
+  const end = simMs + sec * 1000, f0 = frames;
   while (simMs < end) {
     const dt = 1 / 60;
     simMs += dt * 1000; frames++;
@@ -149,6 +150,8 @@ const runFor = (sec, opt) => {
     const me = gC.view.me;
     if (me) {
       const ci = opt.still ? { mx: 0, my: 0, ax: me.x + 50, ay: me.y, dash: false, q: false, e: false, pick: 0, reroll: false, skip: false } : drive(me, t, 1);
+      ci.auto = !!opt.auto;
+      if (opt.still && opt.dash) ci.dash = frames === f0 + 5;
       if (!opt.still) { ci.dash = frames % 180 === 33; ci.q = frames % 420 === 70; ci.e = frames % 700 === 100; ci.pick = me.offer ? 1 + (frames % 3) % me.offer.length : 0; }
       gC.control(ci);
     }
@@ -181,12 +184,22 @@ runFor(0.6);
 ok(gC.view.me.downed && gC.view.me.bleed > 0 && gC.view.me.bleed <= 20, `client sees itself downed (bleed ${gC.view.me.bleed.toFixed(1)} s)`);
 runFor(3.5, { hostTo: () => ({ x: cliHero.x + 12, y: cliHero.y }) });
 ok(!cliHero.downed && !cliHero.dead && !gC.view.me.downed && gC.view.me.hp > 0, `revived on the host and on the client (hp ${Math.round(gC.view.me.hp)})`);
-runFor(18, { compare: true, crowd: 500 });
+runFor(18, { compare: true, crowd: 500, auto: true });
+const autoOn = cliHero.in.auto;
+const big0 = gC.stats.corrBig, dash0 = cliDash;
+runFor(1.5, { still: true, auto: true, dash: true });
+const autoDash = cliDash - dash0, autoBig = gC.stats.corrBig - big0, autoStill = cliHero.in.auto;
 const pendLive = cliHero.pend; // queued level-ups while the client still picks (the still phase below picks nothing)
 // settle with no input: prediction must land exactly on the host; the client's Q becomes Vault level 3 (2 charges) on the host
 Object.assign(cliHero.skills[0], { id: 'vault', lvl: 3, N: null, cd: 0 });
 runFor(1.5, { still: true });
 const me = gC.view.me;
+ok(autoOn && autoStill && !cliHero.in.auto && autoDash === 1 && autoBig === 0, `client auto aim reaches the host as a level (on ${autoOn}, off after ${!cliHero.in.auto}); stick-less auto dash predicted (dashes ${autoDash}, corrections > 2 px ${autoBig})`);
+{
+  const ring = [{ seq: 8, qx: 0, qy: 0, ax: 0, ay: 0, ed: 0 }, { seq: 7, qx: -5, qy: 9, ax: 10.5, ay: -3, ed: 2048 | 2 | (3 << 5) }], got = []; // index seq & 1
+  N.decodeInput(N.encodeInput(ring, 1, 7, 8, 640, 360), (seq, qx, qy, ax, ay, ed) => got.push(ed));
+  ok(got.length === 2 && got[0] === (2048 | 2 | (3 << 5)) && got[1] === 0, 'input codec: auto aim bit 11 round-trips beside the edge / pick bits');
+}
 errs.sort((a, b) => a - b);
 const med = errs[errs.length >> 1] || 0, p95 = errs[Math.floor(errs.length * 0.95)] || 0, pmax = errs[errs.length - 1] || 0;
 ok(checks > 50 && errs.length > 2000, `compared ${errs.length} foe positions over ${checks} moments`);
@@ -200,7 +213,7 @@ const atSnap = ring[Math.round(gC.mir.T / C.TICK) % RING];
 ok(atSnap && atSnap.tick === Math.round(gC.mir.T / C.TICK) && Math.abs(me.hp - atSnap.hp) < 0.01 && me.maxHp === cliHero.maxHp && gC.view.level === atSnap.level && gC.view.kills === atSnap.kills && gC.view.gold === atSnap.gold, `vitals / level / kills / gold match the host at the snapshot tick (lv ${w.level}, kills ${w.kills})`);
 const sig = (p) => p.weapons.map(x => x.id + x.lvl + ':' + x.tune + '/' + x.path + '/' + x.pr.join('') + x.fl + (x.evo ? 'F' : '')).join(',') + '|' + p.passives.map(x => x.id + x.lvl).join(',') + '|' + p.skills.map(x => x.id + x.lvl).join(',');
 ok(sig(me) === sig(cliHero) && me.skills.length === 1 && me.weapons.length >= 1 && me.weapons[0].root === ED.HEROES[me.cls].sig && me.weapons[0].lvl > 1, 'client hero weapon (tune, path ranks, refine) / passives / one skill match the host: ' + sig(me));
-ok(okV, 'NET_VERSION 14');
+ok(okV, 'NET_VERSION 15');
 const cq = me.skills[0], hq = cliHero.skills[0];
 ok(cq && hq.chN === 2 && cq.chN === hq.chN && cq.ch === hq.ch && hq.ch === 2, `Q charges on the wire (host ${hq.ch}/${hq.chN}, client ${cq && cq.ch}/${cq && cq.chN})`);
 ok(cliPicks >= 5 && hostPicks >= 5 && !pendLive, `co-op level-ups resolve without pause (client picks ${cliPicks}, host picks ${hostPicks}, client pending ${pendLive} while picking)`);

@@ -3,7 +3,7 @@
 Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with the code). Legacy: tag `legacy-wickdeep`.
 
 ## Todo
-- mobile: docs/MOBILE-PLAN.md checklist 1-9 (auto-aim per weapon first); ask its 4 user questions before starting.
+- mobile: real-phone fps / thermals as host (MOBILE-PLAN 5); real-phone touch feel playtest.
 - playtest: Last Light lap length / gold (60 s, 1 coin per 8 kills), Form x0.7 + late boss HP x2 feel, Ranger/Knight parity.
 - sim: check-sim --quick fails 7 'reaches a Form by 420 s' (pre-existing at bedbe5b; full run passes).
 - ranger: Seeker kill shots ignore the boss/elite skip.
@@ -31,6 +31,7 @@ Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with th
 - Playtest prep 2026-10-28: facing aim falls back to the nearest foe in range (Cleave, Daggers, Shadow Fan, Bone Spear, Impaler; Bramble stays path-bound); dash 80 px, Shield Charge 110 (+40), Shadow Step 130 (+50); Achievements + Encyclopedia screens (src/client/codex.js).
 - Bot bench 2026-10-28: bot-brain/bot/bench(+report, fake), seed-paired bootstrap ?, skill tiers 1 / 0.3, weapon-aware stance, ?bot watch mode (no save).
 - Hero redesign 2026-10-29: one weapon per hero (3 paths x 3 ranks, 5 Forms incl. 2 hybrids, one Form per run, 2 refines), general weapons deleted, one Q skill (scales with weapon factor and party level), view clamp (ED.inView), hero/foe pace x0.8, roster tiers at 5:00/10:00 + 6 new foes, benchmark surge 12:00, XP curve 10+50(L-1)+1.5(L-1)^2, stage gold x1/1.5/2 + boss/win gold + kill bounty, pixel-true Batch shapes, per-hero hfx-<cls>.js + check-hero-<cls>.js + docs/heroes/<cls>.md, tools/dps.js yardstick, NET_VERSION 6.
+- Mobile 2026-11-07: per-weapon auto-aim (NET_VERSION 15, parity bench), touch stick/buttons, phone layout, PWA + share/invite, quality auto default, browse.js --mobile.
 
 ## Known traps
 - Weapon ids are wire / save keys: addWeapon throws on a duplicate (Ranger's hybrid once overwrote Knight's gale).

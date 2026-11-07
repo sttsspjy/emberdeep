@@ -192,7 +192,7 @@
   const base = (o) => Object.assign({}, ARMY, o);
   const SHOT = { fire(w, p, ws, S) { shards(w, p, ws, S); army(w, p, ws, S); return true; }, kill: onKill };
   ED.addWeapon({
-    id: 'boneshard', name: 'Bone Shard', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', txt: 'Shards pierce; the dead rise to serve',
+    id: 'boneshard', name: 'Bone Shard', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', autoAim: 'nearest', txt: 'Shards pierce; the dead rise to serve',
     base: base({ dmg: 15, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220 }),
     paths: [
       { id: 'legion', name: 'Legion', forms: ['bonelord', 'ossuary'], ranks: [
@@ -220,14 +220,14 @@
       return;
     }
     s.go = true;
-    const a = w.aimDir(p);
+    const a = w.aimDir(p, pr.wid);
     pr.vx = Math.cos(a) * pr.sp; pr.vy = Math.sin(a) * pr.sp; pr.hits.length = 0; pr.rehit = 0; pr.pierce = s.pierce; pr.homing = 2.5; pr.dmg = s.dmg;
     pr.life = s.range / pr.sp;
   };
   const stormEnd = (w, pr) => { const s = pr.st; if (s && s.split > 0 && s.go && pr.p) { SPL.dmg = pr.dmg * 0.5; for (let i = 0; i < s.split; i++) w.shoot(pr.p, pr.wid, pr.x, pr.y, pr.a + (i - (s.split - 1) / 2) * 0.9, null, SPL); } };
   const STORM = { look: 'bone', pierce: 999, rehit: 0.25, life: 1, tick: orbitTick, onEnd: stormEnd, st: null };
   ED.addWeapon({
-    id: 'bonestorm', name: 'Bone Storm', icon: 'weapon.soulscythe', look: 'bone', sig: 'necro', mode: 'around', evolved: true, form: true, from: 'boneshard', txt: 'Shards orbit, then launch',
+    id: 'bonestorm', name: 'Bone Storm', icon: 'weapon.soulscythe', look: 'bone', sig: 'necro', mode: 'around', autoAim: 'nearest', evolved: true, form: true, from: 'boneshard', txt: 'Shards orbit, then launch',
     base: base({ dmg: 4.9, cd: 0.9, n: 6, pierce: 4, area: 1.2, speed: 320, dur: 0, knock: 80, range: 230, orbit: 1.0 }),
     refine: [
       { mods: { n: 2 }, txt: '+2 orbiting shards' },
@@ -249,7 +249,7 @@
   });
   // Bone Lord: the army rises as Bone Knights (wide stunning cleave, a ground slam every S.slam-th swing); shards as Bone Shard.
   ED.addWeapon({
-    id: 'bonelord', name: 'Bone Lord', icon: 'weapon.alt.waraxe', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'Your dead rise as Bone Knights',
+    id: 'bonelord', name: 'Bone Lord', icon: 'weapon.alt.waraxe', look: 'bone', sig: 'necro', mode: 'cursor', autoAim: 'nearest', evolved: true, form: true, from: 'boneshard', txt: 'Your dead rise as Bone Knights',
     base: base({ dmg: 11.2, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 1, kind: 1, life: 12, mk: 0.6, marc: 3.0, slam: 3 }),
     refine: [
       { mods: { cap: 2 }, txt: '+2 Bone Knights' },
@@ -260,7 +260,7 @@
   const globEnd = (w, pr) => { if (pr.p && w.alive(pr.p)) { const i = sigSlot(pr.p); if (i >= 0) spill(w, pr.p, pr.wid, w.weaponS(pr.p, i), pr.x, pr.y, 1); } };
   const GLOB = { look: 'glob', speed: 0, dmg: 0, pierce: 999, r: 3, life: 1, knock: 0, onEnd: globEnd };
   ED.addWeapon({
-    id: 'plaguefield', name: 'Plague Field', icon: 'weapon.plaguestaff', look: 'glob', sig: 'necro', mode: 'densest', evolved: true, form: true, from: 'boneshard', txt: 'Blight leaps from foe to foe',
+    id: 'plaguefield', name: 'Plague Field', icon: 'weapon.plaguestaff', look: 'glob', sig: 'necro', mode: 'densest', autoAim: 'nearest', evolved: true, form: true, from: 'boneshard', txt: 'Blight leaps from foe to foe',
     base: base({ dmg: 11.2, cd: 1.0, n: 2, pierce: 0, area: 1, speed: 220, dur: 0, knock: 0, range: 220, pk: 1.35, parea: 0.2, pdur: 3.5, spread: 1 }),
     refine: [
       { mods: { n: 1, parea: 0.3 }, txt: '+1 glob, pools grow larger' },
@@ -284,7 +284,7 @@
   });
   // Lich: the army rises as plague ghouls that rush foes and burst (blast S.gr, damage S.dmg x S.mk), leaving a blight pool; shards as Bone Shard.
   ED.addWeapon({
-    id: 'lich', name: 'Lich', icon: 'weapon.soulscythe', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'The dead rise as bursting ghouls',
+    id: 'lich', name: 'Lich', icon: 'weapon.soulscythe', look: 'bone', sig: 'necro', mode: 'cursor', autoAim: 'nearest', evolved: true, form: true, from: 'boneshard', txt: 'The dead rise as bursting ghouls',
     base: base({ dmg: 14, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 5, raise: 2, kind: 3, life: 5, mk: 1.15, gr: 34 }),
     refine: [
       { mods: { cap: 2, raise: 1 }, txt: '+2 ghouls, raised faster' },
@@ -293,7 +293,7 @@
   }, SHOT);
   // Ossuary: the army rises as skeleton archers (keep 60-110 px off, loose S.avol homing shards every S.acd s; archers and shards go for elites and bosses first); shards as Bone Shard.
   ED.addWeapon({
-    id: 'ossuary', name: 'Ossuary', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', evolved: true, form: true, from: 'boneshard', txt: 'Bone archers hunt the biggest foes',
+    id: 'ossuary', name: 'Ossuary', icon: 'weapon.bonewand', look: 'bone', sig: 'necro', mode: 'cursor', autoAim: 'nearest', evolved: true, form: true, from: 'boneshard', txt: 'Bone archers hunt the biggest foes',
     base: base({ dmg: 9.8, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 280, dur: 0, knock: 20, range: 220, cap: 4, raise: 2, kind: 2, life: 12, mk: 0.65, acd: 0.6, avol: 1, apierce: 9 }),
     refine: [
       { mods: { cap: 2 }, txt: '+2 skeleton archers' },
@@ -308,7 +308,7 @@
   // mire (L5): walls last twice as long (dur +100%) and slow foes touching them N.mire (st.slow). Zone 'bonewall' (circle x, y, r; arc 0 = full ring, else span around a; w = thickness).
   const ARC_R = 120, WALL_W = 16;
   ED.addSkill({
-    id: 'bonewall', name: 'Bone Wall', icon: 'prop.bonepile', cd: 12, txt: 'A bone wall the horde cannot cross',
+    id: 'bonewall', name: 'Bone Wall', icon: 'prop.bonepile', cd: 12, autoAim: { k: 'densest', d: 220 }, txt: 'A bone wall the horde cannot cross',
     base: { len: 140, dur: 5, ring: 0, taunt: 0, mire: 0 },
     levels: [
       { mods: { len: 60 }, txt: 'A longer wall' },

@@ -1,6 +1,14 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it. Never opens a visible window.
 // Usage: node tools/browse.js [smoke|shots|forms|crowdN|coop|botwatch|lap|ko ...] [--scen=a,b] [--cls=knight,...] [--form=id,...] [--support=id,...|all] [--seconds=N] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seed=1] [--lang=en|ko]
-//                             [--software] [--quality=high|low] [--gate] [--prof] [--ff=480] [--timeout=600] [--cos=id,...]
+//                             [--software] [--quality=auto|high|low] [--gate] [--prof] [--ff=480] [--timeout=600] [--cos=id,...] [--mobile] [--cpu=N]
+//   --mobile (chromium): a landscape phone, device emulation at --viewport (default 844x390) x dpr 3, touch, mobile UA. smoke and shots switch to their phone versions (below);
+//          crowdN / late run as usual on the phone. --cpu=N: CDP CPU slowdown of every page from boot (default 4 for crowdN / late with --mobile, else 1).
+//   smoke --mobile: title -> hero select -> stage select -> run by taps; a raw touch drag on #tc-stick must move the hero right and stop on release; #tc-dash / #tc-q taps
+//          must fire a dash / Q; a level-up card tap must pick; #tc-pause must open the pause overlay; ED.Input.device 'touch', #touch shown, #ov-rotate hidden.
+//   shots --mobile: PNGs of title, hero select, stage select, a run at --ff s with the stick held, 4 level-up cards, pause and results into <outdir>/mobile-<stamp>-<WxH>.
+//   portrait (implies --mobile): a 390x844 phone; fails unless #ov-rotate shows in a run (title noted).
+//   cards (implies --mobile): level-up overlay with 4 cards (and reroll / skip) at --viewport, 740x360 and 667x375; fails on a card or foot button not fully inside the viewport
+//          or card name / text below 20 px.
 //   --cos: cosmetic ids (src/data/cosmetics.js) the profile owns and wears in every solo run the harness starts (skins apply to their own hero).
 //   --lang: display language set right after boot on every page (ED.I18N.set), e.g. sanctum --lang=ko for the Korean banners.
 //   smoke: for each hero (--cls, default all 7) a solo stage-1 run driven ~--seconds (16) s (circling, aim at the nearest foe, Q / E, dash, first card picked); fails on a page or console error,
@@ -15,7 +23,7 @@
 //          six max passives, clock 25:00, the stage boss and 900 last-roster foes held at real HP
 //          (about 1,000 kills/s); measures like crowdN plus own-zone count / coverage. --gate fails when Render.frame p95 > 4 ms on WebGL or > 8 ms on Canvas2D (GAME-DESIGN §13).
 //          --support=id,id: the first two named supports join as Forms (tune 5, path 0 at rank 5). --prof (crowdN / late, chromium): a CPU profile over the measured window,
-//          the top 15 functions by self time in the notes.
+//          the top 15 functions by self time and the top 10 allocation sites (sampled heap, collected objects included) in the notes.
 //   forms: one PNG per hero (--cls) x Form (--form=id,... filters): tune 5, the Form's path at rank 5, the Form refined twice, six max passives, clock 20:00, 400 last-roster foes held at
 //          real HP, no boss, no level-ups or offers, --seconds (4) s of play; into a fresh folder <outdir>/forms-<stamp>-<browser>[-soft] (printed). Fails on a page / console error or a Form not taken.
 //          --support=id,... (support root or Form id; all: every support root): one PNG per hero Form x support, the support's Form (a root: its first Form) beside the hero's.
@@ -44,14 +52,16 @@
 const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
 
 // ---------------- arguments ----------------
-const FLAGS = { scen: 's', cls: 's', form: 's', support: 's', cos: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', lang: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', software: 'b', gate: 'b', prof: 'b', json: 'b', help: 'b' };
+const FLAGS = { scen: 's', cls: 's', form: 's', support: 's', cos: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's', lang: 's', seconds: 'n', seed: 'n', timeout: 'n', ff: 'n', cpu: 'n', software: 'b', gate: 'b', prof: 'b', json: 'b', help: 'b', mobile: 'b' };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
-const SCEN_RE = /^(smoke|shots|coop|botwatch|lap|sanctum|bossart|results|ko|crowd\d{1,4}|late[abc]?|forms)$/;
+const SCEN_RE = /^(smoke|shots|coop|botwatch|lap|sanctum|bossart|results|ko|crowd\d{1,4}|late[abc]?|forms|portrait|cards)$/;
+// --mobile: a landscape phone (Chromium device emulation); the UA is a stock Android Chrome string.
+const PHONE = { dpr: 3, ua: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Mobile Safari/537.36' };
 // Latin words allowed on Korean screens: the game name, stat abbreviations, key and button names.
 const KO_ALLOW = ['Wickdeep', 'HP', 'DPS', 'XP', 'Esc', 'Enter', 'Space', 'Shift', 'Tab', 'Ctrl', 'Alt', 'LMB', 'RMB', 'MMB', 'Mouse', 'Up', 'Down', 'Left', 'Right', 'Arrow', 'Backspace', 'English'];
 function parseArgs(argv) {
-  const o = { scen: '', cls: HEROES.join(','), form: '', support: '', cos: '', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
+  const o = { scen: '', cls: HEROES.join(','), form: '', support: '', cos: '', browser: 'chromium', viewport: '', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'), quality: 'high', seconds: 0, seed: 1, timeout: 600, ff: 480 };
   const pos = [];
   for (const a of argv) {
     if (!a.startsWith('--')) { pos.push(a); continue; }
@@ -65,8 +75,12 @@ function parseArgs(argv) {
   }
   o.scens = (o.scen ? o.scen.split(',') : []).concat(pos).map(s => s.trim()).filter(Boolean);
   if (!o.scens.length) o.scens = ['smoke'];
-  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, forms, crowdN, late[a|b|c], coop, botwatch, lap, sanctum, results, ko, bossart)');
+  for (const s of o.scens) if (!SCEN_RE.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, forms, crowdN, late[a|b|c], coop, botwatch, lap, sanctum, results, ko, bossart, portrait, cards)');
   if (!['chromium', 'firefox'].includes(o.browser)) throw new Fail('--browser is chromium or firefox');
+  if (o.scens.some(s => s === 'portrait' || s === 'cards')) o.mobile = true;
+  if ((o.mobile || o.cpu) && o.browser !== 'chromium') throw new Fail('--mobile / --cpu need chromium (device emulation, CDP)');
+  if (o.cpu !== undefined && !(o.cpu >= 1)) throw new Fail('--cpu is a slowdown factor >= 1');
+  o.viewport = o.viewport || (o.mobile ? '844x390' : '1920x1080');
   const vp = /^(\d{3,5})x(\d{3,5})$/.exec(o.viewport);
   if (!vp) throw new Fail('--viewport is WxH');
   o.vw = +vp[1]; o.vh = +vp[2];
@@ -118,7 +132,12 @@ function serve(root) {
       res.end(req.method === 'HEAD' ? undefined : data);
     });
   });
-  return new Promise((resolve, reject) => { srv.once('error', reject); srv.listen(0, '127.0.0.1', () => resolve({ srv, base: 'http://127.0.0.1:' + srv.address().port, missing })); });
+  const BAD = new Set([1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080]); // Chromium's restricted ports (ERR_UNSAFE_PORT): re-picked
+  return new Promise((resolve, reject) => {
+    srv.once('error', reject);
+    const pick = () => srv.listen(0, '127.0.0.1', () => { const port = srv.address().port; if (BAD.has(port)) srv.close(pick); else resolve({ srv, base: 'http://127.0.0.1:' + port, missing }); });
+    pick();
+  });
 }
 
 // ---------------- in-page harness (serialised into the page before the game scripts; may not use Node variables) ----------------
@@ -356,7 +375,9 @@ function pageBoot(cfg) {
       else {
         const st = (a) => { const s = a.slice().sort((x, y) => x - y); return { p50: +s[Math.floor(s.length * 0.5)].toFixed(2), p95: +s[Math.floor(s.length * 0.95)].toFixed(2), max: +s[s.length - 1].toFixed(2) }; };
         BR.tickMs = null;
-        resolve({ frames: fr.length, frame: st(fr), work: st(wk.slice(1)), tick: st(um.length ? um : [0]), render: st(rm), foes: Math.round(fo.reduce((a, b) => a + b, 0) / fo.length), usePost: E.Render.usePost, soft: !!(E.Post && E.Post.soft), batch: E.Batch ? E.Batch.mode || '?' : 'none', canvas: [E.Render.canvas.width, E.Render.canvas.height, E.Render.bw, E.Render.bh, E.Render.scale] });
+        const pc = E.Post && E.Post.canvas;
+        resolve({ frames: fr.length, frame: st(fr), work: st(wk.slice(1)), tick: st(um.length ? um : [0]), render: st(rm), foes: Math.round(fo.reduce((a, b) => a + b, 0) / fo.length), usePost: E.Render.usePost, soft: !!(E.Post && E.Post.soft), batch: E.Batch ? E.Batch.mode || '?' : 'none', canvas: [E.Render.canvas.width, E.Render.canvas.height, E.Render.bw, E.Render.bh, E.Render.scale],
+          dpr: window.devicePixelRatio, post: pc ? [pc.width, pc.height] : null, q: E.Render.quality, auto: E.Render.autoNote || '' });
       }
     };
     requestAnimationFrame(step);
@@ -410,7 +431,7 @@ function pageBoot(cfg) {
 }
 
 // ---------------- run context ----------------
-const S = { opt: null, pw: null, browser: null, server: null, closing: false, shotDir: '' };
+const S = { opt: null, pw: null, browser: null, server: null, closing: false, shotDir: '', cpu: 1 }; // cpu: CDP CPU slowdown of the pages the current scenario opens
 const log = (...a) => console.error(...a);
 const wait = (ms) => new Promise(r => setTimeout(r, ms));
 async function cleanup() {
@@ -429,9 +450,11 @@ async function launch() {
   } else opts.firefoxUserPrefs = { 'media.volume_scale': '0.0', 'layout.frame_rate': 60 };
   try { return await S.pw[o.browser].launch(opts); } catch (e) { throw new Fail('could not launch headless ' + o.browser + ': ' + String(e.message).split('\n')[0]); }
 }
-async function newContext() {
-  const o = S.opt;
-  const ctx = await S.browser.newContext({ viewport: { width: o.vw, height: o.vh }, deviceScaleFactor: 1, serviceWorkers: 'block', locale: 'en-US' });
+// vp: { w, h } overrides the viewport (portrait check); with --mobile the context is a touch phone at PHONE.dpr.
+async function newContext(vp) {
+  const o = S.opt, w = vp ? vp.w : o.vw, h = vp ? vp.h : o.vh;
+  const dev = o.mobile ? { deviceScaleFactor: PHONE.dpr, isMobile: true, hasTouch: true, userAgent: PHONE.ua } : { deviceScaleFactor: 1 };
+  const ctx = await S.browser.newContext(Object.assign({ viewport: { width: w, height: h }, serviceWorkers: 'block', locale: 'en-US' }, dev));
   await ctx.addInitScript({ content: '(' + pageBoot.toString() + ')(' + JSON.stringify({ seed: o.seed, cos: o.cos }) + ')' });
   const local = S.server.base;
   await ctx.route((u) => u.protocol.startsWith('http') && u.origin !== local, (route) => route.abort('blockedbyclient'));
@@ -444,6 +467,7 @@ async function bootPage(ctx, query, errors, tag) {
   page.on('pageerror', (e) => add('pageerror', (e && e.stack) || e));
   page.on('crash', () => add('crash', 'page crashed'));
   page.on('console', (m) => { if (m.type() !== 'error') return; const url = (m.location() && m.location().url) || ''; if (url && !url.startsWith(local) && !url.startsWith('data:') && !url.startsWith('blob:')) return; add('console', m.text()); });
+  if (S.cpu > 1) await (await cdpOf(page)).send('Emulation.setCPUThrottlingRate', { rate: S.cpu }); // throttled from boot on (the quality auto-pick runs under it)
   await page.goto(local + '/index.html' + (query || ''), { waitUntil: 'load' });
   const info = await page.evaluate(() => window.__BR.boot());
   if (S.opt.lang) await page.evaluate((l) => window.ED.I18N.set(l), S.opt.lang);
@@ -454,6 +478,10 @@ async function openPage(query) {
   const { page, info } = await bootPage(ctx, query, errors);
   return { ctx, page, errors, info };
 }
+// One CDP session per page (CPU throttling, raw touch events).
+async function cdpOf(page) { if (!page.__cdp) page.__cdp = await page.context().newCDPSession(page); return page.__cdp; }
+// Raw touch on page at CSS px (x, y): type touchStart | touchMove | touchEnd (one finger, id 1).
+async function touch(page, type, x, y) { await (await cdpOf(page)).send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: Math.round(x), y: Math.round(y), id: 1, radiusX: 4, radiusY: 4, force: 1 }] }); }
 const call = (page, m, ...args) => page.evaluate(([name, a]) => window.__BR[name](...a), [m, args]);
 const dbg = (page, m, ...args) => call(page, 'debug', m, args);
 const frames = (page, n) => page.evaluate((k) => new Promise(r => { let i = 0; const f = () => (++i >= k ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n || 2);
@@ -732,6 +760,192 @@ async function scenBossArt() {
   return res;
 }
 
+// ---------------- phone (--mobile) ----------------
+// Taps element #id when it is shown; false when it is missing or hidden.
+async function tapId(page, id) { if (!(await call(page, 'visible', id))) return false; await page.tap('#' + id, { timeout: 3000 }); return true; }
+const mineOf = (page, k) => page.evaluate((key) => window.__BR.mine[key] || 0, k);
+const heroAt = (page) => page.evaluate(() => { const v = window.ED.Game.view, m = v && v.me; return m ? { x: m.x, y: m.y } : null; });
+// Title -> hero select -> stage select -> run, all by taps; true once App.state is 'run' (god cheat on, event tallies reset).
+async function tapIntoRun(page, need, shot) {
+  await page.fill('#inp-name', 'Tester').catch(() => {});
+  if (shot) await shot('01-title');
+  need(await tapId(page, 'btn-play'), 'title: #btn-play not tappable');
+  await wait(300);
+  if (shot) await shot('02-hero-select');
+  need(await tapId(page, 'btn-hero-next'), 'hero select: #btn-hero-next not tappable');
+  await wait(300);
+  if (shot) await shot('03-stage-select');
+  need(await tapId(page, 'btn-start'), 'stage select: #btn-start not tappable');
+  await page.waitForFunction(() => window.ED.App.state === 'run', null, { timeout: 8000 }).catch(() => {});
+  const ok = await page.evaluate(() => window.ED.App.state === 'run');
+  if (ok) await page.evaluate(() => { window.__BR.ev = {}; window.__BR.mine = {}; window.ED.Debug.god(true); });
+  return need(ok, 'no run after the start tap');
+}
+// Holds the floating stick: a raw touch at 35% / 60% of #tc-stick dragged dx CSS px over 6 moves, held ms, released. Returns the hero's world move { dx, dy } or null without #tc-stick.
+async function stickDrag(page, dx, ms) {
+  const box = await page.locator('#tc-stick').boundingBox().catch(() => null);
+  if (!box) return null;
+  const x = box.x + box.width * 0.35, y = box.y + box.height * 0.6, a = await heroAt(page);
+  await touch(page, 'touchStart', x, y);
+  for (let i = 1; i <= 6; i++) { await touch(page, 'touchMove', x + dx * i / 6, y); await wait(16); }
+  await wait(ms);
+  const b = await heroAt(page);
+  await touch(page, 'touchEnd');
+  return a && b ? { dx: Math.round(b.x - a.x), dy: Math.round(b.y - a.y) } : null;
+}
+// Level-up overlay up with n cards (pads the sim offer with copies of its last card), pop-in finished. Returns the card count shown.
+async function levelUpCards(page, n) {
+  await page.evaluate(() => window.ED.Debug.levelUp(1));
+  await page.waitForFunction(() => { const el = document.getElementById('ov-offer'); return el && !el.hidden; }, null, { timeout: 3000 }).catch(() => {});
+  if (n) await page.evaluate((k) => { const p = window.ED.Game.w.heroes[0]; if (p.offer) while (p.offer.length < k) p.offer.push(Object.assign({}, p.offer[p.offer.length - 1])); }, n);
+  await wait(900);
+  return page.evaluate(() => document.querySelectorAll('#offer-cards .offer-card').length);
+}
+
+// Phone smoke: menus by taps, a stage-1 run steered by a raw touch drag on #tc-stick, #tc-dash / #tc-q taps, a level-up card tapped, #tc-pause; #ov-rotate hidden in landscape.
+async function scenMobileSmoke() {
+  const o = S.opt, res = newResult('m-smoke');
+  const { ctx, page, errors, info } = await openPage();
+  const need = (cond, note) => { if (!cond) fail(res, note); return !!cond; };
+  try {
+    res.notes.push(bootNote(info) + `, ${o.vw}x${o.vh} dpr ${PHONE.dpr}`);
+    await call(page, 'settings', o.quality);
+    if (!(await tapIntoRun(page, need))) return res;
+    await wait(800);
+    const dev = await page.evaluate(() => window.ED.Input && window.ED.Input.device), shown = await call(page, 'visible', 'touch');
+    res.notes.push(`Input.device ${dev}, #touch ${shown ? 'shown' : 'hidden'}, #ov-rotate ${(await call(page, 'visible', 'ov-rotate')) ? 'SHOWN' : 'hidden'}`);
+    need(dev === 'touch', 'ED.Input.device is ' + dev + ' after taps');
+    need(shown, '#touch hidden in the run');
+    need(!(await call(page, 'visible', 'ov-rotate')), '#ov-rotate shown in landscape');
+    const mv = await stickDrag(page, 70, 1200);
+    res.notes.push('stick drag +70 px x, 1.2 s: hero moved ' + JSON.stringify(mv));
+    if (need(mv, '#tc-stick missing')) need(mv.dx > 15 && mv.dx > Math.abs(mv.dy), 'stick drag right did not move the hero right');
+    await wait(300);
+    const still = await heroAt(page); await wait(400); const still2 = await heroAt(page);
+    need(still && still2 && Math.abs(still2.x - still.x) + Math.abs(still2.y - still.y) < 2, 'hero still moving after the stick was released');
+    for (const [id, k] of [['tc-dash', 'dash'], ['tc-q', 'skill0']]) {
+      const n0 = await mineOf(page, k), tapped = await tapId(page, id);
+      await wait(400);
+      const n1 = await mineOf(page, k);
+      res.notes.push(`${id}: ${tapped ? 'tapped' : 'MISSING'}, ${k} events ${n0} -> ${n1}`);
+      need(tapped && n1 > n0, id + ' tap fired no ' + k);
+    }
+    const cards = await levelUpCards(page, 0), p0 = await mineOf(page, 'pick');
+    if (need(cards > 0, 'level-up overlay shows no cards')) {
+      await page.locator('#offer-cards .offer-card').first().tap({ timeout: 3000 });
+      await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 3000 }).catch(() => {});
+      const p1 = await mineOf(page, 'pick');
+      res.notes.push(`level-up: ${cards} cards, first tapped, pick events ${p0} -> ${p1}`);
+      need(p1 > p0 && (await page.evaluate(() => document.getElementById('ov-offer').hidden)), 'card tap did not pick');
+    }
+    need(await tapId(page, 'tc-pause'), '#tc-pause not tappable');
+    await wait(300);
+    need(await call(page, 'visible', 'ov-pause'), 'pause overlay not shown after #tc-pause');
+    await shoot(page, res, 'm-pause');
+    if (await tapId(page, 'btn-resume')) { await wait(300); need(!(await call(page, 'visible', 'ov-pause')), 'Resume tap left the pause overlay up'); }
+    await shoot(page, res, 'm-run');
+    await call(page, 'stop');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+// Phone shots: title, hero select, stage select, a run at --ff s (stick held), level-up cards, pause, results into <outdir>/mobile-<stamp>.
+async function scenMobileShots() {
+  const o = S.opt, res = newResult('m-shots');
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+  const dir = S.shotDir = path.join(o.outdir, 'mobile-' + stamp + '-' + o.vw + 'x' + o.vh);
+  fs.mkdirSync(dir, { recursive: true });
+  res.notes.push('folder ' + dir);
+  const { ctx, page, errors, info } = await openPage();
+  const shot = (name) => shoot(page, res, name, dir);
+  const need = (cond, note) => { if (!cond) fail(res, note); return !!cond; };
+  try {
+    res.notes.push(bootNote(info));
+    await call(page, 'settings', o.quality);
+    if (!(await tapIntoRun(page, need, shot))) return res;
+    await dbg(page, 'fastForward', o.ff);
+    await wait(1000);
+    const box = await page.locator('#tc-stick').boundingBox().catch(() => null);
+    if (box) { await touch(page, 'touchStart', box.x + box.width * 0.35, box.y + box.height * 0.6); await touch(page, 'touchMove', box.x + box.width * 0.35 + 50, box.y + box.height * 0.6 - 20); await wait(500); }
+    await shot('04-run');
+    if (box) await touch(page, 'touchEnd');
+    res.notes.push('cards: ' + (await levelUpCards(page, 4)));
+    await shot('05-levelup');
+    await page.locator('#offer-cards .offer-card').first().tap({ timeout: 3000 }).catch(() => {});
+    await wait(400);
+    need(await tapId(page, 'tc-pause'), '#tc-pause not tappable');
+    await wait(400);
+    await shot('06-pause');
+    await tapId(page, 'btn-resume');
+    await dbg(page, 'win');
+    await page.waitForFunction(() => window.ED.App.state === 'results', null, { timeout: 5000 }).catch(() => {});
+    await wait(1700);
+    need(await call(page, 'visible', 'scr-results'), 'results screen not shown');
+    await shot('07-results');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+// Portrait phone (390 x 844): #ov-rotate shown on the title and in a run.
+async function scenPortrait() {
+  const res = newResult('portrait');
+  const ctx = await newContext({ w: 390, h: 844 }), errors = [];
+  try {
+    const { page, info } = await bootPage(ctx, '', errors);
+    res.notes.push(bootNote(info) + ', 390x844');
+    const title = await call(page, 'visible', 'ov-rotate');
+    await shoot(page, res, 'portrait-title');
+    await call(page, 'start', 'knight', 0, { god: true });
+    await page.evaluate(() => { window.__BR.drive = false; });
+    await wait(800);
+    const run = await call(page, 'visible', 'ov-rotate');
+    res.notes.push(`#ov-rotate: title ${title ? 'shown' : 'hidden'}, run ${run ? 'shown' : 'hidden'}`);
+    if (!run) fail(res, '#ov-rotate hidden in a portrait run');
+    await shoot(page, res, 'portrait-run');
+    await call(page, 'stop');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+// Level-up layout on landscape phones (--viewport, 740x360, 667x375): 4 cards fully inside the viewport, card name / text >= 20 px, shown foot buttons inside the viewport.
+async function scenCards() {
+  const o = S.opt, res = newResult('cards');
+  const { ctx, page, errors, info } = await openPage();
+  try {
+    res.notes.push(bootNote(info));
+    const sizes = [...new Set([o.vw + 'x' + o.vh, '740x360', '667x375'])];
+    for (const sz of sizes) {
+      const [w, h] = sz.split('x').map(Number);
+      await page.setViewportSize({ width: w, height: h });
+      await call(page, 'start', 'knight', 0, { god: true });
+      await page.evaluate(() => { const B = window.__BR, p = window.ED.Game.w.heroes[0]; B.drive = false; B.autoPick = false; p.rerolls = 2; p.skips = 2; }); // reroll / skip shown
+      await wait(600);
+      const shown = await levelUpCards(page, 4);
+      const m = await page.evaluate(() => {
+        const vw = innerWidth, vh = innerHeight, outside = (el) => { const b = el.getBoundingClientRect(); return b.width < 1 || b.left < -0.5 || b.top < -0.5 || b.right > vw + 0.5 || b.bottom > vh + 0.5; };
+        const cards = [...document.querySelectorAll('#offer-cards .offer-card')], foot = document.getElementById('offer-foot');
+        const fonts = cards.flatMap(c => [...c.querySelectorAll('.card-name, .card-txt')]).map(e => parseFloat(getComputedStyle(e).fontSize));
+        const btns = foot && !foot.hidden ? [...foot.querySelectorAll('.btn')].filter(b => !b.hidden) : [];
+        return { n: cards.length, out: cards.filter(outside).length, minFont: fonts.length ? Math.min(...fonts) : 0, clipped: cards.filter(c => c.scrollHeight > c.clientHeight + 1).length, foot: btns.length, footOut: btns.filter(outside).length,
+          h: cards.length ? Math.round(Math.max(...cards.map(c => c.getBoundingClientRect().bottom)) - Math.min(...cards.map(c => c.getBoundingClientRect().top))) : 0 };
+      });
+      res.notes.push(`${sz}: ${m.n} cards (${shown} shown), ${m.out} outside the viewport, rows height ${m.h} px, min name/text font ${m.minFont} px, ${m.clipped} with clipped text, foot buttons ${m.foot} (${m.footOut} outside)`);
+      if (m.n < 4) fail(res, `${sz}: ${m.n} cards`);
+      if (m.out) fail(res, `${sz}: ${m.out} card(s) not fully inside the viewport`);
+      if (m.minFont < 20) fail(res, `${sz}: card text ${m.minFont} px < 20 px`);
+      if (m.footOut) fail(res, `${sz}: ${m.footOut} reroll / skip button(s) outside the viewport`);
+      await shoot(page, res, 'cards-' + sz);
+      await call(page, 'stop');
+      await wait(300);
+    }
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function scenCrowd(sc) {
   const o = S.opt, n = +sc.slice(5), res = newResult(sc), secs = o.seconds || 6;
   const { ctx, page, errors, info } = await openPage();
@@ -742,7 +956,7 @@ async function scenCrowd(sc) {
     await call(page, 'hold', n);
     await wait(2000);
     const m = await profiled(page, res, () => call(page, 'measure', secs * 1000));
-    res.rows.push(Object.assign({ quality: o.quality }, m));
+    res.rows.push(Object.assign({ quality: o.quality, cpu: S.cpu }, m));
     const gpu = !o.software && !m.soft && (m.batch !== '2d' || m.usePost);
     if (n >= 900) {
       const over = m.frame.p95 > 8;
@@ -783,7 +997,7 @@ async function scenLate(sc) {
     await wait(2500);
     const m = await profiled(page, res, () => call(page, 'measure', secs * 1000));
     const z = await page.evaluate(() => { const B = window.ED.Batch; return { n: B.zoneN, load: +B.zoneLoad.toFixed(2), lite: B.zoneLite, union: B.zoneUnion }; });
-    res.rows.push(Object.assign({ quality: o.quality }, m));
+    res.rows.push(Object.assign({ quality: o.quality, cpu: S.cpu }, m));
     const lim = m.batch === 'gl' ? 4 : 8, over = m.render.p95 > lim;
     res.notes.push(`own zones in view ${z.n}, coverage ${z.load}x view, 2D zone LOD ${z.lite ? (z.union ? 'on (union paths)' : 'on') : 'off'}`);
     res.notes.push(`gate (Render.frame p95 <= ${lim} ms, ${m.batch}): ${over ? 'OVER' : 'ok'} — p95 ${m.render.p95} ms`);
@@ -800,8 +1014,13 @@ async function profiled(page, res, fn) {
   if (!S.opt.prof || S.opt.browser !== 'chromium') return fn();
   const cdp = await page.context().newCDPSession(page);
   await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 200 }); await cdp.send('Profiler.start');
+  await cdp.send('HeapProfiler.enable'); await cdp.send('HeapProfiler.startSampling', { samplingInterval: 4096, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true });
   const out = await fn();
   const { profile } = await cdp.send('Profiler.stop');
+  const heap = (await cdp.send('HeapProfiler.stopSampling')).profile, alloc = new Map();
+  const walk = (n) => { const f = n.callFrame, k = (f.functionName || '(anon)') + ' ' + (f.url || '').split('/').pop() + ':' + (f.lineNumber + 1); if (n.selfSize) alloc.set(k, (alloc.get(k) || 0) + n.selfSize); for (const c of n.children || []) walk(c); };
+  walk(heap.head);
+  [...alloc.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).forEach(([k, b]) => res.notes.push('alloc ' + (b / 1024).toFixed(0).padStart(6) + ' KB  ' + k));
   const self = new Map(), byId = new Map(profile.nodes.map(n => [n.id, n])), dt = profile.timeDeltas || [];
   (profile.samples || []).forEach((id, i) => { const n = byId.get(id), f = n.callFrame, k = (f.functionName || '(anon)') + ' ' + (f.url || '').split('/').pop() + ':' + (f.lineNumber + 1); self.set(k, (self.get(k) || 0) + (dt[i] || 0) / 1000); });
   [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15).forEach(([k, ms]) => res.notes.push('prof ' + ms.toFixed(0).padStart(6) + ' ms  ' + k));
@@ -975,7 +1194,7 @@ function table(results) {
       else if (r.name === 'forms') out.push(`  ${w.cls.padEnd(7)} ${w.form.padEnd(14)} paths ${w.pr} refine ${w.fl} foes ${w.foes} kills ${w.kills} | ${w.looks}`);
       else if (r.name === 'ko') out.push(`  ${w.screen.padEnd(10)} latin ${String(w.latin).padStart(3)}  overflow ${String(w.over).padStart(2)}${w.sample ? '  e.g. ' + w.sample : ''}`);
       else if (r.name === 'coop' || r.name === 'botwatch') out.push('  ' + Object.entries(w).map(([k, v]) => k + ' ' + v).join(', '));
-      else out.push(`  ${w.quality}: foes ${w.foes}, frames ${w.frames}, frame ms p50/p95/max ${tri(w.frame)}, work ms ${tri(w.work)}, sim ms/tick ${tri(w.tick)}, render ms ${tri(w.render)}, batch ${w.batch}, post ${w.usePost ? 'on' : 'off'}${w.soft ? ' (software)' : ''}, canvas ${w.canvas.join('x')}`);
+      else out.push(`  ${w.quality}: foes ${w.foes}, frames ${w.frames}, frame ms p50/p95/max ${tri(w.frame)}, work ms ${tri(w.work)}, sim ms/tick ${tri(w.tick)}, render ms ${tri(w.render)}, batch ${w.batch}, post ${w.usePost ? 'on' : 'off'}${w.soft ? ' (software)' : ''}, canvas ${w.canvas.join('x')}${w.post ? ', post canvas ' + w.post.join('x') : ''}, dpr ${w.dpr}${w.q && w.q !== w.quality ? ', resolved ' + w.q : ''}${w.auto ? ' (' + w.auto + ')' : ''}${w.cpu > 1 ? ', cpu x' + w.cpu : ''}`);
     }
     if (r.name !== 'shots' && r.name !== 'forms' && r.name !== 'ko') for (const f of r.shots) out.push('  shot ' + f);
     else out.push(`  ${r.shots.length} shots`);
@@ -1151,11 +1370,12 @@ async function main() {
   const results = [];
   try {
     S.browser = await launch();
-    log(`browse: headless ${S.opt.browser} ${S.browser.version()}, ${S.opt.vw}x${S.opt.vh}${S.opt.software ? ', no GPU' : ''}`);
+    log(`browse: headless ${S.opt.browser} ${S.browser.version()}, ${S.opt.vw}x${S.opt.vh}${S.opt.mobile ? ' phone (dpr ' + PHONE.dpr + ', touch)' : ''}${S.opt.software ? ', no GPU' : ''}`);
     for (const sc of S.opt.scens) {
       const t0 = Date.now();
+      S.cpu = S.opt.cpu !== undefined ? S.opt.cpu : S.opt.mobile && /^(crowd|late)/.test(sc) ? 4 : 1;
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'forms' ? await scenForms() : sc === 'coop' ? await scenCoop() : sc === 'botwatch' ? await scenBotwatch() : sc === 'lap' ? await scenLap() : sc === 'sanctum' ? await scenSanctum() : sc === 'bossart' ? await scenBossArt() : sc === 'results' ? await scenResults() : sc === 'ko' ? await scenKo() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
+      try { r = sc === 'smoke' ? await (S.opt.mobile ? scenMobileSmoke() : scenSmoke()) : sc === 'shots' ? await (S.opt.mobile ? scenMobileShots() : scenShots()) : sc === 'portrait' ? await scenPortrait() : sc === 'cards' ? await scenCards() : sc === 'forms' ? await scenForms() : sc === 'coop' ? await scenCoop() : sc === 'botwatch' ? await scenBotwatch() : sc === 'lap' ? await scenLap() : sc === 'sanctum' ? await scenSanctum() : sc === 'bossart' ? await scenBossArt() : sc === 'results' ? await scenResults() : sc === 'ko' ? await scenKo() : sc.startsWith('late') ? await scenLate(sc) : await scenCrowd(sc); }
       catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); fail(r, 'harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); }
       r.wallMs = Date.now() - t0;
       if (S.server.missing.size) { r.missing = [...S.server.missing]; fail(r, 'missing files: ' + r.missing.join(', ')); S.server.missing.clear(); }

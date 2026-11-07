@@ -29,7 +29,10 @@ function serve() {
     if (!f.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
     fs.readFile(f, (err, d) => { if (err) { res.writeHead(404); res.end(); return; } res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-store' }); res.end(d); });
   });
-  return new Promise(r => srv.listen(0, '127.0.0.1', () => r(srv)));
+  // Chromium refuses its restricted ports (net::ERR_UNSAFE_PORT); an OS-picked port on that list is re-picked.
+  const BAD = new Set([1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080]);
+  const pick = (r) => srv.listen(0, '127.0.0.1', () => { if (BAD.has(srv.address().port)) srv.close(() => pick(r)); else r(srv); });
+  return new Promise(pick);
 }
 
 // ---------------- in-page helpers (serialised; no Node variables) ----------------

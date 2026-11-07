@@ -421,3 +421,33 @@ ED.I18N.add('ko', {
   'SHE KNEELS: STRIKE THE HEART': '무릎 꿇음: 심장 공격',
   'THE WICK IS ALMOST GONE': '심지 소진 임박',
 });
+// share / invite (src/client/share.js)
+ED.I18N.add('ko', {
+  'Share': '공유',
+  'Invite': '초대',
+  'Survive the horde with me in Wickdeep.': '윅딥에서 함께 무리를 버텨 보세요.',
+  'Join my Wickdeep party. Code: {0}': '윅딥 파티에 참가하세요. 코드: {0}',
+  'Link copied.': '링크를 복사했습니다.',
+  'Invite link copied.': '초대 링크를 복사했습니다.',
+  'Copy this link: {0}': '이 링크를 복사하세요: {0}',
+});
+// touch controls and phone layout (src/client/touch.js, input.js, ui.js, index.html)
+ED.I18N.add('ko', {
+  'Skill Q': 'Q 스킬',
+  'Dash': '대시',
+  'Pause': '일시 정지',
+  'Stick': '스틱',
+  'Tap': '탭',
+  'Aim': '조준',
+  'Cursor': '커서',
+  'Touch buttons': '터치 버튼',
+  'Small': '작게',
+  'Medium': '보통',
+  'Large': '크게',
+  'Rotate your phone to landscape.': '휴대폰을 가로로 돌려 주세요.',
+  'Keep the app open while hosting: the run stops for everyone when it is hidden.': '호스트 중에는 앱을 켜 두세요. 앱이 가려지면 모두의 런이 멈춥니다.',
+  '{0}: tap a card': '{0}: 카드 선택',
+  'Level up: tap a card': '레벨 업: 카드 선택',
+  'Reroll {0}': '리롤 {0}',
+  'Skip {0}': '건너뛰기 {0}',
+});

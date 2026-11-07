@@ -8,10 +8,12 @@
 //   pr: [rank x 3] (only pr[path] is ever nonzero, 0-5), fl (refine 0-2), evo, cd, st (impl state), S (cached numbers), t0 (sim s acquired) }.
 // Each tick per living hero and slot: impl.tick?(w, p, ws, S, dt); ws.cd -= dt; at <= 0 impl.fire(w, p, ws, S) -> true resets cd = S.cd and emits { t: 'shoot', pid, wid }, false retries in 0.1 s.
 // Aim rule (GAME-DESIGN §3): directional patterns fire along w.aimDir(p) (the cursor), foe or no foe; targeted patterns (shells, pillars, globs, minions, the mark) pick foes and fall back to w.aimDir(p).
+// Auto aim (p.in.auto): w.aimDir(p) follows the autoAim style of the def firing now (w.aimWs, set around impl.tick / fire; or weapon id wid): def.autoAim 'nearest' (default) | 'facing' | 'random' | 'crowd'
+//   (crowd reach def.aimR(S, p) px, default S.range x S.area; half arc def.aimH(S) rad, default S.arc / 2 or 0.5).
 // Weapons fire on cooldown with no foe in range. Targeting sees only the holder's view (w.vclamp, combat.js).
 (function (ED) {
   'use strict';
-  const W = ED.World.prototype;
+  const W = ED.World.prototype, U = ED.U;
   ED.WEAPONS = {}; ED.WIMPL = {}; ED.WEAPON_IDS = [];
   ED.MAX_WEAPONS = 3; ED.MAX_PASSIVES = 6; ED.PATH_MAX = 5; ED.TUNE_MAX = 5; ED.TUNE_KIND_MAX = 3;
   // impl: { fire, tick?, init?(w, p, ws), kill?(w, p, ws, S, e) (any foe e its holder kills, by any source), draw? }.
@@ -118,8 +120,70 @@
   W.weaponS = function (p, i) { const ws = p.weapons[i]; return ws.S && ws.Sv === p.statsV && ws.Sk === rkey(ws) && ws.Sid === ws.id ? ws.S : ED.Stats.weapon(p, i); };
   ED.weaponKey = rkey;
 
-  // Cursor aim (GAME-DESIGN §3): angle from hero p toward its aim point (p.in.ax / ay); p.mdir when that point is within 4 px of the hero.
-  W.aimDir = function (p) { const I = p.in, dx = I.ax - p.x, dy = I.ay - p.y; return dx * dx + dy * dy < 16 ? p.mdir : Math.atan2(dy, dx); };
+  // Aim angle of hero p (GAME-DESIGN §3). Cursor: toward p.in.ax / ay (p.mdir when within 4 px of the hero). Auto: autoDir with the def of weapon id wid, else of w.aimWs.
+  W.aimDir = function (p, wid) {
+    const I = p.in;
+    if (I.auto) return this.autoDir(p, wid ? ED.WEAPONS[wid] : this.aimWs ? ED.WEAPONS[this.aimWs.id] : null, wid ? (p.weapons[0] && p.weapons[0].id === wid) : this.aimWs === p.weapons[0]);
+    const dx = I.ax - p.x, dy = I.ay - p.y; return dx * dx + dy * dy < 16 ? p.mdir : Math.atan2(dy, dx);
+  };
+  // Auto-aim targets: only foes (not warded) and intact braziers inside p's view; w.rng only; no allocation. Each sets AT { x, y } and returns true, else false.
+  const AT = { x: 0, y: 0 }, AUTO_R = 400; // AUTO_R reaches every corner of the view
+  const CAP = 128, CK = 8, CA = new Float64Array(CAP), CD = new Float64Array(CAP), CW = new Float64Array(CAP), CX = new Float64Array(CAP), CY = new Float64Array(CAP);
+  // The nearest elite / boss within BIG_R px, else the nearest foe or intact brazier by centre distance.
+  const small = (e) => !(e.elite || e.boss), BIG_R = 300;
+  W.autoNearest = function (p) {
+    const b0 = this.heroFoe(p, BIG_R, small);
+    if (b0) { AT.x = b0.x; AT.y = b0.y; return true; }
+    const e = this.heroFoe(p, AUTO_R), B = this.arena.room ? null : this.arena.braziers;
+    let bd = Infinity;
+    if (e) { AT.x = e.x; AT.y = e.y; bd = U.dist2(p.x, p.y, e.x, e.y); }
+    if (B) for (let i = 0; i < B.length; i++) { const b = B[i]; if (b.broken || !ED.inView(p, b.x, b.y, b.r)) continue; const d = U.dist2(p.x, p.y, b.x, b.y); if (d < bd) { bd = d; AT.x = b.x; AT.y = b.y; } }
+    return bd < Infinity;
+  };
+  // Random foe in view.
+  W.autoRandom = function (p) { const e = this.target('random', p, AUTO_R); if (e) { AT.x = e.x; AT.y = e.y; } return !!e; };
+  // Crowd: foes within R (+ their radius) of the hero's chest; candidates = the CK nearest foes' angles, each scored by the foes within H rad of it (elites weigh 4, bosses 10);
+  // the best candidate (ties: the nearer) turns to the mean angle of the foes it covers; AT = that angle at its foe's distance. Scans at most CAP foes.
+  W.autoCrowd = function (p, R, H) {
+    const cx = p.x, cy = p.y - 4, q = this.foeScan(cx, cy, R);
+    let n = 0;
+    for (let k = 0; k < q.length && n < CAP; k++) {
+      const e = q[k]; if (e.dead || e.takeMul < 0.01 || !ED.inView(p, e.x, e.y, e.r)) continue;
+      const dx = e.x - cx, dy = e.y - cy, d2 = dx * dx + dy * dy, rr = R + e.r; if (d2 > rr * rr) continue;
+      CA[n] = Math.atan2(dy, dx); CD[n] = d2; CW[n] = e.boss ? 10 : e.elite ? 4 : 1; CX[n] = e.x; CY[n] = e.y; n++;
+    }
+    this.foeEnd();
+    if (!n) return false;
+    let best = 0, bs = -1;
+    for (let c = 0; c < CK && c < n; c++) {
+      let m = 0, md = Infinity;
+      for (let i = 0; i < n; i++) if (CD[i] < md) { md = CD[i]; m = i; }
+      CD[m] = Infinity;
+      let s = 0; const a = CA[m];
+      for (let i = 0; i < n; i++) if (Math.abs(U.angDiff(a, CA[i])) <= H) s += CW[i];
+      if (s > bs) { bs = s; best = m; }
+    }
+    const a = CA[best];
+    let off = 0, wt = 0;
+    for (let i = 0; i < n; i++) { const d = U.angDiff(a, CA[i]); if (Math.abs(d) <= H) { off += d * CW[i]; wt += CW[i]; } }
+    const b = a + off / wt, r = Math.sqrt((CX[best] - cx) * (CX[best] - cx) + (CY[best] - cy) * (CY[best] - cy));
+    AT.x = p.x + Math.cos(b) * r; AT.y = p.y + Math.sin(b) * r;
+    return true;
+  };
+  // Auto direction for def d (null: nearest); main: the hero weapon (slot 0). Sets w.aimD (px to the target, 0: none); a main aim with a target sets p.aimA / p.aimT (face, world.js).
+  W.autoDir = function (p, d, main) {
+    const k = d && d.autoAim || 'nearest', S = this.aimS;
+    let hit = false;
+    if (k === 'random') hit = this.autoRandom(p);
+    else if (k === 'crowd' && S && this.aimWs && ED.WEAPONS[this.aimWs.id] === d) {
+      hit = this.autoCrowd(p, d.aimR ? d.aimR(S, p) : S.range * S.area, d.aimH ? d.aimH(S) : S.arc ? S.arc / 2 : 0.5) || this.autoNearest(p);
+    } else if (k !== 'facing') hit = this.autoNearest(p);
+    if (!hit) { this.aimD = 0; return p.mdir; }
+    const a = Math.atan2(AT.y - p.y, AT.x - p.x);
+    this.aimD = Math.sqrt(U.dist2(p.x, p.y, AT.x, AT.y));
+    if (main) { p.aimA = a; p.aimT = this.time; }
+    return a;
+  };
   // Kill callbacks of every weapon hero p holds (called by killFoe).
   W.weaponKill = function (p, e) {
     for (let i = 0; i < p.weapons.length; i++) { const im = ED.WIMPL[p.weapons[i].id]; if (im && im.kill) im.kill(this, p, p.weapons[i], this.weaponS(p, i), e); }
@@ -132,13 +196,15 @@
         const ws = p.weapons[i], im = ED.WIMPL[ws.id];
         if (!im) continue;
         const S = this.weaponS(p, i);
+        this.aimWs = ws; this.aimS = S;
         if (im.tick) im.tick(this, p, ws, S, dt);
         ws.cd -= dt;
-        if (ws.cd > 0) continue;
-        if (im.fire(this, p, ws, S)) { ws.cd = S.cd; this.emit({ t: 'shoot', pid: p.pid, wid: ws.id }); }
-        else ws.cd = 0.1;
+        if (ws.cd <= 0) {
+          if (im.fire(this, p, ws, S)) { ws.cd = S.cd; this.emit({ t: 'shoot', pid: p.pid, wid: ws.id }); }
+          else ws.cd = 0.1;
+        }
       }
     }
-    this.vclamp = null;
+    this.vclamp = null; this.aimWs = null; this.aimS = null;
   };
 })(globalThis.ED || (globalThis.ED = {}));

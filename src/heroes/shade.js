@@ -67,6 +67,8 @@
 
   // ---------------- stabs ----------------
   const reach = (S) => S.len * S.area;
+  // Auto aim (crowd): stab reach + 12 px, half arc 0.25 rad + the storm jitter.
+  const stabR = (S) => reach(S) + 12, stabH = (S) => 0.25 + (S.cone || 0);
   // Aim of one stab: the cursor dir (w.aimDir); the mark instead when within reach + 12 px and AIM_CONE rad of it.
   function stabAim(w, p, ws, S) {
     const R = reach(S) + 12, m = S.mark ? markOf(ws.st) : null, a = w.aimDir(p);
@@ -205,7 +207,7 @@
     bloom: 0, petals: 6, plen: 0.6, pin: false, pdur: 1.2 };
   const base = (o) => Object.assign({}, KEYS, o);
   ED.addWeapon({
-    id: 'daggers', name: 'Twin Daggers', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', txt: 'Rapid stabs toward your cursor',
+    id: 'daggers', name: 'Twin Daggers', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', autoAim: 'crowd', aimR: stabR, aimH: stabH, txt: 'Rapid stabs toward your cursor',
     base: base({ dmg: 16, cd: 0.5, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.1 }),
     paths: [
       { id: 'flurry', name: 'Flurry', forms: ['thousand'], ranks: [
@@ -225,7 +227,7 @@
 
   // Shadow Fan (Return): stabs + a fan of S.fan + S.thrown returning daggers forward and as many behind (registered first: the old evolution id); the return leg always crits.
   ED.addWeapon({
-    id: 'shadowfan', name: 'Shadow Fan', icon: 'weapon.knives', look: 'sknife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Daggers fan out, return and crit',
+    id: 'shadowfan', name: 'Shadow Fan', icon: 'weapon.knives', look: 'sknife', sig: 'shade', mode: 'cursor', autoAim: 'crowd', aimR: stabR, aimH: stabH, evolved: true, form: true, from: 'daggers', txt: 'Daggers fan out, return and crit',
     base: base({ dmg: 14.7, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, fan: 3, tcd: 1, trange: 120, tdm: 0.42 }),
     refine: [
       { mods: { fan: 2 }, txt: '+2 daggers each way' },
@@ -234,7 +236,7 @@
   }, stabImpl);
   // Thousand Cuts (Flurry): the stab storm, each stab jittered within +-S.cone of the aim.
   ED.addWeapon({
-    id: 'thousand', name: 'Thousand Cuts', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A storm of stabs in a narrow cone',
+    id: 'thousand', name: 'Thousand Cuts', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', autoAim: 'crowd', aimR: stabR, aimH: stabH, evolved: true, form: true, from: 'daggers', txt: 'A storm of stabs in a narrow cone',
     base: base({ dmg: 15, cd: 0.4, n: 6, pierce: 0, area: 1, speed: 0, dur: 0, knock: 2, range: 0, crit: 0.1, len: 68, wid: 12, cone: 0.36 }),
     refine: [
       { mods: { n: 2 }, txt: '+2 stabs per storm' },
@@ -243,7 +245,7 @@
   }, stabImpl);
   // Assassinate (Lethality): stabs + the mark and the shadow's X cuts.
   ED.addWeapon({
-    id: 'assassinate', name: 'Assassinate', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'A shadow hunts the toughest foe',
+    id: 'assassinate', name: 'Assassinate', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', autoAim: 'crowd', aimR: stabR, aimH: stabH, evolved: true, form: true, from: 'daggers', txt: 'A shadow hunts the toughest foe',
     base: base({ dmg: 12.6, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.15, mark: true, mk: 0.95, mcd: 0.45, mlen: 64, scap: 2 }),
     refine: [
       { mods: { mcd: -0.15 }, txt: 'The shadow strikes far more often' },
@@ -252,7 +254,7 @@
   }, stabImpl);
   // Death Lotus (Lethality): crit stabs bloom into a ring of blades around their first foe.
   ED.addWeapon({
-    id: 'lotus', name: 'Death Lotus', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Crits bloom into a ring of blades',
+    id: 'lotus', name: 'Death Lotus', icon: 'weapon.daggers', look: 'knife', sig: 'shade', mode: 'cursor', autoAim: 'crowd', aimR: stabR, aimH: stabH, evolved: true, form: true, from: 'daggers', txt: 'Crits bloom into a ring of blades',
     base: base({ dmg: 13.3, cd: 0.45, n: 4, pierce: 0, area: 1, speed: 0, dur: 0, knock: 10, range: 0, crit: 0.15, bloom: 0.32, petals: 6, plen: 0.6, scap: 4 }),
     refine: [
       { mods: { petals: 2 }, txt: '+2 blades per bloom' },
@@ -261,7 +263,7 @@
   }, stabImpl);
   // Reaper's Return (Return): stabs + thrown daggers that pin a foe (strikes on it crit), then tear back as crits.
   ED.addWeapon({
-    id: 'reaper', name: "Reaper's Return", icon: 'weapon.knives', look: 'pknife', sig: 'shade', mode: 'cursor', evolved: true, form: true, from: 'daggers', txt: 'Daggers pin foes, then tear back',
+    id: 'reaper', name: "Reaper's Return", icon: 'weapon.knives', look: 'pknife', sig: 'shade', mode: 'cursor', autoAim: 'crowd', aimR: stabR, aimH: stabH, evolved: true, form: true, from: 'daggers', txt: 'Daggers pin foes, then tear back',
     base: base({ dmg: 12.6, cd: 0.45, n: 2, pierce: 0, area: 1, speed: 0, dur: 0, knock: 14, range: 0, crit: 0.12, thrown: 3, tcd: 1, trange: 120, tdm: 1, pin: true, pdur: 1.2, scap: 2 }),
     refine: [
       { mods: { thrown: 1 }, txt: '+1 pinning dagger' },
@@ -276,7 +278,7 @@
   // Zones: 'stepcut' (blink streak), 'afterimg' (the decoy).
   const DV = ED.HERO_VIEW;
   ED.addSkill({
-    id: 'step', name: 'Shadow Step', icon: 'fx.smoke', cd: 8, txt: 'Blink and leave a decoy foes chase',
+    id: 'step', name: 'Shadow Step', icon: 'fx.smoke', cd: 8, autoAim: { k: 'facing', d: 190 }, txt: 'Blink and leave a decoy foes chase',
     base: { dur: 2, dist: 130, charges: 1, lose: 0 },
     levels: [
       { mods: { dist: 60 }, txt: 'Blink 60 px farther' },

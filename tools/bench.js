@@ -1,13 +1,13 @@
 // Headless hero-balance bench: runs a bot runner (runOne of tools/bot.js) over a stage x hero x seed x meta x skill matrix in parallel and writes a report (one row per hero: its weapon).
 // Usage: node tools/bench.js [--stages 0,1,2|all] [--heroes all|knight,...] [--seeds N] [--seed0 S] [--meta none|max|none,max]
-//                            [--skill 1,0.3] [--maxTime S] [--jobs N] [--low] [--out DIR] [--quick] [--runner MODULE] [--tables pooled|all]
+//                            [--skill 1,0.3] [--aim cursor|auto] [--maxTime S] [--jobs N] [--low] [--out DIR] [--quick] [--runner MODULE] [--tables pooled|all]
 //        node tools/bench.js --resume DIR [any flag above overrides the stored cfg] [--force]   (skips jobs already in DIR/results.jsonl)
 //        node tools/bench.js --report DIR [--tables pooled|all]                                (rebuilds summary.json + report.html from DIR/results.jsonl)
-//   --skill: bot reflex tiers 0..1 (1 competent, 0.3 sloppy). --quick: --seeds 2 --stages 0. Defaults: all stages, all heroes, 8 seeds from 1,
-//   meta none, skill 1,0.3, maxTime 1380, jobs = logical cores - 1. --low: children at low OS priority and default jobs halved (for using the PC meanwhile).
+//   --skill: bot reflex tiers 0..1 (1 competent, 0.3 sloppy). --aim: the bot's aim mode (auto: sim-side auto aim). --quick: --seeds 2 --stages 0. Defaults: all stages, all heroes, 8 seeds from 1,
+//   meta none, skill 1,0.3, aim cursor, maxTime 1380, jobs = logical cores - 1. --low: children at low OS priority and default jobs halved (for using the PC meanwhile).
 //   --runner: module path exporting runOne(cfg) (default ./bot.js; ./bench-fake.js is a fast deterministic stub). --resume refuses a maxTime other than the stored one or a
 //   changed code hash unless --force. --tables all: a stdout table per group (default: only the groups pooled over stages, per meta x skill).
-// Mechanism: job key = stage|hero|seed|meta|skill|maxTime; job order: seed outermost, then stage, hero, meta, skill (deterministic, every cell gets seed 1 first).
+// Mechanism: job key = stage|hero|seed|meta|skill|maxTime (+ |auto for aim auto: cursor keys match older results); job order: seed outermost, then stage, hero, meta, skill (deterministic, every cell gets seed 1 first).
 //   Relative strength: a hero minus the mean of every hero run on the same stage, seed, meta and skill (paired tuples, seeded bootstrap CI).
 //   --jobs child processes each run runOne sequentially per job message. Each result, stamped with the child's code hash, is appended to results.jsonl as it arrives (crash-safe);
 //   errors go to errors.jsonl (dropped once their key has a result); meta.json holds cfg, code hash, git HEAD (-dirty when the tree has changes) and sessions. Code hash: sha1 of
@@ -22,7 +22,7 @@ const BOOT_N = 2000, MIN_PAIRS = 8, SATURATED = 0.95;
 
 // ---------------- arguments ----------------
 function parseArgs(argv) {
-  const VAL = new Set(['stages', 'heroes', 'seeds', 'seed0', 'meta', 'skill', 'jobs', 'maxTime', 'out', 'resume', 'report', 'runner', 'tables']);
+  const VAL = new Set(['stages', 'heroes', 'seeds', 'seed0', 'meta', 'skill', 'aim', 'jobs', 'maxTime', 'out', 'resume', 'report', 'runner', 'tables']);
   const BOOL = new Set(['quick', 'low', 'force', 'help']);
   const o = {};
   for (let i = 0; i < argv.length; i++) {
@@ -38,12 +38,13 @@ function parseArgs(argv) {
   if (o.tables !== undefined && o.tables !== 'pooled' && o.tables !== 'all') throw new Error('--tables is pooled or all');
   return o;
 }
-const DEFAULTS = { stages: 'all', heroes: 'all', seeds: 8, seed0: 1, meta: 'none', skill: '1,0.3', maxTime: 1380, runner: 'tools/bot.js' };
+const DEFAULTS = { stages: 'all', heroes: 'all', seeds: 8, seed0: 1, meta: 'none', skill: '1,0.3', aim: 'cursor', maxTime: 1380, runner: 'tools/bot.js' };
 function cfgFrom(flags, base) {
   // a stored cfg without skill / runner predates them: those benches ran skill 1 on tools/bot.js
   const c = Object.assign({}, DEFAULTS, base ? { skill: '1', runner: DEFAULTS.runner } : {}, base || {});
   if (flags.quick) { c.seeds = 2; c.stages = '0'; }
-  for (const k of ['stages', 'heroes', 'meta', 'skill']) if (flags[k] !== undefined) c[k] = flags[k];
+  for (const k of ['stages', 'heroes', 'meta', 'skill', 'aim']) if (flags[k] !== undefined) c[k] = flags[k];
+  if (c.aim !== 'cursor' && c.aim !== 'auto') throw new Error('--aim is cursor or auto');
   for (const k of ['seeds', 'seed0', 'maxTime']) if (flags[k] !== undefined) {
     const v = Number(flags[k]);
     if (!Number.isInteger(v) || v < (k === 'seed0' ? 0 : 1)) throw new Error('--' + k + ' needs an integer');
@@ -74,13 +75,16 @@ function buildJobs(c, ED) {
   if (!skills.length || skills.some(s => !(s >= 0 && s <= 1))) throw new Error('--skill is a list of numbers in 0..1');
   const jobs = [];
   for (let s = c.seed0; s < c.seed0 + c.seeds; s++) for (const st of stages) for (const h of heroes) for (const m of metas) for (const sk of skills) {
-    jobs.push({ stage: st, cls: h, seed: s, meta: m, skill: sk, maxTime: c.maxTime });
+    const j = { stage: st, cls: h, seed: s, meta: m, skill: sk, maxTime: c.maxTime };
+    if (c.aim === 'auto') j.aim = 'auto';
+    jobs.push(j);
   }
   return jobs;
 }
-const keyOf = (r) => [r.stage, r.cls, r.seed, r.meta, r.skill, r.maxTime].join('|');
-// Pairing tuple: a hero's runs pair with the other heroes' runs on the same stage, seed, meta and skill.
-const tupleOf = (r) => [r.stage, r.seed, r.meta, r.skill].join('|');
+const aimK = (r) => (r.aim === 'auto' ? '|auto' : '');
+const keyOf = (r) => [r.stage, r.cls, r.seed, r.meta, r.skill, r.maxTime].join('|') + aimK(r);
+// Pairing tuple: a hero's runs pair with the other heroes' runs on the same stage, seed, meta, skill and aim.
+const tupleOf = (r) => [r.stage, r.seed, r.meta, r.skill].join('|') + aimK(r);
 
 // ---------------- files ----------------
 function readJsonl(file) {
@@ -240,7 +244,7 @@ function runPool(dir, runner, todo, nj, low, meta, sess, onDone) {
         fs.appendFileSync(errFile, JSON.stringify({ cfg, error: m.error, hash: k.hash }) + '\n');
         console.error(nl + 'error ' + keyOf(cfg) + ': ' + m.error.split('\n')[0]);
       } else {
-        const r = Object.assign({ maxTime: cfg.maxTime }, m.result, { hash: k.hash });
+        const r = Object.assign({ maxTime: cfg.maxTime, aim: cfg.aim }, m.result, { hash: k.hash });
         for (const f of ECHO) {
           const a = r[f] === undefined ? null : r[f], b = cfg[f] === undefined ? null : cfg[f];
           if (a !== b) warn('echo-' + f, 'runner echoed ' + f + ' ' + JSON.stringify(a) + ' for ' + JSON.stringify(b) + ': the result keys under the echoed value');
@@ -375,8 +379,8 @@ function paired(tup, k, ED, seedKey) {
 function aggregate(runs, stage, sel, ED, mixedMax) {
   const st = stage >= 0 ? ED.STAGES[stage] : null, stIds = [...new Set(runs.map(r => r.stage))].sort((a, b) => a - b);
   const nSlots = Math.max(...stIds.map(s => ED.STAGES[s].bosses.length));
-  const label = (st ? st.name : 'All stages') + ' · meta ' + sel.meta + ' · skill ' + sel.skill + (mixedMax ? ' · max ' + Report.mmss(sel.maxTime) : '');
-  const g = Object.assign({ key: [stage, sel.meta, sel.skill, sel.maxTime].join('|'), stage, stageId: st ? st.id : 'all', label }, sel, { n: runs.length, slots: nSlots });
+  const label = (st ? st.name : 'All stages') + ' · meta ' + sel.meta + ' · skill ' + sel.skill + (sel.aim ? ' · aim ' + sel.aim : '') + (mixedMax ? ' · max ' + Report.mmss(sel.maxTime) : '');
+  const g = Object.assign({ key: [stage, sel.meta, sel.skill, sel.maxTime].join('|') + aimK(sel), stage, stageId: st ? st.id : 'all', label }, sel, { n: runs.length, slots: nSlots });
   g.overall = stats(runs, ED, nSlots);
   g.saturated = g.overall.win >= SATURATED;
   const byH = new Map(), byCell = new Map(), tup = new Map();
@@ -442,9 +446,11 @@ function summarize(dir, ED, errs) {
   const uniq = (f, cmp) => [...new Set(runs.map(f))].sort(cmp);
   const metas = uniq(r => r.meta, (a, b) => (a === 'none' ? -1 : b === 'none' ? 1 : a.localeCompare(b)));
   const skills = uniq(r => r.skill, (a, b) => b - a), maxes = uniq(r => r.maxTime, (a, b) => a - b), stages = uniq(r => r.stage, (a, b) => a - b);
+  const aims = uniq(r => (r.aim === 'auto' ? 'auto' : ''), (a, b) => a.localeCompare(b));
   const groups = [];
-  for (const m of metas) for (const sk of skills) for (const mt of maxes) {
-    const sel = { meta: m, skill: sk, maxTime: mt }, rs0 = runs.filter(r => r.meta === m && r.skill === sk && r.maxTime === mt);
+  for (const m of metas) for (const sk of skills) for (const mt of maxes) for (const am of aims) {
+    const sel = { meta: m, skill: sk, maxTime: mt }, rs0 = runs.filter(r => r.meta === m && r.skill === sk && r.maxTime === mt && (r.aim === 'auto' ? 'auto' : '') === am);
+    if (am) sel.aim = am;
     for (const s of stages) { const rs = rs0.filter(r => r.stage === s); if (rs.length) groups.push(aggregate(rs, s, sel, ED, maxes.length > 1)); }
     if (rs0.length && new Set(rs0.map(r => r.stage)).size > 1) groups.push(aggregate(rs0, -1, sel, ED, maxes.length > 1));
   }

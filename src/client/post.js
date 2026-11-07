@@ -1,6 +1,6 @@
 // WebGL present + post-process. The world arrives as a small image (1 px = 1 world px): either ED.Batch's GL render target (o.tex, same context, no upload) or the 2D world buffer canvas
 // (uploaded as a texture). Post renders bloom (1/2 of
-// the buffer, 2 separable blur iterations) at buffer resolution, then composites to the screen-size WebGL canvas with a sharp-bilinear upscale (crisp art pixels at
+// the buffer, 2 separable blur iterations; skipped with o.bloom 0) at buffer resolution, then composites to the WebGL canvas (device px, or 1 px per buffer px CSS-upscaled on coarse pointers: render.js) with a sharp-bilinear upscale (crisp art pixels at
 // non-integer scales, the fractional camera offset applied here), a per-stage colour grade (Post.grade(theme): { id, pal: { accent, light } }), vignette, film grain and FX-driven chromatic aberration (channel offsets rounded to whole buffer px: at the integer scales Render uses, art pixels stay exact nearest-neighbour squares). The WebGL canvas sits
 // beneath the transparent HUD canvas. Any failure leaves Post.ready false and Render falls back to the plain 2D present.
 (function (ED) {
@@ -146,11 +146,12 @@ void main(){
 
   Post.fail = (err) => { Post.ready = false; Post.error = String(err && err.message || err); if (glc) glc.style.display = 'none'; };
 
-  // w x h: screen canvas in device px; bw x bh: world buffer in world px.
-  Post.resize = (w, h, bw, bh) => {
+  // w x h: post canvas px; bw x bh: world buffer in world px; cssW x cssH: the canvas's CSS box (top-left anchored), else the full window.
+  Post.resize = (w, h, bw, bh, cssW, cssH) => {
     if (!glc || !gl || gl.isContextLost()) return;
     try {
       if (glc.width !== w || glc.height !== h) { glc.width = w; glc.height = h; }
+      glc.style.width = cssW ? cssW + 'px' : '100%'; glc.style.height = cssH ? cssH + 'px' : '100%';
       if (bw !== bufW || bh !== bufH || !fb.length) allocate(bw, bh);
     } catch (err) { Post.fail(err); }
   };
@@ -181,7 +182,7 @@ void main(){
   };
 
   // src: the world buffer canvas (bw x bh), or null with o.tex: a bw x bh texture on this context (ED.Batch.out.tex, top row first).
-  // o: { tex, biome, t, aberr, flash:[r,g,b,a], lightLevel, bloom, vig, scale (screen px per buffer px), fx, fy (fractional camera offset in buffer px) }
+  // o: { tex, biome, t, aberr, flash:[r,g,b,a], lightLevel, bloom (0: no bloom passes), vig, scale (post canvas px per buffer px), fx, fy (fractional camera offset in buffer px) }
   Post.render = (src, o) => {
     if (!Post.ready || !gl) return false;
     if (gl.isContextLost()) { Post.ready = false; Post.lost = true; return false; }
@@ -200,15 +201,17 @@ void main(){
       // the batcher shares this context: restore the full-screen quad on attribute 0 and plain blending
       gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); gl.enableVertexAttribArray(0); gl.disable(gl.BLEND);
       const g = Post.grade(o.biome), ll = o.lightLevel === undefined ? 1 : o.lightLevel;
-      // bright pass -> blur x2 (ping-pong at 1/2 of the world buffer)
-      gl.bindFramebuffer(gl.FRAMEBUFFER, fb[0].fbo); gl.viewport(0, 0, qW, qH);
-      gl.useProgram(P.bright.p); gl.uniform1i(P.bright.u.tex, 0); gl.uniform2f(P.bright.u.texel, 1 / bw, 1 / bh); gl.uniform2f(P.bright.u.thr, g.thr, 0.22);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      gl.useProgram(P.blur.p); gl.uniform1i(P.blur.u.tex, 0);
-      for (let i = 0; i < 2; i++) {
-        const k = BLUR_K[i];
-        gl.bindFramebuffer(gl.FRAMEBUFFER, fb[1].fbo); gl.bindTexture(gl.TEXTURE_2D, fb[0].tex); gl.uniform2f(P.blur.u.dir, k / qW, 0); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, fb[0].fbo); gl.bindTexture(gl.TEXTURE_2D, fb[1].tex); gl.uniform2f(P.blur.u.dir, 0, k / qH); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      // bright pass -> blur x2 (ping-pong at 1/2 of the world buffer); skipped with o.bloom 0 (the composite then adds bloom x 0)
+      if (o.bloom !== 0) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fb[0].fbo); gl.viewport(0, 0, qW, qH);
+        gl.useProgram(P.bright.p); gl.uniform1i(P.bright.u.tex, 0); gl.uniform2f(P.bright.u.texel, 1 / bw, 1 / bh); gl.uniform2f(P.bright.u.thr, g.thr, 0.22);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        gl.useProgram(P.blur.p); gl.uniform1i(P.blur.u.tex, 0);
+        for (let i = 0; i < 2; i++) {
+          const k = BLUR_K[i];
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fb[1].fbo); gl.bindTexture(gl.TEXTURE_2D, fb[0].tex); gl.uniform2f(P.blur.u.dir, k / qW, 0); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fb[0].fbo); gl.bindTexture(gl.TEXTURE_2D, fb[1].tex); gl.uniform2f(P.blur.u.dir, 0, k / qH); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
       }
       // composite
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, w, h);

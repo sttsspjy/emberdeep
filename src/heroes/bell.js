@@ -191,7 +191,7 @@
   // Zero damage. A ring from the hero out to N.r (about the screen's half diagonal) in N.t s: N.stun s and a push to every foe it reaches; echo: a second ring, 25% wider, 0.55 s later;
   // ward: every living hero within N.r is invulnerable for N.ward s; gems: every xp gem within N.r flies to the hero. clear (L5): every foe projectile inside the hero's view is erased.
   ED.addSkill({
-    id: 'peal', name: 'Great Peal', icon: 'weapon.greatbell', cd: 16, txt: 'Stun every foe on screen',
+    id: 'peal', name: 'Great Peal', icon: 'weapon.greatbell', cd: 16, autoAim: { k: 'self' }, txt: 'Stun every foe on screen',
     base: { r: 370, t: 0.5, stun: 1.2, knock: 180 },
     levels: [
       { mods: { echo: true }, txt: 'A second, wider peal follows' },

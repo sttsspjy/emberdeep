@@ -8,8 +8,8 @@
 //   botMs (think() time, sampled every 16th tick x 16), sanctum (true once the run reached the Sanctum room: a death after that died inside it),
 //   wm (the Wickmother fight, null when she never spawned): { ph (phase reached), hp (core HP fraction at the end), t: [s in P1, P2, P3], kneel: [in P1 (hands), P2 (sconces), P3 (hands)], lit (sconces lit),
 //   snuff, brk (hand breaks), rage (stall enrages), taken: { look: dmg } (taken during the fight), raw: { warded, core, hand } (hero hit damage before crits and her damage factor, by target), hpLost } }.
-// Optional cfg: skill 0..1 (bot reflexes, default 1).
-// CLI: node tools/bot.js --stage 0 --hero knight [--seed 1] [--meta max] [--max 1380] [--skill 0.5]  -> prints the result JSON and ms per game minute.
+// Optional cfg: skill 0..1 (bot reflexes, default 1), aim 'cursor' (default) | 'auto' (sim-side auto aim; echoed as result.aim only when 'auto').
+// CLI: node tools/bot.js --stage 0 --hero knight [--seed 1] [--meta max] [--max 1380] [--skill 0.5] [--aim auto]  -> prints the result JSON and ms per game minute.
 'use strict';
 const { load } = require('./sim.js');
 const Bot = require('./bot-brain.js');
@@ -30,7 +30,7 @@ function runOne(cfg) {
   const ED = load(), C = ED.CONST;
   const w = new ED.World({ seed: cfg.seed, stage: cfg.stage, players: [{ pid: 'p1', name: 'Bot', slot: 0, cls: cfg.cls, meta: Bot.metaFor(ED, cfg.meta) }] });
   const p = w.heroes[0];
-  const bot = Bot.create({ pid: 'p1', seed: cfg.seed, skill: cfg.skill });
+  const bot = Bot.create({ pid: 'p1', seed: cfg.seed, skill: cfg.skill, aim: cfg.aim });
   bot.onStart(w, p);
   // damage taken per cause (wraps this world's hurtHero; the sim result is unchanged)
   const taken = {}, hurt = w.hurtHero;
@@ -116,7 +116,7 @@ function runOne(cfg) {
   }
   const won = w.state === 'won' || !!w.won; // a banked win (final boss dead) cut by maxTime during the Last Light is still a win
   const r = {
-    skill: cfg.skill, stage: cfg.stage, stageId: ED.STAGES[cfg.stage] ? ED.STAGES[cfg.stage].id : '', cls: p.cls, seed: cfg.seed, meta: cfg.meta,
+    skill: cfg.skill, aim: cfg.aim === 'auto' ? 'auto' : undefined, stage: cfg.stage, stageId: ED.STAGES[cfg.stage] ? ED.STAGES[cfg.stage].id : '', cls: p.cls, seed: cfg.seed, meta: cfg.meta,
     won, time: Math.round(w.time * 100) / 100, level: w.level, kills: w.kills, gold: w.gold,
     death: won ? null : w.state === 'lost' ? lastCause || 'unknown' : 'timeout',
     bosses, elites: elites.map(E => ({ k: E.k, t: E.t, hit: E.hit, ttk: E.ttk, on: E.ttk === null ? null : r1(E.on) })), dealt: {}, taken, hurt: 0,
@@ -138,7 +138,7 @@ module.exports = { runOne, metaFor: Bot.metaFor };
 
 if (require.main === module) {
   const a = process.argv.slice(2), arg = (k, d) => { const i = a.indexOf('--' + k); return i >= 0 && i + 1 < a.length ? a[i + 1] : d; };
-  const cfg = { stage: +arg('stage', 0), cls: arg('hero', 'knight'), seed: +arg('seed', 1), meta: arg('meta', 'none'), maxTime: +arg('max', 23 * 60), skill: +arg('skill', 1) };
+  const cfg = { stage: +arg('stage', 0), cls: arg('hero', 'knight'), seed: +arg('seed', 1), meta: arg('meta', 'none'), maxTime: +arg('max', 23 * 60), skill: +arg('skill', 1), aim: arg('aim', 'cursor') };
   const r = runOne(cfg);
   console.log(JSON.stringify(r, null, 1));
   console.log(`ms per game minute: ${(r.ms / Math.max(1e-6, r.time / 60)).toFixed(0)} (${r.ms} ms for ${(r.time / 60).toFixed(2)} min)`);

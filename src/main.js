@@ -36,6 +36,7 @@
     ED.FX.numbers = s.numbers !== false;
     ED.FX.shakeOn = s.shake !== false;
     ED.Input.setBinds(s.binds);
+    if (ED.Touch) ED.Touch.setSize(s.touchSize);
   };
 
   // Starts a solo run with the selected hero and stage (seed from the clock: runs differ, the sim stays deterministic per seed).
@@ -162,6 +163,7 @@
     if (!S.stageUnlocked(A.profile, A.sel.stage)) A.sel.stage = 0;
     const canvas = $('game');
     ED.Input.init(canvas);
+    if (ED.Touch) ED.Touch.init();
     ED.Render.init(canvas);
     ED.AimFx.applyCursor();
     A.applySettings();
@@ -174,7 +176,11 @@
     }
     ED.UI.bind();
     const unlock = () => { if (ED.Audio && ED.Audio.init) ED.Audio.init(); };
-    window.addEventListener('pointerdown', unlock, { once: true }); window.addEventListener('keydown', unlock, { once: true });
+    window.addEventListener('pointerdown', unlock, { once: true }); window.addEventListener('keydown', unlock, { once: true }); window.addEventListener('touchend', unlock, { once: true });
+    // a solo run pauses when the page hides or a phone turns to portrait (the rotate overlay covers the view)
+    const autoPause = () => { if (A.state === 'run' && ED.Game.mode === 'solo' && !ED.Game.bot && !ED.Game.paused && ED.Game.active()) A.togglePause(true); };
+    document.addEventListener('visibilitychange', () => { if (document.hidden) autoPause(); });
+    try { const mq = matchMedia('(orientation: portrait) and (pointer: coarse)'); const onMq = () => { if (mq.matches) autoPause(); }; if (mq.addEventListener) mq.addEventListener('change', onMq); else mq.addListener(onMq); } catch (e) { /* no media queries */ }
     ED.Atlas.ready.then(() => {
       $('loading').hidden = true;
       A.state = 'title'; ED.UI.renderTitle(); ED.UI.show('title');

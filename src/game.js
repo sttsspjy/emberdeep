@@ -19,6 +19,7 @@
   const SNAP_PX = 96;   // client: a correction larger than this snaps instead of blending
   const BLEND = 12;     // client: correction offset decay (1/s)
   const NET_EV_CAP = 5000;
+  const AUTO = 2048;    // input ed bit 11: auto aim mode (a level, not an edge)
 
   const blankView = () => ({ me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: null, stage: 0, seed: 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, bossBar: null, lap: null, sanctum: null, events: [], botTag: '', botPick: '' });
   const SFX_KEEP = { boss: 1, warn: 1, evolve: 1, level: 1, down: 1, dead: 1, revive: 1, end: 1 }; // events still sounded with sfxLite
@@ -59,13 +60,13 @@
   };
 
   // Local input -> World / client latch (once per frame; edge flags latch until the next tick consumes them).
-  const IN = { mx: 0, my: 0, ax: 0, ay: 0, dash: false, q: false, e: false, pick: 0, reroll: false, skip: false };
+  const IN = { mx: 0, my: 0, ax: 0, ay: 0, auto: false, dash: false, q: false, e: false, pick: 0, reroll: false, skip: false };
   S.control = function (inp) {
     if (this.mode === 'client') { this.clientControl(inp); return; }
     const w = this.w, me = w && w.hero(this.myPid);
     if (!me) return;
     const aim = ED.AimFx.point(me, inp);
-    IN.mx = inp.mx; IN.my = inp.my; IN.ax = aim.wx; IN.ay = aim.wy;
+    IN.mx = inp.mx; IN.my = inp.my; IN.ax = aim.wx; IN.ay = aim.wy; IN.auto = !!inp.auto;
     IN.dash = inp.dash; IN.q = inp.q; IN.e = inp.e; IN.pick = inp.pick; IN.reroll = inp.reroll; IN.skip = inp.skip;
     w.input(this.myPid, IN);
   };
@@ -128,7 +129,7 @@
     for (const p of w.heroes) if (p.pid !== this.myPid) {
       this.rem.set(p.pid, {
         pid: p.pid, idx: this.pidIdx[p.pid], pidIdx: this.pidIdx, q: [], free: [], ack: 0, newest: 0, anchored: false, started: false, wait: 0, late: 0, miss: 0,
-        lx: 0, ly: 0, lax: p.x + 100, lay: p.y, vw: C.VIEW_W, vh: C.VIEW_H, seq: 0, evs: null, carry: [], offer: null, bytes: 0,
+        lx: 0, ly: 0, lax: p.x + 100, lay: p.y, lauto: false, vw: C.VIEW_W, vh: C.VIEW_H, seq: 0, evs: null, carry: [], offer: null, bytes: 0,
       });
     }
     // A hidden host tab gets no animation frames: a timer keeps the shared run going (browsers throttle it, so it may run many steps at once).
@@ -152,15 +153,16 @@
   S.queueFrame = function (seq, qx, qy, ax, ay, ed) {
     const rc = this.rc;
     if (seq <= rc.newest) return; // already queued
-    rc.newest = seq; rc.lx = qx; rc.ly = qy; rc.lax = ax; rc.lay = ay;
+    rc.newest = seq; rc.lx = qx; rc.ly = qy; rc.lax = ax; rc.lay = ay; rc.lauto = !!(ed & AUTO);
     if (!rc.anchored) { rc.anchored = true; rc.ack = seq - 1; }
     if (seq <= rc.ack) rc.late++;
     const f = rc.free.pop() || {};
     f.seq = seq; f.qx = qx; f.qy = qy; f.ax = ax; f.ay = ay; f.ed = ed;
     rc.q.push(f);
   };
-  // One sim tick of client rc's input: the next frame in sequence, else the newest input repeated (stopped after IDLE missing ticks). Presses in skipped frames carry over.
-  const RI = { mx: 0, my: 0, ax: 0, ay: 0, dash: false, q: false, e: false, pick: 0, banish: 0, reroll: false, skip: false };
+  // One sim tick of client rc's input: the next frame in sequence, else the newest input repeated (stopped after IDLE missing ticks). Presses in skipped frames carry over;
+  // the aim mode (ed bit AUTO) is a level: the fed frame's, else the newest frame's.
+  const RI = { mx: 0, my: 0, ax: 0, ay: 0, auto: false, dash: false, q: false, e: false, pick: 0, banish: 0, reroll: false, skip: false };
   S.feed = function (rc) {
     if (!rc.anchored) return;
     const q = rc.q;
@@ -175,11 +177,11 @@
     let qx, qy;
     if (q.length) {
       const f = q.shift();
-      rc.ack = f.seq; rc.miss = 0; rc.late = 0; ed |= f.ed; qx = f.qx; qy = f.qy; RI.ax = f.ax; RI.ay = f.ay;
+      rc.ack = f.seq; rc.miss = 0; rc.late = 0; ed |= f.ed; qx = f.qx; qy = f.qy; RI.ax = f.ax; RI.ay = f.ay; RI.auto = !!(f.ed & AUTO);
       rc.free.push(f);
     } else {
       rc.ack = want; rc.miss++;
-      const idle = rc.miss > IDLE; qx = idle ? 0 : rc.lx; qy = idle ? 0 : rc.ly; RI.ax = rc.lax; RI.ay = rc.lay;
+      const idle = rc.miss > IDLE; qx = idle ? 0 : rc.lx; qy = idle ? 0 : rc.ly; RI.ax = rc.lax; RI.ay = rc.lay; RI.auto = rc.lauto;
     }
     RI.mx = qx / 127; RI.my = qy / 127;
     RI.dash = !!(ed & 1); RI.q = !!(ed & 2); RI.e = !!(ed & 4); RI.reroll = !!(ed & 8); RI.skip = !!(ed & 16); RI.pick = (ed >> 5) & 7; RI.banish = (ed >> 8) & 7;
@@ -221,7 +223,7 @@
     const M = this.mir = new ED.Net.Mirror({ stage: cfg.stage, seed: cfg.seed, roster: cfg.roster, myPid: cfg.myPid });
     this.view = M.view;
     this.P = { x: 0, y: 0, dashT: 0, dashCd: 0, dashDx: 1, dashDy: 0, mdir: 0, mvx: 0, mvy: 0, moving: false };
-    this.L = { mx: 0, my: 0, ax: 0, ay: 0, ed: 0, pick: 0, banish: 0 };
+    this.L = { mx: 0, my: 0, ax: 0, ay: 0, auto: false, ed: 0, pick: 0, banish: 0 };
     this.hist = []; for (let i = 0; i < HIST; i++) this.hist.push({ seq: 0, qx: 0, qy: 0, mx: 0, my: 0, ax: 0, ay: 0, ed: 0 });
     this.seq = 0; this.sent = 0; this.inT = 0; this.acc = 0;
     this.clock = 0; this.srvT = -1; this.srvAt = 0; this.rt = 0; this.rtOn = false; this.offX = 0; this.offY = 0; this.predOn = false; this.spd = 0;
@@ -240,7 +242,7 @@
     const me = this.view && this.view.me, L = this.L;
     if (!me || !this.mir.ready) return;
     const aim = ED.AimFx.point(me, inp);
-    L.mx = inp.mx; L.my = inp.my; L.ax = aim.wx; L.ay = aim.wy;
+    L.mx = inp.mx; L.my = inp.my; L.ax = aim.wx; L.ay = aim.wy; L.auto = !!inp.auto;
     L.ed |= (inp.dash ? 1 : 0) | (inp.q ? 2 : 0) | (inp.e ? 4 : 0) | (inp.reroll ? 8 : 0) | (inp.skip ? 16 : 0);
     if (inp.pick) this.clientPick(inp.pick);
   };
@@ -291,7 +293,7 @@
     P.dashCd -= dt;
     if ((f.ed & 1) && P.dashCd <= 0 && P.dashT <= 0) {
       const l = Math.hypot(f.mx, f.my);
-      if (l > 0.1) { P.dashDx = f.mx / l; P.dashDy = f.my / l; } else { const a = Math.atan2(f.ay - P.y, f.ax - P.x); P.dashDx = Math.cos(a); P.dashDy = Math.sin(a); }
+      if (l > 0.1) { P.dashDx = f.mx / l; P.dashDy = f.my / l; } else { const a = f.ed & AUTO ? P.mdir : Math.atan2(f.ay - P.y, f.ax - P.x); P.dashDx = Math.cos(a); P.dashDy = Math.sin(a); }
       P.dashT = D.t; P.dashCd = D.cd;
       if (live) this.route({ t: 'dash', pid: this.myPid, x: Math.round(P.x), y: Math.round(P.y), a: Math.atan2(P.dashDy, P.dashDx) }, this.evCtx);
     }
@@ -313,7 +315,7 @@
     const mx = f.qx / 127, my = f.qy / 127, l = Math.hypot(mx, my);
     f.mx = l > 1 ? mx / l : mx; f.my = l > 1 ? my / l : my;
     f.ax = U.clamp(Math.round(L.ax * 2), -32768, 32767) / 2; f.ay = U.clamp(Math.round(L.ay * 2), -32768, 32767) / 2;
-    f.ed = (L.ed & 31) | ((L.pick & 7) << 5) | ((L.banish & 7) << 8); L.ed = 0; L.pick = 0; L.banish = 0;
+    f.ed = (L.ed & 31) | ((L.pick & 7) << 5) | ((L.banish & 7) << 8) | (L.auto ? AUTO : 0); L.ed = 0; L.pick = 0; L.banish = 0;
     if (this.predOn) this.step(f, true);
   };
   S.clientUpdate = function (dt) {
@@ -344,7 +346,7 @@
       if (!this.predOn) this.copySrv(M.srv);
       me.x = P.x + this.offX; me.y = P.y + this.offY;
       me.moving = P.moving; me.mdir = P.mdir; me.mvx = P.mvx; me.mvy = P.mvy; me.dashT = P.dashT; me.dashCd = Math.max(0, P.dashCd); me.dashDx = P.dashDx; me.dashDy = P.dashDy;
-      me.face = Math.atan2(this.L.ay - me.y, this.L.ax - me.x);
+      me.face = this.L.auto ? P.mdir : Math.atan2(this.L.ay - me.y, this.L.ax - me.x); // auto: the heading (the host faces the target; cosmetic)
       for (const sk of me.skills) if (sk.cd > 0) sk.cd = Math.max(0, sk.cd - dt);
       if (this.offerHold > 0 && (this.offerHold -= dt) <= 0 && !me.offer) me.offer = this.offerKeep;
     }

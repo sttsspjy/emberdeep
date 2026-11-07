@@ -92,7 +92,7 @@
   };
   const hsThrow = (w, p, ws, S) => {
     const a = w.aimDir(p), n = Math.max(1, S.n | 0), I = p.in;
-    const d = U.clamp(Math.hypot(I.ax - p.x, I.ay - p.y), HMIN, S.range * (S.far || 1));
+    const d = U.clamp(I.auto ? w.aimD || S.range * 0.5 : Math.hypot(I.ax - p.x, I.ay - p.y), HMIN, S.range * (S.far || 1)); // auto: the target's distance, none: half range
     HAXE.r = 14 * S.area; HAXE.life = d / S.speed; HAXE.onHit = hsHit; HAXE.onEnd = hsEmbed;
     let vol = 0;
     for (let i = 0; i < n; i++) {
@@ -103,7 +103,7 @@
     return true;
   };
   ED.addWeapon({
-    id: 'waraxe', name: 'War Axe', look: 'axe', held: 'weapon.alt.throwing_axe', support: true, role: 'control', mode: 'cursor', txt: 'Arcing axes knock the horde back',
+    id: 'waraxe', name: 'War Axe', look: 'axe', held: 'weapon.alt.throwing_axe', support: true, role: 'control', mode: 'cursor', autoAim: 'nearest', txt: 'Arcing axes knock the horde back',
     base: { dmg: 20, cd: 1.5, n: 2, pierce: 4, area: 1, speed: 100, dur: 0, knock: 260, range: 0, both: false, stag: 0, far: 1 },
     paths: [
       { id: 'count', name: 'Count', forms: ['headsman'], ranks: [
@@ -121,7 +121,7 @@
     ],
   }, { fire: axeThrow });
   ED.addWeapon({
-    id: 'headsman', name: 'Headsman', look: 'hsaxe', held: 'weapon.alt.double_axe', support: true, role: 'control', mode: 'cursor', evolved: true, form: true, from: 'waraxe',
+    id: 'headsman', name: 'Headsman', look: 'hsaxe', held: 'weapon.alt.double_axe', support: true, role: 'control', mode: 'cursor', autoAim: 'nearest', evolved: true, form: true, from: 'waraxe',
     txt: 'Giant axes fly where you aim and grind',
     base: { dmg: 12, cd: 1.6, n: 2, pierce: 0, area: 1, speed: 380, dur: 1.2, knock: 220, range: 200, both: false, stag: 0, far: 1, push: 20 },
     refine: [
@@ -191,7 +191,7 @@
     },
   };
   ED.addWeapon({
-    id: 'bramble', name: 'Bramble Trail', look: 'bramble', held: 'proj.thorn', support: true, role: 'control', mode: 'around', txt: 'Thorns root foes where you walk',
+    id: 'bramble', name: 'Bramble Trail', look: 'bramble', held: 'proj.thorn', support: true, role: 'control', mode: 'around', autoAim: 'nearest', txt: 'Thorns root foes where you walk',
     base: { dmg: 8, cd: 1.6, n: 5, pierce: 0, area: 1, speed: 0, dur: 1.8, knock: 0, range: 0, gap: 22, size: 8.5, rows: 1, ringR: 56, ring2: false, root: 0.5, imm: 0.8, barb: 0, rcrit: false, burst: false },
     paths: [
       { id: 'length', name: 'Length', forms: ['thornwood'], ranks: [
@@ -209,7 +209,7 @@
     ],
   }, bramble);
   ED.addWeapon({
-    id: 'thornwood', name: 'Thornwood', look: 'thicket', held: 'proj.thorn', support: true, role: 'control', mode: 'around', evolved: true, form: true, from: 'bramble', txt: 'Thickets persist and grab',
+    id: 'thornwood', name: 'Thornwood', look: 'thicket', held: 'proj.thorn', support: true, role: 'control', mode: 'around', autoAim: 'nearest', evolved: true, form: true, from: 'bramble', txt: 'Thickets persist and grab',
     base: { dmg: 6.5, cd: 1.8, n: 5, pierce: 0, area: 1.1, speed: 0, dur: 2.2, knock: 0, range: 0, gap: 20, size: 10, rows: 1, ringR: 58, ring2: false, root: 0.6, imm: 0.4, barb: 0, rcrit: false, burst: false },
     refine: [
       { mods: { dmg: 0.2, area: 0.15 }, txt: '+20% damage, thickets 15% wider' },
@@ -264,7 +264,7 @@
     return true;
   };
   ED.addWeapon({
-    id: 'glaive', name: 'Glaive', look: 'glaive', held: 'weapon.glaive', support: true, role: 'lane', mode: 'cursor', txt: 'Boomerang out and back, pierces',
+    id: 'glaive', name: 'Glaive', look: 'glaive', held: 'weapon.glaive', support: true, role: 'lane', mode: 'cursor', autoAim: 'nearest', txt: 'Boomerang out and back, pierces',
     base: { dmg: 32, cd: 1.0, n: 1, pierce: 3, area: 1, speed: 260, dur: 0, knock: 30, range: 320, keep: 0.3, hover: false, bcrit: false },
     paths: [
       { id: 'twin', name: 'Twin', forms: ['twinmoons'], ranks: [
@@ -282,7 +282,7 @@
     ],
   }, { fire: glaiveFire });
   ED.addWeapon({
-    id: 'twinmoons', name: 'Twin Moons', look: 'moon', held: 'weapon.glaive', support: true, role: 'lane', mode: 'cursor', evolved: true, form: true, from: 'glaive', txt: 'Two moon pairs loop both ways',
+    id: 'twinmoons', name: 'Twin Moons', look: 'moon', held: 'weapon.glaive', support: true, role: 'lane', mode: 'cursor', autoAim: 'nearest', evolved: true, form: true, from: 'glaive', txt: 'Two moon pairs loop both ways',
     base: { dmg: 23, cd: 1.5, n: 2, pierce: 2, area: 1, speed: 300, dur: 0, knock: 50, range: 320, rad: 62, keep: 0, hover: false, bcrit: false },
     refine: [
       { mods: { n: 1 }, txt: '+1 moon each way' },

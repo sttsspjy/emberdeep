@@ -15,6 +15,7 @@ Canonical code contract. Rules and numbers live in [GAME-DESIGN.md](GAME-DESIGN.
 
 ```
 index.html  style.css
+manifest.webmanifest sw.js icons/*.png   PWA shell (the only runtime files besides code; rule ② exception): manifest, service worker (cache-first, atomic file-set update), icons (tools/icons.js; --check)
 src/util.js                 U (math, RNG, hash3), ED.CONST, ED.regLook / ED.LOOKS, client hook tables (ED.WeaponFx/SkillFx/BossFx/HeroFx/ZoneFx)
 src/data/foes.js            ED.FOES, ED.FOE_IDS, ED.FOE_IDX (append-only wire index)
 src/data/stages.js          ED.STAGES (theme {floor, deco, features, brazier, pal}, arena, foe {hp, dmg} stage multipliers, timeline [{rate, cap, floor, roster}] per minute, events {swarm {ring, stampede}, flock {id, first, every, n}}, elites, bosses)
@@ -58,6 +59,8 @@ src/client/music.js         synthesized per-stage tracks (run / mid-boss / final
 src/client/input.js aim.js  keyboard/mouse (e.code), aim
 src/client/hud.js           in-run HUD (canvas)
 src/client/ui.js            DOM screens
+src/client/pwa.js           ED.PWA: registers sw.js (http(s); localhost only with ?sw=1), posts 'check' after load, reloads on 'updated' only while idle on the title
+src/client/share.js         ED.Share: title Share + lobby Invite buttons (navigator.share, else clipboard), #join=<CODE> deep link -> join screen
 src/client/title.js         title art (ED.Title): pixel wordmark with wick flame and falling drops, backdrop (stage-1 floor, candle-lit arc of unlocked heroes, embers, foe eyes); menu scenes via ED.UI.addScene
 src/client/codex.js         Achievements (unlock progress, records) and Encyclopedia (heroes, weapons, passives, foes, bosses, stages) screens (ED.Codex)
 src/client/wardrobe.js      Wardrobe screen (ED.Wardrobe, from the Camp): tabs per kind, skins per hero, preview, Buy / Wear / Take off
@@ -66,7 +69,7 @@ src/main.js                 app state machine + frame loop
 
 Node load order (`tools/sim.js` FILES): util, data/foes, data/stages, data/passives, data/meta, data/cosmetics, save, sim/stats, sim/arena, sim/grid, sim/world, sim/combat, sim/foes, sim/ai, sim/spawner, sim/weapons, sim/skills, sim/progress, sim/bosses, sim/lap, sim/sanctum, sim/boss-{warden, spore, king, hollow, twins, cyclops, samurai, weaver, wickeater, wickmother}, heroes/{knight, ranger, pyro, necro, cleric, shade, bell}. `require('./tools/sim.js').load()` resets `globalThis.ED`, runs FILES and returns ED.
 
-Browser order (index.html): vendor/peerjs.min.js, the sim list above, src/net.js, src/game.js, src/client/i18n.js, src/i18n/ko-data.js, src/i18n/ko-ui.js, src/art/*.js, client atlas, pixfx, gl, render, post, actors, fx, hfx-{knight, ranger, pyro, necro, cleric, shade, bell}, wfx-a, wfx-b, bfx-a, bfx-b, bfx-c, bfx-d, cosfx, audio, music, input, aim, hud, ui, title, codex, wardrobe, src/main.js.
+Browser order (index.html): vendor/peerjs.min.js, the sim list above, src/net.js, src/game.js, src/client/i18n.js, src/i18n/ko-data.js, src/i18n/ko-ui.js, src/art/*.js, client atlas, pixfx, gl, render, post, actors, fx, hfx-{knight, ranger, pyro, necro, cleric, shade, bell}, wfx-a, wfx-b, bfx-a, bfx-b, bfx-c, bfx-d, cosfx, audio, music, input, aim, hud, ui, pwa, share, title, codex, wardrobe, src/main.js.
 
 ## 3. Registries (how lanes plug in without editing core files)
 
@@ -148,7 +151,7 @@ Supports register after the heroes (`src/weapons/support-a.js`, `support-b.js`; 
 - Snapshot (`N.encodeSnap(w, cc)`, `apply(buf)` on `ED.Net.Mirror`): header, boss + boss bar, Last Light (phase, s left, lap gold, lap kills → `view.lap`), Sanctum (u8 st + 1, f32 t0 → `view.sanctum`; the mirror sets `view.props.room` from st ≥ 1, so prediction clamps too), broken braziers, heroes (full; weapons: id, u8 lvl | evo << 7, u16 tk0 | tk1 << 2 | tk2 << 4 | (path + 1) << 6 | pr[path] << 8 | fl << 11 (the mirror rebuilds tune, tk, path, pr); skills: Q only), then zones spawn-once per client (full record when a zone enters the client's rect or changes; a moved zone sends only its position; unchanged zones send nothing and age on the client; then ids of zones that died or left; the host keeps what each client holds in `cc.zc`), foes / projectiles / pickups inside the client's view + 160 px (3-byte positions, delta ids), capped events (100 hits, 120 deaths, 80 misc binary, 24 pickups, 48 JSON of other types). A busy channel skips a snapshot; its JSON events carry over. Offers go as JSON `{t:'offer', cards}`, the end as `{t:'end', summary}`.
 - Host: remote inputs play from a 3-frame jitter buffer (missing frames repeat the newest; the hero stops after 6). Client: own hero movement and dash predicted with the sim's arithmetic and reconciled on each snapshot (blend); everything else interpolated 0.1 s behind; events released at that render time. Host-only displacement (Vault leap, whirlpool pull) arrives through the correction blend.
 - Lobby API (default party): `ED.Net.host(name, cls)` → code, `join(code, name, cls)`, `setHero(cls)`, `setReady(v)`, `setStage(i)`, `start(cheats?, seed?)` → bool, `leave()`; state `ED.Net.lobby {role, code, me, status, error, stage, members[{pid, slot, name, cls, cos, ready, isHost}], inRun, canStart}`; callbacks `ED.Net.onChange(lobby)`, `onError(msg)`, `onClosed(msg)` (set by ui.js). A start builds the run on every peer and calls `ED.App.enterRun(stage)`. Cosmetics: `cos` = the worn bundle `{skin, tint, kill, lvl, title, ncol}` (ED.Save.cosBundle of the profile for the picked hero) rides hello / pick / lobby members and the start roster (`ED.Save.cosClean` on receipt), never snapshots; `ED.Game.cos[pid]` holds it for the run (solo: `players[].cos`; bot runs and checks: defaults). Late joins are refused; a leaving client's hero dies; a lost host ends the run with `sum.note`.
-- `ED.NET_VERSION` (= `ED.Net.VERSION`, now 14) bumps on any wire change. Wire ids (looks, weapons, skills, foes, passives) are registration order, so they must be registered at script load.
+- `ED.NET_VERSION` (= `ED.Net.VERSION`, now 15) bumps on any wire change. Wire ids (looks, weapons, skills, foes, passives) are registration order, so they must be registered at script load.
 
 ## 10. Client
 

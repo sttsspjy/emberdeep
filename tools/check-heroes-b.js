@@ -6,6 +6,7 @@
 // 4. 60 s solo run per hero with level-ups and Q spam: no exceptions, same digest twice. 5. Crowd cost at 900 foes (informational).
 // 6. No-target fire: every signature (no ranks) and its Form on its own hero, standing still facing east with no foe alive, breaks a brazier 60 px ahead
 //    within the first fire (0.4 s) + its cooldown + 0.9 s travel; a hero projectile crossing a brazier breaks it and keeps its pierce and its flight.
+// 7. Auto aim: every path at rank 5 and every Form in auto deal damage; Twin Daggers stabs and the Lance sweep turn to the bigger pack.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
@@ -261,6 +262,38 @@ for (const cls of HEROES) {
   const b2 = w.arena.braziers[1], e = w.foeShoot({ id: 1, x: b2.x - 40, y: b2.y + 4, r: 8 }, 0, 300, 'bolt', 1, 4);
   for (let i = 0; i < 18; i++) { w.update(C.TICK); w.events.length = 0; }
   ok(!b2.broken && e, 'foe projectiles never break braziers');
+}
+
+// 7. Auto aim: every path at rank 5 and every Form (refine 2) for 8 s in auto aim in a foe ring: no exception, damage; Shade stabs and the Lance sweep turn to the crowd.
+for (const cls of HEROES) {
+  const sig = ED.HEROES[cls].sig, builds = [0, 1, 2].map(i => ({ path: i })).concat(ED.weaponForms(sig).map(f => ({ form: f.id })));
+  for (const b of builds) {
+    const w = world([cls], 90), p = w.heroes[0], ws = p.weapons[0];
+    if (b.form) w.setForm(p, ws, b.form, 2); else w.setRanks(p, ws, ED.TUNE_MAX, b.path, ED.PATH_MAX);
+    w.input(p.pid, { auto: true });
+    const err = arena(w, p, 8, 30), d = p.dealt[ws.id] || 0;
+    ok(!err && d > 0 && p.in.auto, `auto ${ws.id}${b.form ? ' refine 2' : ' path ' + b.path + ' rank 5'}: 8 s, dealt ${Math.round(d)}` + (err ? ': ' + err.stack : ''));
+  }
+}
+{
+  // one tough foe east, a tough pack west, both in reach: the first stab / the first sweep centres on the pack
+  const crowdScene = (cls, path, rank) => {
+    const w = world([cls], 92), p = w.heroes[0];
+    for (const b of w.arena.braziers) b.broken = true;
+    if (path >= 0) w.setRanks(p, p.weapons[0], ED.TUNE_MAX, path, rank);
+    w.input(p.pid, { auto: true }); p.mdir = 0;
+    w.spawnFoe('skeleton', p.x + 34, p.y - 6, { hpMul: 80 });
+    for (let i = 0; i < 5; i++) w.spawnFoe('skeleton', p.x - 40, p.y - 6 + (i - 2) * 8, { hpMul: 80 });
+    return { w, p };
+  };
+  let S = crowdScene('shade', -1, 0), a = null;
+  S.p.weapons[0].cd = 0;
+  for (let i = 0; i < 3 && a === null; i++) { S.w.update(C.TICK); for (const z of S.w.zones) if (!z.dead && (z.k === 'stab' || z.k === 'stabx')) { a = z.a; break; } S.w.events.length = 0; }
+  ok(a !== null && Math.abs(U.angDiff(a, Math.PI)) < 0.35, `auto crowd: the first Twin Daggers stab goes at the pack west (${a === null ? 'none' : a.toFixed(2)} rad)`);
+  S = crowdScene('cleric', 2, 1); a = null;
+  const st = S.p.weapons[0].st;
+  for (let i = 0; i < 90 && a === null; i++) { S.w.update(C.TICK); S.w.events.length = 0; if (st.bOn) a = st.ba + 1.9 / 2; }
+  ok(a !== null && Math.abs(U.angDiff(a, Math.PI)) < 0.35, `auto crowd: the Lance sweep centres on the pack west (${a === null ? 'none' : a.toFixed(2)} rad)`);
 }
 
 console.log(`check-heroes-b: ${fails ? fails + ' failure(s)' : 'all passed'} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);

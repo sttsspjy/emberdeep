@@ -1,12 +1,14 @@
 // Keyboard, mouse and gamepad. One binding table maps every action to two slots, each a KeyboardEvent.code or Mouse0..Mouse4 (always e.code: layouts never matter).
 // Defaults: WASD move (arrows alternate), skill Q, dash Space, pick 1-4 Digit1-4, reroll R, skip X, pause Esc. No mouse button is bound by default (a click does nothing in a run).
 // Aim is the mouse cursor (I.mouse, CSS px). Gamepad (fixed): left stick move, right stick aim, RB or LB skill, A dash, X / Y / B / RT pick 1-4, Start pause.
+// Touch (ED.Touch, touch.js): floating stick + Q / dash / pause buttons; a touch pointer never moves I.mouse. I.device: 'mouse' | 'pad' | 'touch' (the last device used).
+// Aim mode: settings.aim 'auto' | 'cursor' (unset: auto on touch); read() reports it as out.auto, I.auto mirrors it.
 // I.mask([actions]) makes every key held right now read as up until released (an overlay that closes must not pass its closing press to the game).
 (function (ED) {
   'use strict';
   const I = ED.Input = {
     keys: new Set(), pressed: new Set(), mouse: { x: 0, y: 0, moved: 0, inside: true },
-    pad: null, padPrev: [], enabled: true, binds: {}, device: 'mouse',
+    pad: null, padPrev: [], enabled: true, binds: {}, device: 'mouse', auto: false,
   };
   const PAD_AIM = 0.45, LATCH_MS = 350, SWITCH_PX = 3, SWITCH_WINDOW_MS = 250;
   let padLast = null; // last right-stick aim above PAD_AIM {a, mag, t}
@@ -110,17 +112,20 @@
   I.labels = (action) => (codes[action] || []).map(I.keyName);
   // Gamepad button names (fixed layout, see I.poll): what HUD keycaps, prompts and signs show while I.device is 'pad'.
   const PAD = { skill1: 'RB', dash: 'A', pick1: 'X', pick2: 'Y', pick3: 'B', pick4: 'RT', pause: 'Start' };
-  // Primary label for HUD hints: the first keyboard binding, else the first mouse button; the pad button names on a pad.
+  // Touch names: the on-screen button, 'Tap' for cards and menu actions, 'Stick' for movement.
+  const touchName = (action) => (action === 'skill1' ? 'Q' : action === 'dash' ? ED.t('Dash') : action === 'pause' ? 'II' : /^(up|down|left|right)$/.test(action) ? ED.t('Stick') : ED.t('Tap'));
+  // Primary label for HUD hints: the first keyboard binding, else the first mouse button; the pad button names on a pad; the touch names on touch.
   I.label = (action) => {
+    if (I.device === 'touch' && ACTION[action]) return touchName(action);
     if (I.device === 'pad' && PAD[action]) return PAD[action];
     const list = codes[action] || [];
     const c = list.find(x => !isMouse(x)) || list[0];
     return c ? I.keyName(c) : '—';
   };
   // Every bound key of an action, at most two ('W / ↑').
-  I.hint = (action) => { if (I.device === 'pad' && PAD[action]) return PAD[action]; const l = I.labels(action); return l.length ? l.slice(0, 2).join(' / ') : '—'; };
+  I.hint = (action) => { if (I.device === 'touch' && ACTION[action]) return touchName(action); if (I.device === 'pad' && PAD[action]) return PAD[action]; const l = I.labels(action); return l.length ? l.slice(0, 2).join(' / ') : '—'; };
   // Replaces {action} tokens in a text with the action's current key hint (unknown tokens stay); {aim} names the device that aims.
-  I.fill = (text) => String(text).replace(/\{(\w+)\}/g, (m, a) => (a === 'aim' ? (I.device === 'pad' ? 'the right stick' : 'the mouse') : ACTION[a] ? I.hint(a) : m));
+  I.fill = (text) => String(text).replace(/\{(\w+)\}/g, (m, a) => (a === 'aim' ? (I.device === 'pad' ? 'the right stick' : I.device === 'touch' ? 'the move stick' : 'the mouse') : ACTION[a] ? I.hint(a) : m));
 
   // ---------------- capture (rebinding screen) ----------------
   let stopCap = null;
@@ -155,6 +160,7 @@
     window.addEventListener('keydown', (e) => {
       const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT');
       if (typing) return;
+      if (I.device === 'touch') I.device = 'mouse';
       if (ED.App && ED.App.inRun() && (I.boundCodes.has(e.code) || e.code === 'Space')) e.preventDefault(); // menus keep Tab/Space for keyboard navigation
       if (!I.keys.has(e.code)) I.pressed.add(e.code);
       I.keys.add(e.code);
@@ -171,8 +177,8 @@
       m.x = e.clientX; m.y = e.clientY; m.moved = now; m.inside = true;
       if (press || travel > SWITCH_PX) { I.device = 'mouse'; travel = 0; }
     };
-    window.addEventListener('pointermove', (e) => point(e, false), { passive: true });
-    window.addEventListener('pointerdown', (e) => point(e, true), { passive: true });
+    window.addEventListener('pointermove', (e) => { if (e.pointerType !== 'touch') point(e, false); }, { passive: true });
+    window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') { I.device = 'touch'; document.documentElement.classList.add('can-touch'); } else point(e, true); }, { passive: true });
     const leave = () => { I.mouse.inside = false; }, enter = () => { I.mouse.inside = true; };
     for (const t of [document, document.documentElement]) { t.addEventListener('mouseleave', leave); t.addEventListener('mouseenter', enter); }
     canvas.addEventListener('mousedown', (e) => {
@@ -192,9 +198,10 @@
   const hit = (a) => codes[a].some(c => I.pressed.has(c));
   const hitCode = (...cs) => cs.some(c => I.pressed.has(c));
 
-  // Snapshot of intent for this frame: { mx, my (move, length <= 1), q, e, dash, pick (1-4 or 0), reroll, skip, esc, confirm, up/down/left/right (menus), padAim (angle, gamepad) }.
+  // Snapshot of intent for this frame: { mx, my (move, length <= 1), q, e, dash, pick (1-4 or 0), reroll, skip, esc, confirm, up/down/left/right (menus), padAim (angle, gamepad), auto (aim mode) }.
+  let devSeen = '', aimOff = null;
   I.read = () => {
-    const out = { mx: 0, my: 0, q: false, e: false, dash: false, pick: 0, reroll: false, skip: false, esc: false, confirm: false, up: false, down: false, left: false, right: false };
+    const out = { mx: 0, my: 0, q: false, e: false, dash: false, pick: 0, reroll: false, skip: false, esc: false, confirm: false, up: false, down: false, left: false, right: false, auto: false };
     if (down('up')) out.my -= 1;
     if (down('down')) out.my += 1;
     if (down('left')) out.mx -= 1;
@@ -227,11 +234,22 @@
       out.up = out.up || bp(12); out.down = out.down || bp(13); out.left = out.left || bp(14); out.right = out.right || bp(15);
       I.padPrev = gp.buttons.map(x => x.pressed);
     } else { padLast = null; if (I.device === 'pad') I.device = 'mouse'; }
+    const Tc = ED.Touch, A = ED.App;
+    if (Tc) {
+      Tc.sync(!!(A && A.state === 'run' && I.device === 'touch'));
+      if (Tc.shown) { out.mx += Tc.sx; out.my += Tc.sy; out.q = out.q || Tc.press.q; out.dash = out.dash || Tc.press.dash; out.esc = out.esc || Tc.press.esc; }
+    }
     const l = Math.hypot(out.mx, out.my);
     if (l > 1) { out.mx /= l; out.my /= l; }
+    const am = A && A.settings ? A.settings.aim : undefined;
+    out.auto = I.auto = am === 'auto' || (am !== 'cursor' && I.device === 'touch');
+    // <html data-dev> names the device for CSS (touch hides key badges); class aim-off hides the reticle cursor
+    if (I.device !== devSeen) { devSeen = I.device; document.documentElement.setAttribute('data-dev', devSeen); }
+    const off = out.auto || I.device === 'touch';
+    if (off !== aimOff) { aimOff = off; document.documentElement.classList.toggle('aim-off', off); }
     return out;
   };
 
-  I.endFrame = () => { I.pressed.clear(); };
+  I.endFrame = () => { I.pressed.clear(); const Tc = ED.Touch; if (Tc) Tc.press.q = Tc.press.dash = Tc.press.esc = false; };
   I.setBinds(null);
 })(globalThis.ED || (globalThis.ED = {}));

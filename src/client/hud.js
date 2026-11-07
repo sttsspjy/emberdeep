@@ -1,7 +1,9 @@
 // In-run HUD on the screen canvas (device px). Sizes are CSS px at 1280x720 scaled by k = dpr x clamp(viewport / 1280x720, 1, 2), so text never drops below its CSS size (numbers >= 16 px).
 // Draws: XP bar across the top with the level, timer, kills / gold, 3 weapon slots (hero weapon + 2 supports, empty ones dim; level; Form = gold frame) + 6 passive slots with levels,
 // HP bar, Q cooldown dial and the dash dial with charge pips, boss bar, Last Light (view.lap: a VICTORY banner during the calm; the lap countdown and lap gold in place of the timer), the Sanctum's VICTORY banner (view.sanctum st 2), teammate panel (HP, downed, revive), off-screen teammate arrows, own downed notice,
-// low-HP edge glow, banners and the bot-watch tag (view.botTag / view.botPick, bottom-left). No per-frame allocation: strings are cached by value. Font 'Pixel Operator' (Hangul falls back to 'Wickdeep Hangul').
+// low-HP edge glow, banners and the bot-watch tag (view.botTag / view.botPick, bottom-left). Edges keep clear of the safe-area insets (ED.Touch.inset).
+// Touch (ED.Touch.shown): the Q / dash dials draw inside the on-screen button boxes (ED.Touch.rects), kills / gold move left of the pause button, the HP bar sits bottom centre
+// between the stick half and the button cluster, and the floating stick (base ring + knob) draws while held. CSS vars: --hud-top (XP bar height), --hud-bottom (kept clear above the HUD). No per-frame allocation: strings are cached by value. Font 'Pixel Operator' (Hangul falls back to 'Wickdeep Hangul').
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = Math.PI * 2, T = ED.t, L = ED.tr;
@@ -9,7 +11,7 @@
   const FONT = 'px "Pixel Operator", "Wickdeep Hangul", monospace';
   const SLOT_COL = ['#ffd27a', '#6ad7ff', '#7fe39a', '#ff8ad8'];
   const NUM = []; for (let i = 0; i <= 99; i++) NUM.push(String(i));
-  let c = null, k = 1, W = 0, Hh = 0, now = 0, hudTop = 0;
+  let c = null, k = 1, W = 0, Hh = 0, now = 0, hudTop = 0, hudXp = 0;
   const fpx = []; // cached font strings per rounded px
   const font = (px) => { const n = Math.max(8, Math.round(px * k)); c.font = fpx[n] || (fpx[n] = n + FONT); };
   const txt = (s, x, y, col, px, align, base) => {
@@ -49,12 +51,14 @@
   const heroIcon = (cls) => (ED.HEROES[cls] && ED.HEROES[cls].icon) || '';
   const RUN = {}; const runIcon = (cls) => RUN[cls] || (RUN[cls] = ED.Atlas && ED.Atlas.has('hero.' + cls + '.run') ? 'hero.' + cls + '.run' : 'fx.smoke');
   const bossName = (v) => { const def = ED.FOES[ED.FOE_IDS[v >> 1]], n = def ? L(def.name) : T('Boss'); return v & 1 ? T('{0} ENRAGED', n) : n; };
-  const keyLbl = { q: 'Q', dash: 'Space', t: 0 };
+  const keyLbl = { q: 'Q', dash: 'Space', t: 0, dev: '' };
+  // Dial key badges: keyboard key, pad button; on touch 'Q' only (the dash button needs no badge). Refreshed each second and on a device change.
   const keys = () => {
-    if (now - keyLbl.t < 1) return; keyLbl.t = now;
-    const I = ED.Input; if (!I || !I.labels) return;
-    keyLbl.q = I.labels('skill1')[0] || 'Q'; keyLbl.dash = I.labels('dash')[0] || 'Space';
+    const I = ED.Input; if (!I || !I.label) return;
+    if (now - keyLbl.t < 1 && I.device === keyLbl.dev) return; keyLbl.t = now; keyLbl.dev = I.device;
+    keyLbl.q = I.label('skill1'); keyLbl.dash = I.device === 'touch' ? '' : I.label('dash');
   };
+  const NO_INSET = { l: 0, r: 0, t: 0, b: 0 };
 
   // ---------------- pieces ----------------
   const ready = [0, 0, 0], readyT = [0, 0, 0];
@@ -73,6 +77,7 @@
     ready[i] = up ? 1 : 0;
     frame(x, y, s, s, up ? col : 'rgba(232,216,192,0.28)', Math.max(2, R(up ? 3 : 2)));
     if (readyT[i] > 0) { c.globalAlpha = readyT[i] / 0.45; c.fillStyle = '#fff6dc'; c.fillRect(x, y, s, s); c.globalAlpha = 1; }
+    if (!key) return;
     // key badge
     font(16); const kw = Math.max(R(22), Math.ceil(c.measureText(key).width) + R(10)), kh = R(22), bx = x - R(6), by = y - R(12);
     c.fillStyle = '#000'; c.fillRect(bx, by, kw, kh);
@@ -149,14 +154,16 @@
     const d = (ED.Render && ED.Render.dpr) || 1;
     k = H.k = d * U.clamp(Math.min(W / d / 1280, Hh / d / 720), 1, 2);
     keys();
-    const me = view.me;
+    const me = view.me, Tc = ED.Touch, tc = !!(Tc && Tc.shown && Tc.rects.q), ins = Tc ? Tc.inset : NO_INSET;
+    const il = Math.round(ins.l * d), ir = W - Math.round(ins.r * d), ib = Hh - Math.round(ins.b * d); // safe left / right / bottom edges (device px)
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     if (me && !me.dead) lowHp(me.maxHp ? me.hp / me.maxHp : 1);
     for (let i = 0; i < 3; i++) if (readyT[i] > 0) readyT[i] -= dt;
     // XP bar across the top + level
     const xh = R(20);
     bar(0, 0, W, xh, view.xpNext ? view.xp / view.xpNext : 0, '#3aa8e8', '#9fe6ff', 'rgba(10,7,6,0.85)');
-    txt(cs('lv', view.level, fmtLv), W - R(10), R(2), '#ffffff', 16, 'right');
+    txt(cs('lv', view.level, fmtLv), ir - R(10), R(2), '#ffffff', 16, 'right');
+    const xhc = Math.round(xh / d); if (xhc !== hudXp) { hudXp = xhc; document.documentElement.style.setProperty('--hud-top', xhc + 'px'); }
     // timer (Last Light lap: its countdown and the lap's coin gold instead), kills, gold
     const lp = view.lap;
     if (lp && lp.ph === 2) {
@@ -165,10 +172,11 @@
       icon('pickup.coin', W / 2 - R(46), xh + R(68), R(22));
       txt(cs('lapg', lp.gold, fmtLapG), W / 2 - R(20), xh + R(68), '#ffd24a', 22, 'left');
     } else txt(cs('time', Math.floor(view.time), fmtT), W / 2, xh + R(6), '#fff1d6', 36, 'center');
-    icon('fx.sigil.skull', W - R(40), xh + R(8), R(24));
-    txt(cs('kills', view.kills, fmtKills), W - R(46), xh + R(8), '#f0e0c8', 22, 'right');
-    icon('pickup.coin', W - R(40), xh + R(36), R(24));
-    txt(cs('gold', view.gold, fmtKills), W - R(46), xh + R(36), '#ffd24a', 22, 'right');
+    const rx = tc && Tc.rects.pause ? Math.round(Tc.rects.pause.x * d) - R(6) : ir; // kills / gold right edge
+    icon('fx.sigil.skull', rx - R(40), xh + R(8), R(24));
+    txt(cs('kills', view.kills, fmtKills), rx - R(46), xh + R(8), '#f0e0c8', 22, 'right');
+    icon('pickup.coin', rx - R(40), xh + R(36), R(24));
+    txt(cs('gold', view.gold, fmtKills), rx - R(46), xh + R(36), '#ffd24a', 22, 'right');
     // boss bar: view.bossBar (whole fight: every body's HP, phase, revive dial), else the single boss entity
     const bb = view.bossBar, b = view.boss;
     if ((bb && bb.on) || (b && !b.dead)) {
@@ -185,14 +193,22 @@
     else if (winT >= 0) victory(Math.max(0, ED.CONST.SANCTUM.end - (view.time - winT)), ED.CONST.SANCTUM.end, T('THE WICKDEEP IS SNUFFED OUT'));
     if (!me) { banner(dt); return; }
     // weapon and passive slots (top-left)
-    const x0 = R(10), ws = R(42), ps = R(32);
+    const x0 = il + R(10), ws = R(42), ps = R(32);
     slots(me.weapons, ED.WEAPONS, x0, xh + R(8), ws, true);
     slots(me.passives, ED.PASSIVES, x0, xh + R(8) + ws + R(5), ps, false);
     if (view.heroes.length > 1) team(view, me, x0, xh + R(8) + ws + ps + R(16));
     // HP bar + skills (bottom centre)
-    const ds = R(62), dd = R(50), gap = R(16), rowW = ds + dd + gap, kx = Math.round(W / 2 - rowW / 2), ky = Hh - ds - R(16);
-    const hw = Math.max(rowW + R(40), R(360)), hx = Math.round(W / 2 - hw / 2), hy = ky - R(22) - R(26), hpF = me.maxHp ? me.hp / me.maxHp : 0;
-    const top = Math.round((Hh - hy) / d) + 10; // CSS px kept clear above the HP bar (co-op card strip)
+    let ds = R(62), dd = R(50), gap = R(16), rowW = ds + dd + gap, kx = Math.round(W / 2 - rowW / 2), ky = ib - ds - R(16);
+    let hw = Math.max(rowW + R(40), R(360)), hx = Math.round(W / 2 - hw / 2), hy = ky - R(22) - R(26), dx = kx + ds + gap, dy = ky + ds - dd, clear = hy;
+    if (tc) { // dials in the touch button boxes; HP bar at the bottom, no wider than the room left of the cluster
+      const rq = Tc.rects.q, rd = Tc.rects.dash, cl = Math.min(rq.x, rd.x) * d;
+      kx = Math.round(rq.x * d); ky = Math.round(rq.y * d); ds = Math.round(rq.w * d);
+      dx = Math.round(rd.x * d); dy = Math.round(rd.y * d); dd = Math.round(rd.w * d);
+      hw = Math.max(R(160), Math.min(R(360), Math.round(2 * (cl - W / 2) - R(24)))); hx = Math.round(W / 2 - hw / 2); hy = ib - R(12) - R(22);
+      clear = Math.min(hy, ky, dy);
+    }
+    const hpF = me.maxHp ? me.hp / me.maxHp : 0;
+    const top = Math.round((Hh - clear) / d) + 10; // CSS px kept clear above the HP bar and touch buttons (co-op card strip)
     if (top !== hudTop) { hudTop = top; document.documentElement.style.setProperty('--hud-bottom', top + 'px'); }
     bar(hx, hy, hw, R(22), hpF, hpF < 0.3 ? ((now * 5 | 0) % 2 ? '#ff4a3a' : '#c02a1a') : '#e8483a', '#ff9a8a');
     const hp = Math.max(0, Math.ceil(me.hp));
@@ -201,11 +217,10 @@
     if (q) dial(0, kx, ky, ds, ED.SKILLS[q.id] ? ED.SKILLS[q.id].icon : 'fx.star.stun', q.cd, q.cdMax, keyLbl.q, '#ffd27a');
     // Q charge pips (multi-charge skills: chN slots, ch lit), left of the dial
     if (q && q.chN > 1) { const pw = R(10); for (let i = 0; i < q.chN; i++) { const px = kx - pw - R(6), py = ky + ds - (i + 1) * (pw + R(3)); c.fillStyle = '#000'; c.fillRect(px, py, pw, pw); c.fillStyle = i < q.ch ? '#ffd27a' : '#48382a'; c.fillRect(px + R(2), py + R(2), pw - R(4), pw - R(4)); } }
-    const dx = kx + ds + gap, dy = ky + ds - dd;
     dial(2, dx, dy, dd, runIcon(me.cls), me.dashCd, C.cd, keyLbl.dash, '#6ad7ff', skinOf(runIcon(me.cls), me));
-    // dash charge pips (one per charge; C.charges when the sim grows more)
+    // dash charge pips (one per charge; C.charges when the sim grows more): right of the dial, above it on touch
     const nch = C.charges || 1, pw = R(10);
-    for (let i = 0; i < nch; i++) { const px = dx + dd + R(6), py = dy + dd - (i + 1) * (pw + R(3)); c.fillStyle = '#000'; c.fillRect(px, py, pw, pw); c.fillStyle = me.dashCd <= 0 ? '#6ad7ff' : '#2a3a48'; c.fillRect(px + R(2), py + R(2), pw - R(4), pw - R(4)); }
+    for (let i = 0; i < nch; i++) { const px = tc ? dx + i * (pw + R(3)) : dx + dd + R(6), py = tc ? dy - pw - R(6) : dy + dd - (i + 1) * (pw + R(3)); c.fillStyle = '#000'; c.fillRect(px, py, pw, pw); c.fillStyle = me.dashCd <= 0 ? '#6ad7ff' : '#2a3a48'; c.fillRect(px + R(2), py + R(2), pw - R(4), pw - R(4)); }
     // teammates off-screen
     if (view.heroes.length > 1) arrows(view, me);
     // own downed notice
@@ -215,12 +230,22 @@
       txt(T('A teammate can revive you'), W / 2, yy + R(38), '#f0e0c8', 18, 'center');
       bar(Math.round(W / 2 - R(110)), yy + R(62), R(220), R(10), me.revive, '#7fe39a');
     }
+    if (tc && Tc.stick.on) stick(Tc.stick, d);
     if (view.botTag) {
       txt(view.botTag, x0, Hh - R(12), '#7fe3ff', 24, 'left', 'bottom');
       if (view.botPick) txt(view.botPick, x0, Hh - R(42), '#f0e0c8', 18, 'left', 'bottom');
     }
     banner(dt);
   };
+  // Floating stick: base ring at the touch origin, knob at the finger (clamped to the ring); st in CSS px.
+  function stick(st, d) {
+    const ox = st.ox * d, oy = st.oy * d, r = 60 * d, kr = 22 * d;
+    let kx = st.x * d - ox, ky = st.y * d - oy; const l = Math.hypot(kx, ky); if (l > r) { kx *= r / l; ky *= r / l; }
+    c.globalAlpha = 0.35; c.fillStyle = '#0a0706'; c.beginPath(); c.arc(ox, oy, r, 0, TAU); c.fill();
+    c.globalAlpha = 0.6; c.strokeStyle = '#e8d8c0'; c.lineWidth = Math.max(2, Math.round(2 * d)); c.stroke();
+    c.globalAlpha = 0.8; c.fillStyle = '#ffd27a'; c.beginPath(); c.arc(ox + kx, oy + ky, kr, 0, TAU); c.fill();
+    c.globalAlpha = 1;
+  }
   // VICTORY banner of the Last Light calm or the Sanctum's end (rem: s left of its dur s, sub: the line under it): pops in, pulses, fades out over the last 0.3 s.
   let winT = -1; // view time the Sanctum fight was won (view.sanctum.st 2), -1 none
   function victory(rem, dur, sub) {
