@@ -8,7 +8,7 @@
   const N = ED.Net = {};
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const PREFIX = 'wickdeep-sv-';
-  N.VERSION = ED.NET_VERSION = 14; // bump on any wire change: mixed versions would desync
+  N.VERSION = ED.NET_VERSION = 15; // bump on any wire change: mixed versions would desync
   // Heartbeat: PeerJS 'close' does not fire when a tab crashes or a network drops, so both ends ping and
   // treat a few seconds of silence as a disconnect (longer in the lobby, where little else is sent).
   const PING_MS = 2000, TIMEOUT_RUN = 6000, TIMEOUT_LOBBY = 10000;
@@ -779,7 +779,7 @@
   N.decodeSnap = (buf, mirror) => mirror.apply(buf);
 
   // ---------------- input packets (client -> host) ----------------
-  // u8 INPUT, u32 first seq, u8 n, u16 view w, u16 view h, then per local tick: i8 mx, i8 my (x127), i16 ax, ay (x2), u16 edges (1 dash, 2 q, 4 e, 8 reroll, 16 skip, pick << 5, banish << 8).
+  // u8 INPUT, u32 first seq, u8 n, u16 view w, u16 view h, then per local tick: i8 mx, i8 my (x127), i16 ax, ay (x2), u16 edges (1 dash, 2 q, 4 e, 8 reroll, 16 skip, pick << 5, banish << 8, 2048 auto aim).
   // frames: ring of { seq, qx, qy, ax, ay, ed } indexed by seq & mask.
   N.encodeInput = (ring, mask, from, to, vw, vh) => {
     o = 0;

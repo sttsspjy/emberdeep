@@ -183,7 +183,7 @@
 
   // ---------------- Cleave and its Forms ----------------
   ED.addWeapon({
-    id: 'cleave', name: 'Cleave', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', txt: 'Sword arc toward your cursor',
+    id: 'cleave', name: 'Cleave', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', autoAim: 'crowd', aimR: (S) => Math.max(S.range * S.area, S.wave > 0 ? WAVE.speed * Math.min(0.72, 0.5 * Math.sqrt(S.area)) : 0), txt: 'Sword arc toward your cursor',
     base: { dmg: 36, cd: 1.1, n: 1, pierce: 0, area: 1, speed: 0, dur: 0, knock: 120, range: 56, arc: 2.0, wave: 0, stag: 0, slam: 0 },
     paths: [
       { id: 'great', name: 'Greatblade', forms: ['colossus', 'earthsplitter'], ranks: [
@@ -212,7 +212,7 @@
   }, IMPL);
   // Colossus Blade (Greatblade): one huge slow 200 deg sweep that staggers; cracks fan across it and erupt 0.3 s later.
   ED.addWeapon({
-    id: 'colossus', name: 'Colossus Blade', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', evolved: true, form: true, from: 'cleave', txt: 'One giant sweep that cracks the ground',
+    id: 'colossus', name: 'Colossus Blade', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', autoAim: 'crowd', evolved: true, form: true, from: 'cleave', txt: 'One giant sweep that cracks the ground',
     base: { dmg: 40.6, cd: 1.8, n: 1, pierce: 0, area: 1.5, speed: 0, dur: 0, knock: 200, range: 60, arc: 3.5, wave: 0, stag: 0.5, slam: 0, cracks: 3 },
     refine: [
       { mods: { cracks: 2 }, txt: '+2 ground cracks' },
@@ -221,7 +221,7 @@
   }, IMPL);
   // Rending Gale (Edge Wave): swings fling big piercing crescents that leave cutting wind lines.
   ED.addWeapon({
-    id: 'gale', name: 'Rending Gale', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', evolved: true, form: true, from: 'cleave', txt: 'Big crescents that leave cutting wind',
+    id: 'gale', name: 'Rending Gale', icon: 'weapon.longsword', sig: 'knight', mode: 'cursor', autoAim: 'crowd', aimR: () => GALE.speed * 0.9, aimH: () => FORM.gale.cone, evolved: true, form: true, from: 'cleave', txt: 'Big crescents that leave cutting wind',
     base: { dmg: 12.6, cd: 0.7, n: 1, pierce: 0, area: 1.15, speed: 0, dur: 0, knock: 80, range: 56, arc: 2.0, wave: 3, stag: 0, slam: 0, cutT: 1.0 },
     refine: [
       { mods: { wave: 2 }, txt: '+2 crescents' },
@@ -268,7 +268,7 @@
   };
   // Base r 50: foes held on the edge (centre distance 50 + their radius) stay inside base Cleave reach (56 + radius from 4 px above the hero).
   ED.addSkill({
-    id: 'shove', name: 'Aegis Ward', icon: 'shield.kite', cd: 25, txt: 'A ward the horde cannot step into',
+    id: 'shove', name: 'Aegis Ward', icon: 'shield.kite', cd: 25, autoAim: { k: 'self' }, txt: 'A ward the horde cannot step into',
     base: { r: 50, dur: 6.5, follow: false },
     levels: [
       { mods: { r: 0.2 }, txt: '+20% ward radius' },

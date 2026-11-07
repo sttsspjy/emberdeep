@@ -263,7 +263,7 @@
     for (let i = 0; i < (S.shower | 0); i++) { const t = spot(w, p, S, false, 12); drop(w, p, ws, S, t.x, t.y, 'mshower', S.size * 0.5 * S.area, S.dmg * 0.4, 0.45, 0); }
   };
   ED.addWeapon({
-    id: 'meteorcall', name: 'Meteor Call', icon: 'proj.fireball', look: 'meteor', support: true, role: 'horde', mode: 'random', txt: 'Meteors fall on foes near you',
+    id: 'meteorcall', name: 'Meteor Call', icon: 'proj.fireball', look: 'meteor', support: true, role: 'horde', mode: 'random', autoAim: 'nearest', txt: 'Meteors fall on foes near you',
     base: { dmg: 10, cd: 2.4, n: 3, pierce: 0, area: 1, speed: 0, dur: 2, knock: 140, range: 420, fall: 0.7, size: 22, dense: 0, crater: 0, craterK: 0, erupt: 0, shower: 0, shards: 0 },
     paths: [
       { id: 'volley', name: 'Volley', forms: ['starfall'], ranks: [
@@ -288,7 +288,7 @@
     },
   });
   ED.addWeapon({
-    id: 'starfall', name: 'Starfall', icon: 'fx.spark.magic', look: 'star', support: true, role: 'horde', mode: 'random', evolved: true, form: true, from: 'meteorcall',
+    id: 'starfall', name: 'Starfall', icon: 'fx.spark.magic', look: 'star', support: true, role: 'horde', mode: 'random', autoAim: 'nearest', evolved: true, form: true, from: 'meteorcall',
     txt: 'A constant shower of stars',
     base: { dmg: 5, cd: 0.8, n: 1, pierce: 0, area: 1, speed: 0, dur: 2, knock: 90, range: 440, fall: 0.5, size: 30, comet: 8 },
     refine: [

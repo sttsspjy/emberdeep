@@ -4,7 +4,7 @@ A co-op survivors-like that runs in the browser. Hordes pour into an open arena;
 
 No build step, no backend, no install. It is a static site: open it from any web host and play.
 
-**Play online:** https://sttsspjy.github.io/emberdeep/ (the repository keeps its old name)
+**Play online:** https://sttsspjy.github.io/emberdeep/ (the repository keeps its old name). Works on phones too: open the link, turn the phone sideways, play. Send the link to a friend with the **Share** button on the title screen.
 
 > Balance is not tuned yet: numbers will change.
 
@@ -22,6 +22,16 @@ No build step, no backend, no install. It is a static site: open it from any web
 | Pause | Esc | Start |
 
 Mouse buttons do nothing in a run by default; the mouse aims. Your weapon fires automatically, straight toward the cursor: swings, arrows, bolts, shards, stabs and beam sweeps go exactly where you point. A few attacks pick their own targets on your screen: Pyro shells, Plague Field globs, Smite pillars, minions and the Shade's Assassinate mark. Orbits, auras and spins hit all around you. Keys follow the physical key position, so they work on any keyboard layout.
+
+## Playing on a phone
+
+- Hold the phone sideways (landscape); the game asks you to rotate in portrait. The first tap goes fullscreen.
+- **Move:** put a thumb anywhere on the left half of the screen and drag; the stick appears where you touch.
+- **Skill** and **Dash:** the two buttons at the bottom right. **Pause:** the button at the top right.
+- Weapons aim themselves (Settings → Aim: Auto, the default on touch screens): shots go at the nearest elite, boss or foe, swings and stabs turn to the thickest part of the crowd, homing shots pick random targets. Auto aim is as strong as mouse aim, and PC players can switch to it too.
+- Tap a card to pick it. Settings → Touch buttons: Small / Medium / Large.
+- A solo run pauses itself when you leave the app. A host must keep the app open: the run stops for everyone while it is hidden.
+- **Install:** Android Chrome → menu → **Install app**; iPhone Safari → Share → **Add to Home Screen**. It then starts fullscreen like an app and works offline after the first visit; new versions load on their own at the title screen.
 
 Menus work with the keyboard too: arrows or WASD move between buttons, Enter presses, Esc goes back.
 
@@ -51,11 +61,11 @@ Every boss and elite attack is telegraphed: a red outline marks where it lands. 
 
 ## Co-op (2–4 players)
 
-1. One player picks **Host co-op** and shares the 5-letter party code.
-2. The others pick **Join co-op** and enter the code.
+1. One player picks **Host co-op** and shares the 5-letter party code, or presses **Invite** to send a link that joins the party in one tap.
+2. The others pick **Join co-op** and enter the code (or open the invite link).
 3. Everyone picks a hero and presses **Ready**; the host picks the stage and presses **Start run**.
 
-The host's browser runs the game, so the host needs the steadiest connection. Co-op never pauses: level-up cards appear in a strip at the bottom, pick with 1–4 while you keep moving. Each player's hero wears their slot colour (gold, blue, green, pink); your own hero has a ring under it. A downed hero is revived by a teammate standing next to them. Leaving from the pause menu ends your part of the run.
+The host's browser runs the game, so the host needs the steadiest connection. Phones play co-op best on Wi-Fi: mobile data networks often block direct connections. Co-op never pauses: level-up cards appear in a strip at the bottom, pick with 1–4 while you keep moving. Each player's hero wears their slot colour (gold, blue, green, pink); your own hero has a ring under it. A downed hero is revived by a teammate standing next to them. Leaving from the pause menu ends your part of the run.
 
 ## Heroes
 

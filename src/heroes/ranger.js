@@ -93,7 +93,7 @@
   // Path keys: heavy (every heavy-th volley's first arrow is a heavy bolt), two (the fan splits between two targets), bounce (bounces after the last pierce), kshot (kills loose arrows).
   const ARROW = { look: 'arrow', onHit: bounce };
   ED.addWeapon({
-    id: 'longbow', name: 'Longbow', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', txt: 'Piercing arrows toward your cursor',
+    id: 'longbow', name: 'Longbow', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', autoAim: 'nearest', txt: 'Piercing arrows toward your cursor',
     base: { dmg: 22, cd: 0.7, n: 1, pierce: 8, area: 1, speed: 420, dur: 0, knock: 25, range: 260, heavy: 0, two: false, bounce: 0, kshot: 0 },
     paths: [
       { id: 'spread', name: 'Spread', forms: ['hail', 'galeshot'], ranks: [
@@ -128,7 +128,7 @@
   };
   const HAIL = { look: 'arrow', pierce: 0, bk: 0.5, onHit: split };
   ED.addWeapon({
-    id: 'hail', name: 'Hail of Arrows', icon: 'weapon.twinbows', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'Arrows split on hit',
+    id: 'hail', name: 'Hail of Arrows', icon: 'weapon.twinbows', look: 'arrow', sig: 'ranger', mode: 'cursor', autoAim: 'nearest', evolved: true, form: true, from: 'longbow', txt: 'Arrows split on hit',
     base: { dmg: 14.8, cd: 1.05, n: 3, pierce: 1, area: 1, speed: 440, dur: 0, knock: 30, range: 320, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows' },
@@ -161,7 +161,7 @@
     }
   };
   ED.addWeapon({
-    id: 'ballista', name: 'Ballista', icon: 'weapon.crossbow', look: 'bolt', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'A giant bolt through the whole line',
+    id: 'ballista', name: 'Ballista', icon: 'weapon.crossbow', look: 'bolt', sig: 'ranger', mode: 'cursor', autoAim: 'nearest', evolved: true, form: true, from: 'longbow', txt: 'A giant bolt through the whole line',
     base: { dmg: 30.8, cd: 1.2, n: 1, pierce: 0, area: 1, speed: 240, dur: 0, knock: 70, range: 330, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+1 bolt' },
@@ -178,7 +178,7 @@
   };
   const SEEK = { look: 'arrow', homing: 10, hskip: bigFoe, pierce: 0, onHit: seekHit };
   ED.addWeapon({
-    id: 'seeker', name: 'Seeker', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'Homing arrows hunt kill to kill',
+    id: 'seeker', name: 'Seeker', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', autoAim: 'random', evolved: true, form: true, from: 'longbow', txt: 'Homing arrows hunt kill to kill',
     base: { dmg: 30.8, cd: 0.9, n: 5, pierce: 0, area: 1, speed: 360, dur: 0, knock: 20, range: 360, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows' },
@@ -191,7 +191,7 @@
   const GALE_N = 1, GALE_FIRST = 1.25;
   const GALE = { look: 'arrow', onHit: bounceK(GALE_FIRST), first: GALE_FIRST };
   ED.addWeapon({
-    id: 'galeshot', name: 'Gale Barrage', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'A rapid stream of arrows',
+    id: 'galeshot', name: 'Gale Barrage', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', autoAim: 'nearest', evolved: true, form: true, from: 'longbow', txt: 'A rapid stream of arrows',
     base: { dmg: 18.2, cd: 0.95, n: 1, pierce: 16, area: 1, speed: 520, dur: 0, knock: 15, range: 330, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows per stream' },
@@ -240,7 +240,7 @@
     }
   };
   ED.addWeapon({
-    id: 'rebound', name: 'Rebound', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', evolved: true, form: true, from: 'longbow', txt: 'Arrows rebound off the screen edge',
+    id: 'rebound', name: 'Rebound', icon: 'weapon.longbow', look: 'arrow', sig: 'ranger', mode: 'cursor', autoAim: 'nearest', evolved: true, form: true, from: 'longbow', txt: 'Arrows rebound off the screen edge',
     base: { dmg: 29.4, cd: 0.9, n: 1, pierce: 8, area: 1, speed: 460, dur: 0, knock: 20, range: 300, heavy: 0, two: false, bounce: 0, kshot: 0 },
     refine: [
       { mods: { n: 2 }, txt: '+2 arrows' },
@@ -258,7 +258,7 @@
   const caltFoe = (e) => CW.slow(e, 0.5, 2);
   const caltTick = (w, z) => { if (z.t < z.st.nt) return; z.st.nt = z.t + 0.2; CW = w; w.zoneFoes(z, caltFoe); CW = null; };
   ED.addSkill({
-    id: 'vault', name: 'Vault', icon: 'proj.arrow', cd: 9, txt: 'Leap over the horde, pull in gems',
+    id: 'vault', name: 'Vault', icon: 'proj.arrow', cd: 9, autoAim: { k: 'facing', d: 200 }, txt: 'Leap over the horde, pull in gems',
     base: { dist: 160, t: 0.34, gem: 200, charges: 1, caltrops: 0 },
     levels: [
       { mods: { dist: 60 }, txt: 'Leap 60 px farther' },

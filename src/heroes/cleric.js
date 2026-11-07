@@ -147,6 +147,7 @@
   // Lance sweep (S.beam ranks): every S.bcd s (x haste), centred on the cursor dir (w.aimDir; beam length BEAM_L x (1 + blen) x area), 1 + S.beams beams spread evenly sweep
   // SWEEP_ARC rad in PASS_T s, 1 + S.pass passes (alternating). Each crossing: dmg x beamK and a 0.2 s stun. Verdict: a pillar falls along each beam every VP_T s (distance cycles VP_F).
   const BEAM_L = 130, SWEEP_ARC = 1.9, PASS_T = 0.4, BEAM_W = 12, VP_T = 0.06, VP_F = [0.5, 0.78, 1.0];
+  const beamR = (S) => BEAM_L * (1 + (S.blen || 0)) * S.area; // auto aim (crowd) reach
   function beamTick(w, p, ws, S, dt, verdict) {
     const st = ws.st, L = BEAM_L * (1 + (S.blen || 0)) * S.area, nb = 1 + (S.beams | 0), np = 1 + (S.pass | 0), T = PASS_T * np;
     if (!st.bOn) {
@@ -226,7 +227,7 @@
 
   // Smite: S.n pillars on random foes near the hero; paths Storm (more pillars, leaps), Censer (aura, healing, censers), Lance (sweeping beam).
   ED.addWeapon({
-    id: 'smite', name: 'Smite', icon: 'weapon.mace', sig: 'cleric', mode: 'random', txt: 'Holy pillars on random foes',
+    id: 'smite', name: 'Smite', icon: 'weapon.mace', sig: 'cleric', mode: 'random', autoAim: 'crowd', aimR: beamR, aimH: () => SWEEP_ARC / 2, txt: 'Holy pillars on random foes',
     base: base({ dmg: 23, cd: 1.0, n: 1 }),
     paths: [
       { id: 'storm', name: 'Storm', forms: ['wrath'], ranks: [
@@ -246,7 +247,7 @@
 
   // Wrath: every pillar starts a chain that hops to the next foe outward (S.hop hops, 85% damage each).
   ED.addWeapon({
-    id: 'wrath', name: 'Wrath', icon: 'weapon.dawnhammer', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Pillars hop from foe to foe',
+    id: 'wrath', name: 'Wrath', icon: 'weapon.dawnhammer', sig: 'cleric', mode: 'random', autoAim: 'nearest', evolved: true, form: true, from: 'smite', txt: 'Pillars hop from foe to foe',
     base: base({ dmg: 21, cd: 1.0, n: 2, r: 28, hop: 5, knock: 90 }),
     refine: [
       { mods: { hop: 2 }, txt: 'Chains hop 2 more times' },
@@ -255,7 +256,7 @@
   }, impl('wrath'));
   // Halo: the aura becomes a ring wall that burns, slows and shoves out foes crossing it.
   ED.addWeapon({
-    id: 'halo', name: 'Halo', icon: 'weapon.lantern', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'A ring of light walls foes out',
+    id: 'halo', name: 'Halo', icon: 'weapon.lantern', sig: 'cleric', mode: 'random', autoAim: 'nearest', evolved: true, form: true, from: 'smite', txt: 'A ring of light walls foes out',
     base: base({ dmg: 16.8, cd: 1.0, n: 2, hr: 0, bandK: 0.35, heal: 0.6, swing: 1, auraK: 0.8 }),
     refine: [
       { mods: { hr: 0.3 }, txt: 'The ring is 30% wider' },
@@ -264,7 +265,7 @@
   }, impl('halo'));
   // Judgment Ray: holy beams turn around the hero without pause.
   ED.addWeapon({
-    id: 'jray', name: 'Judgment Ray', icon: 'weapon.glaive', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Holy beams turn around you',
+    id: 'jray', name: 'Judgment Ray', icon: 'weapon.glaive', sig: 'cleric', mode: 'random', autoAim: 'nearest', evolved: true, form: true, from: 'smite', txt: 'Holy beams turn around you',
     base: base({ dmg: 16.1, cd: 1.0, n: 3, rays: 1, rayK: 0.35 }),
     refine: [
       { mods: { blen: 0.3 }, txt: 'Beams reach 30% farther' },
@@ -273,7 +274,7 @@
   }, impl('ray'));
   // Consecration (Censer): every volley pillar leaves holy ground that burns and slows foes and heals allies standing in it.
   ED.addWeapon({
-    id: 'consecration', name: 'Consecration', icon: 'weapon.mace', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Pillars leave holy ground',
+    id: 'consecration', name: 'Consecration', icon: 'weapon.mace', sig: 'cleric', mode: 'random', autoAim: 'nearest', evolved: true, form: true, from: 'smite', txt: 'Pillars leave holy ground',
     base: base({ dmg: 21, cd: 1.0, n: 2, groundK: 0.3, gheal: 1.2 }),
     refine: [
       { mods: { n: 1 }, txt: '+1 pillar' },
@@ -282,7 +283,7 @@
   }, impl('hallow'));
   // Verdict (Lance): the beam sweeps more often and calls pillars down along its path.
   ED.addWeapon({
-    id: 'verdict', name: 'Verdict', icon: 'weapon.warhammer', sig: 'cleric', mode: 'random', evolved: true, form: true, from: 'smite', txt: 'Beams call pillars as they sweep',
+    id: 'verdict', name: 'Verdict', icon: 'weapon.warhammer', sig: 'cleric', mode: 'random', autoAim: 'crowd', aimR: beamR, aimH: () => SWEEP_ARC / 2, evolved: true, form: true, from: 'smite', txt: 'Beams call pillars as they sweep',
     base: base({ dmg: 33.6, cd: 1.0, n: 2, bcd: 1.6, vpK: 0.6 }),
     refine: [
       { mods: { blen: 0.3 }, txt: 'Beams reach 30% farther' },
@@ -297,7 +298,7 @@
   // when the hero is outside at a tick or the zone ends).
   const SANCT_SLOW = 0.45, WARD = 90, REV_K = 1.2, RAIN_T = 0.25, ST = 0.25, RAIN_R = 20, RAIN_STUN = 0.6;
   ED.addSkill({
-    id: 'sanctuary', name: 'Sanctuary', icon: 'fx.shield.gold', cd: 14, txt: 'Holy ground heals allies',
+    id: 'sanctuary', name: 'Sanctuary', icon: 'fx.shield.gold', cd: 14, autoAim: { k: 'facing', d: 30 }, txt: 'Holy ground heals allies',
     base: { r: 80, dur: 4, heal: 5, shield: 0 },
     levels: [
       { mods: { r: 0.35, ward: true }, txt: '+35% area, wards foes out' },

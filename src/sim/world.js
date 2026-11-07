@@ -60,10 +60,10 @@
     const p = {
       pid: pd.pid, slot, cls: h.id, name: pd.name || 'Hero', meta: pd.meta || { shop: {}, sigs: [] },
       x: c + (slot % 2 ? 24 : -24) * (slot > 0 ? 1 : 0), y: c + (slot >= 2 ? 24 : 0), vx: 0, vy: 0, face: 0, mdir: 0, mvx: 0, mvy: 0, moving: false, r: C.HERO_R,
-      hp: 1, maxHp: 1, stats: null, statsV: 0, weapons: [], passives: [], skills: [],
+      hp: 1, maxHp: 1, stats: null, statsV: 0, weapons: [], passives: [], skills: [], aimA: 0, aimT: -9,
       dashCd: 0, dashT: 0, dashDx: 1, dashDy: 0, invuln: 0, hurtT: 0, dr: 0, slowT: 0, slowK: 0, downed: false, bleed: 0, revive: 0, dead: false, revUsed: 0, atkTok: 1,
       kills: 0, dealt: {}, kw: {}, taken: 0, healed: 0, top: 0, topId: '', downs: 0, revs: 0, goldGot: 0, offer: null, pend: 0, rerolls: 0, skips: 0, pickInv: 0,
-      in: { mx: 0, my: 0, ax: c + 100, ay: c, dash: false, q: false, e: false, pick: 0, reroll: false, skip: false },
+      in: { mx: 0, my: 0, ax: c + 100, ay: c, auto: false, dash: false, q: false, e: false, pick: 0, reroll: false, skip: false },
     };
     this.heroes.push(p); this.byPid[p.pid] = p;
     this.recalc(p, true);
@@ -87,12 +87,13 @@
     return h;
   };
 
-  // Latches one input frame for hero pid; applied at the next tick. Edge flags (dash, q, e, reroll, skip) stay set until a tick consumes them; pick and banish are 1..4.
+  // Latches one input frame for hero pid; applied at the next tick. Edge flags (dash, q, e, reroll, skip) stay set until a tick consumes them; pick and banish are 1..4; auto (aim mode) is a level.
   W.prototype.input = function (pid, inp) {
     const p = this.byPid[pid]; if (!p || !inp) return;
     const I = p.in;
     if (inp.mx !== undefined) { const l = Math.hypot(inp.mx, inp.my); I.mx = l > 1 ? inp.mx / l : inp.mx; I.my = l > 1 ? inp.my / l : inp.my; }
     if (inp.ax !== undefined && isFinite(inp.ax) && isFinite(inp.ay)) { I.ax = inp.ax; I.ay = inp.ay; }
+    if (inp.auto !== undefined) I.auto = !!inp.auto;
     if (inp.dash) I.dash = true;
     if (inp.q) I.q = true;
     if (inp.e) I.e = true;
@@ -102,6 +103,7 @@
     if (inp.banish >= 1 && inp.banish <= 4) I.banish = inp.banish | 0;
   };
 
+  const FACE_HOLD = 0.6;
   W.prototype.updateHeroes = function (dt) {
     const A = this.arena, D = C.DASH;
     for (const p of this.heroes) {
@@ -119,10 +121,11 @@
         continue;
       }
       if (p.stats.regen > 0 && p.hp < p.maxHp) { const g = Math.min(p.maxHp - p.hp, p.stats.regen * dt); p.hp += g; p.healed += g; }
-      p.face = Math.atan2(I.ay - p.y, I.ax - p.x);
+      // auto aim: face the hero weapon's last target for FACE_HOLD s (weapons.js autoDir), else the heading; dash without a stick goes along the heading
+      p.face = I.auto ? (this.time - p.aimT < FACE_HOLD ? p.aimA : p.mdir) : Math.atan2(I.ay - p.y, I.ax - p.x);
       if (I.dash && p.dashCd <= 0 && p.dashT <= 0) {
-        const l = Math.hypot(I.mx, I.my);
-        if (l > 0.1) { p.dashDx = I.mx / l; p.dashDy = I.my / l; } else { p.dashDx = Math.cos(p.face); p.dashDy = Math.sin(p.face); }
+        const l = Math.hypot(I.mx, I.my), fa = I.auto ? p.mdir : p.face;
+        if (l > 0.1) { p.dashDx = I.mx / l; p.dashDy = I.my / l; } else { p.dashDx = Math.cos(fa); p.dashDy = Math.sin(fa); }
         p.dashT = D.t; p.dashCd = D.cd;
         this.emit({ t: 'dash', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y), a: Math.atan2(p.dashDy, p.dashDx) });
       }

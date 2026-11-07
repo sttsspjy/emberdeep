@@ -1,5 +1,5 @@
 // Bot policy (UMD, no DOM): a "competent survivors player" that drives one hero through w.input frames. Node: require('./bot-brain.js'); browser: ED.Bot after the game scripts.
-// Usage: const bot = Bot.create({ pid, seed, skill (0..1, default 1) }); bot.onStart(w, p);
+// Usage: const bot = Bot.create({ pid, seed, skill (0..1, default 1), aim ('cursor' default | 'auto': frames carry auto: true and no weapon aim point) }); bot.onStart(w, p);
 //   every sim tick: w.input(pid, bot.think(w, p)) (the frame object is reused: copy it to keep it). Bot.metaFor(ED, 'none' | 'max') -> a meta bundle shaped like Save.metaBundle.
 // Pure reader: linear scans of w.foes / w.projs / w.zones / w.pickups (never the foe grid, whose lazy rebuild is sim state); own seeded RNG; ED read lazily from globalThis on each call.
 // Movement (re-plan every PLAN thinks, sooner on a new threat): 16 directions + stay, each scored over samples at H s ahead: contact danger (foes closing at their speed, dashers along
@@ -78,7 +78,8 @@
     this.tgt = null; this.tgtId = 0; this.tgtT = 0; this.tgtK = 0;
     this.lastX = 0; this.lastY = 0; this.stuckN = 0; this.wander = -1; this.wanderT = 0; this.planT = 0;
     this.castGap = 0; this.zSeen = 0; this.pSeen = 0;
-    this.f = { mx: 0, my: 0, ax: 0, ay: 0, dash: false, q: false, e: false, pick: 0, banish: 0, reroll: false, skip: false };
+    this.auto = cfg.aim === 'auto';
+    this.f = { mx: 0, my: 0, ax: 0, ay: 0, auto: this.auto, dash: false, q: false, e: false, pick: 0, banish: 0, reroll: false, skip: false };
     this.near = 0; this.crowd = 0; this.cx = 0; this.cy = 0; this.dx = 0; this.dy = 0; this.boss = null; this.goalOn = false; this.goalIn = false; this.goalX = 0; this.goalY = 0; this.goalS = null; this.wmCore = null; this.wmB = null; this.zPrev = new Map(); // zone id -> [x, y, r, a, time, think n]
     this.gmin = Infinity; this.gx = 0; this.gy = 0; // nearest contact foe: gap and position
     this.reach = 0; this.close = false; this.bossFn = null; this.bossS = null; this.bossOn = false; // stance(): main weapon reach to a typical foe's edge (0 = ranged), crowd / boss stance
@@ -99,7 +100,7 @@
     const urgent = this.newThreat(w, p);
     if (this.n >= this.plan || (urgent && this.skill >= 1)) { this.plan = this.n + this.planN; this.replan(ED, w, p); }
     f.mx = this.mx; f.my = this.my;
-    if (!f.q) this.aim(ED, w, p);
+    if (!f.q && !this.auto) this.aim(ED, w, p);
     return f;
   };
 

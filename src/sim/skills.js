@@ -3,6 +3,8 @@
 // ED.addSkill(def, cast): ED.SKILLS[id] = { id, name, icon, cd, txt, base: { r, dur, charges, ... }, levels: [{ mods, txt }] x 4 (levels 2-5; level 5 is a capstone that changes the skill's shape) }, ED.CAST[id] = cast(w, p, x, y, N, sk) where (x, y) is the
 // aim point (world px), N = ED.Stats.skill numbers, sk the slot { id, lvl, cd, cdMax }. A cast returns false to refuse (no cooldown), else an object merged into the 'skill' event or nothing.
 // Hero skills are utility: they deal no damage (push, stun, slow, flee, lure, block, heal, gem pull).
+// Auto aim (p.in.auto): the aim point comes from def.autoAim { k, d } (autoPoint): 'self' the hero; 'facing' d px along p.mdir; 'nearest' foe / 'densest' cluster point in view
+// within d px (default 400), none -> FALL px along p.mdir. No autoAim: 'self'.
 // ED.HOOK[cls] = { init(w, p), tick(w, p, dt), kill(w, p, e), hit(w, p, e, dealt, src), stats(p, add) } (all optional).
 (function (ED) {
   'use strict';
@@ -31,6 +33,19 @@
     for (const g of this.pickups) if (!g.dead && !g.pull && g.k.charCodeAt(0) === 120 && (r < 0 ? ED.inView(p, g.x, g.y, 0) : U.dist2(x, y, g.x, g.y) <= r2)) { g.pull = p.pid; g.t = 0; } // 120 'x': xp gems
   };
 
+  // Auto aim point of hero p for rule A (see header). Returns the scratch PT.
+  const PT = { x: 0, y: 0 }, FALL = 90;
+  W.autoPoint = function (p, A) {
+    const k = A ? A.k : 'self', d = A && A.d > 0 ? A.d : 400;
+    let t = null;
+    if (k === 'nearest') t = this.heroFoe(p, d);
+    else if (k === 'densest') t = this.target('densest', p, d);
+    if (t) { PT.x = t.x; PT.y = t.y; }
+    else if (k === 'self') { PT.x = p.x; PT.y = p.y; }
+    else { const r = k === 'facing' ? d : FALL; PT.x = p.x + Math.cos(p.mdir) * r; PT.y = p.y + Math.sin(p.mdir) * r; }
+    return PT;
+  };
+
   W.updateSkills = function (dt) {
     for (const p of this.heroes) {
       const I = p.in;
@@ -42,11 +57,13 @@
         if (max > 1) charge(sk, N.cd, max, dt); else if (sk.cd > 0) sk.cd -= dt;
         if (i > 0 || !I.q || sk.cd > 0) continue;
         const fn = ED.CAST[sk.id]; if (!fn) continue;
-        const r = fn(this, p, I.ax, I.ay, N, sk);
+        let x = I.ax, y = I.ay;
+        if (I.auto) { const P = this.autoPoint(p, ED.SKILLS[sk.id].autoAim); x = P.x; y = P.y; }
+        const r = fn(this, p, x, y, N, sk);
         if (r === false) continue;
         if (max > 1) { sk.ch--; if (!(sk.rc > 0)) sk.rc = N.cd; sk.gp = GAP; sk.cd = sk.ch > 0 ? GAP : sk.rc; sk.cdMax = sk.ch > 0 ? GAP : N.cd; }
         else { sk.cdMax = N.cd; sk.cd = N.cd; }
-        const ev = { t: 'skill', pid: p.pid, id: sk.id, slot: i, x: Math.round(I.ax), y: Math.round(I.ay), a: p.face };
+        const ev = { t: 'skill', pid: p.pid, id: sk.id, slot: i, x: Math.round(x), y: Math.round(y), a: p.face };
         if (r && typeof r === 'object') Object.assign(ev, r);
         this.emit(ev);
       }

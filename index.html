@@ -6,11 +6,25 @@
 <title>Wickdeep</title>
 <meta name="description" content="Wickdeep: a co-op survivors-like in your browser. Hordes pour in, your weapons fire on their own, you move, dash and unleash your hero skill. Solo or with up to 3 friends.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cpath d=%22M16 2c6 7 10 11 10 18a10 10 0 0 1-20 0c0-5 3-8 5-11 0 4 2 6 4 6-2-5 0-9 1-13z%22 fill=%22%23ff8a3d%22/%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b0908">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icons/apple-touch-180.png">
 <link rel="stylesheet" href="src/art/fonts.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <canvas id="game" aria-label="Game view" data-i18n-attr="aria-label"></canvas>
+
+<div id="touch" hidden>
+  <div id="tc-stick"></div>
+  <button id="tc-q" class="tc-btn" aria-label="Skill Q" data-i18n-attr="aria-label"></button>
+  <button id="tc-dash" class="tc-btn" aria-label="Dash" data-i18n-attr="aria-label"></button>
+  <button id="tc-pause" class="tc-btn" aria-label="Pause" data-i18n-attr="aria-label"><i></i><i></i></button>
+</div>
+<div id="ov-rotate" role="alert"><div class="rot-ico" aria-hidden="true"></div><p data-i18n>Rotate your phone to landscape.</p></div>
 
 <div id="ui">
   <div id="loading" data-i18n>Loading...</div>
@@ -118,6 +132,7 @@
       <div class="lobby-stage" id="lobby-stage-row"><span class="hint" data-i18n>Stage</span><div class="pick-row" id="lobby-stages" role="radiogroup" aria-label="Stage" data-i18n-attr="aria-label"></div></div>
     </div>
     <div class="msg" id="lobby-msg" role="status"></div>
+    <p class="hint tc-only" id="lobby-keep" hidden data-i18n>Keep the app open while hosting: the run stops for everyone when it is hidden.</p>
     <div class="row"><button class="btn" id="btn-lobby-leave" data-back data-i18n>Leave</button><button class="btn btn-primary btn-big" id="btn-lobby-go" data-focus>Ready</button></div>
   </section>
 
@@ -177,6 +192,8 @@
       <div class="set-grid">
         <span class="set-lbl" data-i18n>Language</span><div class="seg" id="set-lang" role="radiogroup" aria-label="Language" data-i18n-attr="aria-label"><button class="btn btn-sm" data-v="en" lang="en">English</button><button class="btn btn-sm" data-v="ko" lang="ko">한국어</button></div>
         <span class="set-lbl" data-i18n>Quality</span><div class="seg" id="set-quality" role="radiogroup" aria-label="Quality" data-i18n-attr="aria-label"><button class="btn btn-sm" data-v="auto" data-i18n>Auto</button><button class="btn btn-sm" data-v="high" data-i18n>High</button><button class="btn btn-sm" data-v="low" data-i18n>Low</button></div>
+        <span class="set-lbl" data-i18n>Aim</span><div class="seg" id="set-aim" role="radiogroup" aria-label="Aim" data-i18n-attr="aria-label"><button class="btn btn-sm" data-v="auto" data-i18n>Auto</button><button class="btn btn-sm" data-v="cursor" data-i18n>Cursor</button></div>
+        <span class="set-lbl tc-only" data-i18n>Touch buttons</span><div class="seg tc-only" id="set-touch" role="radiogroup" aria-label="Touch buttons" data-i18n-attr="aria-label"><button class="btn btn-sm" data-v="s" data-i18n>Small</button><button class="btn btn-sm" data-v="m" data-i18n>Medium</button><button class="btn btn-sm" data-v="l" data-i18n>Large</button></div>
         <label class="set-lbl" for="set-music" data-i18n>Music</label><div class="slide"><input type="range" id="set-music" min="0" max="100" step="5"><b id="set-music-v">0</b></div>
         <label class="set-lbl" for="set-sfx" data-i18n>Effects</label><div class="slide"><input type="range" id="set-sfx" min="0" max="100" step="5"><b id="set-sfx-v">0</b></div>
         <span class="set-lbl" data-i18n>Damage numbers</span><button class="btn btn-sm tog" id="set-numbers" aria-pressed="true">On</button>
@@ -272,9 +289,12 @@
 <script src="src/client/audio.js" defer></script>
 <script src="src/client/music.js" defer></script>
 <script src="src/client/input.js" defer></script>
+<script src="src/client/touch.js" defer></script>
 <script src="src/client/aim.js" defer></script>
 <script src="src/client/hud.js" defer></script>
 <script src="src/client/ui.js" defer></script>
+<script src="src/client/pwa.js" defer></script>
+<script src="src/client/share.js" defer></script>
 <script src="src/client/title.js" defer></script>
 <script src="src/client/codex.js" defer></script>
 <script src="src/client/wardrobe.js" defer></script>

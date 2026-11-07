@@ -10,11 +10,12 @@
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST;
-  const R = ED.Render = { canvas: null, ctx: null, buf: null, bctx: null, dpr: 1, scale: 3, bw: 640, bh: 360, camX: 0, camY: 0, quality: 'high', usePost: false, gpu: false, ms: 0, crowd: 0 };
+  // pref: the Quality setting ('auto' | 'high' | 'low'); quality: what it resolved to. postLite: the post canvas runs at 1 px per world px (coarse pointer). lite: bloom off ('auto' benchmark verdict).
+  const R = ED.Render = { canvas: null, ctx: null, buf: null, bctx: null, dpr: 1, scale: 3, bw: 640, bh: 360, camX: 0, camY: 0, pref: 'high', quality: 'high', usePost: false, gpu: false, ms: 0, crowd: 0, postLite: false, lite: false, autoNote: '' };
   const CHUNK = 256, TILE = 16;
   let theme = null, stageId = '', chunks = new Map(), frameN = 0, arenaRef = null, roomOn = null, bgHex = 0, bgCss = '#000', wallRgba = 0;
   const SH = { x: 0, y: 0 };
-  const PO_ARGS = { biome: null, t: 0, scale: 1, fx: 0, fy: 0, aberr: 0, flash: [0, 0, 0, 0], tex: null };
+  const PO_ARGS = { biome: null, t: 0, scale: 1, fx: 0, fy: 0, aberr: 0, flash: [0, 0, 0, 0], tex: null, bloom: undefined };
   ED.ZoneActor = ED.ZoneActor || {}; // look -> fn(B, z, t): zones drawn as y-sorted actors (lanes register in their fx files)
 
   R.init = (canvas) => {
@@ -22,6 +23,7 @@
     R.buf = document.createElement('canvas'); R.bctx = R.buf.getContext('2d', { alpha: false });
     ED.Batch.init(R.bctx);
     if (ED.Post && ED.Post.init) ED.Post.init(canvas);
+    if (R.pref === 'auto') R.quality = R.autoQuality();
     R.resize();
     window.addEventListener('resize', R.resize);
     if (ED.Atlas && ED.Atlas.ready) ED.Atlas.ready.then(() => chunks.clear());
@@ -32,9 +34,31 @@
     R.scale = Math.max(1, Math.floor(Math.min(cw / C.VIEW_W, ch / C.VIEW_H)));
     R.bw = Math.ceil(cw / R.scale) + 1; R.bh = Math.ceil(ch / R.scale) + 1;
     R.buf.width = R.bw; R.buf.height = R.bh;
-    if (ED.Post && ED.Post.resize) ED.Post.resize(cw, ch, R.bw, R.bh);
+    // Coarse pointer (phones, tablets): the post canvas holds one px per world px, CSS-sized to scale / dpr CSS px per px, so the composite shades ~scale^2 fewer px and the
+    // compositor's nearest upscale keeps whole art pixels; fine pointers composite at device px.
+    R.postLite = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    if (ED.Post && ED.Post.resize) {
+      if (R.postLite) ED.Post.resize(R.bw, R.bh, R.bw, R.bh, R.bw * R.scale / dpr, R.bh * R.scale / dpr);
+      else ED.Post.resize(cw, ch, R.bw, R.bh);
+    }
   };
-  R.setQuality = (q) => { R.quality = q === 'low' ? 'low' : 'high'; };
+  // Quality 'auto': 'high' (WebGL batch + post) on a hardware WebGL context, else 'low'. The Canvas2D path costs several times the CPU of the WebGL path, so a GPU never resolves to 'low'.
+  R.autoQuality = () => { const P = ED.Post; return !P || !(P.canvas || P.error) || (!P.soft && (P.ready || P.lost)) ? 'high' : 'low'; }; // 'high' until Post.init ran
+  R.setQuality = (q) => { R.pref = q === 'low' || q === 'high' ? q : 'auto'; R.quality = R.pref === 'auto' ? R.autoQuality() : R.pref; R.lite = R.pref === 'auto' && autoLite; };
+  // 'auto' benchmark, once per page on the WebGL path: frames AUTO_SKIP..AUTO_SKIP + AUTO_N of the first run; a median rAF interval above AUTO_MS turns bloom off (R.lite).
+  const AUTO_SKIP = 60, AUTO_N = 60, AUTO_MS = 22, autoS = new Float32Array(AUTO_N);
+  let autoI = -AUTO_SKIP, autoLast = 0, autoLite = false;
+  function autoBench(now) {
+    const dt = now - autoLast; autoLast = now;
+    if (autoI < 0) { autoI++; return; }
+    if (dt > 250) return; // a stall (tab switch, pause) is not a frame time
+    autoS[autoI++] = dt;
+    if (autoI < AUTO_N) return;
+    autoS.sort();
+    const med = autoS[AUTO_N >> 1];
+    R.lite = autoLite = med > AUTO_MS;
+    R.autoNote = 'median frame ' + med.toFixed(1) + ' ms: ' + (R.lite ? 'bloom off' : 'full');
+  }
   // Screen (device px) -> world.
   R.toWorld = (sx, sy, out) => { out = out || {}; out.x = R.camX + sx / R.scale; out.y = R.camY + sy / R.scale; return out; };
 
@@ -132,7 +156,7 @@
 
   // ---------------- view rect ----------------
   let vx0 = 0, vy0 = 0, vx1 = 0, vy1 = 0;
-  const inView = (o) => o.x >= vx0 && o.x <= vx1 && o.y >= vy0 && o.y <= vy1;
+  const inXY = (x, y) => x >= vx0 && x <= vx1 && y >= vy0 && y <= vy1; // takes (x, y), not the object: each call site's loads stay monomorphic (no boxed doubles)
   const zoneInView = (z) => {
     if (z.len > 0) { const ex = z.x + Math.cos(z.a) * z.len, ey = z.y + Math.sin(z.a) * z.len, m = z.w || 0; return Math.max(z.x, ex) + m >= vx0 && Math.min(z.x, ex) - m <= vx1 && Math.max(z.y, ey) + m >= vy0 && Math.min(z.y, ey) - m <= vy1; }
     const r = z.r || 0; return z.x + r >= vx0 && z.x - r <= vx1 && z.y + r >= vy0 && z.y - r <= vy1;
@@ -211,7 +235,8 @@
   }
 
   // ---------------- y-sort ----------------
-  // items[0..n) sorted by y: 16-bit keys (half-px steps from the view top), two stable 8-bit LSD radix passes over typed arrays (no per-frame allocation).
+  // items[0..n) sorted by y: 16-bit keys kA (half-px steps from the view top, written as items are collected: a monomorphic y load per list), two stable 8-bit LSD radix passes
+  // over typed arrays (no per-frame allocation).
   const items = [];
   let cap = 0, kA = null, kB = null, iA = null, iB = null;
   const cnt = new Uint32Array(256);
@@ -226,9 +251,9 @@
     for (let i = 0, s = 0; i < 256; i++) { const c = cnt[i]; cnt[i] = s; s += c; }
     for (let i = 0; i < n; i++) { const d = cnt[(ks[i] >> shift) & 255]++; kd[d] = ks[i]; id[d] = is[i]; }
   }
+  const yKey = (y) => { const q = (y - vy0) * 2; return q <= 0 ? 0 : q >= 65535 ? 65535 : q | 0; };
   function ysort(n) {
-    sortCap(n);
-    for (let i = 0; i < n; i++) { const q = (items[i].y - vy0) * 2; kA[i] = q <= 0 ? 0 : q >= 65535 ? 65535 : q | 0; iA[i] = i; }
+    for (let i = 0; i < n; i++) iA[i] = i;
     radix(n, 0, kA, iA, kB, iB); radix(n, 8, kB, iB, kA, iA);
   }
 
@@ -251,6 +276,7 @@
     }
     ED.FX.shakeXY(SH);
     const cx = R.camX + Math.round(SH.x), cy = R.camY + Math.round(SH.y);
+    if (R.pref === 'auto') { R.quality = R.autoQuality(); if (!R.autoNote && R.quality === 'high') autoBench(t0); }
     const postOk = R.quality === 'high' && P && P.ready && !P.soft;
     const gpu = R.gpu = postOk && B.use('gl');
     if (!gpu) B.use('2d');
@@ -268,16 +294,17 @@
     if (zn) { if (zf < 1) B.fade(zf); for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && z.team !== 1 && zoneInView(z)) { if (Cs) Cs.tint(Cs.zoneTint(z)); drawZone(B, z, t); } } if (Cs) Cs.tint(''); B.zflush(); if (zf < 1) B.fade(1); }
     for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && z.team === 1 && zoneInView(z)) drawZone(B, z, t); }
     const pk = view.pickups;
-    for (let i = 0; i < pk.length; i++) { const g = pk[i]; if (!g.dead && inView(g)) ED.Actors.pickup(B, g, t); }
+    for (let i = 0; i < pk.length; i++) { const g = pk[i]; if (!g.dead && inXY(g.x, g.y)) ED.Actors.pickup(B, g, t); }
     // actors
     let n = 0, crowd = 0;
     const foes = view.foes, heroes = view.heroes;
-    for (let i = 0; i < foes.length; i++) { const e = foes[i]; if (!e.dead && inView(e)) { items[n++] = e; crowd++; } }
+    sortCap(foes.length + heroes.length + zones.length + (room ? 0 : A.obstacles.length + A.braziers.length));
+    for (let i = 0; i < foes.length; i++) { const e = foes[i]; if (!e.dead && inXY(e.x, e.y)) { kA[n] = yKey(e.y); items[n++] = e; crowd++; } }
     B.crowd = crowd; R.crowd = crowd;
-    for (let i = 0; i < heroes.length; i++) { const p = heroes[i]; if (!p.dead && inView(p)) items[n++] = p; }
-    if (!room) { for (const o of A.obstacles) if (inView(o)) items[n++] = o; for (const b of A.braziers) if (inView(b)) items[n++] = b; }
+    for (let i = 0; i < heroes.length; i++) { const p = heroes[i]; if (!p.dead && inXY(p.x, p.y)) { kA[n] = yKey(p.y); items[n++] = p; } }
+    if (!room) { for (const o of A.obstacles) if (inXY(o.x, o.y)) { kA[n] = yKey(o.y); items[n++] = o; } for (const b of A.braziers) if (inXY(b.x, b.y)) { kA[n] = yKey(b.y); items[n++] = b; } }
     const ZA = ED.ZoneActor;
-    for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && ZA[z.k] && inView(z)) items[n++] = z; } // zones with a body (minions): ED.ZoneActor[look](B, z, t)
+    for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && ZA[z.k] && inXY(z.x, z.y)) { kA[n] = yKey(z.y); items[n++] = z; } } // zones with a body (minions): ED.ZoneActor[look](B, z, t)
     if (items.length > n) items.length = n;
     ysort(n);
     for (let i = 0; i < n; i++) {
@@ -290,7 +317,7 @@
     }
     if (tele) for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && hostile(z) && lowTele(z) && zoneInView(z)) drawTele(B, z, t); }
     const prs = view.projs;
-    for (let i = 0; i < prs.length; i++) { const pr = prs[i]; if (!pr.dead && inView(pr)) { if (Cs) Cs.tint(Cs.projTint(pr)); drawProj(B, pr, t); } }
+    for (let i = 0; i < prs.length; i++) { const pr = prs[i]; if (!pr.dead && inXY(pr.x, pr.y)) { if (Cs) Cs.tint(Cs.projTint(pr)); drawProj(B, pr, t); } }
     if (Cs) Cs.tint('');
     for (let i = 0; i < zones.length; i++) { // zone overlays above actors (own-team ones share the zone fade)
       const z = zones[i]; if (z.dead || !zoneInView(z)) continue;
@@ -301,11 +328,11 @@
     ED.FX.draw(B, t);
     if (tele) for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && hostile(z) && !lowTele(z) && zoneInView(z)) drawTele(B, z, t); }
     const busy = heroes.length === 1 && (tele > 0 || zl > 0.5 || crowd > 150);
-    for (let i = 0; i < heroes.length; i++) { const p = heroes[i]; if (!p.dead && inView(p)) ED.Actors.heroTop(B, p, t, p === me, busy); } // hero markers over FX and telegraphs
+    for (let i = 0; i < heroes.length; i++) { const p = heroes[i]; if (!p.dead && inXY(p.x, p.y)) ED.Actors.heroTop(B, p, t, p === me, busy); } // hero markers over FX and telegraphs
     // overlays: name tags (co-op, or a solo hero wearing a title / name colour), revive bars (co-op), elite HP bars
     const coopN = heroes.length > 1;
     for (const p of heroes) {
-      if (p.dead || !inView(p) || !(coopN || (Cs && Cs.tagged(p.pid)))) continue;
+      if (p.dead || !inXY(p.x, p.y) || !(coopN || (Cs && Cs.tagged(p.pid)))) continue;
       if (Cs) Cs.nameTag(B, p, p === me, t); else B.text(p.name, p.x, p.y - 30, p === me ? 0xfff1d6 : 0xb8d8ff, 1);
       if (coopN && p.downed) { B.rect(p.x - 12, p.y - 24, 24, 3, 0x000000aa); B.rect(p.x - 12, p.y - 24, 24 * p.revive, 3, 0x7fe39aff); }
     }
@@ -321,7 +348,7 @@
     if (usePost) {
       ctx.clearRect(0, 0, R.canvas.width, R.canvas.height);
       P.setVisible(true);
-      PO_ARGS.t = t; PO_ARGS.scale = R.scale; PO_ARGS.tex = gpu ? B.out.tex : null;
+      PO_ARGS.t = t; PO_ARGS.scale = R.postLite ? 1 : R.scale; PO_ARGS.tex = gpu ? B.out.tex : null; PO_ARGS.bloom = R.lite ? 0 : undefined;
       shown = P.render(gpu ? null : R.buf, PO_ARGS);
     }
     if (!shown) {

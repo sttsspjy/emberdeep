@@ -18,8 +18,10 @@
 
   // ---------------- per-entity state ----------------
   const ST = new Map(), FREE = [];
-  // State of entity id at (x, y): kind tag k (1 foe, 2 boss, 3 pickup); movement is detected from position deltas (> 0.4 px), so clients and hosts behave alike.
-  function stOf(id, x, y, k) {
+  // State of entity e (e.id at e.x, e.y): kind tag k (1 foe, 2 boss, 3 pickup); movement is detected from position deltas (> 0.4 px), so clients and hosts behave alike.
+  // Takes the entity, not its coordinates: doubles passed to a call that is not inlined are boxed (one allocation each per foe per frame).
+  function stOf(e, k) {
+    const id = e.id, x = e.x, y = e.y;
     let s = ST.get(id);
     if (s && s.k !== k) { ST.delete(id); FREE.push(s); s = null; }
     if (!s) {
@@ -42,7 +44,7 @@
   // Shown hit flash of e (state s): true for FLASH_T s from a hit, then off for the rest of gap s even while e.flash stays set.
   const flashOn = (s, e, gap) => { if (e.flash > 0 && now - s.flA >= gap) s.flA = now; return now - s.flA < FLASH_T; };
   // Same for a boss or BossFx body (ED.BossFx draw hooks call this instead of reading e.flash).
-  Ac.hitFlash = (e) => flashOn(stOf(e.id, e.x, e.y, 2), e, FLASH_GAP);
+  Ac.hitFlash = (e) => flashOn(stOf(e, 2), e, FLASH_GAP);
 
   // ---------------- variant drawing ----------------
   const VO = { flip: false, alpha: 1, rot: 0, variant: '' }, O2 = { flip: false, flash: 1, alpha: 1, rot: 0, sx: 1, sy: 1, tint: 0, add: false };
@@ -126,7 +128,7 @@
     const def = e.def || ED.FOES[ED.FOE_IDS[e.k]];
     if (!def) return;
     if (def.boss) { Ac.boss(B, e, t, def, heroes); return; }
-    const f = foeInfo(def), A = ED.Atlas, o = reset(), s = stOf(e.id, e.x, e.y, 1), ph = (e.id % 97) * 0.618, lite = B.crowd > 250;
+    const f = foeInfo(def), A = ED.Atlas, o = reset(), s = stOf(e, 1), ph = (e.id % 97) * 0.618, lite = B.crowd > 250;
     if (e.st !== s.st) { s.st = e.st; s.ss = now; s.hold = -1; }
     const moving = now - s.mv < 0.2, wind = e.st === 1, act = e.st === 2, held = e.freezeT > 0 || e.stunT > 0;
     const tgtA = nearAng(e, heroes), faceA = moving && !wind && !act ? s.hd : tgtA, el = now - s.ss;
@@ -172,7 +174,7 @@
     else if (moving && id && A.anim(id).n === 2 && Math.floor((t + ph) * 4) % 2) oy -= 1; // two-frame walkers hop
     const x = e.x + ox, y = e.y + oy, h = f.h * base;
     // under the body: shadow, elite glow
-    B.shadow(e.x, e.y, e.r * (f.flyer ? 0.7 : 0.9));
+    B.shadow(Math.round(e.x), Math.round(e.y), e.r * (f.flyer ? 0.7 : 0.9)); // both backends round x, y; whole numbers pass unboxed
     if (e.elite) {
       const pu = 0.5 + 0.5 * Math.sin(t * 5 + e.id);
       B.circ(e.x, e.y - h * 0.45, h * 0.62 + pu * 3, (0xffc94a00 | Math.round(26 + 22 * pu)) >>> 0, 0);
@@ -186,7 +188,7 @@
     }
     let drawn = false;
     if (e.freezeT > 0 && !fl) { drawn = varDraw(B, id, fi, x, y, o, 'frozen', 1); if (!drawn) o.tint = hexN(ICE); }
-    if (!drawn && !B.spr(id, fi, x, y, o)) B.circ(e.x, e.y - e.r, e.r, fl ? 0xffffffff : 0xc05050ff, 0);
+    if (!drawn && !B.spr(id, fi, Math.round(x), Math.round(y), o)) B.circ(e.x, e.y - e.r, e.r, fl ? 0xffffffff : 0xc05050ff, 0);
     if (wk > 0.25 && !lite) B.text('!', e.x, y - h - 5, Math.floor(now * 10) % 2 ? 0xff4a3a : 0xffd84a, base > 1 ? 2 : 1);
     if (e.stunT > 0 && !lite) { const sa = t * 6; B.rect(q1(e.x + Math.cos(sa) * 6) - 1, q1(y - h - 3 + Math.sin(sa) * 2) - 1, 2, 2, 0xffe66bff); B.rect(q1(e.x - Math.cos(sa) * 6) - 1, q1(y - h - 3 - Math.sin(sa) * 2) - 1, 2, 2, 0xffe66bff); }
     s.an = id; s.fi = fi; s.flip = o.flip; s.sx = base; s.sy = base; s.ox = ox; s.oy = oy; s.h = h;
@@ -222,7 +224,7 @@
   Ac.boss = (B, e, t, def, heroes) => {
     const bf = ED.BossFx[def.id];
     if (bf && bf.draw && bf.draw(B, e, t)) return;
-    const A = ED.Atlas, o = reset(), b = bossInfo(def), s = stOf(e.id, e.x, e.y, 2), sc = e.scale || 1;
+    const A = ED.Atlas, o = reset(), b = bossInfo(def), s = stOf(e, 2), sc = e.scale || 1;
     if (e.st !== s.st) { if (e.st === 1 || (e.st === 2 && s.st === 0)) s.atk++; s.st = e.st; s.ss = now; }
     const el = now - s.ss, moving = now - s.mv < 0.25, tgtA = heroes ? nearAng(e, heroes) : 0;
     o.sx = o.sy = sc; o.flip = !b.front && (e.st ? Math.cos(tgtA) < 0 : e.face < 0);
@@ -403,7 +405,7 @@
   const PKCOL = { xp1: 0x6ad7ffff, xp5: 0x8aff9aff, xp25: 0xff7ad9ff, gold: 0xffd24aff, food: 0xff5a5aff, magnet: 0xffe14aff, bomb: 0xffffffff, chest: 0xc89a4aff };
   Ac.pickup = (B, g, t) => {
     const d = PK[g.k] || PK.xp1, o = reset(), chest = g.k === 'chest', gem = g.k === 'xp1' || g.k === 'xp5' || g.k === 'xp25';
-    const s = stOf(g.id, g.x, g.y, 3), pulled = now - s.mv < 0.1 && s.spd > 1.2;
+    const s = stOf(g, 3), pulled = now - s.mv < 0.1 && s.spd > 1.2;
     const bob = chest || pulled ? 0 : Math.round(Math.sin(t * 4 + g.id) * 1.5);
     o.sx = o.sy = d[1];
     if (chest) {

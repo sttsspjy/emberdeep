@@ -1,4 +1,5 @@
-// Aim (client only): the world point skills aim at (mouse cursor, or the right stick 120 px ahead of the hero on a gamepad) and the procedural reticle CSS cursor.
+// Aim (client only): the world point skills aim at (mouse cursor, or 120 px ahead of the hero along the right stick on a gamepad / the move stick on touch) and the procedural reticle CSS cursor
+// (hidden by html.aim-off, set by ED.Input.read while aim is auto or the device is touch).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = Math.PI * 2;
@@ -7,7 +8,7 @@
   // World aim point for hero me from this frame's input `inp` (ED.Input.read()). Returns A ({ wx, wy }).
   A.point = (me, inp) => {
     const I = ED.Input, R = ED.Render;
-    if (I.device === 'pad') {
+    if (I.device === 'pad' || I.device === 'touch') {
       if (inp.padAim !== undefined) A.padA = inp.padAim; else if (Math.hypot(inp.mx, inp.my) > 0.2) A.padA = Math.atan2(inp.my, inp.mx);
       A.wx = me.x + Math.cos(A.padA) * 120; A.wy = me.y + Math.sin(A.padA) * 120;
     } else { const w = R.toWorld(I.mouse.x * R.dpr, I.mouse.y * R.dpr); A.wx = w.x; A.wy = w.y; }
@@ -35,9 +36,10 @@
       document.documentElement.style.setProperty('--aim-cur', `url(${reticle(sz, 1)}) ${h} ${h}, crosshair`);
     } catch (e) { document.documentElement.style.setProperty('--aim-cur', 'crosshair'); }
   };
-  // Gamepad aim marker in the world (drawn by the caller between the actors and the overlays).
+  // Gamepad / touch aim marker in the world (drawn by the caller between the actors and the overlays); none in auto aim.
   A.draw = (B, me) => {
-    if (!me || ED.Input.device !== 'pad') return;
+    const I = ED.Input;
+    if (!me || I.device === 'mouse' || I.auto) return;
     B.circ(A.wx, A.wy, 4, 0xffb56bcc, 1);
   };
 })(globalThis.ED || (globalThis.ED = {}));

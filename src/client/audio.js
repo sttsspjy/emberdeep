@@ -566,8 +566,8 @@
     let hov = null;
     const btn = (e) => (e.target && e.target.closest ? e.target.closest('button, .btn, .card') : null);
     document.addEventListener('click', (e) => { const b = btn(e); if (b && !b.disabled) A.play('ui.click'); }, true);
-    document.addEventListener('pointerover', (e) => { const b = btn(e); if (b !== hov) { hov = b; if (b && !b.disabled) A.play('ui.hover'); } }, true);
+    document.addEventListener('pointerover', (e) => { if (e.pointerType === 'touch') return; const b = btn(e); if (b !== hov) { hov = b; if (b && !b.disabled) A.play('ui.hover'); } }, true);
     const wake = () => { if (A.ctx && A.ctx.state === 'suspended' && !document.hidden) A.ctx.resume(); };
-    document.addEventListener('pointerdown', wake, true); document.addEventListener('keydown', wake, true);
+    document.addEventListener('pointerdown', wake, true); document.addEventListener('keydown', wake, true); document.addEventListener('touchend', wake, true); // touch activation (iOS) comes on touchend
   }
 })(globalThis.ED || (globalThis.ED = {}));

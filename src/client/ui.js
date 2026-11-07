@@ -420,6 +420,7 @@
     const s = App().settings;
     const seg = (id, v) => { for (const b of $(id).children) { const on = v === b.dataset.v; b.classList.toggle('on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); b.setAttribute('role', 'radio'); } };
     seg('set-quality', s.quality || 'auto'); seg('set-lang', ED.I18N.lang);
+    seg('set-aim', s.aim || (ED.Input.device === 'touch' ? 'auto' : 'cursor')); seg('set-touch', s.touchSize || 'm');
     for (const k of ['music', 'sfx']) { $('set-' + k).value = s[k]; $('set-' + k + '-v').textContent = s[k]; }
     const tog = (id, v) => { const b = $(id); b.setAttribute('aria-pressed', v ? 'true' : 'false'); b.textContent = v ? ED.t('On') : ED.t('Off'); };
     tog('set-numbers', s.numbers !== false); tog('set-shake', s.shake !== false); tog('set-full', !!document.fullscreenElement);
@@ -513,7 +514,8 @@
   UI.syncOffer = (me, solo) => {
     const ov = $('ov-offer'), offer = me && !me.dead ? me.offer : null;
     if (!offer || !(me.banishes > 0)) UI.banishOn = false;
-    const sig = offer ? offer.map(c => c.kind + c.id + (c.path | 0) + ':' + (c.tk | 0) + c.lvl).join('|') + '|' + me.rerolls + me.skips + (me.banishes | 0) + (UI.banishOn ? 'b' : '') + (solo ? 's' : 'c') : '';
+    const touch = ED.Input.device === 'touch';
+    const sig = offer ? offer.map(c => c.kind + c.id + (c.path | 0) + ':' + (c.tk | 0) + c.lvl).join('|') + '|' + me.rerolls + me.skips + (me.banishes | 0) + (UI.banishOn ? 'b' : '') + (solo ? 's' : 'c') + (touch ? 't' : '') : '';
     if (sig === UI.offerSig) return;
     UI.offerSig = sig;
     ov.hidden = !offer;
@@ -521,7 +523,7 @@
     if (!offer) return;
     const v = ED.Game.view, W = ED.World.prototype, chest = W.isChestOffer(offer); // chest offer (path pick, Form fork): picks only
     const wd = chest && ED.WEAPONS[ED.weaponRoot(offer[0].id)], head = chest ? (offer[0].kind === 'form' ? T('Choose a Form') : T('Choose a path')) + (wd ? ' · ' + L(wd.name) : '') : '';
-    $('offer-title').textContent = chest ? (solo ? head : T('{0}: press 1-{1}', head, offer.length)) : solo ? T('Level {0}!', v ? v.level : '') : T('Level up: press 1-{0}', offer.length);
+    $('offer-title').textContent = chest ? (solo ? head : touch ? T('{0}: tap a card', head) : T('{0}: press 1-{1}', head, offer.length)) : solo ? T('Level {0}!', v ? v.level : '') : touch ? T('Level up: tap a card') : T('Level up: press 1-{0}', offer.length);
     const box = $('offer-cards'); box.textContent = '';
     offer.forEach((c, i) => {
       const f = cardInfo(me, c), b = document.createElement('button');
@@ -536,8 +538,8 @@
       box.appendChild(b);
     });
     const rr = $('btn-reroll'), sk = $('btn-skip');
-    rr.textContent = T('Reroll ({0}) {1}', keyOf('reroll', 'R'), me.rerolls); rr.disabled = !(me.rerolls > 0);
-    sk.textContent = T('Skip ({0}) {1}', keyOf('skip', 'X'), me.skips); sk.disabled = !(me.skips > 0);
+    rr.textContent = touch ? T('Reroll {0}', me.rerolls) : T('Reroll ({0}) {1}', keyOf('reroll', 'R'), me.rerolls); rr.disabled = !(me.rerolls > 0);
+    sk.textContent = touch ? T('Skip {0}', me.skips) : T('Skip ({0}) {1}', keyOf('skip', 'X'), me.skips); sk.disabled = !(me.skips > 0);
     const bn = $('btn-banish');
     const banAny = me.banishes > 0 && offer.some(c => W.canBanish(offer, c)); // Banish shows only with a banishable card on offer
     bn.textContent = UI.banishOn ? T('Pick a card to banish {0}', me.banishes | 0) : T('Banish {0}', me.banishes | 0); bn.disabled = !banAny; bn.hidden = !banAny; bn.classList.toggle('on', UI.banishOn);
@@ -967,7 +969,7 @@
     $('lobby-title').textContent = host ? T('Your party') : T('Party');
     $('lobby-code').textContent = code;
     $('lobby-code-lbl').textContent = host ? T('Party code') : T('Joined');
-    $('btn-lobby-copy').hidden = !host;
+    $('btn-lobby-copy').hidden = !host; $('lobby-keep').hidden = !host;
     const slots = $('lobby-slots'); slots.textContent = '';
     const mem = (s.members || []).slice().sort((a, b) => a.slot - b.slot);
     for (let i = 0; i < (ED.CONST.MAX_PLAYERS || 4); i++) {
@@ -1133,6 +1135,8 @@
     // settings
     $('btn-settings-close').onclick = closeSettings;
     for (const b of $('set-quality').children) b.onclick = () => { A.settings.quality = b.dataset.v; store(); syncSettings(); };
+    for (const b of $('set-aim').children) b.onclick = () => { A.settings.aim = b.dataset.v; store(); syncSettings(); };
+    for (const b of $('set-touch').children) b.onclick = () => { A.settings.touchSize = b.dataset.v; store(); syncSettings(); };
     for (const b of $('set-lang').children) b.onclick = () => { if (ED.I18N.lang !== b.dataset.v) ED.I18N.set(b.dataset.v); };
     ED.I18N.on(relang);
     for (const k of ['music', 'sfx']) $('set-' + k).addEventListener('input', (e) => { A.settings[k] = +e.target.value; $('set-' + k + '-v').textContent = e.target.value; store(); });
@@ -1159,7 +1163,7 @@
     for (const id of LAYERS) mo.observe($(id), { attributes: true, attributeFilter: ['hidden'] });
     // results: tabs, timeline hover, input guard (registered before onKey so it can eat keys first)
     $('res-tabbar').onclick = (e) => { const b = e.target.closest && e.target.closest('.tab'); if (b) setTab(b.dataset.tab); };
-    $('res-tl').addEventListener('mousemove', tlHover);
+    $('res-tl').addEventListener('pointermove', tlHover); $('res-tl').addEventListener('pointerdown', tlHover); // touch: tap / drag shows the minute
     $('res-tl').addEventListener('mouseleave', () => { hideTip(); if (R.hover >= 0) { R.hover = -1; drawTimeline(); } });
     window.addEventListener('resize', () => { if (R.sum && resOn()) drawTimeline(); });
     for (const t of ['keydown', 'keyup']) window.addEventListener(t, guardKey, true);
@@ -1168,7 +1172,7 @@
     window.addEventListener('keydown', onKey, true);
     let lx = -1, ly = -1;
     $('ui').addEventListener('pointermove', (e) => {
-      if (e.clientX === lx && e.clientY === ly) return;
+      if (e.pointerType === 'touch' || (e.clientX === lx && e.clientY === ly)) return;
       lx = e.clientX; ly = e.clientY;
       const b = e.target.closest && e.target.closest('button'); if (!b || b.disabled || UI.resGuarded()) return;
       const ae = document.activeElement; if (ae && (ae.tagName === 'INPUT' && ae.type !== 'range' || ae.tagName === 'TEXTAREA')) return;

@@ -6,7 +6,7 @@
 
 ## north-star (Ultimate goal for all plans/tasks)
 
-A browser **co-op survivors-like** (solo or up to 4 friends) where **a strong run turns the screen into a blender**: hordes of hundreds pour into an open arena, weapons fire on their own, each hero brings one weapon that grows along its own three paths into one hidden Form, plus one big hand-fired skill, and every level-up changes the *shape* of an attack (more projectiles, area, pierce, orbitals, Forms), never just a number. Rules: **① Zero install** (static site, no build step, no backend; opens from any static host or `file://`) **② No runtime asset files** (art is embedded as data URIs built by `tools/art.js` from vendored CC0/CC-BY sources in `art-src/` (Hangul font: SIL OFL 1.1); all audio synthesized with WebAudio) **③ Host-authoritative deterministic sim** (the same sim code runs headless in Node for checks) **④ Every death is earned** (telegraphed elite and boss attacks, crowd pressure over burst damage, no sustain-by-default) **⑤ Hordes stay smooth** (900 foes on screen at 60 fps in a browser).
+A browser **co-op survivors-like** (solo or up to 4 friends) where **a strong run turns the screen into a blender**: hordes of hundreds pour into an open arena, weapons fire on their own, each hero brings one weapon that grows along its own three paths into one hidden Form, plus one big hand-fired skill, and every level-up changes the *shape* of an attack (more projectiles, area, pierce, orbitals, Forms), never just a number. Rules: **① Zero install** (static site, no build step, no backend; opens from any static host or `file://`) **② No runtime asset files** (art is embedded as data URIs built by `tools/art.js` from vendored CC0/CC-BY sources in `art-src/` (Hangul font: SIL OFL 1.1); all audio synthesized with WebAudio; PWA shell files — manifest, sw.js, icons — are the only runtime files besides code) **③ Host-authoritative deterministic sim** (the same sim code runs headless in Node for checks) **④ Every death is earned** (telegraphed elite and boss attacks, crowd pressure over burst damage, no sustain-by-default) **⑤ Hordes stay smooth** (900 foes on screen at 60 fps in a browser).
 
 **NO COMPROMISES. A PLAYER MUST FINISH A RUN FEELING OVERPOWERED AND WANT ANOTHER WITH A DIFFERENT HERO.**
 
@@ -23,6 +23,7 @@ Full layout, load order and registries: [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 
 ```
 index.html, style.css    page shell, DOM screens, styling
+manifest.webmanifest, sw.js, icons/   PWA shell (install, offline cache)
 src/util.js              constants, math, seeded RNG
 src/data/                foes · stages (themes, timelines, bosses) · passives · meta (shop, unlocks)
 src/save.js              profile storage + save code
@@ -33,7 +34,7 @@ src/client/              atlas · pixfx · gl (ED.Batch) · render · post · ac
 src/art/                 generated atlas pages (data URIs) from tools/art.js; never hand-edited
 art-src/                 vendored CC0/CC-BY source art + SOURCES.md (packs, licences, hashes)
 src/main.js              app state machine + frame loop
-tools/                   sim.js (Node loader) · check-*.js (headless checks, exit 1 on failure) · check-perf.js · browse.js (headless browser smoke, shots, crowd perf; never a visible window) · art.js + art-manifest.js · bot-brain.js + bot.js + bench.js (bot balance bench)
+tools/                   sim.js (Node loader) · check-*.js (headless checks, exit 1 on failure) · check-perf.js · browse.js (headless browser smoke, shots, crowd perf; never a visible window) · art.js + art-manifest.js · icons.js (PWA icons) · bot-brain.js + bot.js + bench.js (bot balance bench)
 docs/                    GAME-DESIGN.md · ARCHITECTURE.md · MASTERPLAN.md · MASTERPLAN-AGENT.md · HANDOFF-*.md
 ```
 
